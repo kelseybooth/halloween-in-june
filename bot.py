@@ -28,7 +28,13 @@ logging.basicConfig(
 log = logging.getLogger("catbot")
 
 # Placeholder copy - writers will replace these in Phase 2.
+# The cat's mood is a coin flip: three welcoming reactions, three prickly ones.
 PET_RESPONSES = [
+    # Friendly
+    "The cat purrs contentedly as you pet it, tail curling like smoke.",
+    "The cat meows and rubs against your leg, eyes glinting in the dark.",
+    "The cat stretches, blinks slowly at you, and vanishes for just a second.",
+    # Standoffish
     "The cat meows incessantly until you pet it again.",
     "The cat startles, hissing at you.",
     "The cat gives you a warning bat with its paw.",
