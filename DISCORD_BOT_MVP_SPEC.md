@@ -169,22 +169,15 @@ discord-bot/
 
 **requirements.txt**
 ```
-discord.py==2.6.4
-python-dotenv==1.1.1
-SQLAlchemy[asyncio]==2.0.44
-asyncpg==0.30.0
-aiosqlite==0.21.0
+discord.py==2.3.2
+python-dotenv==1.0.0
+sqlalchemy==2.0.23
+asyncpg==0.29.0
 ```
 
-Versions were raised from the original pins, which predate Python 3.13 and cannot
-install on it: discord.py <2.4 imports the `audioop` stdlib module removed by
-PEP 594, and asyncpg <0.30 ships no 3.13 wheels. `aiosqlite` backs the local
-SQLite fallback described below.
-
 **Environment Variables (.env)**
-- `DISCORD_TOKEN` — Discord bot token (from Developer Portal). Required.
-- `DATABASE_URL` — PostgreSQL connection string (provided by Railway, e.g., `postgresql://user:pass@host:port/dbname`). Optional: when unset, the bot falls back to a local SQLite file (`catbot.db`) so it runs with no database setup. Stock `postgresql://` URLs are rewritten to `postgresql+asyncpg://` automatically.
-- `GUILD_ID` — Optional test server ID. Slash commands sync to that one guild instantly instead of taking up to an hour to propagate globally. Leave unset in production.
+- `DISCORD_TOKEN` — Discord bot token (from Developer Portal)
+- `DATABASE_URL` — PostgreSQL connection string (provided by Railway, e.g., `postgresql://user:pass@host:port/dbname`)
 
 **Database Setup (Railway)**
 - PostgreSQL database automatically provisioned when you add a database to your Railway project
@@ -267,14 +260,11 @@ SQLite fallback described below.
 1. Create `.env` file with:
    ```
    DISCORD_TOKEN=your_token_here
-   DATABASE_URL=
-   GUILD_ID=your_test_server_id
+   DATABASE_URL=postgresql://user:password@localhost:5432/catbot
    ```
 2. Install dependencies: `pip install -r requirements.txt`
 3. Run bot locally: `python bot.py`
-4. Leaving `DATABASE_URL` empty creates a local SQLite file automatically — no
-   PostgreSQL install needed. Set it to a Railway connection string to test
-   against Postgres instead.
+4. (Optional: set up local PostgreSQL, or use Railway's free tier for testing)
 
 **For Production (Railway):**
 1. Push code to GitHub
