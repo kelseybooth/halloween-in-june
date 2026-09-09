@@ -117,7 +117,7 @@ class User(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
     pet_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     relationship: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, server_default=text("0")
+        Integer, nullable=False, default=50, server_default=text("50")
     )
     # Last Pacific day the nightly decay was evaluated for this user. Lets the
     # bot catch up on days it was offline without double-applying any of them.
@@ -174,7 +174,7 @@ async def _add_missing_columns(conn) -> None:
 
     if "relationship" not in existing:
         await conn.execute(
-            text("ALTER TABLE users ADD COLUMN relationship INTEGER NOT NULL DEFAULT 0")
+            text("ALTER TABLE users ADD COLUMN relationship INTEGER NOT NULL DEFAULT 50")
         )
         log.info("Schema upgrade: added users.relationship")
 
