@@ -46,6 +46,14 @@ PACIFIC = ZoneInfo("America/Los_Angeles")
 RELATIONSHIP_MIN = -100
 RELATIONSHIP_MAX = 100
 
+# Where a brand-new player starts. Above neutral, so the cat is friendly by
+# default and has to be annoyed into hostility - but this is a starting point,
+# not a resting one: the nightly decay below still pulls an inactive player back
+# to 0, so a new player who never returns drifts to neutral over five days.
+# Referenced by both the model default and the ALTER in _add_missing_columns;
+# keep them reading from here so the two cannot disagree.
+RELATIONSHIP_START = 50
+
 # Nightly drift back toward neutral, applied only to users who did not pet that day.
 DECAY_POSITIVE_THRESHOLD = 10   # at or above this, affection fades...
 DECAY_POSITIVE_STEP = 10        # ...by this much, never past 0
@@ -116,8 +124,14 @@ class User(Base):
     # Discord snowflake IDs exceed 32 bits, so BIGINT is required.
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
     pet_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # `default` is what actually sets a new player's score, since rows are only
+    # ever created by the upsert in increment_pet_count; `server_default` writes
+    # the same value into the CREATE TABLE DDL for databases built from scratch.
     relationship: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=50, server_default=text("50")
+        Integer,
+        nullable=False,
+        default=RELATIONSHIP_START,
+        server_default=text(str(RELATIONSHIP_START)),
     )
     # Last Pacific day the nightly decay was evaluated for this user. Lets the
     # bot catch up on days it was offline without double-applying any of them.
@@ -173,8 +187,13 @@ async def _add_missing_columns(conn) -> None:
     existing = await conn.run_sync(_existing)
 
     if "relationship" not in existing:
+        # Interpolated rather than bound: DDL defaults cannot take a parameter.
+        # RELATIONSHIP_START is an int constant defined above, never user input.
         await conn.execute(
-            text("ALTER TABLE users ADD COLUMN relationship INTEGER NOT NULL DEFAULT 50")
+            text(
+                "ALTER TABLE users ADD COLUMN relationship "
+                f"INTEGER NOT NULL DEFAULT {RELATIONSHIP_START}"
+            )
         )
         log.info("Schema upgrade: added users.relationship")
 
