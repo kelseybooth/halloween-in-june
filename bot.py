@@ -48,8 +48,19 @@ class CatBot(commands.Bot):
     async def setup_hook(self) -> None:
         """Runs once before the gateway connects - open the DB and register commands."""
         await database.init_db()
-        synced = await self.tree.sync()
-        log.info("Synced %d slash command(s)", len(synced))
+
+        # Global syncs can take up to an hour to propagate. Setting GUILD_ID copies
+        # the commands into one server instead, where they appear immediately - much
+        # faster to iterate on locally. Leave it unset in production.
+        guild_id = os.getenv("GUILD_ID", "").strip()
+        if guild_id:
+            guild = discord.Object(id=int(guild_id))
+            self.tree.copy_global_to(guild=guild)
+            synced = await self.tree.sync(guild=guild)
+            log.info("Synced %d command(s) to guild %s (instant)", len(synced), guild_id)
+        else:
+            synced = await self.tree.sync()
+            log.info("Synced %d command(s) globally (may take up to an hour)", len(synced))
 
     async def on_ready(self) -> None:
         log.info("Logged in as %s (id: %s)", self.user, self.user.id)
