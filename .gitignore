@@ -16,3 +16,6 @@ venv/
 Thumbs.db
 .vscode/
 .idea/
+
+# Local SQLite database
+catbot.db

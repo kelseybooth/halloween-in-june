@@ -1,0 +1,125 @@
+"""Halloween cat petting bot - MVP (Phase 1).
+
+Slash commands:
+  /pet    - pet the cat, increments a persistent per-user counter
+  /stats  - show your pet total
+"""
+
+import logging
+import os
+import random
+import sys
+
+import discord
+from discord import app_commands
+from discord.ext import commands
+from dotenv import load_dotenv
+from sqlalchemy.exc import SQLAlchemyError
+
+import database
+
+load_dotenv()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+    stream=sys.stdout,  # Railway captures stdout for its log dashboard
+)
+log = logging.getLogger("catbot")
+
+# Placeholder copy - writers will replace these in Phase 2.
+PET_RESPONSES = [
+    "The cat purrs contentedly as you pet it, tail curling like smoke.",
+    "The cat meows and rubs against your leg, eyes glinting in the dark.",
+    "The cat stretches, blinks slowly at you, and vanishes for just a second.",
+]
+
+DB_ERROR_MESSAGE = (
+    "The cat slipped into the shadows and I lost track of it. "
+    "Something went wrong reaching the database - please try again in a moment."
+)
+
+
+class CatBot(commands.Bot):
+    def __init__(self) -> None:
+        # Slash commands need no privileged intents; defaults keep the bot lightweight.
+        super().__init__(command_prefix="!", intents=discord.Intents.default())
+
+    async def setup_hook(self) -> None:
+        """Runs once before the gateway connects - open the DB and register commands."""
+        await database.init_db()
+        synced = await self.tree.sync()
+        log.info("Synced %d slash command(s)", len(synced))
+
+    async def on_ready(self) -> None:
+        log.info("Logged in as %s (id: %s)", self.user, self.user.id)
+        log.info("Ready - try /pet in your server")
+
+    async def close(self) -> None:
+        """Graceful shutdown: release the connection pool, then disconnect."""
+        await database.close_db()
+        await super().close()
+
+
+bot = CatBot()
+
+
+@bot.tree.command(name="pet", description="Pet the cat.")
+async def pet(interaction: discord.Interaction) -> None:
+    # Defer first: the DB round trip can exceed Discord's 3s interaction deadline.
+    await interaction.response.defer()
+    try:
+        count = await database.increment_pet_count(interaction.user.id)
+    except SQLAlchemyError:
+        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    await interaction.followup.send(f"{random.choice(PET_RESPONSES)}\n\nTotal pets: {count}")
+
+
+@bot.tree.command(name="stats", description="See how many times you've petted the cat.")
+async def stats(interaction: discord.Interaction) -> None:
+    await interaction.response.defer()
+    try:
+        count = await database.get_pet_count(interaction.user.id)
+    except SQLAlchemyError:
+        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    if count == 0:
+        await interaction.followup.send(
+            "You haven't petted the cat yet. Try `/pet` - it's waiting for you."
+        )
+        return
+
+    await interaction.followup.send(f"Your cat petting stats:\nTotal pets: {count}")
+
+
+@bot.tree.error
+async def on_app_command_error(
+    interaction: discord.Interaction, error: app_commands.AppCommandError
+) -> None:
+    """Catch-all so an unexpected failure never leaves the user staring at 'thinking...'."""
+    log.exception("Unhandled error in command %s", interaction.command, exc_info=error)
+    message = "Something went wrong. Please try again."
+    if interaction.response.is_done():
+        await interaction.followup.send(message, ephemeral=True)
+    else:
+        await interaction.response.send_message(message, ephemeral=True)
+
+
+def main() -> None:
+    token = os.getenv("DISCORD_TOKEN")
+    if not token:
+        log.error("DISCORD_TOKEN is not set. Copy .env.example to .env and fill it in.")
+        sys.exit(1)
+
+    try:
+        bot.run(token, log_handler=None)  # log_handler=None: reuse our logging config
+    except discord.LoginFailure:
+        log.error("Discord rejected the token. Check DISCORD_TOKEN in your .env file.")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

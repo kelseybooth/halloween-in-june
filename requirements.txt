@@ -1,0 +1,8 @@
+# Bumped from the spec's pins: those predate Python 3.13 and fail to install on it.
+# discord.py <2.4 imports the stdlib `audioop` module, removed in 3.13 (PEP 594).
+# asyncpg <0.30 ships no 3.13 wheels and fails to build from source.
+discord.py==2.6.4
+python-dotenv==1.1.1
+SQLAlchemy[asyncio]==2.0.44
+asyncpg==0.30.0
+aiosqlite==0.21.0
