@@ -39,6 +39,28 @@ returns gradually as a user goes quiet. Each pet is timestamped in the
 `pet_events` table, which is what makes the window computable — the `users`
 table holds only a lifetime total.
 
+### Relationship meter
+
+Each player has a score from **-100 to 100**, starting at 0. A friendly reaction
+adds 5; a standoffish one subtracts 5.
+
+At **midnight Pacific** each day, players who did not `/pet` at all that day
+drift back toward neutral:
+
+| Score at midnight | Change | Never passes |
+|---|---|---|
+| 10 or above | -10 | 0 |
+| Between -19 and 9 | no change | - |
+| -20 or below | +20 | 0 |
+
+Petting even once during a day cancels that night's drift. The bot settles any
+nights it was offline for on next startup, and stamps each user's
+`last_decay_date` so a restart cannot apply the same night twice.
+
+> **Testing aid:** `/pet` currently appends a `[testing]` block showing the mood
+> roll, its weighting, and the relationship score. Set `SHOW_DEBUG_INFO = False`
+> in `bot.py` to turn it off.
+
 ### Database
 
 The backend is chosen from `DATABASE_URL`:
