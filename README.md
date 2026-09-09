@@ -24,6 +24,21 @@ Copy `.env.example` to `.env` and set `DISCORD_TOKEN`. Then:
 python bot.py
 ```
 
+### Cat mood
+
+`/pet` picks from two pools of three responses. A user with no pets in the last
+ten minutes has a **70%** chance of a friendly reaction; each pet already inside
+that window subtracts 10 points, floored at zero:
+
+| Recent pets (last 10 min) | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7+ |
+|---|---|---|---|---|---|---|---|---|
+| Friendly chance | 70% | 60% | 50% | 40% | 30% | 20% | 10% | 0% |
+
+The window slides continuously rather than resetting, so the cat's patience
+returns gradually as a user goes quiet. Each pet is timestamped in the
+`pet_events` table, which is what makes the window computable — the `users`
+table holds only a lifetime total.
+
 ### Database
 
 The backend is chosen from `DATABASE_URL`:

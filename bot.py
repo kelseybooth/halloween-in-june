@@ -28,17 +28,45 @@ logging.basicConfig(
 log = logging.getLogger("catbot")
 
 # Placeholder copy - writers will replace these in Phase 2.
-# The cat's mood is a coin flip: three welcoming reactions, three prickly ones.
-PET_RESPONSES = [
-    # Friendly
+FRIENDLY_RESPONSES = [
     "The cat purrs contentedly as you pet it, tail curling like smoke.",
     "The cat meows and rubs against your leg, eyes glinting in the dark.",
     "The cat stretches, blinks slowly at you, and vanishes for just a second.",
-    # Standoffish
+]
+
+STANDOFFISH_RESPONSES = [
     "The cat meows incessantly until you pet it again.",
     "The cat startles, hissing at you.",
     "The cat gives you a warning bat with its paw.",
 ]
+
+PET_RESPONSES = FRIENDLY_RESPONSES + STANDOFFISH_RESPONSES
+
+# Mood weighting: the cat tires of being pestered. A user arriving with no recent
+# pets gets BASE_FRIENDLY_CHANCE; every pet already inside
+# database.RECENT_PET_WINDOW subtracts DECAY_PER_RECENT_PET points. Go quiet for
+# ten minutes and the window empties, restoring the cat's patience.
+BASE_FRIENDLY_CHANCE = 70
+DECAY_PER_RECENT_PET = 10
+
+
+def friendly_chance(recent_pets: int) -> int:
+    """Percentage chance of a friendly response, floored at zero.
+
+    From the 7th recent pet onward this is 0 and the cat is reliably standoffish
+    until the window clears.
+    """
+    return max(0, BASE_FRIENDLY_CHANCE - DECAY_PER_RECENT_PET * recent_pets)
+
+
+def choose_response(recent_pets: int, rng=random) -> str:
+    """Pick a response, weighted by how much this user has been pestering the cat.
+
+    `rng` is injectable so the weighting can be exercised deterministically.
+    """
+    if rng.random() * 100 < friendly_chance(recent_pets):
+        return rng.choice(FRIENDLY_RESPONSES)
+    return rng.choice(STANDOFFISH_RESPONSES)
 
 DB_ERROR_MESSAGE = (
     "The cat slipped into the shadows and I lost track of it. "
@@ -86,12 +114,13 @@ async def pet(interaction: discord.Interaction) -> None:
     # Defer first: the DB round trip can exceed Discord's 3s interaction deadline.
     await interaction.response.defer()
     try:
-        count = await database.increment_pet_count(interaction.user.id)
+        result = await database.increment_pet_count(interaction.user.id)
     except SQLAlchemyError:
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
         return
 
-    await interaction.followup.send(f"{random.choice(PET_RESPONSES)}\n\nTotal pets: {count}")
+    response = choose_response(result.recent)
+    await interaction.followup.send(f"{response}\n\nTotal pets: {result.total}")
 
 
 @bot.tree.command(name="stats", description="See how many times you've petted the cat.")
