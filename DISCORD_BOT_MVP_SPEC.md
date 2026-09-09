@@ -6,7 +6,7 @@ Build a simple Discord bot that allows users to pet a cat (the bot) and track th
 ## Project Scope: MVP Only
 - ✅ `/pet` slash command to pet the cat
 - ✅ Persistent per-user pet counter
-- ✅ 3 random response variations for each pet
+- ✅ 6 random response variations for each pet (3 friendly, 3 standoffish)
 - ✅ `/stats` slash command to view pet count
 - ❌ Thread management
 - ❌ Role-based permissions
@@ -80,15 +80,24 @@ CREATE TABLE users (
 2. Query database: check if user exists
 3. If user exists: increment pet_count by 1; if not: insert new user with pet_count = 1
 4. Retrieve updated pet_count from database
-5. Select a random response from the 3 predefined responses
+5. Select a random response from the 6 predefined responses
 6. Send a response message containing:
    - The random response text
    - The user's updated pet count (e.g., "You've petted the cat 5 times!")
 
-**Response Examples (3 options - writers will iterate later):**
-- "The cat purrs contentedly as you pet it."
-- "The cat meows and rubs against your leg."
-- "The cat stretches and blinks slowly at you."
+**Response Examples (6 options - writers will iterate later):**
+
+The cat's mood is an even coin flip between welcoming and prickly.
+
+*Friendly:*
+- "The cat purrs contentedly as you pet it, tail curling like smoke."
+- "The cat meows and rubs against your leg, eyes glinting in the dark."
+- "The cat stretches, blinks slowly at you, and vanishes for just a second."
+
+*Standoffish:*
+- "The cat meows incessantly until you pet it again."
+- "The cat startles, hissing at you."
+- "The cat gives you a warning bat with its paw."
 
 **Response Format:**
 ```
@@ -160,15 +169,22 @@ discord-bot/
 
 **requirements.txt**
 ```
-discord.py==2.3.2
-python-dotenv==1.0.0
-sqlalchemy==2.0.23
-asyncpg==0.29.0
+discord.py==2.6.4
+python-dotenv==1.1.1
+SQLAlchemy[asyncio]==2.0.44
+asyncpg==0.30.0
+aiosqlite==0.21.0
 ```
 
+Versions were raised from the original pins, which predate Python 3.13 and cannot
+install on it: discord.py <2.4 imports the `audioop` stdlib module removed by
+PEP 594, and asyncpg <0.30 ships no 3.13 wheels. `aiosqlite` backs the local
+SQLite fallback described below.
+
 **Environment Variables (.env)**
-- `DISCORD_TOKEN` — Discord bot token (from Developer Portal)
-- `DATABASE_URL` — PostgreSQL connection string (provided by Railway, e.g., `postgresql://user:pass@host:port/dbname`)
+- `DISCORD_TOKEN` — Discord bot token (from Developer Portal). Required.
+- `DATABASE_URL` — PostgreSQL connection string (provided by Railway, e.g., `postgresql://user:pass@host:port/dbname`). Optional: when unset, the bot falls back to a local SQLite file (`catbot.db`) so it runs with no database setup. Stock `postgresql://` URLs are rewritten to `postgresql+asyncpg://` automatically.
+- `GUILD_ID` — Optional test server ID. Slash commands sync to that one guild instantly instead of taking up to an hour to propagate globally. Leave unset in production.
 
 **Database Setup (Railway)**
 - PostgreSQL database automatically provisioned when you add a database to your Railway project
@@ -251,11 +267,14 @@ asyncpg==0.29.0
 1. Create `.env` file with:
    ```
    DISCORD_TOKEN=your_token_here
-   DATABASE_URL=postgresql://user:password@localhost:5432/catbot
+   DATABASE_URL=
+   GUILD_ID=your_test_server_id
    ```
 2. Install dependencies: `pip install -r requirements.txt`
 3. Run bot locally: `python bot.py`
-4. (Optional: set up local PostgreSQL, or use Railway's free tier for testing)
+4. Leaving `DATABASE_URL` empty creates a local SQLite file automatically — no
+   PostgreSQL install needed. Set it to a Railway connection string to test
+   against Postgres instead.
 
 **For Production (Railway):**
 1. Push code to GitHub
@@ -286,7 +305,7 @@ asyncpg==0.29.0
 3. **SQLAlchemy ORM:** Using SQLAlchemy for async database access. Cleaner than raw asyncpg, easier to expand for future features.
 4. **Async/Await:** All database operations are async (non-blocking), so Discord bot responsiveness is never impacted.
 5. **Slash Commands Only:** No prefix commands for MVP; slash commands are modern Discord standard.
-6. **Random Responses:** Use Python's `random.choice()` to pick from list of 3 strings.
+6. **Random Responses:** Use Python's `random.choice()` to pick from list of 6 strings, weighted evenly. Weighting by mood (e.g. friendlier at low pet counts) is a Phase 2 option.
 7. **Per-User Isolation:** Each user's counter is independent and persists across sessions via database.
 8. **No Authentication:** Discord handles auth via bot token; no additional security needed for MVP.
 
