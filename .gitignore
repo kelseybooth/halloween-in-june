@@ -19,3 +19,4 @@ Thumbs.db
 
 # Local SQLite database
 catbot.db
+catbot.db.backup-*

@@ -73,6 +73,20 @@ The backend is chosen from `DATABASE_URL`:
 
 Tables are created on startup, so there is no migration step.
 
+## Resetting test data
+
+```powershell
+python reset_db.py --yes            # clear all players and pet events
+python reset_db.py --yes --fresh    # SQLite: delete the file, rebuilding the schema
+```
+
+Both wipe every player. Use `--fresh` after changing a column default: a column
+added by the ALTER migration keeps whatever SQL default it was created with, so
+only a rebuilt schema picks the new one up. The SQLite file is backed up to
+`catbot.db.backup-<timestamp>` first; PostgreSQL is not, so snapshot it yourself.
+
+Stop the bot before resetting, then restart it.
+
 ## Deploying to Railway
 
 1. Push to GitHub.
