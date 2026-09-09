@@ -31,6 +31,9 @@ log = logging.getLogger("catbot")
 PET_RESPONSES = [
     "The cat purrs contentedly as you pet it, tail curling like smoke.",
     "The cat meows and rubs against your leg, eyes glinting in the dark.",
+    "The cat bats your hand in warning, claws not extended. Yet.",
+    "The cat eyes you suspiciously.",
+    "The cat startles, hissing.",
     "The cat stretches, blinks slowly at you, and vanishes for just a second.",
 ]
 
