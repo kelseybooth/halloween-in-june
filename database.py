@@ -82,6 +82,15 @@ class PetResult(NamedTuple):
     recent: int
 
 
+class GameState(NamedTuple):
+    """A player's position in the haunted house."""
+
+    user_id: int
+    cohort: str
+    current_room: str
+    rooms_unlocked: list[str]
+
+
 class DecayChange(NamedTuple):
     """One user's relationship movement during a nightly decay run."""
 
@@ -444,6 +453,46 @@ async def start_game(
             return created
     except SQLAlchemyError:
         log.exception("Failed to start game for %s", user_id)
+        raise
+
+
+async def get_game_state(user_id: int) -> GameState | None:
+    """This player's cohort, room and unlocked rooms, or None if not in the house."""
+    session_factory = _require_session()
+    try:
+        async with session_factory() as session:
+            row = (
+                await session.execute(
+                    select(
+                        PlayerGameState.user_id,
+                        PlayerGameState.room_version_assignment,
+                        PlayerGameState.current_room,
+                        PlayerGameState.rooms_unlocked,
+                    ).where(PlayerGameState.user_id == user_id)
+                )
+            ).one_or_none()
+            if row is None:
+                return None
+            return GameState(row[0], row[1], row[2], list(row[3] or []))
+    except SQLAlchemyError:
+        log.exception("Failed to read game state for %s", user_id)
+        raise
+
+
+async def update_current_room(user_id: int, room_name: str) -> None:
+    """Move a player to a different room."""
+    session_factory = _require_session()
+    try:
+        async with session_factory() as session:
+            await session.execute(
+                update(PlayerGameState)
+                .where(PlayerGameState.user_id == user_id)
+                .values(current_room=room_name, updated_at=func.now())
+            )
+            await session.commit()
+            log.info("Player %s moved to %s", user_id, room_name)
+    except SQLAlchemyError:
+        log.exception("Failed to move player %s to %s", user_id, room_name)
         raise
 
 
