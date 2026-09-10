@@ -1,0 +1,255 @@
+"""Haunted house layout and Discord thread management (Phase 2).
+
+Every room exists as two threads whose names differ only by a leading article:
+cohort A sees "Entryway", cohort B sees "The Entryway". Players are not told this;
+it exists so mods can tell at a glance which cohort a thread belongs to.
+"""
+
+import logging
+from typing import NamedTuple
+
+import discord
+
+log = logging.getLogger(__name__)
+
+# The channel the house lives in. Must already exist - the bot does not create it.
+HALLOWEEN_CHANNEL_NAME = "halloween"
+
+# One week, the longest value Discord accepts. Long enough that a slow tester does
+# not come back to an archived room.
+THREAD_AUTO_ARCHIVE_MINUTES = 10080
+
+COHORTS = ("A", "B")
+
+# Canonical room names, in the order the spec lists them.
+ROOMS = [
+    "Dining Room",
+    "Entryway",
+    "Living Room",
+    "Kitchen",
+    "Courtyard",
+    "Secret Library",
+    "Upstairs Hallway",
+    "Bedroom",
+    "Nursery",
+]
+
+STARTING_ROOM = "Entryway"
+
+ROOM_NAMES_A = list(ROOMS)
+ROOM_NAMES_B = [f"The {room}" for room in ROOMS]
+
+# Exits keyed by label. Codes are the first letter of the current room plus the
+# first letter of the destination; they are placeholders, and Phase 3 replaces them
+# with descriptive names ("blue door"). find_exit matches case-insensitively and
+# also accepts the destination room name, so both styles work today.
+NAVIGATION_GRAPH = {
+    "Dining Room": {"DK": "Kitchen", "DE": "Entryway"},
+    "Entryway": {"ED": "Dining Room", "EL": "Living Room", "EH": "Upstairs Hallway"},
+    "Living Room": {"LE": "Entryway", "LS": "Secret Library"},
+    "Kitchen": {"KD": "Dining Room", "KH": "Upstairs Hallway", "KC": "Courtyard"},
+    "Courtyard": {"CK": "Kitchen", "CS": "Secret Library"},
+    "Secret Library": {"SL": "Living Room", "SC": "Courtyard"},
+    # HE is not in the spec's graph, which lists Entryway -> Upstairs Hallway (EH)
+    # with no return exit. The spec also states every exit is bidirectional, so the
+    # omission looks like an oversight rather than a one-way door; without HE the
+    # Entryway is unreachable from upstairs except by going the long way round
+    # through the Kitchen.
+    "Upstairs Hallway": {
+        "HK": "Kitchen",
+        "HB": "Bedroom",
+        "HN": "Nursery",
+        "HE": "Entryway",
+    },
+    "Bedroom": {"BH": "Upstairs Hallway"},
+    "Nursery": {"NH": "Upstairs Hallway"},
+}
+
+
+class InitResult(NamedTuple):
+    """What one run of initialize_threads did."""
+
+    deleted: int
+    created: int
+    restored: int
+    errors: list[str]
+
+
+def get_thread_name(room_name: str, cohort: str) -> str:
+    """Thread name for a room in a given cohort: "Entryway" or "The Entryway"."""
+    if cohort not in COHORTS:
+        raise ValueError(f"unknown cohort {cohort!r}; expected one of {COHORTS}")
+    return f"The {room_name}" if cohort == "B" else room_name
+
+
+def all_thread_names() -> list[str]:
+    """Every thread name the house needs - 9 rooms x 2 cohorts, in creation order."""
+    return [get_thread_name(room, cohort) for room in ROOMS for cohort in COHORTS]
+
+
+def find_exit(current_room: str, user_input: str) -> str | None:
+    """Resolve an exit label to a destination room, or None if there is no such exit.
+
+    Matching ignores case and surrounding whitespace, and accepts either the exit
+    code ("EL") or the destination room name ("living room"), so the command keeps
+    working when Phase 3 swaps codes for descriptive labels.
+    """
+    exits = NAVIGATION_GRAPH.get(current_room)
+    if not exits:
+        return None
+
+    needle = user_input.strip().lower()
+    if not needle:
+        return None
+
+    for label, destination in exits.items():
+        if needle == label.lower() or needle == destination.lower():
+            return destination
+    return None
+
+
+def validate_graph() -> list[str]:
+    """Return a list of structural problems with NAVIGATION_GRAPH; empty means sound.
+
+    Run as a startup self-check so a typo in the layout surfaces immediately rather
+    than as a player hitting a dead end mid-game.
+    """
+    problems: list[str] = []
+    known = set(ROOMS)
+
+    for room in ROOMS:
+        if room not in NAVIGATION_GRAPH:
+            problems.append(f"{room} has no entry in NAVIGATION_GRAPH")
+
+    for room, exits in NAVIGATION_GRAPH.items():
+        if room not in known:
+            problems.append(f"NAVIGATION_GRAPH has unknown room {room!r}")
+        for label, destination in exits.items():
+            if destination not in known:
+                problems.append(f"{room}/{label} leads to unknown room {destination!r}")
+                continue
+            # The spec states every exit is bidirectional.
+            if room not in NAVIGATION_GRAPH.get(destination, {}).values():
+                problems.append(f"{room} -> {destination} has no return exit")
+
+    # Every room must be reachable from the start, or a player could be stranded.
+    seen, queue = {STARTING_ROOM}, [STARTING_ROOM]
+    while queue:
+        for destination in NAVIGATION_GRAPH.get(queue.pop(), {}).values():
+            if destination not in seen:
+                seen.add(destination)
+                queue.append(destination)
+    for room in known - seen:
+        problems.append(f"{room} is unreachable from {STARTING_ROOM}")
+
+    return problems
+
+
+def find_channel(guild: discord.Guild) -> discord.TextChannel | None:
+    """The #halloween text channel, or None if the server has no such channel."""
+    return discord.utils.get(guild.text_channels, name=HALLOWEEN_CHANNEL_NAME)
+
+
+async def _existing_threads(channel: discord.TextChannel) -> list[discord.Thread]:
+    """Active and archived threads in the channel.
+
+    Archived threads are fetched separately: they do not appear in `channel.threads`,
+    and leaving them behind would collide with the names we are about to create.
+    """
+    threads = list(channel.threads)
+    seen = {thread.id for thread in threads}
+
+    for private in (True, False):
+        try:
+            async for thread in channel.archived_threads(private=private, limit=None):
+                if thread.id not in seen:
+                    seen.add(thread.id)
+                    threads.append(thread)
+        except discord.HTTPException:
+            # Missing history permission for archived private threads is not fatal.
+            log.warning("Could not list archived threads (private=%s)", private, exc_info=True)
+
+    return threads
+
+
+async def initialize_threads(
+    channel: discord.TextChannel,
+    locations: list[tuple[int, str, str]],
+) -> InitResult:
+    """Delete every thread in the channel and recreate the full set of 18.
+
+    `locations` is (user_id, cohort, current_room) for each player with game state.
+    After the threads exist, each player is re-added to the thread for the room they
+    were in, which is what makes the command rerunnable without stranding anyone -
+    the database, not Discord, is the source of truth for who belongs where.
+    """
+    errors: list[str] = []
+
+    existing = await _existing_threads(channel)
+    deleted = 0
+    for thread in existing:
+        try:
+            await thread.delete()
+            deleted += 1
+        except discord.HTTPException as exc:
+            errors.append(f"could not delete thread {thread.name!r}: {exc}")
+            log.warning("Failed to delete thread %s", thread.name, exc_info=True)
+
+    threads: dict[str, discord.Thread] = {}
+    for name in all_thread_names():
+        try:
+            thread = await channel.create_thread(
+                name=name,
+                type=discord.ChannelType.private_thread,
+                auto_archive_duration=THREAD_AUTO_ARCHIVE_MINUTES,
+                invitable=False,  # only the bot decides who joins
+            )
+            threads[name] = thread
+        except discord.HTTPException as exc:
+            errors.append(f"could not create thread {name!r}: {exc}")
+            log.error("Failed to create thread %s", name, exc_info=True)
+
+    restored = 0
+    for user_id, cohort, room in locations:
+        try:
+            name = get_thread_name(room, cohort)
+        except ValueError as exc:
+            errors.append(f"player {user_id}: {exc}")
+            continue
+
+        thread = threads.get(name)
+        if thread is None:
+            errors.append(f"player {user_id}: thread {name!r} was not created")
+            continue
+
+        try:
+            await thread.add_user(discord.Object(id=user_id))
+            restored += 1
+        except discord.HTTPException as exc:
+            errors.append(f"could not restore player {user_id} to {name!r}: {exc}")
+            log.warning("Failed to restore player %s to %s", user_id, name, exc_info=True)
+
+    log.info(
+        "Haunted House initialized with %d threads (deleted %d, restored %d players)",
+        len(threads),
+        deleted,
+        restored,
+    )
+    return InitResult(deleted=deleted, created=len(threads), restored=restored, errors=errors)
+
+
+async def add_player_to_thread(thread: discord.Thread, player_id: int) -> None:
+    """Invite a player into a private thread."""
+    await thread.add_user(discord.Object(id=player_id))
+
+
+async def remove_player_from_thread(thread: discord.Thread, player_id: int) -> None:
+    """Remove a player from a private thread."""
+    await thread.remove_user(discord.Object(id=player_id))
+
+
+def get_thread_by_room_and_cohort(
+    channel: discord.TextChannel, room_name: str, cohort: str
+) -> discord.Thread | None:
+    """Find the live thread for a room/cohort pair by name."""
+    return discord.utils.get(channel.threads, name=get_thread_name(room_name, cohort))

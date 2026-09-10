@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 from sqlalchemy.exc import SQLAlchemyError
 
 import database
+import house_utils
 
 load_dotenv()
 
@@ -114,6 +115,11 @@ class CatBot(commands.Bot):
         """Runs once before the gateway connects - open the DB and register commands."""
         await database.init_db()
 
+        # A broken layout would surface as a player hitting a dead end mid-game,
+        # so check it once at startup instead.
+        for problem in house_utils.validate_graph():
+            log.error("Navigation graph problem: %s", problem)
+
         # Settle any nights the bot was offline for before serving commands.
         caught_up = await database.run_pending_decay()
         if caught_up:
@@ -190,6 +196,88 @@ async def pet(interaction: discord.Interaction) -> None:
     if SHOW_DEBUG_INFO:
         message += _debug_lines(reaction, result.recent, relationship)
     await interaction.followup.send(message)
+
+
+@bot.tree.command(
+    name="initialize-haunted-house",
+    description="(Admin) Rebuild every haunted house thread from scratch.",
+)
+@app_commands.default_permissions(administrator=True)
+@app_commands.checks.has_permissions(administrator=True)
+async def initialize_haunted_house(interaction: discord.Interaction) -> None:
+    """Delete and recreate all 18 room threads, restoring players to their rooms.
+
+    Rerunnable by design: players are re-added afterwards from the database, so a
+    rebuild does not strand anyone in a thread that no longer exists.
+    """
+    if interaction.guild is None:
+        await interaction.response.send_message(
+            "This command only works inside a server.", ephemeral=True
+        )
+        return
+
+    # Deleting and creating 18 threads takes far longer than Discord's 3s deadline.
+    await interaction.response.defer(ephemeral=True, thinking=True)
+
+    channel = house_utils.find_channel(interaction.guild)
+    if channel is None:
+        await interaction.followup.send(
+            f"I couldn't find a #{house_utils.HALLOWEEN_CHANNEL_NAME} channel. "
+            "Create it first, then run this again.",
+            ephemeral=True,
+        )
+        return
+
+    try:
+        locations = await database.get_all_player_locations()
+    except SQLAlchemyError:
+        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    try:
+        result = await house_utils.initialize_threads(channel, locations)
+    except discord.Forbidden:
+        log.exception("Missing permissions to manage threads in #%s", channel.name)
+        await interaction.followup.send(
+            f"I don't have permission to manage threads in #{channel.name}. "
+            "I need Manage Threads and Create Private Threads there.",
+            ephemeral=True,
+        )
+        return
+    except discord.HTTPException:
+        log.exception("Thread initialization failed")
+        await interaction.followup.send(
+            "Something went wrong talking to Discord. Check the logs and try again.",
+            ephemeral=True,
+        )
+        return
+
+    lines = [
+        f"Haunted House initialized with {result.created} threads.",
+        f"- deleted {result.deleted} existing thread(s)",
+        f"- restored {result.restored} player(s) to their current room",
+    ]
+    if result.errors:
+        lines.append(f"\n**{len(result.errors)} problem(s):**")
+        # Discord caps messages at 2000 characters; show a few and log the rest.
+        lines.extend(f"- {err}" for err in result.errors[:5])
+        if len(result.errors) > 5:
+            lines.append(f"- ...and {len(result.errors) - 5} more (see logs)")
+
+    await interaction.followup.send("\n".join(lines), ephemeral=True)
+
+
+@initialize_haunted_house.error
+async def _initialize_error(
+    interaction: discord.Interaction, error: app_commands.AppCommandError
+) -> None:
+    """Turn the permission check failure into a clear message rather than a traceback."""
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message(
+            "You need to be a server administrator to run this.", ephemeral=True
+        )
+        return
+    raise error
 
 
 @bot.tree.command(name="stats", description="See how many times you've petted the cat.")
