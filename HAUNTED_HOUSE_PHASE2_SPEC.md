@@ -101,7 +101,10 @@ Nursery
 
 ### Update to Users Table
 
-Keep existing columns (`id`, `pet_count`, `created_at`, `updated_at`).
+Keep all existing columns: `id`, `pet_count`, `relationship`, `last_decay_date`,
+`created_at`, `updated_at`. Phase 2 adds nothing to this table — the relationship
+meter and its nightly decay (see the Phase 1 spec) continue to work unchanged
+alongside the haunted house.
 
 ### New Table: Player Game State
 
@@ -110,18 +113,36 @@ CREATE TABLE player_game_state (
   user_id BIGINT PRIMARY KEY,
   room_version_assignment CHAR(1) CHECK (room_version_assignment IN ('A', 'B')),
   current_room VARCHAR(50),
-  rooms_unlocked TEXT[], -- Array of room names player has visited/unlocked
+  rooms_unlocked JSON, -- JSON array of room names player has visited/unlocked
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
 ```
 
+**Ordering requirement (important):** a `users` row is created only on a player's
+first `/pet` — nothing else creates one. A player who starts the haunted house
+without ever petting the cat therefore has no `users` row, and inserting their
+`player_game_state` row would violate this foreign key.
+
+Game start must **ensure the `users` row exists before** inserting into
+`player_game_state`. Creating it there is harmless: `pet_count` stays 0 until they
+actually pet, and `relationship` takes its usual starting value, which suits a game
+whose opening line has the cat appearing at the player's side.
+
+The alternative — dropping the foreign key — is not recommended: it would let game
+state exist for players the rest of the bot knows nothing about, and the nightly
+relationship drift iterates `users`, so such a player would silently never drift.
+
 **Schema Details:**
 - `user_id` (BIGINT, PRIMARY KEY): Discord user ID
 - `room_version_assignment` (CHAR(1)): 'A' or 'B', randomly assigned on first game start
 - `current_room` (VARCHAR(50)): Name of the room player is currently in (e.g., "Entryway")
-- `rooms_unlocked` (TEXT[]): Array of room names the player has unlocked/visited
+- `rooms_unlocked` (JSON): JSON array of room names the player has unlocked/visited
+  - **Not `TEXT[]`.** PostgreSQL array types have no SQLite equivalent, and the bot
+    falls back to SQLite whenever `DATABASE_URL` is unset — which is how it runs
+    locally. A JSON column behaves the same on both, so the table builds and the
+    same code reads it either way.
   - Initially: `["Entryway"]` (only starting room)
   - All other rooms in testing phase: starts unlocked via `/initialize-haunted-house` setup
 - `created_at`, `updated_at`: Timestamps
@@ -186,6 +207,8 @@ CREATE TABLE player_game_state (
 1. Check if player already has an entry in `player_game_state` table
 2. If YES: Respond "You're already in the haunted house!" (stop here)
 3. If NO, proceed:
+   - Ensure a `users` row exists for this player (create it if they have never
+     petted the cat) so the `player_game_state` foreign key is satisfied
    - Randomly assign cohort: A or B (50/50 chance)
    - Set `current_room = "Entryway"`
    - Set `rooms_unlocked = ["Entryway", "Dining Room", "Living Room", "Kitchen", "Courtyard", "Secret Library", "Upstairs Hallway", "Bedroom", "Nursery"]` (all rooms for testing phase)
@@ -265,6 +288,8 @@ When a player first joins the game (separate mechanism for starting the game):
 
 1. Check if player exists in `player_game_state` table
 2. If NOT found:
+   - **Ensure a `users` row exists for this player, creating one if needed** — the
+     foreign key requires it, and a player who has never petted has no row yet
    - Randomly assign cohort: A or B (50/50)
    - Set `current_room = "Entryway"`
    - Set `rooms_unlocked = ["Entryway"]`
@@ -360,6 +385,9 @@ This allows:
 **database.py** (existing, needs updates)
 - Add `player_game_state` table creation in `init_db()`
 - Add async functions:
+  - `ensure_user_exists(user_id)` → creates the `users` row if absent, so the
+    `player_game_state` foreign key can be satisfied for a player who has
+    never petted the cat
   - `get_or_create_game_state(user_id)` → returns cohort assignment
   - `update_current_room(user_id, room_name)` → sets current room
   - `get_rooms_unlocked(user_id)` → returns list of unlocked rooms
@@ -383,6 +411,8 @@ This allows:
 
 ### Database Setup
 - [ ] Create `player_game_state` table in `database.py` init
+- [ ] Implement `ensure_user_exists(user_id)` async function (call before any
+      `player_game_state` insert)
 - [ ] Implement `get_or_create_game_state(user_id)` async function
 - [ ] Implement `update_current_room(user_id, room_name)` async function
 - [ ] Implement `get_rooms_unlocked(user_id)` async function
@@ -458,6 +488,8 @@ This allows:
 - [ ] Test `/use` from dead-end rooms (e.g., Bedroom only has one exit)
 - [ ] Test reinitializing threads preserves player permissions
 - [ ] Test cohort consistency: same player always sees same room names
+- [ ] Test `/enter-entryway` for a player who has never run `/pet` (no `users`
+      row yet) - must succeed, not fail on the foreign key
 - [ ] Test error cases: invalid exits, unlocked room checks (currently all unlocked)
 
 ---
