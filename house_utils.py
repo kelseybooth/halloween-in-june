@@ -145,9 +145,33 @@ def validate_graph() -> list[str]:
     return problems
 
 
+# What the bot needs in #halloween, mapped to the labels Discord shows in its
+# permission UI, so a warning can name what to tick rather than an attribute.
+REQUIRED_PERMISSIONS = {
+    "view_channel": "View Channel",
+    "read_message_history": "Read Message History",
+    "manage_threads": "Manage Threads",
+    "create_private_threads": "Create Private Threads",
+    "send_messages_in_threads": "Send Messages in Threads",
+}
+
+
 def find_channel(guild: discord.Guild) -> discord.TextChannel | None:
     """The #halloween text channel, or None if the server has no such channel."""
     return discord.utils.get(guild.text_channels, name=HALLOWEEN_CHANNEL_NAME)
+
+
+def missing_permissions(channel: discord.TextChannel) -> list[str]:
+    """Permissions the bot still needs in this channel, by their Discord UI names.
+
+    Checked up front because the failures otherwise surface mid-run as opaque
+    "50001 Missing Access" errors that do not say which permission is absent.
+    """
+    me = channel.guild.me
+    if me is None:
+        return []
+    allowed = channel.permissions_for(me)
+    return [label for attr, label in REQUIRED_PERMISSIONS.items() if not getattr(allowed, attr, False)]
 
 
 async def _existing_threads(channel: discord.TextChannel) -> list[discord.Thread]:
@@ -165,9 +189,20 @@ async def _existing_threads(channel: discord.TextChannel) -> list[discord.Thread
                 if thread.id not in seen:
                     seen.add(thread.id)
                     threads.append(thread)
+        except discord.Forbidden:
+            # Expected and actionable, so say what to fix rather than dumping a
+            # traceback the reader has to decode - this repeats on every sweep.
+            log.warning(
+                "Cannot list %s archived threads in #%s: the bot needs the "
+                "'Read Message History' and 'Manage Threads' permissions there. "
+                "Active threads still work; archived ones are being skipped.",
+                "private" if private else "public",
+                channel.name,
+            )
         except discord.HTTPException:
-            # Missing history permission for archived private threads is not fatal.
-            log.warning("Could not list archived threads (private=%s)", private, exc_info=True)
+            log.warning(
+                "Could not list archived threads (private=%s)", private, exc_info=True
+            )
 
     return threads
 

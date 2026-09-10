@@ -142,6 +142,29 @@ class CatBot(commands.Bot):
 
     async def on_ready(self) -> None:
         log.info("Logged in as %s (id: %s)", self.user, self.user.id)
+
+        # Say up front what the haunted house is missing, rather than letting it
+        # surface later as an opaque "Missing Access" error mid-command.
+        for guild in self.guilds:
+            channel = house_utils.find_channel(guild)
+            if channel is None:
+                log.info(
+                    "%s has no #%s channel yet - create it before running "
+                    "/initialize-haunted-house",
+                    guild.name,
+                    house_utils.HALLOWEEN_CHANNEL_NAME,
+                )
+                continue
+            missing = house_utils.missing_permissions(channel)
+            if missing:
+                log.warning(
+                    "In %s, the bot is missing these permissions on #%s: %s. "
+                    "Grant them or the haunted house commands will fail.",
+                    guild.name,
+                    channel.name,
+                    ", ".join(missing),
+                )
+
         log.info("Ready - try /pet in your server")
 
     async def close(self) -> None:
@@ -260,6 +283,16 @@ async def initialize_haunted_house(interaction: discord.Interaction) -> None:
         await interaction.followup.send(
             f"I couldn't find a #{house_utils.HALLOWEEN_CHANNEL_NAME} channel. "
             "Create it first, then run this again.",
+            ephemeral=True,
+        )
+        return
+
+    missing = house_utils.missing_permissions(channel)
+    if missing:
+        await interaction.followup.send(
+            f"I'm missing these permissions on #{channel.name}:\n"
+            + "\n".join(f"- {name}" for name in missing)
+            + "\n\nGrant them to my role there, then run this again.",
             ephemeral=True,
         )
         return
