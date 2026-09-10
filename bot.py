@@ -149,6 +149,9 @@ class CatBot(commands.Bot):
         # Say up front what the haunted house is missing, rather than letting it
         # surface later as an opaque "Missing Access" error mid-command.
         for guild in self.guilds:
+            # Logged so GUILD_ID can be set without hunting for it in Discord's UI.
+            log.info("In guild %r (GUILD_ID=%s)", guild.name, guild.id)
+
             channel = house_utils.find_channel(guild)
             if channel is None:
                 log.info(
