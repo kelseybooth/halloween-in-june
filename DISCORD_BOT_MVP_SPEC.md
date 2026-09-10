@@ -7,6 +7,8 @@ Build a simple Discord bot that allows users to pet a cat (the bot) and track th
 - ✅ `/pet` slash command to pet the cat
 - ✅ Persistent per-user pet counter
 - ✅ 6 random response variations for each pet (3 friendly, 3 standoffish)
+- ✅ Cat mood weighting: repeated petting makes a standoffish reaction likelier
+- ✅ Per-user relationship meter, with nightly drift back toward neutral
 - ✅ `/stats` slash command to view pet count
 - ❌ Thread management
 - ❌ Role-based permissions
@@ -49,6 +51,8 @@ The bot token will be needed to run the bot.
 CREATE TABLE users (
   id BIGINT PRIMARY KEY,
   pet_count INTEGER DEFAULT 0,
+  relationship INTEGER DEFAULT 50,
+  last_decay_date DATE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -57,15 +61,87 @@ CREATE TABLE users (
 **Schema:**
 - `id` (BIGINT, PRIMARY KEY): Discord user ID
 - `pet_count` (INTEGER): Number of times user has petted the cat (default 0)
+- `relationship` (INTEGER): How the cat feels about this user, -100 to 100 (default 50)
+- `last_decay_date` (DATE): Last day the nightly drift was applied for this user
 - `created_at` (TIMESTAMP): When user first petted the cat
-- `updated_at` (TIMESTAMP): Last time pet_count was updated
+- `updated_at` (TIMESTAMP): Last time the row was updated
+
+**Table: `pet_events`**
+
+One timestamped row per pet. The `users` table holds only a lifetime total, which
+cannot answer "how many pets in the last ten minutes" — the question the mood
+weighting depends on.
+
+```sql
+CREATE TABLE pet_events (
+  id INTEGER PRIMARY KEY,
+  user_id BIGINT NOT NULL,
+  created_at TIMESTAMP NOT NULL
+);
+```
 
 **Behavior:**
 - Database connection established on bot startup using connection string from Railway environment variable
-- For `/pet`: Query database → increment → update row
-- For `/stats`: Query database → retrieve pet_count
+- For `/pet`: Query database → increment → update row → record a `pet_events` row
+- For `/stats`: Query database → retrieve pet_count and relationship
 - If user doesn't exist in database, insert new row with pet_count = 1
+- A user's row is created on their first `/pet`, never before
 - All queries are async (non-blocking)
+
+---
+
+## Cat Mood
+
+The cat tires of being pestered. Each `/pet` is either **friendly** (one of the 3
+friendly responses) or **standoffish** (one of the 3 standoffish responses), chosen
+at random but weighted by how much the user has petted recently.
+
+A user with no pets in the previous 10 minutes has a **70%** chance of a friendly
+reaction. Every pet already inside that 10-minute window subtracts 10 percentage
+points, floored at zero:
+
+| Recent pets (last 10 min) | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7+ |
+|---|---|---|---|---|---|---|---|---|
+| Chance of a friendly response | 70% | 60% | 50% | 40% | 30% | 20% | 10% | 0% |
+
+The window slides continuously rather than resetting on a timer, so the cat's
+patience returns gradually as a user goes quiet. From the 7th recent pet onward the
+cat is reliably standoffish until the window clears.
+
+---
+
+## Relationship Meter
+
+Every player has a relationship score with the cat, ranging from **-100 to 100**.
+
+**Starting value: 50.** The cat is friendly toward newcomers and has to be annoyed
+into hostility. This is a starting disposition, not a resting one — see the drift
+below.
+
+**Per pet:** a friendly reaction adds 5; a standoffish reaction subtracts 5. The
+score is clamped at both ends, so it never leaves the -100 to 100 range.
+
+### Nightly drift toward neutral
+
+At **midnight Pacific** each day, any player who did **not** `/pet` at all during
+that day drifts back toward 0:
+
+| Score at midnight | Change | Stops at |
+|---|---|---|
+| 10 or above | -10 | 0 (never below) |
+| Between -19 and 9 | no change | — |
+| -20 or below | +20 | 0 (never above) |
+
+**Rules and edge cases:**
+- Petting even once during a day cancels that night's drift entirely.
+- The thresholds are re-evaluated each night, so a score of 15 drops to 5 and then
+  stops, because 5 is below the 10 threshold. Drift never crosses zero.
+- **0 is the resting point.** A new player who never returns drifts 50 → 40 → 30 →
+  20 → 10 → 0 across five idle days.
+- Nights the bot was offline for are settled when it next starts, so an outage does
+  not silently skip a player's drift, and no night is ever applied twice.
+- Midnight follows Pacific *local* time, so it tracks daylight saving rather than
+  drifting by an hour twice a year.
 
 ---
 
@@ -117,13 +193,14 @@ Total pets: 42
 
 **Behavior:**
 1. Get the user's ID
-2. Query database for user's pet_count (default to 0 if user not found)
-3. Send a response message displaying their pet count
+2. Query database for user's pet_count and relationship (default to 0 if user not found)
+3. Send a response message displaying their pet count and relationship score
 
 **Response Format:**
 ```
 Your cat petting stats:
 Total pets: 42
+Relationship: 65
 ```
 
 **Error Handling:**
@@ -295,7 +372,7 @@ asyncpg==0.29.0
 3. **SQLAlchemy ORM:** Using SQLAlchemy for async database access. Cleaner than raw asyncpg, easier to expand for future features.
 4. **Async/Await:** All database operations are async (non-blocking), so Discord bot responsiveness is never impacted.
 5. **Slash Commands Only:** No prefix commands for MVP; slash commands are modern Discord standard.
-6. **Random Responses:** Use Python's `random.choice()` to pick from list of 6 strings, weighted evenly. Weighting by mood (e.g. friendlier at low pet counts) is a Phase 2 option.
+6. **Random Responses:** Pick at random from the 6 strings, weighted by the cat's mood rather than evenly — see Cat Mood above. The two pools (friendly, standoffish) are chosen between first, then a line is picked uniformly from within the chosen pool.
 7. **Per-User Isolation:** Each user's counter is independent and persists across sessions via database.
 8. **No Authentication:** Discord handles auth via bot token; no additional security needed for MVP.
 

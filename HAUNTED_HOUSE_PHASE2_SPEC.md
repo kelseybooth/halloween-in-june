@@ -101,7 +101,10 @@ Nursery
 
 ### Update to Users Table
 
-Keep existing columns (`id`, `pet_count`, `created_at`, `updated_at`).
+Keep all existing columns: `id`, `pet_count`, `relationship`, `last_decay_date`,
+`created_at`, `updated_at`. Phase 2 adds nothing to this table — the relationship
+meter and its nightly decay (see the Phase 1 spec) continue to work unchanged
+alongside the haunted house.
 
 ### New Table: Player Game State
 
@@ -110,7 +113,7 @@ CREATE TABLE player_game_state (
   user_id BIGINT PRIMARY KEY,
   room_version_assignment CHAR(1) CHECK (room_version_assignment IN ('A', 'B')),
   current_room VARCHAR(50),
-  rooms_unlocked TEXT[], -- Array of room names player has visited/unlocked
+  rooms_unlocked JSON, -- JSON array of room names player has visited/unlocked
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id)
@@ -121,7 +124,11 @@ CREATE TABLE player_game_state (
 - `user_id` (BIGINT, PRIMARY KEY): Discord user ID
 - `room_version_assignment` (CHAR(1)): 'A' or 'B', randomly assigned on first game start
 - `current_room` (VARCHAR(50)): Name of the room player is currently in (e.g., "Entryway")
-- `rooms_unlocked` (TEXT[]): Array of room names the player has unlocked/visited
+- `rooms_unlocked` (JSON): JSON array of room names the player has unlocked/visited
+  - **Not `TEXT[]`.** PostgreSQL array types have no SQLite equivalent, and the bot
+    falls back to SQLite whenever `DATABASE_URL` is unset — which is how it runs
+    locally. A JSON column behaves the same on both, so the table builds and the
+    same code reads it either way.
   - Initially: `["Entryway"]` (only starting room)
   - All other rooms in testing phase: starts unlocked via `/initialize-haunted-house` setup
 - `created_at`, `updated_at`: Timestamps
