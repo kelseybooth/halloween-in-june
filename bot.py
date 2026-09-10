@@ -125,6 +125,7 @@ class CatBot(commands.Bot):
         if caught_up:
             log.info("Startup decay settled %d relationship(s)", len(caught_up))
         nightly_decay.start()
+        keep_threads_alive.start()
 
         # Global syncs can take up to an hour to propagate. Setting GUILD_ID copies
         # the commands into one server instead, where they appear immediately - much
@@ -146,6 +147,7 @@ class CatBot(commands.Bot):
     async def close(self) -> None:
         """Graceful shutdown: stop the scheduler, release the pool, then disconnect."""
         nightly_decay.cancel()
+        keep_threads_alive.cancel()
         await database.close_db()
         await super().close()
 
@@ -176,6 +178,40 @@ async def nightly_decay() -> None:
 
 @nightly_decay.before_loop
 async def _before_nightly_decay() -> None:
+    await bot.wait_until_ready()
+
+
+# Discord's longest auto-archive is 7 days, so a daily sweep is comfortably ahead
+# of any room going quiet long enough to archive.
+@tasks.loop(hours=24)
+async def keep_threads_alive() -> None:
+    """Keep every haunted house thread permanently open.
+
+    Rooms are meant to stay available regardless of how long they sit idle, and
+    Discord offers no auto-archive setting long enough to express that, so archived
+    rooms are revived here instead.
+    """
+    for guild in bot.guilds:
+        channel = house_utils.find_channel(guild)
+        if channel is None:
+            continue
+        try:
+            revived, errors = await house_utils.unarchive_all(channel)
+        except discord.Forbidden:
+            log.warning("No permission to manage threads in #%s (%s)", channel.name, guild.name)
+            continue
+        except discord.HTTPException:
+            log.exception("Keep-alive sweep failed in %s", guild.name)
+            continue
+
+        for err in errors:
+            log.warning("Keep-alive: %s", err)
+        if revived:
+            log.info("Keep-alive revived %d thread(s) in %s", revived, guild.name)
+
+
+@keep_threads_alive.before_loop
+async def _before_keep_alive() -> None:
     await bot.wait_until_ready()
 
 

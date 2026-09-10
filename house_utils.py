@@ -15,8 +15,10 @@ log = logging.getLogger(__name__)
 # The channel the house lives in. Must already exist - the bot does not create it.
 HALLOWEEN_CHANNEL_NAME = "halloween"
 
-# One week, the longest value Discord accepts. Long enough that a slow tester does
-# not come back to an archived room.
+# Discord accepts only 60, 1440, 4320 or 10080 minutes, so one week is the longest
+# auto-archive it will take. The house is meant never to archive, so this is a
+# backstop rather than the real policy: keep_threads_alive() revives anything that
+# slips through, which is what actually keeps the rooms open indefinitely.
 THREAD_AUTO_ARCHIVE_MINUTES = 10080
 
 COHORTS = ("A", "B")
@@ -50,11 +52,9 @@ NAVIGATION_GRAPH = {
     "Kitchen": {"KD": "Dining Room", "KH": "Upstairs Hallway", "KC": "Courtyard"},
     "Courtyard": {"CK": "Kitchen", "CS": "Secret Library"},
     "Secret Library": {"SL": "Living Room", "SC": "Courtyard"},
-    # HE is not in the spec's graph, which lists Entryway -> Upstairs Hallway (EH)
-    # with no return exit. The spec also states every exit is bidirectional, so the
-    # omission looks like an oversight rather than a one-way door; without HE the
-    # Entryway is unreachable from upstairs except by going the long way round
-    # through the Kitchen.
+    # HE was missing from the spec's original diagram, which gave Entryway an exit
+    # up (EH) with no way back down. Confirmed as an oversight rather than a
+    # one-way door, and added to the spec to match.
     "Upstairs Hallway": {
         "HK": "Kitchen",
         "HB": "Bedroom",
@@ -248,8 +248,47 @@ async def remove_player_from_thread(thread: discord.Thread, player_id: int) -> N
     await thread.remove_user(discord.Object(id=player_id))
 
 
-def get_thread_by_room_and_cohort(
+async def unarchive_all(channel: discord.TextChannel) -> tuple[int, list[str]]:
+    """Revive every archived house thread. Returns (revived count, errors).
+
+    Discord's longest auto-archive is 7 days, so a room with no traffic for a week
+    would archive and drop out of the channel's active list. Running this on a
+    schedule keeps all 18 rooms permanently open.
+    """
+    wanted = set(all_thread_names())
+    revived = 0
+    errors: list[str] = []
+
+    for thread in await _existing_threads(channel):
+        if thread.name not in wanted or not thread.archived:
+            continue
+        try:
+            # A locked thread cannot be unarchived without also unlocking it.
+            if thread.locked:
+                await thread.edit(archived=False, locked=False)
+            else:
+                await thread.edit(archived=False)
+            revived += 1
+        except discord.HTTPException as exc:
+            errors.append(f"could not revive thread {thread.name!r}: {exc}")
+            log.warning("Failed to unarchive thread %s", thread.name, exc_info=True)
+
+    if revived:
+        log.info("Revived %d archived house thread(s) in #%s", revived, channel.name)
+    return revived, errors
+
+
+async def get_thread_by_room_and_cohort(
     channel: discord.TextChannel, room_name: str, cohort: str
 ) -> discord.Thread | None:
-    """Find the live thread for a room/cohort pair by name."""
-    return discord.utils.get(channel.threads, name=get_thread_name(room_name, cohort))
+    """Find the thread for a room/cohort pair by name.
+
+    Searches archived threads as well as active ones: `channel.threads` omits
+    archived threads, so an active-only lookup would fail during the window between
+    a thread archiving and the next keep-alive pass reviving it.
+    """
+    name = get_thread_name(room_name, cohort)
+    for thread in await _existing_threads(channel):
+        if thread.name == name:
+            return thread
+    return None
