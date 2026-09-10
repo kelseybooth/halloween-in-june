@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 from sqlalchemy.exc import SQLAlchemyError
 
 import database
+import house_utils
 
 load_dotenv()
 
@@ -114,11 +115,17 @@ class CatBot(commands.Bot):
         """Runs once before the gateway connects - open the DB and register commands."""
         await database.init_db()
 
+        # A broken layout would surface as a player hitting a dead end mid-game,
+        # so check it once at startup instead.
+        for problem in house_utils.validate_graph():
+            log.error("Navigation graph problem: %s", problem)
+
         # Settle any nights the bot was offline for before serving commands.
         caught_up = await database.run_pending_decay()
         if caught_up:
             log.info("Startup decay settled %d relationship(s)", len(caught_up))
         nightly_decay.start()
+        keep_threads_alive.start()
 
         # Global syncs can take up to an hour to propagate. Setting GUILD_ID copies
         # the commands into one server instead, where they appear immediately - much
@@ -135,11 +142,35 @@ class CatBot(commands.Bot):
 
     async def on_ready(self) -> None:
         log.info("Logged in as %s (id: %s)", self.user, self.user.id)
+
+        # Say up front what the haunted house is missing, rather than letting it
+        # surface later as an opaque "Missing Access" error mid-command.
+        for guild in self.guilds:
+            channel = house_utils.find_channel(guild)
+            if channel is None:
+                log.info(
+                    "%s has no #%s channel yet - create it before running "
+                    "/initialize-haunted-house",
+                    guild.name,
+                    house_utils.HALLOWEEN_CHANNEL_NAME,
+                )
+                continue
+            missing = house_utils.missing_permissions(channel)
+            if missing:
+                log.warning(
+                    "In %s, the bot is missing these permissions on #%s: %s. "
+                    "Grant them or the haunted house commands will fail.",
+                    guild.name,
+                    channel.name,
+                    ", ".join(missing),
+                )
+
         log.info("Ready - try /pet in your server")
 
     async def close(self) -> None:
         """Graceful shutdown: stop the scheduler, release the pool, then disconnect."""
         nightly_decay.cancel()
+        keep_threads_alive.cancel()
         await database.close_db()
         await super().close()
 
@@ -173,6 +204,40 @@ async def _before_nightly_decay() -> None:
     await bot.wait_until_ready()
 
 
+# Discord's longest auto-archive is 7 days, so a daily sweep is comfortably ahead
+# of any room going quiet long enough to archive.
+@tasks.loop(hours=24)
+async def keep_threads_alive() -> None:
+    """Keep every haunted house thread permanently open.
+
+    Rooms are meant to stay available regardless of how long they sit idle, and
+    Discord offers no auto-archive setting long enough to express that, so archived
+    rooms are revived here instead.
+    """
+    for guild in bot.guilds:
+        channel = house_utils.find_channel(guild)
+        if channel is None:
+            continue
+        try:
+            revived, errors = await house_utils.unarchive_all(channel)
+        except discord.Forbidden:
+            log.warning("No permission to manage threads in #%s (%s)", channel.name, guild.name)
+            continue
+        except discord.HTTPException:
+            log.exception("Keep-alive sweep failed in %s", guild.name)
+            continue
+
+        for err in errors:
+            log.warning("Keep-alive: %s", err)
+        if revived:
+            log.info("Keep-alive revived %d thread(s) in %s", revived, guild.name)
+
+
+@keep_threads_alive.before_loop
+async def _before_keep_alive() -> None:
+    await bot.wait_until_ready()
+
+
 @bot.tree.command(name="pet", description="Pet the cat.")
 async def pet(interaction: discord.Interaction) -> None:
     # Defer first: the DB round trip can exceed Discord's 3s interaction deadline.
@@ -190,6 +255,98 @@ async def pet(interaction: discord.Interaction) -> None:
     if SHOW_DEBUG_INFO:
         message += _debug_lines(reaction, result.recent, relationship)
     await interaction.followup.send(message)
+
+
+@bot.tree.command(
+    name="initialize-haunted-house",
+    description="(Admin) Rebuild every haunted house thread from scratch.",
+)
+@app_commands.default_permissions(administrator=True)
+@app_commands.checks.has_permissions(administrator=True)
+async def initialize_haunted_house(interaction: discord.Interaction) -> None:
+    """Delete and recreate all 18 room threads, restoring players to their rooms.
+
+    Rerunnable by design: players are re-added afterwards from the database, so a
+    rebuild does not strand anyone in a thread that no longer exists.
+    """
+    if interaction.guild is None:
+        await interaction.response.send_message(
+            "This command only works inside a server.", ephemeral=True
+        )
+        return
+
+    # Deleting and creating 18 threads takes far longer than Discord's 3s deadline.
+    await interaction.response.defer(ephemeral=True, thinking=True)
+
+    channel = house_utils.find_channel(interaction.guild)
+    if channel is None:
+        await interaction.followup.send(
+            f"I couldn't find a #{house_utils.HALLOWEEN_CHANNEL_NAME} channel. "
+            "Create it first, then run this again.",
+            ephemeral=True,
+        )
+        return
+
+    missing = house_utils.missing_permissions(channel)
+    if missing:
+        await interaction.followup.send(
+            f"I'm missing these permissions on #{channel.name}:\n"
+            + "\n".join(f"- {name}" for name in missing)
+            + "\n\nGrant them to my role there, then run this again.",
+            ephemeral=True,
+        )
+        return
+
+    try:
+        locations = await database.get_all_player_locations()
+    except SQLAlchemyError:
+        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    try:
+        result = await house_utils.initialize_threads(channel, locations)
+    except discord.Forbidden:
+        log.exception("Missing permissions to manage threads in #%s", channel.name)
+        await interaction.followup.send(
+            f"I don't have permission to manage threads in #{channel.name}. "
+            "I need Manage Threads and Create Private Threads there.",
+            ephemeral=True,
+        )
+        return
+    except discord.HTTPException:
+        log.exception("Thread initialization failed")
+        await interaction.followup.send(
+            "Something went wrong talking to Discord. Check the logs and try again.",
+            ephemeral=True,
+        )
+        return
+
+    lines = [
+        f"Haunted House initialized with {result.created} threads.",
+        f"- deleted {result.deleted} existing thread(s)",
+        f"- restored {result.restored} player(s) to their current room",
+    ]
+    if result.errors:
+        lines.append(f"\n**{len(result.errors)} problem(s):**")
+        # Discord caps messages at 2000 characters; show a few and log the rest.
+        lines.extend(f"- {err}" for err in result.errors[:5])
+        if len(result.errors) > 5:
+            lines.append(f"- ...and {len(result.errors) - 5} more (see logs)")
+
+    await interaction.followup.send("\n".join(lines), ephemeral=True)
+
+
+@initialize_haunted_house.error
+async def _initialize_error(
+    interaction: discord.Interaction, error: app_commands.AppCommandError
+) -> None:
+    """Turn the permission check failure into a clear message rather than a traceback."""
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message(
+            "You need to be a server administrator to run this.", ephemeral=True
+        )
+        return
+    raise error
 
 
 @bot.tree.command(name="stats", description="See how many times you've petted the cat.")

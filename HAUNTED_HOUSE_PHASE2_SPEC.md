@@ -84,7 +84,8 @@ Secret Library
 Upstairs Hallway
 ├─ Kitchen (exit code: HK) [via Secret Staircase]
 ├─ Bedroom (exit code: HB)
-└─ Nursery (exit code: HN)
+├─ Nursery (exit code: HN)
+└─ Entryway (exit code: HE)
 
 Bedroom
 └─ Upstairs Hallway (exit code: BH)
@@ -155,6 +156,8 @@ relationship drift iterates `users`, so such a player would silently never drift
 
 - **#halloween** channel: Contains all 18 thread (9 rooms × 2 versions)
 - Threads are **private** (invitation-only)
+- Threads are kept permanently un-archived by a daily sweep, so a room that
+  goes untouched for weeks is still there when a player returns
 - Thread names follow naming convention above
 
 ### Thread Permissions
@@ -180,7 +183,12 @@ relationship drift iterates `users`, so such a player would silently never drift
 3. Create 18 threads (9 rooms × 2 versions):
    - Thread names follow naming convention (no article / with article)
    - Threads are set to **private** with no initial members
-   - Set auto-archive: 1 week (reasonable default)
+   - Set auto-archive to 7 days, Discord's maximum (it accepts only 1 hour,
+     1 day, 3 days or 7 days)
+   - **Rooms must never actually archive.** Since no auto-archive setting is
+     long enough to express that, a daily background sweep un-archives every
+     house thread, keeping all 18 permanently open regardless of how long a
+     room sits idle. The 7-day setting is only a backstop.
 4. Log completion: "Haunted House initialized with 18 threads"
 5. Provide confirmation in Discord
 
@@ -429,7 +437,9 @@ This allows:
   - [ ] Delete existing threads (if any)
   - [ ] Create 18 new threads (9 rooms × 2 cohorts)
   - [ ] Set thread privacy (private)
-  - [ ] Set auto-archive duration
+  - [ ] Set auto-archive duration (7 days - Discord's maximum)
+- [ ] Implement a daily sweep that un-archives every house thread, so rooms
+      stay open no matter how long they sit idle
   - [ ] Return success/failure info
 - [ ] Implement `add_player_to_thread(thread, player_id)` async function
 - [ ] Implement `remove_player_from_thread(thread, player_id)` async function
@@ -551,7 +561,9 @@ exit_flavors = {
 ## Questions for Claude Code
 
 - Should we use a config file for `NAVIGATION_GRAPH` or hardcode in `house_utils.py`? (Hardcoding is fine for Phase 2)
-- Should thread auto-archive be 1 week or different? (1 week is reasonable for testing)
+- Should thread auto-archive be 1 week or different? **Resolved:** rooms should
+  never archive. Discord's maximum setting is 7 days, so the setting is a
+  backstop and a daily sweep keeps all 18 threads permanently open.
 - Any specific logging recommendations for room transitions? (Standard `logging` module is fine)
 - Should we add a `/current-room` command so players can check where they are? (Nice to have, but not required for MVP)
 - Should we add a `/rooms-unlocked` command so players can see what they've discovered? (Nice to have, but not required for MVP)

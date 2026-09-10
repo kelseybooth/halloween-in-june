@@ -14,11 +14,14 @@ from typing import NamedTuple
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Date,
     DateTime,
+    ForeignKey,
     Index,
     Integer,
+    String,
     case,
     func,
     inspect,
@@ -157,6 +160,33 @@ class PetEvent(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class PlayerGameState(Base):
+    """One row per player who has started the haunted house (Phase 2).
+
+    Separate from `users`, which counts petting: a player can pet the cat without
+    entering the house. The foreign key means the reverse is not true, so game
+    start must ensure a `users` row exists before inserting here.
+    """
+
+    __tablename__ = "player_game_state"
+
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id"), primary_key=True, autoincrement=False
+    )
+    # 'A' sees rooms without a leading article, 'B' with one.
+    room_version_assignment: Mapped[str] = mapped_column(String(1), nullable=False)
+    current_room: Mapped[str] = mapped_column(String(50), nullable=False)
+    # JSON rather than a PostgreSQL array: arrays have no SQLite equivalent, and
+    # SQLite is what runs locally whenever DATABASE_URL is unset.
+    rooms_unlocked: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
 
 
 def _normalise_url(raw: str) -> str:
@@ -354,6 +384,28 @@ async def get_pet_count(user_id: int) -> int:
             return result.scalar_one_or_none() or 0
     except SQLAlchemyError:
         log.exception("Failed to read pet count for user %s", user_id)
+        raise
+
+
+async def get_all_player_locations() -> list[tuple[int, str, str]]:
+    """Every player's (user_id, cohort, current_room).
+
+    Used when rebuilding the house: the database says who belongs in which thread,
+    so recreating threads does not strand anyone.
+    """
+    session_factory = _require_session()
+    try:
+        async with session_factory() as session:
+            rows = await session.execute(
+                select(
+                    PlayerGameState.user_id,
+                    PlayerGameState.room_version_assignment,
+                    PlayerGameState.current_room,
+                )
+            )
+            return [(row[0], row[1], row[2]) for row in rows]
+    except SQLAlchemyError:
+        log.exception("Failed to read player locations")
         raise
 
 
