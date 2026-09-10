@@ -65,6 +65,8 @@ DB_ERROR_MESSAGE = (
     "Something went wrong reaching the database - please try again in a moment."
 )
 
+GENERIC_ERROR_MESSAGE = "An error occurred. Try again."
+
 
 class Reaction(NamedTuple):
     """A chosen response plus the weighting that produced it."""
@@ -347,6 +349,92 @@ async def _initialize_error(
         )
         return
     raise error
+
+
+# TODO(Phase 3): remove this command. It exists so testers can self-onboard without
+# an admin; a proper game start flow replaces it.
+@bot.tree.command(
+    name="enter-entryway",
+    description="Enter the haunted house and begin in the Entryway.",
+)
+async def enter_entryway(interaction: discord.Interaction) -> None:
+    """Enrol the player, assign a cohort, and place them in their Entryway thread."""
+    if interaction.guild is None:
+        await interaction.response.send_message(
+            "This command only works inside a server.", ephemeral=True
+        )
+        return
+
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    user = interaction.user
+
+    channel = house_utils.find_channel(interaction.guild)
+    if channel is None:
+        await interaction.followup.send(
+            f"There's no #{house_utils.HALLOWEEN_CHANNEL_NAME} channel yet. "
+            "An admin needs to create it and run `/initialize-haunted-house`.",
+            ephemeral=True,
+        )
+        return
+
+    # Assign the cohort before looking up the thread, since which thread the player
+    # belongs in depends on it. A 50/50 split, per the spec.
+    cohort = random.choice(house_utils.COHORTS)
+
+    # Find the thread first: enrolling a player and then discovering the house was
+    # never built would leave them marked as inside a room that does not exist.
+    try:
+        thread = await house_utils.get_thread_by_room_and_cohort(
+            channel, house_utils.STARTING_ROOM, cohort
+        )
+    except discord.HTTPException:
+        log.exception("Could not look up the Entryway thread")
+        await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    if thread is None:
+        await interaction.followup.send(
+            "The haunted house hasn't been built yet. "
+            "Ask an admin to run `/initialize-haunted-house`.",
+            ephemeral=True,
+        )
+        return
+
+    try:
+        # All rooms start unlocked during the testing phase; Phase 3 gates them
+        # behind puzzles and this becomes just the starting room.
+        enrolled = await database.start_game(
+            user.id, cohort, house_utils.STARTING_ROOM, list(house_utils.ROOMS)
+        )
+    except SQLAlchemyError:
+        await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    if not enrolled:
+        await interaction.followup.send("You're already in the haunted house!", ephemeral=True)
+        return
+
+    try:
+        await house_utils.add_player_to_thread(thread, user.id)
+        await thread.send(
+            f"Welcome, {user.mention}! You arrive at the entrance to the haunted "
+            "house. The cat appears at your side."
+        )
+    except discord.HTTPException:
+        # Undo the enrolment so the player can retry, rather than being recorded as
+        # inside a house they were never actually let into.
+        log.exception("Failed to place %s in the Entryway; rolling back", user.id)
+        try:
+            await database.delete_game_state(user.id)
+        except SQLAlchemyError:
+            log.error("Rollback failed for %s - player may be stuck enrolled", user.id)
+        await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    await interaction.followup.send(
+        f"You've entered the haunted house! Head to {thread.mention} to begin.",
+        ephemeral=True,
+    )
 
 
 @bot.tree.command(name="stats", description="See how many times you've petted the cat.")
