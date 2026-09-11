@@ -94,7 +94,13 @@ Nursery
 └─ Upstairs Hallway (exit code: NH)
 ```
 
-**Note:** The exit codes (DK, DE, etc.) are temporary. In future iterations, exits will have descriptive names like "blue door" or "ornate doorway". The `/use` command must be flexible enough to accept both codes and descriptive strings.
+**Every exit has two names.** The codes above (DK, DE, …) are each exit's
+`thing_ID`: a stable identifier that code and tests refer to and that never
+changes. Separately, each exit has a `thing` — the description players see and
+can type. For now every description is the placeholder `<thing_ID>_desc` (so EL's
+description is `EL_desc`); Phase 3 replaces each with real copy such as "blue
+door" or "ornate doorway", and *only the description changes*. The `/use` command
+accepts the `thing_ID`, the description, or the destination room name.
 
 ---
 
@@ -323,10 +329,11 @@ players can interact with, and the same command will handle both.
 
 4. **Exit message:**
    - Send exit message in current room thread
-   - Format: `@<username> exits via <exit label>.`
-   - Example: `@Alice exits via EL.` (Phase 3: `@Alice exits via blue door.`)
-   - The label is the exit's canonical label from the navigation graph, not what
-     the player typed: `/use living room` still announces `exits via EL.`
+   - Format: `@<username> exits via <thing>.` — the exit's **description**, never its ID
+   - Example: `@Alice exits via EL_desc.` (Phase 3: `@Alice exits via blue door.`)
+   - The description comes from the navigation graph, not from what the player
+     typed: `/use EL`, `/use el_desc` and `/use living room` all announce
+     `exits via EL_desc.`
    - No link to the destination thread. The player who moved gets a private
      "You head to <room>" reply with the link; onlookers in the room they left
      see only which exit was taken.
@@ -394,16 +401,17 @@ When a player first joins the game (separate mechanism for starting the game):
 
 **In the room player is leaving:**
 ```
-@<username> exits via <exit label>.
+@<username> exits via <thing>.
 ```
 
-The exit label is the canonical one from the navigation graph. There is no
-link to the destination: the mover receives that privately, and the room they
+`<thing>` is the exit's description from the navigation graph (`EL_desc` now,
+"blue door" after Phase 3), regardless of how the player referred to it. There is
+no link to the destination: the mover receives that privately, and the room they
 left learns only which exit they took.
 
 **Example in Discord:**
 ```
-@Alice exits via EL.
+@Alice exits via EL_desc.
 ```
 
 ### Entry Message Format
@@ -427,37 +435,44 @@ left learns only which exit they took.
 The navigation graph should be structured in code for easy updates. Suggested structure:
 
 ```python
+class Exit(NamedTuple):
+    thing_id: str      # stable identifier: "EL". Never changes.
+    thing: str         # what players see and can type: "EL_desc" now, "blue door" in Phase 3
+    destination: str   # room this exit leads to
+
+def _exit(thing_id, destination, thing=None):
+    # description defaults to "<thing_id>_desc" until a writer supplies one
+    return Exit(thing_id, thing or f"{thing_id}_desc", destination)
+
 NAVIGATION_GRAPH = {
     "Entryway": {
-        "exits": {
-            "ED": "Dining Room",      # exit code: destination
-            "EL": "Living Room",
-            "EH": "Upstairs Hallway"
-        }
+        "ED": _exit("ED", "Dining Room"),
+        "EL": _exit("EL", "Living Room"),
+        "EH": _exit("EH", "Upstairs Hallway"),
     },
     "Dining Room": {
-        "exits": {
-            "DE": "Entryway",
-            "DK": "Kitchen"
-        }
-    },
-    "Living Room": {
-        "exits": {
-            "LE": "Entryway",
-            "LS": "Secret Library"
-        }
+        "DE": _exit("DE", "Entryway"),
+        "DK": _exit("DK", "Kitchen"),
     },
     # ... etc for all 9 rooms
 }
 ```
 
 This allows:
-- Easy lookup: `NAVIGATION_GRAPH["Entryway"]["exits"]["EL"]` → "Living Room"
+- Easy lookup: `NAVIGATION_GRAPH["Entryway"]["EL"].destination` → "Living Room"
 - Easy iteration for initialization
 - Easy updates if exits change
-- Easy extension for future exit descriptions (replace "ED" with descriptive name)
+- **Phase 3 is a one-argument change per exit:** `_exit("EL", "Living Room", thing="blue door")`.
+  The ID, the key, the destination and every test referring to `EL` stay as they are.
 
-**In future:** Exit labels will be descriptive ("blue door", "ornate doorway") instead of codes. The structure remains the same.
+A startup self-check validates the graph: every room present, every exit's
+destination real, every exit bidirectional, every room reachable from the
+Entryway, each dict key matching its exit's `thing_id`, and — once writers start
+naming things — no two exits in the same room sharing a description, which would
+make a player's input ambiguous.
+
+**Placeholder descriptions are deliberately ugly.** `EL_desc` cannot be mistaken
+for finished copy, so any exit a writer has not yet named stands out in play.
 
 ---
 
@@ -649,7 +664,7 @@ The room entry/exit messages should use placeholder text that's easy to find and
 
 **Exit Message:**
 ```python
-exit_msg = f"@{player_name} exits via {exit_label}."
+exit_msg = f"@{player_name} exits via {exit.thing}."
 ```
 
 **Entry Message:**
