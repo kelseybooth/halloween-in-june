@@ -38,19 +38,34 @@ Railway is a deployment platform that makes hosting applications simple. It hand
 1. In your Railway project dashboard, click "New Service"
 2. Select "Database" → "PostgreSQL"
 3. Railway automatically provisions a PostgreSQL database
-4. **Important:** Railway automatically adds `DATABASE_URL` environment variable
-   - You can see it in the PostgreSQL service settings
-   - Copy this value (you'll need it for local testing)
+4. The Postgres service now has its own `DATABASE_URL` variable — **but the bot
+   cannot see it yet.** Railway does *not* share one service's variables with
+   another automatically. You link them in Step 4.
 
 ---
 
-## Step 4: Add Your Discord Bot Token
+## Step 4: Give the Bot Its Variables
 
-1. In your Railway project dashboard, click "Variables"
-2. Add a new variable:
+These go on the **bot's service** (the one deployed from GitHub, often shown as
+"Worker"), not on the Postgres service.
+
+1. Click the bot service → **Variables** tab
+2. Add `DISCORD_TOKEN`:
    - **Key:** `DISCORD_TOKEN`
    - **Value:** Your Discord bot token (from Developer Portal)
-3. Save the variables
+3. Add `DATABASE_URL` as a **reference**, not a pasted value:
+   - Click **Add Variable Reference** (or type `${{Postgres.DATABASE_URL}}` as the value)
+   - Choose the Postgres service's `DATABASE_URL`
+   - A reference stays correct if Railway ever rotates the database credentials;
+     a pasted value would silently break
+4. Leave `GUILD_ID` unset in production — the bot runs in multiple servers, so
+   commands must sync globally
+5. Railway redeploys automatically once variables change
+
+**If you skip `DATABASE_URL`:** the bot refuses to start and says so in the
+logs. It will not fall back to SQLite on Railway, because that file lives on the
+container's disk and is wiped on every redeploy — all player data would vanish
+silently.
 
 ---
 
