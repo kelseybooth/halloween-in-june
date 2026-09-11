@@ -308,6 +308,9 @@ async def initialize_haunted_house(interaction: discord.Interaction) -> None:
 
     try:
         locations = await database.get_all_player_locations(interaction.guild_id)
+        # Room rows hold writer descriptions; make sure each room has one to
+        # fill in. Existing descriptions are never overwritten by a rebuild.
+        await database.seed_rooms(interaction.guild_id, house_utils.ROOMS)
     except SQLAlchemyError:
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
         return
@@ -563,6 +566,179 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
     await interaction.followup.send(
         f"You head to {destination_thread.mention}.", ephemeral=True
     )
+
+
+GENERIC_ROOM_DESCRIPTION = "You see a room."
+NOT_IN_ROOM_MESSAGE = "You must be in a room to look around."
+CANT_LOOK_MESSAGE = "You can't look at that."
+INVENTORY_ERROR_MESSAGE = "Couldn't retrieve your inventory. Try again."
+
+
+@bot.tree.command(name="look", description="Look around the room, or at a specific thing.")
+@app_commands.guild_only()
+@app_commands.describe(thing="What to look at. Leave empty to look around the room.")
+async def look(interaction: discord.Interaction, thing: str | None = None) -> None:
+    """Describe the player's current room, or one thing in it or in their bag.
+
+    Replies are ephemeral: /look can be typed in any channel of the server, and a
+    public reply would leak room and thing descriptions to people who are not
+    playing. It also keeps a busy room thread from filling with everyone's looks.
+    """
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    user = interaction.user
+
+    try:
+        state = await database.get_game_state(user.id, interaction.guild_id)
+    except SQLAlchemyError:
+        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    if state is None:
+        await interaction.followup.send(NOT_IN_ROOM_MESSAGE, ephemeral=True)
+        return
+
+    if thing is None or not thing.strip():
+        try:
+            description = await database.get_room_description(
+                interaction.guild_id, state.current_room
+            )
+        except SQLAlchemyError:
+            await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+            return
+        await interaction.followup.send(description or GENERIC_ROOM_DESCRIPTION, ephemeral=True)
+        return
+
+    try:
+        found = await database.look_at_thing(
+            user.id, interaction.guild_id, state.current_room, thing
+        )
+    except SQLAlchemyError:
+        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    if found is None:
+        await interaction.followup.send(CANT_LOOK_MESSAGE, ephemeral=True)
+        return
+
+    # A thing with no description yet still exists; say so rather than send nothing.
+    text = found.description or f"You see {thing.strip()}."
+    if found.count > 1:
+        text += f" There are {found.count}."
+    await interaction.followup.send(text, ephemeral=True)
+
+
+@bot.tree.command(name="inventory", description="See what you're carrying.")
+@app_commands.guild_only()
+async def inventory(interaction: discord.Interaction) -> None:
+    """List the player's carried things in this server, grouped and counted."""
+    await interaction.response.defer(ephemeral=True, thinking=True)
+
+    try:
+        items = await database.get_inventory(interaction.user.id, interaction.guild_id)
+    except SQLAlchemyError:
+        await interaction.followup.send(INVENTORY_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    if not items:
+        await interaction.followup.send("Your inventory is empty.", ephemeral=True)
+        return
+
+    lines = ["Your inventory:"]
+    lines.extend(f"- {name} ({count})" for name, count in items)
+    lines.append(f"\nTotal items: {sum(count for _, count in items)}")
+    await interaction.followup.send("\n".join(lines), ephemeral=True)
+
+
+# --- Admin helpers for populating content without touching the database -------
+# Both act on the admin's *current room*, so an admin walks to a room and
+# describes it or drops things into it from inside the game.
+
+
+@bot.tree.command(
+    name="add-thing",
+    description="(Admin) Place a thing in the room you're standing in.",
+)
+@app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
+@app_commands.checks.has_permissions(administrator=True)
+@app_commands.describe(
+    name="What players will type to look at it, e.g. 'cat food'.",
+    description="What they see when they look. Optional.",
+)
+async def add_thing(
+    interaction: discord.Interaction, name: str, description: str | None = None
+) -> None:
+    await interaction.response.defer(ephemeral=True, thinking=True)
+
+    if not name.strip():
+        await interaction.followup.send("The thing needs a name.", ephemeral=True)
+        return
+
+    try:
+        state = await database.get_game_state(interaction.user.id, interaction.guild_id)
+        if state is None:
+            await interaction.followup.send(
+                "Enter the house first (`/enter-entryway`) and walk to the room "
+                "you want to place it in.",
+                ephemeral=True,
+            )
+            return
+        thing_id = await database.add_thing(
+            interaction.guild_id, state.current_room, name, description
+        )
+    except SQLAlchemyError:
+        await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    await interaction.followup.send(
+        f"Placed **{name.strip()}** in {state.current_room} (thing_id {thing_id}).",
+        ephemeral=True,
+    )
+
+
+@bot.tree.command(
+    name="add-room-desc",
+    description="(Admin) Set the description of the room you're standing in.",
+)
+@app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
+@app_commands.checks.has_permissions(administrator=True)
+@app_commands.describe(description="What players see when they /look here.")
+async def add_room_desc(interaction: discord.Interaction, description: str) -> None:
+    await interaction.response.defer(ephemeral=True, thinking=True)
+
+    try:
+        state = await database.get_game_state(interaction.user.id, interaction.guild_id)
+        if state is None:
+            await interaction.followup.send(
+                "Enter the house first (`/enter-entryway`) and walk to the room "
+                "you want to describe.",
+                ephemeral=True,
+            )
+            return
+        await database.set_room_description(
+            interaction.guild_id, state.current_room, description.strip()
+        )
+    except SQLAlchemyError:
+        await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    await interaction.followup.send(
+        f"Description set for **{state.current_room}**. Try `/look`.", ephemeral=True
+    )
+
+
+@add_thing.error
+@add_room_desc.error
+async def _content_admin_error(
+    interaction: discord.Interaction, error: app_commands.AppCommandError
+) -> None:
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message(
+            "You need to be a server administrator to run this.", ephemeral=True
+        )
+        return
+    raise error
 
 
 @bot.tree.command(name="stats", description="See how many times you've petted the cat.")
