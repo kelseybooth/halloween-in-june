@@ -65,6 +65,9 @@ DB_ERROR_MESSAGE = (
     "Something went wrong reaching the database - please try again in a moment."
 )
 
+GENERIC_ERROR_MESSAGE = "An error occurred. Try again."
+MOVE_ERROR_MESSAGE = "An error occurred while moving between rooms. Try again."
+
 
 class Reaction(NamedTuple):
     """A chosen response plus the weighting that produced it."""
@@ -146,6 +149,9 @@ class CatBot(commands.Bot):
         # Say up front what the haunted house is missing, rather than letting it
         # surface later as an opaque "Missing Access" error mid-command.
         for guild in self.guilds:
+            # Logged so GUILD_ID can be set without hunting for it in Discord's UI.
+            log.info("In guild %r (GUILD_ID=%s)", guild.name, guild.id)
+
             channel = house_utils.find_channel(guild)
             if channel is None:
                 log.info(
@@ -347,6 +353,209 @@ async def _initialize_error(
         )
         return
     raise error
+
+
+# TODO(Phase 3): remove this command. It exists so testers can self-onboard without
+# an admin; a proper game start flow replaces it.
+@bot.tree.command(
+    name="enter-entryway",
+    description="Enter the haunted house and begin in the Entryway.",
+)
+async def enter_entryway(interaction: discord.Interaction) -> None:
+    """Enrol the player, assign a cohort, and place them in their Entryway thread."""
+    if interaction.guild is None:
+        await interaction.response.send_message(
+            "This command only works inside a server.", ephemeral=True
+        )
+        return
+
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    user = interaction.user
+
+    channel = house_utils.find_channel(interaction.guild)
+    if channel is None:
+        await interaction.followup.send(
+            f"There's no #{house_utils.HALLOWEEN_CHANNEL_NAME} channel yet. "
+            "An admin needs to create it and run `/initialize-haunted-house`.",
+            ephemeral=True,
+        )
+        return
+
+    # Assign the cohort before looking up the thread, since which thread the player
+    # belongs in depends on it. A 50/50 split, per the spec.
+    cohort = random.choice(house_utils.COHORTS)
+
+    # Find the thread first: enrolling a player and then discovering the house was
+    # never built would leave them marked as inside a room that does not exist.
+    try:
+        thread = await house_utils.get_thread_by_room_and_cohort(
+            channel, house_utils.STARTING_ROOM, cohort
+        )
+    except discord.HTTPException:
+        log.exception("Could not look up the Entryway thread")
+        await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    if thread is None:
+        await interaction.followup.send(
+            "The haunted house hasn't been built yet. "
+            "Ask an admin to run `/initialize-haunted-house`.",
+            ephemeral=True,
+        )
+        return
+
+    try:
+        # All rooms start unlocked during the testing phase; Phase 3 gates them
+        # behind puzzles and this becomes just the starting room.
+        enrolled = await database.start_game(
+            user.id, cohort, house_utils.STARTING_ROOM, list(house_utils.ROOMS)
+        )
+    except SQLAlchemyError:
+        await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    if not enrolled:
+        await interaction.followup.send("You're already in the haunted house!", ephemeral=True)
+        return
+
+    try:
+        await house_utils.add_player_to_thread(thread, user.id)
+        await thread.send(
+            f"Welcome, {user.mention}! You arrive at the entrance to the haunted "
+            "house. The cat appears at your side."
+        )
+    except discord.HTTPException:
+        # Undo the enrolment so the player can retry, rather than being recorded as
+        # inside a house they were never actually let into.
+        log.exception("Failed to place %s in the Entryway; rolling back", user.id)
+        try:
+            await database.delete_game_state(user.id)
+        except SQLAlchemyError:
+            log.error("Rollback failed for %s - player may be stuck enrolled", user.id)
+        await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    await interaction.followup.send(
+        f"You've entered the haunted house! Head to {thread.mention} to begin.",
+        ephemeral=True,
+    )
+
+
+@bot.tree.command(name="use", description="Take an exit to move to another room.")
+@app_commands.describe(exit_label="The exit to take, e.g. EL or 'living room'.")
+async def use(interaction: discord.Interaction, exit_label: str) -> None:
+    """Move the player through an exit into the adjoining room.
+
+    Ordering note: the spec's numbered steps post the exit message and remove the
+    player before adding them to the destination, but its error handling requires
+    that a failed add must not have already removed them. The latter wins - the
+    player is added to the destination first, so any failure leaves them exactly
+    where they were.
+    """
+    if interaction.guild is None:
+        await interaction.response.send_message(
+            "This command only works inside a server.", ephemeral=True
+        )
+        return
+
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    user = interaction.user
+
+    try:
+        state = await database.get_game_state(user.id)
+    except SQLAlchemyError:
+        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    if state is None:
+        await interaction.followup.send(
+            "You're not in the haunted house yet. Use `/enter-entryway` first.",
+            ephemeral=True,
+        )
+        return
+
+    destination = house_utils.find_exit(state.current_room, exit_label)
+    if destination is None:
+        await interaction.followup.send("You don't see that exit here.", ephemeral=True)
+        return
+
+    if destination not in state.rooms_unlocked:
+        await interaction.followup.send("You can't access that room yet.", ephemeral=True)
+        return
+
+    channel = house_utils.find_channel(interaction.guild)
+    if channel is None:
+        await interaction.followup.send(
+            f"There's no #{house_utils.HALLOWEEN_CHANNEL_NAME} channel. "
+            "Ask an admin to run `/initialize-haunted-house`.",
+            ephemeral=True,
+        )
+        return
+
+    try:
+        destination_thread = await house_utils.get_thread_by_room_and_cohort(
+            channel, destination, state.cohort
+        )
+        origin_thread = await house_utils.get_thread_by_room_and_cohort(
+            channel, state.current_room, state.cohort
+        )
+    except discord.HTTPException:
+        log.exception("Could not look up room threads")
+        await interaction.followup.send(MOVE_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    if destination_thread is None:
+        await interaction.followup.send(
+            f"I couldn't find the thread for {destination}. "
+            "Ask an admin to run `/initialize-haunted-house`.",
+            ephemeral=True,
+        )
+        return
+
+    # Add before removing: if this fails, the player has not been moved or removed
+    # from anywhere, so they are exactly where they started and can retry.
+    try:
+        await house_utils.add_player_to_thread(destination_thread, user.id)
+    except discord.HTTPException:
+        log.exception("Failed to add %s to %s", user.id, destination)
+        await interaction.followup.send(MOVE_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    try:
+        await database.update_current_room(user.id, destination)
+    except SQLAlchemyError:
+        # Undo the add so Discord and the database do not disagree about where
+        # this player is.
+        try:
+            await house_utils.remove_player_from_thread(destination_thread, user.id)
+        except discord.HTTPException:
+            log.exception("Rollback failed: %s left in %s", user.id, destination)
+        await interaction.followup.send(MOVE_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    # From here the move has happened. The remaining steps are presentational, so
+    # a failure is logged rather than surfaced - the player has already moved.
+    if origin_thread is not None:
+        try:
+            await origin_thread.send(
+                f"{user.mention} exits to go to {destination_thread.mention}"
+            )
+        except discord.HTTPException:
+            log.warning("Could not post exit message in %s", state.current_room, exc_info=True)
+
+        try:
+            await house_utils.remove_player_from_thread(origin_thread, user.id)
+        except discord.HTTPException:
+            log.warning("Could not remove %s from %s", user.id, state.current_room, exc_info=True)
+
+    try:
+        await destination_thread.send(f"{user.mention} enters {destination}")
+    except discord.HTTPException:
+        log.warning("Could not post entry message in %s", destination, exc_info=True)
+
+    await interaction.followup.send(
+        f"You head to {destination_thread.mention}.", ephemeral=True
+    )
 
 
 @bot.tree.command(name="stats", description="See how many times you've petted the cat.")

@@ -23,6 +23,7 @@ from sqlalchemy import (
     Integer,
     String,
     case,
+    delete,
     func,
     inspect,
     select,
@@ -79,6 +80,15 @@ class PetResult(NamedTuple):
 
     total: int
     recent: int
+
+
+class GameState(NamedTuple):
+    """A player's position in the haunted house."""
+
+    user_id: int
+    cohort: str
+    current_room: str
+    rooms_unlocked: list[str]
 
 
 class DecayChange(NamedTuple):
@@ -384,6 +394,124 @@ async def get_pet_count(user_id: int) -> int:
             return result.scalar_one_or_none() or 0
     except SQLAlchemyError:
         log.exception("Failed to read pet count for user %s", user_id)
+        raise
+
+
+async def ensure_user_exists(user_id: int) -> None:
+    """Create this player's `users` row if they have never petted the cat.
+
+    `player_game_state` has a foreign key to `users`, but a `users` row is
+    otherwise only created by /pet. Without this, a player who joins the haunted
+    house before ever petting would fail on the constraint.
+    """
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    stmt = insert(User).values(id=user_id, pet_count=0).on_conflict_do_nothing(
+        index_elements=[User.id]
+    )
+    try:
+        async with session_factory() as session:
+            await session.execute(stmt)
+            await session.commit()
+    except SQLAlchemyError:
+        log.exception("Failed to ensure users row for %s", user_id)
+        raise
+
+
+async def start_game(
+    user_id: int, cohort: str, starting_room: str, rooms_unlocked: list[str]
+) -> bool:
+    """Enrol a player in the haunted house. True if enrolled, False if already in.
+
+    The `users` row is ensured first to satisfy the foreign key, then the game
+    state is inserted with ON CONFLICT DO NOTHING so two rapid invocations cannot
+    both believe they enrolled the player.
+    """
+    session_factory = _require_session()
+    await ensure_user_exists(user_id)
+
+    insert = _upsert_statement()
+    stmt = (
+        insert(PlayerGameState)
+        .values(
+            user_id=user_id,
+            room_version_assignment=cohort,
+            current_room=starting_room,
+            rooms_unlocked=rooms_unlocked,
+        )
+        .on_conflict_do_nothing(index_elements=[PlayerGameState.user_id])
+        .returning(PlayerGameState.user_id)
+    )
+
+    try:
+        async with session_factory() as session:
+            result = await session.execute(stmt)
+            created = result.scalar_one_or_none() is not None
+            await session.commit()
+            if created:
+                log.info("Player %s entered the house as cohort %s", user_id, cohort)
+            return created
+    except SQLAlchemyError:
+        log.exception("Failed to start game for %s", user_id)
+        raise
+
+
+async def get_game_state(user_id: int) -> GameState | None:
+    """This player's cohort, room and unlocked rooms, or None if not in the house."""
+    session_factory = _require_session()
+    try:
+        async with session_factory() as session:
+            row = (
+                await session.execute(
+                    select(
+                        PlayerGameState.user_id,
+                        PlayerGameState.room_version_assignment,
+                        PlayerGameState.current_room,
+                        PlayerGameState.rooms_unlocked,
+                    ).where(PlayerGameState.user_id == user_id)
+                )
+            ).one_or_none()
+            if row is None:
+                return None
+            return GameState(row[0], row[1], row[2], list(row[3] or []))
+    except SQLAlchemyError:
+        log.exception("Failed to read game state for %s", user_id)
+        raise
+
+
+async def update_current_room(user_id: int, room_name: str) -> None:
+    """Move a player to a different room."""
+    session_factory = _require_session()
+    try:
+        async with session_factory() as session:
+            await session.execute(
+                update(PlayerGameState)
+                .where(PlayerGameState.user_id == user_id)
+                .values(current_room=room_name, updated_at=func.now())
+            )
+            await session.commit()
+            log.info("Player %s moved to %s", user_id, room_name)
+    except SQLAlchemyError:
+        log.exception("Failed to move player %s to %s", user_id, room_name)
+        raise
+
+
+async def delete_game_state(user_id: int) -> None:
+    """Remove a player's game state.
+
+    Used to roll back an enrolment that could not be completed in Discord, so the
+    player is not left recorded as inside a house they were never added to.
+    """
+    session_factory = _require_session()
+    try:
+        async with session_factory() as session:
+            await session.execute(
+                delete(PlayerGameState).where(PlayerGameState.user_id == user_id)
+            )
+            await session.commit()
+            log.info("Rolled back game state for %s", user_id)
+    except SQLAlchemyError:
+        log.exception("Failed to roll back game state for %s", user_id)
         raise
 
 
