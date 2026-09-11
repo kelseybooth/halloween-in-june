@@ -448,10 +448,10 @@ async def enter_entryway(interaction: discord.Interaction) -> None:
     )
 
 
-@bot.tree.command(name="use", description="Take an exit to move to another room.")
+@bot.tree.command(name="use", description="Attempt to use an object or exit.")
 @app_commands.guild_only()
-@app_commands.describe(exit_label="The exit to take, e.g. EL or 'living room'.")
-async def use(interaction: discord.Interaction, exit_label: str) -> None:
+@app_commands.describe(thing="The object or exit to use.")
+async def use(interaction: discord.Interaction, thing: str) -> None:
     """Move the player through an exit into the adjoining room.
 
     Ordering note: the spec's numbered steps post the exit message and remove the
@@ -482,11 +482,12 @@ async def use(interaction: discord.Interaction, exit_label: str) -> None:
         )
         return
 
-    destination = house_utils.find_exit(state.current_room, exit_label)
-    if destination is None:
+    chosen_exit = house_utils.resolve_exit(state.current_room, thing)
+    if chosen_exit is None:
         await interaction.followup.send("You don't see that exit here.", ephemeral=True)
         return
 
+    destination = chosen_exit.destination
     if destination not in state.rooms_unlocked:
         await interaction.followup.send("You can't access that room yet.", ephemeral=True)
         return
@@ -545,9 +546,7 @@ async def use(interaction: discord.Interaction, exit_label: str) -> None:
     # a failure is logged rather than surfaced - the player has already moved.
     if origin_thread is not None:
         try:
-            await origin_thread.send(
-                f"{user.mention} exits to go to {destination_thread.mention}"
-            )
+            await origin_thread.send(f"{user.mention} exits via {chosen_exit.label}.")
         except discord.HTTPException:
             log.warning("Could not post exit message in %s", state.current_room, exc_info=True)
 
