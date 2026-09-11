@@ -13,6 +13,7 @@ every table is keyed by (user_id, guild_id), and every query filters on both.
 
 import logging
 import os
+import random
 from datetime import date, datetime, time, timedelta, timezone
 from typing import NamedTuple
 from zoneinfo import ZoneInfo
@@ -511,45 +512,105 @@ async def ensure_user_exists(user_id: int, guild_id: int) -> None:
         raise
 
 
+async def cohort_counts(guild_id: int) -> dict[str, int]:
+    """How many players each cohort has in this server, counting everyone ever enrolled."""
+    session_factory = _require_session()
+    try:
+        async with session_factory() as session:
+            rows = await session.execute(
+                select(PlayerGameState.room_version_assignment, func.count())
+                .where(PlayerGameState.guild_id == guild_id)
+                .group_by(PlayerGameState.room_version_assignment)
+            )
+            counts = {"A": 0, "B": 0}
+            counts.update({row[0]: row[1] for row in rows})
+            return counts
+    except SQLAlchemyError:
+        log.exception("Failed to count cohorts for guild %s", guild_id)
+        raise
+
+
+def _pick_cohort(counts: dict[str, int], rng=random) -> str:
+    """The cohort with fewer players; a coin flip when they are level.
+
+    Keeps the two groups within one player of each other at every point, which
+    independent 50/50 rolls do not - a four-player server has a 1-in-8 chance of
+    landing everyone in the same cohort. The tie-break keeps it unpredictable for
+    any individual player.
+    """
+    if counts["A"] < counts["B"]:
+        return "A"
+    if counts["B"] < counts["A"]:
+        return "B"
+    return rng.choice(("A", "B"))
+
+
 async def start_game(
-    user_id: int, guild_id: int, cohort: str, starting_room: str, rooms_unlocked: list[str]
-) -> bool:
-    """Enrol a player in this server's haunted house. True if enrolled, False if already in.
+    user_id: int,
+    guild_id: int,
+    starting_room: str,
+    rooms_unlocked: list[str],
+    cohort: str | None = None,
+    rng=random,
+) -> str | None:
+    """Enrol a player in this server's haunted house.
+
+    Returns the cohort they were placed in, or None if they were already enrolled.
+
+    Cohort is chosen to keep this server's groups balanced (see _pick_cohort),
+    counting everyone ever enrolled here. Pass `cohort` explicitly to override -
+    useful for tests and admin tooling. The count and the insert share one
+    transaction. Two players enrolling in the same instant can still both read
+    the same counts and land on the same side, but that is harmless: the next
+    enrolment goes to the smaller cohort, so any imbalance self-corrects.
 
     The `users` row is ensured first to satisfy the foreign key, then the game
-    state is inserted with ON CONFLICT DO NOTHING so two rapid invocations cannot
-    both believe they enrolled the player.
+    state is inserted with ON CONFLICT DO NOTHING so two rapid invocations for
+    the same player cannot both believe they enrolled them.
     """
     session_factory = _require_session()
     await ensure_user_exists(user_id, guild_id)
 
     insert = _upsert_statement()
-    stmt = (
-        insert(PlayerGameState)
-        .values(
-            user_id=user_id,
-            guild_id=guild_id,
-            room_version_assignment=cohort,
-            current_room=starting_room,
-            rooms_unlocked=rooms_unlocked,
-        )
-        .on_conflict_do_nothing(index_elements=[PlayerGameState.user_id, PlayerGameState.guild_id])
-        .returning(PlayerGameState.user_id)
-    )
-
     try:
         async with session_factory() as session:
+            if cohort is None:
+                rows = await session.execute(
+                    select(PlayerGameState.room_version_assignment, func.count())
+                    .where(PlayerGameState.guild_id == guild_id)
+                    .group_by(PlayerGameState.room_version_assignment)
+                )
+                counts = {"A": 0, "B": 0}
+                counts.update({row[0]: row[1] for row in rows})
+                cohort = _pick_cohort(counts, rng)
+
+            stmt = (
+                insert(PlayerGameState)
+                .values(
+                    user_id=user_id,
+                    guild_id=guild_id,
+                    room_version_assignment=cohort,
+                    current_room=starting_room,
+                    rooms_unlocked=rooms_unlocked,
+                )
+                .on_conflict_do_nothing(
+                    index_elements=[PlayerGameState.user_id, PlayerGameState.guild_id]
+                )
+                .returning(PlayerGameState.user_id)
+            )
             result = await session.execute(stmt)
             created = result.scalar_one_or_none() is not None
             await session.commit()
-            if created:
-                log.info(
-                    "Player %s entered the house in guild %s as cohort %s",
-                    user_id,
-                    guild_id,
-                    cohort,
-                )
-            return created
+
+            if not created:
+                return None
+            log.info(
+                "Player %s entered the house in guild %s as cohort %s",
+                user_id,
+                guild_id,
+                cohort,
+            )
+            return cohort
     except SQLAlchemyError:
         log.exception("Failed to start game for %s in guild %s", user_id, guild_id)
         raise

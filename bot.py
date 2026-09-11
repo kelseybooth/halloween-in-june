@@ -385,22 +385,23 @@ async def enter_entryway(interaction: discord.Interaction) -> None:
         )
         return
 
-    # Assign the cohort before looking up the thread, since which thread the player
-    # belongs in depends on it. A 50/50 split, per the spec.
-    cohort = random.choice(house_utils.COHORTS)
-
-    # Find the thread first: enrolling a player and then discovering the house was
-    # never built would leave them marked as inside a room that does not exist.
+    # The cohort is chosen by the database to keep this server's groups balanced,
+    # so it is not known until enrolment. Check that BOTH Entryway threads exist
+    # first: enrolling a player and then discovering the house was never built
+    # would leave them marked as inside a room that does not exist.
     try:
-        thread = await house_utils.get_thread_by_room_and_cohort(
-            channel, house_utils.STARTING_ROOM, cohort
-        )
+        entryways = {
+            cohort: await house_utils.get_thread_by_room_and_cohort(
+                channel, house_utils.STARTING_ROOM, cohort
+            )
+            for cohort in house_utils.COHORTS
+        }
     except discord.HTTPException:
-        log.exception("Could not look up the Entryway thread")
+        log.exception("Could not look up the Entryway threads")
         await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
         return
 
-    if thread is None:
+    if any(thread is None for thread in entryways.values()):
         await interaction.followup.send(
             "The haunted house hasn't been built yet. "
             "Ask an admin to run `/initialize-haunted-house`.",
@@ -411,16 +412,18 @@ async def enter_entryway(interaction: discord.Interaction) -> None:
     try:
         # All rooms start unlocked during the testing phase; Phase 3 gates them
         # behind puzzles and this becomes just the starting room.
-        enrolled = await database.start_game(
-            user.id, interaction.guild_id, cohort, house_utils.STARTING_ROOM, list(house_utils.ROOMS)
+        cohort = await database.start_game(
+            user.id, interaction.guild_id, house_utils.STARTING_ROOM, list(house_utils.ROOMS)
         )
     except SQLAlchemyError:
         await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
         return
 
-    if not enrolled:
+    if cohort is None:
         await interaction.followup.send("You're already in the haunted house!", ephemeral=True)
         return
+
+    thread = entryways[cohort]
 
     try:
         await house_utils.add_player_to_thread(thread, user.id)

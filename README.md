@@ -24,6 +24,15 @@ Copy `.env.example` to `.env` and set `DISCORD_TOKEN`. Then:
 python bot.py
 ```
 
+### Cohorts
+
+Each player entering the house is placed in cohort A or B, which decides whether
+they see "Entryway" or "The Entryway". Assignment is **balanced per server**: a
+new player goes to whichever cohort currently has fewer members in that server
+(counting everyone ever enrolled there), with a coin flip on a tie. The two groups
+never differ by more than one player, which independent random rolls can't
+promise on a small server.
+
 ### Multiple servers
 
 The bot can live in several Discord servers at once, and **nothing is shared
