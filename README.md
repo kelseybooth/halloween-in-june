@@ -7,8 +7,15 @@ each user's total persists in a database and is readable via `/stats`.
 
 | Command | Description |
 |---|---|
-| `/pet` | Pet the cat. Increments your counter, returns one of three responses. |
-| `/stats` | Show your total pet count. |
+| `/pet` | Pet the cat. Increments your counter, returns one of six responses. |
+| `/stats` | Show your total pet count and relationship. |
+| `/enter-entryway` | Enter the haunted house (testing; replaced in Phase 3). |
+| `/use thing` | Take an exit out of your current room. |
+| `/look [thing]` | Describe your room, or one thing in it or in your bag. |
+| `/inventory` | List what you're carrying. |
+| `/initialize-haunted-house` | Admin. Rebuild every room thread. |
+| `/add-thing name [description]` | Admin. Place a thing in the room you're in. |
+| `/add-room-desc description` | Admin. Describe the room you're in. |
 
 ## Local setup
 
@@ -32,6 +39,15 @@ new player goes to whichever cohort currently has fewer members in that server
 (counting everyone ever enrolled there), with a coin flip on a tie. The two groups
 never differ by more than one player, which independent random rolls can't
 promise on a small server.
+
+### Looking around
+
+`/look` shows your room's description, or `/look cat food` shows one thing.
+Things are *instances* — five cans of cat food are five rows — so `/look` reports
+"There are 5." when several match, counting what's in the room plus what you're
+carrying. A thing someone is carrying has left the room. Room and thing text is
+per-server and set from inside the game by an admin with `/add-room-desc` and
+`/add-thing`; nothing needs a database edit.
 
 ### Multiple servers
 

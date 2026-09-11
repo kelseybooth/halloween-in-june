@@ -23,10 +23,13 @@ from sqlalchemy import (
     BigInteger,
     Date,
     DateTime,
+    ForeignKey,
     ForeignKeyConstraint,
     Index,
     Integer,
     String,
+    Text,
+    UniqueConstraint,
     case,
     delete,
     func,
@@ -35,6 +38,7 @@ from sqlalchemy import (
     text,
     update,
 )
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import SQLAlchemyError
@@ -226,6 +230,77 @@ class PlayerGameState(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class Room(Base):
+    """One row per (server, room): the writer-supplied description of a room.
+
+    The room *layout* lives in code (house_utils.ROOMS and NAVIGATION_GRAPH);
+    this table only holds per-server flavour text, so writers can change it
+    without a deploy. A missing or empty description shows a generic fallback.
+    """
+
+    __tablename__ = "rooms"
+    __table_args__ = (UniqueConstraint("guild_id", "room_name"),)
+
+    room_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    room_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    room_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class Thing(Base):
+    """One row per *instance* of a thing in a server's house.
+
+    Five cans of cat food in the Kitchen are five rows sharing a thing_name.
+    `room_id` is where the instance was placed; an instance that a player has
+    picked up (an `inventory` row exists for it) is no longer visible in that
+    room, but keeps its room_id so it can be put back.
+    """
+
+    __tablename__ = "things"
+    __table_args__ = (Index("ix_things_guild_room", "guild_id", "room_id"),)
+
+    thing_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    room_id: Mapped[int] = mapped_column(Integer, ForeignKey("rooms.room_id"), nullable=False)
+    thing_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    thing_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class InventoryItem(Base):
+    """A specific thing instance held by a player in a server.
+
+    Keyed by the instance, so five cans held are five rows. The unique constraint
+    stops the same instance being held twice; the composite foreign key means a
+    player must have a `users` row for that server, as with player_game_state.
+    """
+
+    __tablename__ = "inventory"
+    __table_args__ = (
+        UniqueConstraint("user_id", "guild_id", "thing_id"),
+        ForeignKeyConstraint(["user_id", "guild_id"], ["users.id", "users.guild_id"]),
+    )
+
+    inventory_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    thing_id: Mapped[int] = mapped_column(Integer, ForeignKey("things.thing_id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
 
@@ -705,6 +780,306 @@ async def get_all_player_locations(guild_id: int) -> list[tuple[int, str, str]]:
             return [(row[0], row[1], row[2]) for row in rows]
     except SQLAlchemyError:
         log.exception("Failed to read player locations for guild %s", guild_id)
+        raise
+
+
+# --------------------------------------------------------------------------
+# Rooms, things and inventory (/look, /inventory), per server
+# --------------------------------------------------------------------------
+
+
+class LookResult(NamedTuple):
+    """What /look found: the description shown, and how many instances matched."""
+
+    description: str | None
+    count: int
+
+
+async def seed_rooms(guild_id: int, room_names: list[str]) -> int:
+    """Create a `rooms` row for each named room in this server if absent.
+
+    Descriptions are left empty for writers to fill in. Returns how many rows
+    were newly created. Safe to rerun: existing rows and their descriptions are
+    untouched, so rebuilding the house never loses a writer's work.
+    """
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    created = 0
+    try:
+        async with session_factory() as session:
+            for name in room_names:
+                stmt = (
+                    insert(Room)
+                    .values(guild_id=guild_id, room_name=name)
+                    .on_conflict_do_nothing(index_elements=[Room.guild_id, Room.room_name])
+                    .returning(Room.room_id)
+                )
+                if (await session.execute(stmt)).scalar_one_or_none() is not None:
+                    created += 1
+            await session.commit()
+        if created:
+            log.info("Seeded %d room row(s) for guild %s", created, guild_id)
+        return created
+    except SQLAlchemyError:
+        log.exception("Failed to seed rooms for guild %s", guild_id)
+        raise
+
+
+async def get_room_description(guild_id: int, room_name: str) -> str | None:
+    """The writer-supplied description of a room in this server, or None if unset."""
+    session_factory = _require_session()
+    try:
+        async with session_factory() as session:
+            value = await session.scalar(
+                select(Room.room_description).where(
+                    Room.guild_id == guild_id, Room.room_name == room_name
+                )
+            )
+            return value.strip() if value and value.strip() else None
+    except SQLAlchemyError:
+        log.exception("Failed to read description of %s in guild %s", room_name, guild_id)
+        raise
+
+
+async def set_room_description(guild_id: int, room_name: str, description: str) -> None:
+    """Set a room's description in this server, creating the row if needed."""
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    stmt = (
+        insert(Room)
+        .values(guild_id=guild_id, room_name=room_name, room_description=description)
+        .on_conflict_do_update(
+            index_elements=[Room.guild_id, Room.room_name],
+            set_={"room_description": description, "updated_at": func.now()},
+        )
+    )
+    try:
+        async with session_factory() as session:
+            await session.execute(stmt)
+            await session.commit()
+            log.info("Description set for %s in guild %s", room_name, guild_id)
+    except SQLAlchemyError:
+        log.exception("Failed to set description of %s in guild %s", room_name, guild_id)
+        raise
+
+
+async def add_thing(
+    guild_id: int, room_name: str, thing_name: str, description: str | None
+) -> int:
+    """Place a new thing instance in a room of this server. Returns its thing_id.
+
+    Creates the room row if it does not exist yet, so things can be added before
+    the house has been initialized or described.
+    """
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    try:
+        async with session_factory() as session:
+            await session.execute(
+                insert(Room)
+                .values(guild_id=guild_id, room_name=room_name)
+                .on_conflict_do_nothing(index_elements=[Room.guild_id, Room.room_name])
+            )
+            room_id = await session.scalar(
+                select(Room.room_id).where(Room.guild_id == guild_id, Room.room_name == room_name)
+            )
+            thing = Thing(
+                guild_id=guild_id,
+                room_id=room_id,
+                thing_name=thing_name.strip(),
+                thing_description=description,
+            )
+            session.add(thing)
+            await session.commit()
+            log.info(
+                "Added thing %r (id %s) to %s in guild %s",
+                thing.thing_name,
+                thing.thing_id,
+                room_name,
+                guild_id,
+            )
+            return thing.thing_id
+    except SQLAlchemyError:
+        log.exception("Failed to add thing %r to %s in guild %s", thing_name, room_name, guild_id)
+        raise
+
+
+def _held_thing_ids():
+    """Subquery of every thing instance currently in someone's inventory."""
+    return select(InventoryItem.thing_id)
+
+
+async def get_things_in_room(guild_id: int, room_name: str) -> list[tuple[int, str]]:
+    """(thing_id, thing_name) for every instance visible in a room of this server.
+
+    An instance someone is carrying is not in the room any more, so instances
+    with an inventory row are excluded.
+    """
+    session_factory = _require_session()
+    try:
+        async with session_factory() as session:
+            rows = await session.execute(
+                select(Thing.thing_id, Thing.thing_name)
+                .join(Room, Room.room_id == Thing.room_id)
+                .where(
+                    Thing.guild_id == guild_id,
+                    Room.guild_id == guild_id,
+                    Room.room_name == room_name,
+                    ~Thing.thing_id.in_(_held_thing_ids()),
+                )
+                .order_by(Thing.thing_id)
+            )
+            return [(row[0], row[1]) for row in rows]
+    except SQLAlchemyError:
+        log.exception("Failed to list things in %s for guild %s", room_name, guild_id)
+        raise
+
+
+async def look_at_thing(
+    user_id: int, guild_id: int, room_name: str, thing_name: str
+) -> LookResult | None:
+    """Find every matching instance in the player's room or their inventory.
+
+    Case-insensitive on thing_name. Returns None if nothing matches anywhere.
+    Otherwise returns the first match's description and the combined count -
+    three in the room and two in the player's bag is "There are 5."
+
+    Instances in the room that another player is carrying are not counted;
+    they have left the room. The player's own carried instances are counted
+    via the inventory half, never the room half, so nothing is counted twice.
+    """
+    session_factory = _require_session()
+    needle = thing_name.strip().lower()
+    if not needle:
+        return None
+
+    in_room = (
+        select(Thing.thing_id, Thing.thing_description)
+        .join(Room, Room.room_id == Thing.room_id)
+        .where(
+            Thing.guild_id == guild_id,
+            Room.guild_id == guild_id,
+            Room.room_name == room_name,
+            func.lower(Thing.thing_name) == needle,
+            ~Thing.thing_id.in_(_held_thing_ids()),
+        )
+    )
+    in_bag = (
+        select(Thing.thing_id, Thing.thing_description)
+        .join(InventoryItem, InventoryItem.thing_id == Thing.thing_id)
+        .where(
+            InventoryItem.user_id == user_id,
+            InventoryItem.guild_id == guild_id,
+            func.lower(Thing.thing_name) == needle,
+        )
+    )
+
+    try:
+        async with session_factory() as session:
+            room_rows = (await session.execute(in_room)).all()
+            bag_rows = (await session.execute(in_bag)).all()
+    except SQLAlchemyError:
+        log.exception("Failed to look at %r in %s for guild %s", thing_name, room_name, guild_id)
+        raise
+
+    matches = room_rows + bag_rows
+    if not matches:
+        return None
+    description = next((row[1] for row in matches if row[1]), None)
+    return LookResult(description=description, count=len(matches))
+
+
+async def get_inventory(user_id: int, guild_id: int) -> list[tuple[str, int]]:
+    """(thing_name, count) for everything the player carries in this server.
+
+    Grouped by name and ordered alphabetically, ready to display.
+    """
+    session_factory = _require_session()
+    try:
+        async with session_factory() as session:
+            rows = await session.execute(
+                select(Thing.thing_name, func.count())
+                .join(InventoryItem, InventoryItem.thing_id == Thing.thing_id)
+                .where(InventoryItem.user_id == user_id, InventoryItem.guild_id == guild_id)
+                .group_by(Thing.thing_name)
+                .order_by(Thing.thing_name)
+            )
+            return [(row[0], row[1]) for row in rows]
+    except SQLAlchemyError:
+        log.exception("Failed to read inventory for %s in guild %s", user_id, guild_id)
+        raise
+
+
+async def inventory_count(user_id: int, guild_id: int) -> int:
+    """How many thing instances the player carries in this server."""
+    session_factory = _require_session()
+    try:
+        async with session_factory() as session:
+            return (
+                await session.scalar(
+                    select(func.count())
+                    .select_from(InventoryItem)
+                    .where(InventoryItem.user_id == user_id, InventoryItem.guild_id == guild_id)
+                )
+            ) or 0
+    except SQLAlchemyError:
+        log.exception("Failed to count inventory for %s in guild %s", user_id, guild_id)
+        raise
+
+
+async def add_to_inventory(user_id: int, guild_id: int, thing_id: int) -> bool:
+    """Give the player a specific thing instance. False if they already hold it.
+
+    Ensures the player's `users` row exists first, as the foreign key requires.
+    The unique constraint is the source of truth for "already held": a second
+    insert is refused by the database rather than checked and raced.
+    """
+    session_factory = _require_session()
+    await ensure_user_exists(user_id, guild_id)
+    insert = _upsert_statement()
+    stmt = (
+        insert(InventoryItem)
+        .values(user_id=user_id, guild_id=guild_id, thing_id=thing_id)
+        .on_conflict_do_nothing(
+            index_elements=[InventoryItem.user_id, InventoryItem.guild_id, InventoryItem.thing_id]
+        )
+        .returning(InventoryItem.inventory_id)
+    )
+    try:
+        async with session_factory() as session:
+            added = (await session.execute(stmt)).scalar_one_or_none() is not None
+            await session.commit()
+            if added:
+                log.info("User %s in guild %s picked up thing %s", user_id, guild_id, thing_id)
+            return added
+    except IntegrityError:
+        # A thing_id that does not exist fails the foreign key; report, don't crash.
+        log.warning("add_to_inventory: thing %s does not exist in guild %s", thing_id, guild_id)
+        return False
+    except SQLAlchemyError:
+        log.exception("Failed to add thing %s to inventory of %s in guild %s", thing_id, user_id, guild_id)
+        raise
+
+
+async def remove_from_inventory(user_id: int, guild_id: int, thing_id: int) -> bool:
+    """Take a specific thing instance from the player. False if they did not hold it."""
+    session_factory = _require_session()
+    try:
+        async with session_factory() as session:
+            result = await session.execute(
+                delete(InventoryItem).where(
+                    InventoryItem.user_id == user_id,
+                    InventoryItem.guild_id == guild_id,
+                    InventoryItem.thing_id == thing_id,
+                )
+            )
+            await session.commit()
+            removed = result.rowcount > 0
+            if removed:
+                log.info("User %s in guild %s dropped thing %s", user_id, guild_id, thing_id)
+            return removed
+    except SQLAlchemyError:
+        log.exception("Failed to remove thing %s from inventory of %s in guild %s", thing_id, user_id, guild_id)
         raise
 
 
