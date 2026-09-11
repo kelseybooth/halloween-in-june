@@ -546,7 +546,7 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
     # a failure is logged rather than surfaced - the player has already moved.
     if origin_thread is not None:
         try:
-            await origin_thread.send(f"{user.mention} exits via {chosen_exit.label}.")
+            await origin_thread.send(f"{user.mention} exits via {chosen_exit.thing}.")
         except discord.HTTPException:
             log.warning("Could not post exit message in %s", state.current_room, exc_info=True)
 

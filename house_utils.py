@@ -41,28 +41,71 @@ STARTING_ROOM = "Entryway"
 ROOM_NAMES_A = list(ROOMS)
 ROOM_NAMES_B = [f"The {room}" for room in ROOMS]
 
-# Exits keyed by label. Codes are the first letter of the current room plus the
-# first letter of the destination; they are placeholders, and Phase 3 replaces them
-# with descriptive names ("blue door"). find_exit matches case-insensitively and
-# also accepts the destination room name, so both styles work today.
-NAVIGATION_GRAPH = {
-    "Dining Room": {"DK": "Kitchen", "DE": "Entryway"},
-    "Entryway": {"ED": "Dining Room", "EL": "Living Room", "EH": "Upstairs Hallway"},
-    "Living Room": {"LE": "Entryway", "LS": "Secret Library"},
-    "Kitchen": {"KD": "Dining Room", "KH": "Upstairs Hallway", "KC": "Courtyard"},
-    "Courtyard": {"CK": "Kitchen", "CS": "Secret Library"},
-    "Secret Library": {"SL": "Living Room", "SC": "Courtyard"},
+class Exit(NamedTuple):
+    """One way out of a room.
+
+    `thing_id` is the stable identifier code and tests refer to - "EL". It never
+    changes. `thing` is what players see - the description announced when the exit
+    is taken and what they can type to use it. Phase 3 replaces each placeholder
+    with real copy ("blue door"); only the `thing=` argument in the graph changes.
+    """
+
+    thing_id: str
+    thing: str
+    destination: str
+
+
+def _exit(thing_id: str, destination: str, thing: str | None = None) -> Exit:
+    """Build an Exit; the description defaults to `<thing_id>_desc` until Phase 3.
+
+    The default is deliberately obvious placeholder text, so any exit a writer has
+    not yet named stands out in play rather than passing for finished copy.
+    """
+    return Exit(thing_id, thing if thing is not None else f"{thing_id}_desc", destination)
+
+
+# Exits keyed by thing_id. Codes are the first letter of the current room plus the
+# first letter of the destination. resolve_exit matches case-insensitively against
+# the thing_id, the description, and the destination room name, so any of those
+# work as input.
+NAVIGATION_GRAPH: dict[str, dict[str, Exit]] = {
+    "Dining Room": {
+        "DK": _exit("DK", "Kitchen"),
+        "DE": _exit("DE", "Entryway"),
+    },
+    "Entryway": {
+        "ED": _exit("ED", "Dining Room"),
+        "EL": _exit("EL", "Living Room"),
+        "EH": _exit("EH", "Upstairs Hallway"),
+    },
+    "Living Room": {
+        "LE": _exit("LE", "Entryway"),
+        "LS": _exit("LS", "Secret Library"),
+    },
+    "Kitchen": {
+        "KD": _exit("KD", "Dining Room"),
+        "KH": _exit("KH", "Upstairs Hallway"),
+        "KC": _exit("KC", "Courtyard"),
+    },
+    "Courtyard": {
+        "CK": _exit("CK", "Kitchen"),
+        "CS": _exit("CS", "Secret Library"),
+    },
+    "Secret Library": {
+        "SL": _exit("SL", "Living Room"),
+        "SC": _exit("SC", "Courtyard"),
+    },
     # HE was missing from the spec's original diagram, which gave Entryway an exit
     # up (EH) with no way back down. Confirmed as an oversight rather than a
     # one-way door, and added to the spec to match.
     "Upstairs Hallway": {
-        "HK": "Kitchen",
-        "HB": "Bedroom",
-        "HN": "Nursery",
-        "HE": "Entryway",
+        "HK": _exit("HK", "Kitchen"),
+        "HB": _exit("HB", "Bedroom"),
+        "HN": _exit("HN", "Nursery"),
+        "HE": _exit("HE", "Entryway"),
     },
-    "Bedroom": {"BH": "Upstairs Hallway"},
-    "Nursery": {"NH": "Upstairs Hallway"},
+    "Bedroom": {"BH": _exit("BH", "Upstairs Hallway")},
+    "Nursery": {"NH": _exit("NH", "Upstairs Hallway")},
 }
 
 
@@ -87,21 +130,13 @@ def all_thread_names() -> list[str]:
     return [get_thread_name(room, cohort) for room in ROOMS for cohort in COHORTS]
 
 
-class Exit(NamedTuple):
-    """A resolved exit: its canonical label and where it leads."""
-
-    label: str
-    destination: str
-
-
 def resolve_exit(current_room: str, user_input: str) -> Exit | None:
     """Resolve what a player typed to an exit from their room, or None if no match.
 
-    Matching ignores case and surrounding whitespace, and accepts either the exit
-    label ("EL") or the destination room name ("living room"), so the command keeps
-    working when Phase 3 swaps codes for descriptive labels. The returned label is
-    the canonical one from the graph, not the player's text - the exit message
-    announces the exit as the house names it, not as the player spelled it.
+    Matching ignores case and surrounding whitespace, and accepts the thing_id
+    ("EL"), the description ("EL_desc", later "blue door"), or the destination
+    room name ("living room"). Whatever they typed, the returned Exit carries the
+    canonical description, which is what the exit message announces.
     """
     exits = NAVIGATION_GRAPH.get(current_room)
     if not exits:
@@ -111,9 +146,9 @@ def resolve_exit(current_room: str, user_input: str) -> Exit | None:
     if not needle:
         return None
 
-    for label, destination in exits.items():
-        if needle == label.lower() or needle == destination.lower():
-            return Exit(label, destination)
+    for exit_ in exits.values():
+        if needle in (exit_.thing_id.lower(), exit_.thing.lower(), exit_.destination.lower()):
+            return exit_
     return None
 
 
@@ -139,21 +174,32 @@ def validate_graph() -> list[str]:
     for room, exits in NAVIGATION_GRAPH.items():
         if room not in known:
             problems.append(f"NAVIGATION_GRAPH has unknown room {room!r}")
-        for label, destination in exits.items():
+        for thing_id, exit_ in exits.items():
+            if thing_id != exit_.thing_id:
+                problems.append(f"{room}: key {thing_id!r} does not match its exit's id {exit_.thing_id!r}")
+            destination = exit_.destination
             if destination not in known:
-                problems.append(f"{room}/{label} leads to unknown room {destination!r}")
+                problems.append(f"{room}/{thing_id} leads to unknown room {destination!r}")
                 continue
             # The spec states every exit is bidirectional.
-            if room not in NAVIGATION_GRAPH.get(destination, {}).values():
+            returns = {e.destination for e in NAVIGATION_GRAPH.get(destination, {}).values()}
+            if room not in returns:
                 problems.append(f"{room} -> {destination} has no return exit")
+
+    # Within one room, no two exits may share a description or a player's input
+    # would be ambiguous. (Across rooms it is fine: the player is only ever in one.)
+    for room, exits in NAVIGATION_GRAPH.items():
+        things = [e.thing.lower() for e in exits.values()]
+        for dup in {t for t in things if things.count(t) > 1}:
+            problems.append(f"{room} has two exits described as {dup!r}")
 
     # Every room must be reachable from the start, or a player could be stranded.
     seen, queue = {STARTING_ROOM}, [STARTING_ROOM]
     while queue:
-        for destination in NAVIGATION_GRAPH.get(queue.pop(), {}).values():
-            if destination not in seen:
-                seen.add(destination)
-                queue.append(destination)
+        for exit_ in NAVIGATION_GRAPH.get(queue.pop(), {}).values():
+            if exit_.destination not in seen:
+                seen.add(exit_.destination)
+                queue.append(exit_.destination)
     for room in known - seen:
         problems.append(f"{room} is unreachable from {STARTING_ROOM}")
 
