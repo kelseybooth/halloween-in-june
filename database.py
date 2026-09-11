@@ -5,6 +5,10 @@ Backend is chosen from DATABASE_URL:
   - postgres[ql]://  -> PostgreSQL via asyncpg (what Railway provides)
 
 The same model and queries run on both, so local behaviour matches production.
+
+Everything is scoped per Discord server. A player who meets the bot in two
+servers has two independent cats and two independent haunted-house positions:
+every table is keyed by (user_id, guild_id), and every query filters on both.
 """
 
 import logging
@@ -18,7 +22,7 @@ from sqlalchemy import (
     BigInteger,
     Date,
     DateTime,
-    ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     String,
@@ -71,6 +75,10 @@ _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker | None = None
 
 
+class SchemaOutdatedError(RuntimeError):
+    """The database predates per-server scoping and must be rebuilt."""
+
+
 class Base(DeclarativeBase):
     pass
 
@@ -83,18 +91,20 @@ class PetResult(NamedTuple):
 
 
 class GameState(NamedTuple):
-    """A player's position in the haunted house."""
+    """A player's position in one server's haunted house."""
 
     user_id: int
+    guild_id: int
     cohort: str
     current_room: str
     rooms_unlocked: list[str]
 
 
 class DecayChange(NamedTuple):
-    """One user's relationship movement during a nightly decay run."""
+    """One player's relationship movement in one server during a nightly decay run."""
 
     user_id: int
+    guild_id: int
     before: int
     after: int
     day: date
@@ -130,23 +140,28 @@ def pacific_day_bounds_utc(day: date) -> tuple[datetime, datetime]:
 
 
 class User(Base):
-    """One row per Discord user who has petted the cat."""
+    """One row per (player, server): each server has its own cat.
+
+    A player's pet count and relationship in one server say nothing about the
+    same player in another. The composite key is what enforces that.
+    """
 
     __tablename__ = "users"
 
     # Discord snowflake IDs exceed 32 bits, so BIGINT is required.
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
     pet_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     # `default` is what actually sets a new player's score, since rows are only
-    # ever created by the upsert in increment_pet_count; `server_default` writes
-    # the same value into the CREATE TABLE DDL for databases built from scratch.
+    # ever created by the upserts below; `server_default` writes the same value
+    # into the CREATE TABLE DDL for databases built from scratch.
     relationship: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
         default=RELATIONSHIP_START,
         server_default=text(str(RELATIONSHIP_START)),
     )
-    # Last Pacific day the nightly decay was evaluated for this user. Lets the
+    # Last Pacific day the nightly decay was evaluated for this row. Lets the
     # bot catch up on days it was offline without double-applying any of them.
     last_decay_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -165,15 +180,18 @@ class PetEvent(Base):
     """
 
     __tablename__ = "pet_events"
-    __table_args__ = (Index("ix_pet_events_user_time", "user_id", "created_at"),)
+    __table_args__ = (
+        Index("ix_pet_events_guild_user_time", "guild_id", "user_id", "created_at"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
 class PlayerGameState(Base):
-    """One row per player who has started the haunted house (Phase 2).
+    """One row per (player, server) that has started the haunted house (Phase 2).
 
     Separate from `users`, which counts petting: a player can pet the cat without
     entering the house. The foreign key means the reverse is not true, so game
@@ -181,11 +199,14 @@ class PlayerGameState(Base):
     """
 
     __tablename__ = "player_game_state"
-
-    user_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("users.id"), primary_key=True, autoincrement=False
+    __table_args__ = (
+        ForeignKeyConstraint(["user_id", "guild_id"], ["users.id", "users.guild_id"]),
     )
-    # 'A' sees rooms without a leading article, 'B' with one.
+
+    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    # 'A' sees rooms without a leading article, 'B' with one. Assigned per server,
+    # so the same player can be in different cohorts in different servers.
     room_version_assignment: Mapped[str] = mapped_column(String(1), nullable=False)
     current_room: Mapped[str] = mapped_column(String(50), nullable=False)
     # JSON rather than a PostgreSQL array: arrays have no SQLite equivalent, and
@@ -212,13 +233,36 @@ def _normalise_url(raw: str) -> str:
     return raw
 
 
+async def _reject_pre_guild_schema(conn) -> None:
+    """Refuse to run against a database built before per-server scoping.
+
+    Adding `guild_id` to a primary key cannot be done with ALTER TABLE on
+    SQLite, and there is no correct value to backfill for existing rows anyway -
+    the database never recorded which server a pet happened in. Rather than
+    guess or silently drop data, stop and say what to do.
+    """
+
+    def _columns(sync_conn):
+        insp = inspect(sync_conn)
+        if "users" not in insp.get_table_names():
+            return None
+        return {col["name"] for col in insp.get_columns("users")}
+
+    columns = await conn.run_sync(_columns)
+    if columns is not None and "guild_id" not in columns:
+        raise SchemaOutdatedError(
+            "This database predates per-server scoping and cannot be upgraded in "
+            "place. Run `python reset_db.py --yes --fresh` to rebuild it (the "
+            "SQLite file is backed up first), then start the bot again."
+        )
+
+
 async def _add_missing_columns(conn) -> None:
     """Add columns introduced after a database was first created.
 
-    `create_all` creates missing *tables* but never missing *columns*, so a
-    database predating the relationship meter would keep a stale `users` table
-    and every query against it would fail. Both backends accept this ALTER form,
-    and re-running it is a no-op once the columns exist.
+    `create_all` creates missing *tables* but never missing *columns*. Both
+    backends accept this ALTER form, and re-running it is a no-op once the
+    columns exist.
     """
 
     def _existing(sync_conn):
@@ -261,9 +305,16 @@ async def init_db() -> None:
     _engine = create_async_engine(url, pool_pre_ping=True)
     _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
 
-    async with _engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        await _add_missing_columns(conn)
+    try:
+        async with _engine.begin() as conn:
+            await _reject_pre_guild_schema(conn)
+            await conn.run_sync(Base.metadata.create_all)
+            await _add_missing_columns(conn)
+    except SchemaOutdatedError:
+        await _engine.dispose()
+        _engine = None
+        _session_factory = None
+        raise
 
     log.info("Database ready (%s)", backend)
 
@@ -285,13 +336,18 @@ def _require_session() -> async_sessionmaker:
     return _session_factory
 
 
-async def increment_pet_count(user_id: int) -> PetResult:
-    """Record a pet for this user, creating their row if needed.
+# --------------------------------------------------------------------------
+# Cat: petting and relationship (Phase 1), per server
+# --------------------------------------------------------------------------
 
-    Returns the new lifetime total alongside the number of pets this user
-    already made inside RECENT_PET_WINDOW - the caller uses that to weight how
-    warmly the cat reacts. Counting happens before the new event is inserted, so
-    `recent` describes the state the user arrived in, not including this pet.
+
+async def increment_pet_count(user_id: int, guild_id: int) -> PetResult:
+    """Record a pet for this player in this server, creating their row if needed.
+
+    Returns the new lifetime total alongside the number of pets this player
+    already made inside RECENT_PET_WINDOW in this server - the caller uses that
+    to weight how warmly the cat reacts. Counting happens before the new event
+    is inserted, so `recent` describes the state the player arrived in.
 
     The count, the increment and the new event all share one transaction, so a
     burst of rapid /pet calls cannot interleave into a wrong reading.
@@ -304,9 +360,9 @@ async def increment_pet_count(user_id: int) -> PetResult:
     insert = _upsert_statement()
     stmt = (
         insert(User)
-        .values(id=user_id, pet_count=1)
+        .values(id=user_id, guild_id=guild_id, pet_count=1)
         .on_conflict_do_update(
-            index_elements=[User.id],
+            index_elements=[User.id, User.guild_id],
             set_={"pet_count": User.pet_count + 1, "updated_at": func.now()},
         )
         .returning(User.pet_count)
@@ -317,24 +373,32 @@ async def increment_pet_count(user_id: int) -> PetResult:
             recent = await session.scalar(
                 select(func.count())
                 .select_from(PetEvent)
-                .where(PetEvent.user_id == user_id, PetEvent.created_at >= cutoff)
+                .where(
+                    PetEvent.user_id == user_id,
+                    PetEvent.guild_id == guild_id,
+                    PetEvent.created_at >= cutoff,
+                )
             )
             result = await session.execute(stmt)
             total = result.scalar_one()
-            session.add(PetEvent(user_id=user_id, created_at=now))
+            session.add(PetEvent(user_id=user_id, guild_id=guild_id, created_at=now))
             await session.commit()
 
             log.info(
-                "User %s petted the cat (total: %s, recent: %s)", user_id, total, recent
+                "User %s petted the cat in guild %s (total: %s, recent: %s)",
+                user_id,
+                guild_id,
+                total,
+                recent,
             )
             return PetResult(total=total, recent=recent or 0)
     except SQLAlchemyError:
-        log.exception("Failed to increment pet count for user %s", user_id)
+        log.exception("Failed to increment pet count for user %s in guild %s", user_id, guild_id)
         raise
 
 
-async def adjust_relationship(user_id: int, delta: int) -> int:
-    """Move this user's relationship by `delta`, clamped to [-100, 100].
+async def adjust_relationship(user_id: int, guild_id: int, delta: int) -> int:
+    """Move this player's relationship in this server by `delta`, clamped to [-100, 100].
 
     The clamp is expressed as a SQL CASE so the read, the arithmetic and the
     write are one atomic statement - two rapid pets cannot both read the same
@@ -345,7 +409,7 @@ async def adjust_relationship(user_id: int, delta: int) -> int:
     moved = User.relationship + delta
     stmt = (
         update(User)
-        .where(User.id == user_id)
+        .where(User.id == user_id, User.guild_id == guild_id)
         .values(
             relationship=case(
                 (moved > RELATIONSHIP_MAX, RELATIONSHIP_MAX),
@@ -363,42 +427,51 @@ async def adjust_relationship(user_id: int, delta: int) -> int:
             row = result.scalar_one_or_none()
             await session.commit()
             if row is None:
-                # No row yet: the caller adjusted before the user existed.
-                log.warning("adjust_relationship: no user row for %s", user_id)
+                # No row yet: the caller adjusted before the player existed here.
+                log.warning("adjust_relationship: no row for %s in guild %s", user_id, guild_id)
                 return 0
-            log.info("User %s relationship %+d -> %s", user_id, delta, row)
+            log.info("User %s in guild %s relationship %+d -> %s", user_id, guild_id, delta, row)
             return row
     except SQLAlchemyError:
-        log.exception("Failed to adjust relationship for user %s", user_id)
+        log.exception("Failed to adjust relationship for %s in guild %s", user_id, guild_id)
         raise
 
 
-async def get_relationship(user_id: int) -> int:
-    """Return this user's relationship score, or 0 if they have no row yet."""
+async def get_relationship(user_id: int, guild_id: int) -> int:
+    """This player's relationship score in this server, or 0 if they have no row."""
     session_factory = _require_session()
     try:
         async with session_factory() as session:
-            value = await session.scalar(select(User.relationship).where(User.id == user_id))
+            value = await session.scalar(
+                select(User.relationship).where(User.id == user_id, User.guild_id == guild_id)
+            )
             return value or 0
     except SQLAlchemyError:
-        log.exception("Failed to read relationship for user %s", user_id)
+        log.exception("Failed to read relationship for %s in guild %s", user_id, guild_id)
         raise
 
 
-async def get_pet_count(user_id: int) -> int:
-    """Return this user's pet total, or 0 if they have never petted the cat."""
+async def get_pet_count(user_id: int, guild_id: int) -> int:
+    """This player's pet total in this server, or 0 if they have never petted here."""
     session_factory = _require_session()
     try:
         async with session_factory() as session:
-            result = await session.execute(select(User.pet_count).where(User.id == user_id))
-            return result.scalar_one_or_none() or 0
+            value = await session.scalar(
+                select(User.pet_count).where(User.id == user_id, User.guild_id == guild_id)
+            )
+            return value or 0
     except SQLAlchemyError:
-        log.exception("Failed to read pet count for user %s", user_id)
+        log.exception("Failed to read pet count for %s in guild %s", user_id, guild_id)
         raise
 
 
-async def ensure_user_exists(user_id: int) -> None:
-    """Create this player's `users` row if they have never petted the cat.
+# --------------------------------------------------------------------------
+# Haunted house: game state (Phase 2), per server
+# --------------------------------------------------------------------------
+
+
+async def ensure_user_exists(user_id: int, guild_id: int) -> None:
+    """Create this player's `users` row for this server if they have never petted here.
 
     `player_game_state` has a foreign key to `users`, but a `users` row is
     otherwise only created by /pet. Without this, a player who joins the haunted
@@ -406,40 +479,43 @@ async def ensure_user_exists(user_id: int) -> None:
     """
     session_factory = _require_session()
     insert = _upsert_statement()
-    stmt = insert(User).values(id=user_id, pet_count=0).on_conflict_do_nothing(
-        index_elements=[User.id]
+    stmt = (
+        insert(User)
+        .values(id=user_id, guild_id=guild_id, pet_count=0)
+        .on_conflict_do_nothing(index_elements=[User.id, User.guild_id])
     )
     try:
         async with session_factory() as session:
             await session.execute(stmt)
             await session.commit()
     except SQLAlchemyError:
-        log.exception("Failed to ensure users row for %s", user_id)
+        log.exception("Failed to ensure users row for %s in guild %s", user_id, guild_id)
         raise
 
 
 async def start_game(
-    user_id: int, cohort: str, starting_room: str, rooms_unlocked: list[str]
+    user_id: int, guild_id: int, cohort: str, starting_room: str, rooms_unlocked: list[str]
 ) -> bool:
-    """Enrol a player in the haunted house. True if enrolled, False if already in.
+    """Enrol a player in this server's haunted house. True if enrolled, False if already in.
 
     The `users` row is ensured first to satisfy the foreign key, then the game
     state is inserted with ON CONFLICT DO NOTHING so two rapid invocations cannot
     both believe they enrolled the player.
     """
     session_factory = _require_session()
-    await ensure_user_exists(user_id)
+    await ensure_user_exists(user_id, guild_id)
 
     insert = _upsert_statement()
     stmt = (
         insert(PlayerGameState)
         .values(
             user_id=user_id,
+            guild_id=guild_id,
             room_version_assignment=cohort,
             current_room=starting_room,
             rooms_unlocked=rooms_unlocked,
         )
-        .on_conflict_do_nothing(index_elements=[PlayerGameState.user_id])
+        .on_conflict_do_nothing(index_elements=[PlayerGameState.user_id, PlayerGameState.guild_id])
         .returning(PlayerGameState.user_id)
     )
 
@@ -449,15 +525,20 @@ async def start_game(
             created = result.scalar_one_or_none() is not None
             await session.commit()
             if created:
-                log.info("Player %s entered the house as cohort %s", user_id, cohort)
+                log.info(
+                    "Player %s entered the house in guild %s as cohort %s",
+                    user_id,
+                    guild_id,
+                    cohort,
+                )
             return created
     except SQLAlchemyError:
-        log.exception("Failed to start game for %s", user_id)
+        log.exception("Failed to start game for %s in guild %s", user_id, guild_id)
         raise
 
 
-async def get_game_state(user_id: int) -> GameState | None:
-    """This player's cohort, room and unlocked rooms, or None if not in the house."""
+async def get_game_state(user_id: int, guild_id: int) -> GameState | None:
+    """This player's position in this server's house, or None if not in it."""
     session_factory = _require_session()
     try:
         async with session_factory() as session:
@@ -465,39 +546,46 @@ async def get_game_state(user_id: int) -> GameState | None:
                 await session.execute(
                     select(
                         PlayerGameState.user_id,
+                        PlayerGameState.guild_id,
                         PlayerGameState.room_version_assignment,
                         PlayerGameState.current_room,
                         PlayerGameState.rooms_unlocked,
-                    ).where(PlayerGameState.user_id == user_id)
+                    ).where(
+                        PlayerGameState.user_id == user_id,
+                        PlayerGameState.guild_id == guild_id,
+                    )
                 )
             ).one_or_none()
             if row is None:
                 return None
-            return GameState(row[0], row[1], row[2], list(row[3] or []))
+            return GameState(row[0], row[1], row[2], row[3], list(row[4] or []))
     except SQLAlchemyError:
-        log.exception("Failed to read game state for %s", user_id)
+        log.exception("Failed to read game state for %s in guild %s", user_id, guild_id)
         raise
 
 
-async def update_current_room(user_id: int, room_name: str) -> None:
-    """Move a player to a different room."""
+async def update_current_room(user_id: int, guild_id: int, room_name: str) -> None:
+    """Move a player to a different room in this server's house."""
     session_factory = _require_session()
     try:
         async with session_factory() as session:
             await session.execute(
                 update(PlayerGameState)
-                .where(PlayerGameState.user_id == user_id)
+                .where(
+                    PlayerGameState.user_id == user_id,
+                    PlayerGameState.guild_id == guild_id,
+                )
                 .values(current_room=room_name, updated_at=func.now())
             )
             await session.commit()
-            log.info("Player %s moved to %s", user_id, room_name)
+            log.info("Player %s moved to %s in guild %s", user_id, room_name, guild_id)
     except SQLAlchemyError:
-        log.exception("Failed to move player %s to %s", user_id, room_name)
+        log.exception("Failed to move %s to %s in guild %s", user_id, room_name, guild_id)
         raise
 
 
-async def delete_game_state(user_id: int) -> None:
-    """Remove a player's game state.
+async def delete_game_state(user_id: int, guild_id: int) -> None:
+    """Remove a player's game state in this server.
 
     Used to roll back an enrolment that could not be completed in Discord, so the
     player is not left recorded as inside a house they were never added to.
@@ -506,20 +594,24 @@ async def delete_game_state(user_id: int) -> None:
     try:
         async with session_factory() as session:
             await session.execute(
-                delete(PlayerGameState).where(PlayerGameState.user_id == user_id)
+                delete(PlayerGameState).where(
+                    PlayerGameState.user_id == user_id,
+                    PlayerGameState.guild_id == guild_id,
+                )
             )
             await session.commit()
-            log.info("Rolled back game state for %s", user_id)
+            log.info("Rolled back game state for %s in guild %s", user_id, guild_id)
     except SQLAlchemyError:
-        log.exception("Failed to roll back game state for %s", user_id)
+        log.exception("Failed to roll back game state for %s in guild %s", user_id, guild_id)
         raise
 
 
-async def get_all_player_locations() -> list[tuple[int, str, str]]:
-    """Every player's (user_id, cohort, current_room).
+async def get_all_player_locations(guild_id: int) -> list[tuple[int, str, str]]:
+    """Every player's (user_id, cohort, current_room) in one server.
 
-    Used when rebuilding the house: the database says who belongs in which thread,
-    so recreating threads does not strand anyone.
+    Used when rebuilding that server's house: the database says who belongs in
+    which thread, so recreating threads does not strand anyone. Filtered by
+    guild so rebuilding one server never touches another's players.
     """
     session_factory = _require_session()
     try:
@@ -529,23 +621,29 @@ async def get_all_player_locations() -> list[tuple[int, str, str]]:
                     PlayerGameState.user_id,
                     PlayerGameState.room_version_assignment,
                     PlayerGameState.current_room,
-                )
+                ).where(PlayerGameState.guild_id == guild_id)
             )
             return [(row[0], row[1], row[2]) for row in rows]
     except SQLAlchemyError:
-        log.exception("Failed to read player locations")
+        log.exception("Failed to read player locations for guild %s", guild_id)
         raise
 
 
+# --------------------------------------------------------------------------
+# Nightly relationship decay, per (player, server)
+# --------------------------------------------------------------------------
+
+
 async def apply_daily_decay(day: date) -> list[DecayChange]:
-    """Settle one Pacific calendar day, drifting idle users back toward neutral.
+    """Settle one Pacific calendar day, drifting idle players back toward neutral.
 
-    A user is skipped entirely if they petted at any point during `day`. Users at
-    or above DECAY_POSITIVE_THRESHOLD lose DECAY_POSITIVE_STEP without crossing
-    below 0; users at or below DECAY_NEGATIVE_THRESHOLD gain DECAY_NEGATIVE_STEP
-    without crossing above 0. Scores between those thresholds are left alone.
+    Each (player, server) row is independent: a player is skipped in a server
+    only if they petted *in that server* during `day`. Rows at or above
+    DECAY_POSITIVE_THRESHOLD lose DECAY_POSITIVE_STEP without crossing below 0;
+    rows at or below DECAY_NEGATIVE_THRESHOLD gain DECAY_NEGATIVE_STEP without
+    crossing above 0. Scores between those thresholds are left alone.
 
-    Every user considered has `last_decay_date` stamped to `day`, so a restart
+    Every row considered has `last_decay_date` stamped to `day`, so a restart
     cannot apply the same night twice.
     """
     session_factory = _require_session()
@@ -556,18 +654,19 @@ async def apply_daily_decay(day: date) -> list[DecayChange]:
         async with session_factory() as session:
             pending = (
                 await session.execute(
-                    select(User.id, User.relationship).where(
+                    select(User.id, User.guild_id, User.relationship).where(
                         (User.last_decay_date.is_(None)) | (User.last_decay_date < day)
                     )
                 )
             ).all()
 
-            for user_id, score in pending:
+            for user_id, guild_id, score in pending:
                 petted = await session.scalar(
                     select(func.count())
                     .select_from(PetEvent)
                     .where(
                         PetEvent.user_id == user_id,
+                        PetEvent.guild_id == guild_id,
                         PetEvent.created_at >= start,
                         PetEvent.created_at < end,
                     )
@@ -584,19 +683,21 @@ async def apply_daily_decay(day: date) -> list[DecayChange]:
                     if new_score != score:
                         await session.execute(
                             update(User)
-                            .where(User.id == user_id)
+                            .where(User.id == user_id, User.guild_id == guild_id)
                             .values(relationship=new_score)
                         )
-                        changes.append(DecayChange(user_id, score, new_score, day))
+                        changes.append(DecayChange(user_id, guild_id, score, new_score, day))
 
                 await session.execute(
-                    update(User).where(User.id == user_id).values(last_decay_date=day)
+                    update(User)
+                    .where(User.id == user_id, User.guild_id == guild_id)
+                    .values(last_decay_date=day)
                 )
 
             await session.commit()
 
         if changes:
-            log.info("Nightly decay for %s adjusted %d user(s)", day, len(changes))
+            log.info("Nightly decay for %s adjusted %d row(s)", day, len(changes))
         return changes
     except SQLAlchemyError:
         log.exception("Nightly decay failed for %s", day)

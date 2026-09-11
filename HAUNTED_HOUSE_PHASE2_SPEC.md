@@ -100,31 +100,64 @@ Nursery
 
 ## Database Schema
 
+### Multi-Server Isolation (applies to every table)
+
+The bot can be installed in more than one Discord server at once. **Nothing
+leaks between servers.** Every table is keyed by `(user_id, guild_id)`, and every
+query filters on both. The same player in two servers is, as far as the data is
+concerned, two unrelated players:
+
+- Same player on Server 1: `user_id=123, guild_id=456` → Cohort A, Living Room, 47 pets, relationship -95
+- Same player on Server 2: `user_id=123, guild_id=789` → Cohort B, Entryway, 2 pets, relationship 50
+
+This covers the cat as well as the house. **Each server has its own cat**: pet
+counts, mood windows, relationship scores and the nightly decay are all
+per-server. A player who annoys the cat in one server meets a friendly cat in
+another.
+
+Threads are naturally per-server already — each server has its own `#halloween`
+and its own 18 threads — so only the database needed changing to achieve this.
+
+Because every command needs a server to scope to, **all commands are
+guild-only** and do not appear in DMs.
+
 ### Update to Users Table
 
 Keep all existing columns: `id`, `pet_count`, `relationship`, `last_decay_date`,
-`created_at`, `updated_at`. Phase 2 adds nothing to this table — the relationship
-meter and its nightly decay (see the Phase 1 spec) continue to work unchanged
-alongside the haunted house.
+`created_at`, `updated_at`. Add `guild_id BIGINT NOT NULL`, and change the primary
+key from `id` to the composite `(id, guild_id)`. `pet_events` likewise gains
+`guild_id`. The relationship meter and its nightly decay (see the Phase 1 spec)
+otherwise work unchanged, now once per server.
+
+**Migration note:** adding a column to a primary key cannot be done with
+`ALTER TABLE` on SQLite, and there is no correct `guild_id` to backfill for rows
+that predate this change — the database never recorded which server a pet
+happened in. The bot therefore **refuses to start** against a pre-multi-server
+database, with a message pointing to `reset_db.py --yes --fresh`. All such data is
+test data, and the SQLite file is backed up before it is rebuilt.
 
 ### New Table: Player Game State
 
 ```sql
 CREATE TABLE player_game_state (
-  user_id BIGINT PRIMARY KEY,
+  user_id BIGINT NOT NULL,
+  guild_id BIGINT NOT NULL,
   room_version_assignment CHAR(1) CHECK (room_version_assignment IN ('A', 'B')),
   current_room VARCHAR(50),
   rooms_unlocked JSON, -- JSON array of room names player has visited/unlocked
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id)
+  PRIMARY KEY (user_id, guild_id),
+  FOREIGN KEY (user_id, guild_id) REFERENCES users(id, guild_id)
 );
 ```
 
 **Ordering requirement (important):** a `users` row is created only on a player's
-first `/pet` — nothing else creates one. A player who starts the haunted house
-without ever petting the cat therefore has no `users` row, and inserting their
-`player_game_state` row would violate this foreign key.
+first `/pet` *in that server* — nothing else creates one. A player who starts the
+haunted house in a server without ever petting the cat there has no `users` row
+for that server, and inserting their `player_game_state` row would violate this
+foreign key. (Having petted the cat in a *different* server does not help: the key
+is per-server.)
 
 Game start must **ensure the `users` row exists before** inserting into
 `player_game_state`. Creating it there is harmless: `pet_count` stays 0 until they
@@ -136,8 +169,10 @@ state exist for players the rest of the bot knows nothing about, and the nightly
 relationship drift iterates `users`, so such a player would silently never drift.
 
 **Schema Details:**
-- `user_id` (BIGINT, PRIMARY KEY): Discord user ID
-- `room_version_assignment` (CHAR(1)): 'A' or 'B', randomly assigned on first game start
+- `user_id` (BIGINT, NOT NULL): Discord user ID
+- `guild_id` (BIGINT, NOT NULL): Discord server ID — what makes every row server-specific
+- `PRIMARY KEY (user_id, guild_id)`: one row per player *per server*
+- `room_version_assignment` (CHAR(1)): 'A' or 'B', randomly assigned **per server** on first game start there
 - `current_room` (VARCHAR(50)): Name of the room player is currently in (e.g., "Entryway")
 - `rooms_unlocked` (JSON): JSON array of room names the player has unlocked/visited
   - **Not `TEXT[]`.** PostgreSQL array types have no SQLite equivalent, and the bot
@@ -175,12 +210,13 @@ relationship drift iterates `users`, so such a player would silently never drift
 
 ### 1. `/initialize-haunted-house` (Admin Only)
 
-**Purpose:** Create/recreate all haunted house threads and initialize game state.
+**Purpose:** Create/recreate all haunted house threads **for the current server** and initialize game state.
 
 **Behavior:**
-1. Check if `#halloween` channel exists (must exist before running command)
-2. Delete all existing threads in `#halloween` (if any)
-3. Create 18 threads (9 rooms × 2 versions):
+1. Take the server (guild) ID from the command context
+2. Check if `#halloween` channel exists in this server (must exist before running command)
+3. Delete all existing threads in this server's `#halloween` (if any)
+4. Create 18 threads (9 rooms × 2 versions) in this server:
    - Thread names follow naming convention (no article / with article)
    - Threads are set to **private** with no initial members
    - Set auto-archive to 7 days, Discord's maximum (it accepts only 1 hour,
@@ -189,14 +225,19 @@ relationship drift iterates `users`, so such a player would silently never drift
      long enough to express that, a daily background sweep un-archives every
      house thread, keeping all 18 permanently open regardless of how long a
      room sits idle. The 7-day setting is only a backstop.
-4. Log completion: "Haunted House initialized with 18 threads"
-5. Provide confirmation in Discord
+5. Log completion: "Haunted House initialized with 18 threads in [Server Name]"
+6. Provide confirmation in Discord, naming the server
+
+**Multi-Server Behavior:**
+- Each server gets its own set of 18 threads
+- Running `/initialize-haunted-house` on Server 1 does NOT affect Server 2's threads or players
+- Player restoration reads only *this server's* rows from `player_game_state` (filtered by `guild_id`)
 
 **Important:** This command should be **rerunnable**. If run multiple times:
 - First run: Creates all threads
 - Subsequent runs: Deletes existing threads and recreates them
-- **Preserves player permissions:** If player A was in "Entryway", they remain invited after recreation
-- Use database as source of truth for who should have access to which threads
+- **Preserves player permissions:** If player A was in "Entryway" on Server 1, they remain invited after recreation
+- Use database as source of truth for who should have access to which threads (filtered by `guild_id`)
 
 **Error Handling:**
 - If `#halloween` channel doesn't exist, inform admin to create it first
@@ -207,24 +248,32 @@ relationship drift iterates `users`, so such a player would silently never drift
 
 ### 2. `/enter-entryway` (Player Command - Temporary Testing Only)
 
-**Purpose:** Initialize a new player into the game and place them in the Entryway.
+**Purpose:** Initialize a new player into the game and place them in the Entryway **for the current server**.
 
 **Note:** This is a temporary testing command. In Phase 3, this will be replaced with a proper game start flow/mechanism.
 
 **Behavior:**
-1. Check if player already has an entry in `player_game_state` table
-2. If YES: Respond "You're already in the haunted house!" (stop here)
-3. If NO, proceed:
-   - Ensure a `users` row exists for this player (create it if they have never
-     petted the cat) so the `player_game_state` foreign key is satisfied
-   - Randomly assign cohort: A or B (50/50 chance)
+1. Take the server (guild) ID from the command context
+2. Check if player already has an entry in `player_game_state` **for this server**
+   - Query: `WHERE user_id = <player_id> AND guild_id = <guild_id>`
+3. If YES: Respond "You're already in the haunted house!" (stop here)
+4. If NO, proceed:
+   - Ensure a `users` row exists for this player *in this server* (create it if
+     they have never petted the cat here) so the `player_game_state` foreign key
+     is satisfied
+   - Randomly assign cohort: A or B (50/50 chance) — **per server**
    - Set `current_room = "Entryway"`
    - Set `rooms_unlocked = ["Entryway", "Dining Room", "Living Room", "Kitchen", "Courtyard", "Secret Library", "Upstairs Hallway", "Bedroom", "Nursery"]` (all rooms for testing phase)
-   - Insert new record into `player_game_state` table
+   - Insert new record into `player_game_state` table with `guild_id`
    - Determine correct Entryway thread based on cohort (Entryway for A, The Entryway for B)
-   - Add player to the correct Entryway thread
+   - Add player to the correct Entryway thread **in this server**
    - Send welcome message in Entryway thread: `Welcome, @<username>! You arrive at the entrance to the haunted house. The cat appears at your side.` (placeholder text)
    - Respond to player's `/enter-entryway` command: "You've entered the haunted house! Check #halloween for the Entryway thread."
+
+**Multi-Server Behavior:**
+- The same player can run `/enter-entryway` on Server 1 and be assigned Cohort A
+- The same player can run `/enter-entryway` on Server 2 and be assigned Cohort B
+- The two game states are completely independent
 
 **Error Handling:**
 - If database insert fails, inform player: "An error occurred. Try again."
@@ -236,9 +285,12 @@ relationship drift iterates `users`, so such a player would silently never drift
 
 ### 3. `/use [exit_label]` (Player Command)
 
-**Purpose:** Navigate between rooms using an exit label.
+**Purpose:** Navigate between rooms using an exit label, **in the current server**.
 
 **Behavior:**
+0. Take the server (guild) ID from the command context; every read and write below
+   is scoped by `user_id AND guild_id`
+
 1. **Input parsing:**
    - Accept any string with spaces (e.g., `/use SL`, `/use secret library`, `/use blue door`)
    - Convert input to lowercase for matching
@@ -270,9 +322,15 @@ relationship drift iterates `users`, so such a player would silently never drift
    - Format: `@<username> enters <room name>`
    - Example: `@Alice enters Living Room`
 
-8. **Update database:**
+8. **Update database (guild-scoped):**
+   - Update: `WHERE user_id = <player_id> AND guild_id = <guild_id>`
    - Set `current_room = <destination_room_name>`
    - Update `updated_at` timestamp
+
+**Multi-Server Behavior:**
+- A player navigates independently in each server
+- Threads, cohort assignments and current rooms are all per-server
+- Moving in one server has no effect on the player's position in another
 
 **Error Handling:**
 - If thread operations fail, inform player: "An error occurred while moving between rooms. Try again."
@@ -294,10 +352,11 @@ All resolve to the same exit (Living Room from Secret Library)
 
 When a player first joins the game (separate mechanism for starting the game):
 
-1. Check if player exists in `player_game_state` table
+1. Check if player exists in `player_game_state` table **for this server**
 2. If NOT found:
-   - **Ensure a `users` row exists for this player, creating one if needed** — the
-     foreign key requires it, and a player who has never petted has no row yet
+   - **Ensure a `users` row exists for this player in this server, creating one if
+     needed** — the foreign key requires it, and a player who has never petted the
+     cat here has no row yet
    - Randomly assign cohort: A or B (50/50)
    - Set `current_room = "Entryway"`
    - Set `rooms_unlocked = ["Entryway"]`
@@ -391,15 +450,17 @@ This allows:
 - Integrate with `house_utils` for room management
 
 **database.py** (existing, needs updates)
-- Add `player_game_state` table creation in `init_db()`
-- Add async functions:
-  - `ensure_user_exists(user_id)` → creates the `users` row if absent, so the
-    `player_game_state` foreign key can be satisfied for a player who has
-    never petted the cat
-  - `get_or_create_game_state(user_id)` → returns cohort assignment
-  - `update_current_room(user_id, room_name)` → sets current room
-  - `get_rooms_unlocked(user_id)` → returns list of unlocked rooms
-  - `add_room_unlocked(user_id, room_name)` → adds room to unlocked list
+- Add `player_game_state` table creation in `init_db()` with composite key `(user_id, guild_id)`
+- Add `guild_id` to `users` and `pet_events`; refuse to start against a pre-multi-server database
+- Add async functions (**all guild-scoped — every one takes `guild_id`**):
+  - `ensure_user_exists(user_id, guild_id)` → creates the `users` row for this
+    server if absent, so the `player_game_state` foreign key can be satisfied for
+    a player who has never petted the cat here
+  - `start_game(user_id, guild_id, cohort, room, rooms_unlocked)` → enrols, or reports already enrolled
+  - `get_game_state(user_id, guild_id)` → cohort, current room and unlocked rooms in this server
+  - `update_current_room(user_id, guild_id, room_name)` → sets current room in this server
+  - `get_all_player_locations(guild_id)` → who is where, in this server only
+  - **All queries must filter by both `user_id` AND `guild_id`**
 
 **house_utils.py** (new file)
 - Define `NAVIGATION_GRAPH` constant
@@ -418,13 +479,17 @@ This allows:
 ## Implementation Checklist
 
 ### Database Setup
-- [ ] Create `player_game_state` table in `database.py` init
-- [ ] Implement `ensure_user_exists(user_id)` async function (call before any
+- [ ] Create `player_game_state` table with composite key `(user_id, guild_id)`
+- [ ] Add `guild_id` to `users` (composite key) and `pet_events`
+- [ ] Refuse to start against a database that predates `guild_id`, pointing to `reset_db.py --yes --fresh`
+- [ ] Implement `ensure_user_exists(user_id, guild_id)` async function (call before any
       `player_game_state` insert)
-- [ ] Implement `get_or_create_game_state(user_id)` async function
-- [ ] Implement `update_current_room(user_id, room_name)` async function
-- [ ] Implement `get_rooms_unlocked(user_id)` async function
-- [ ] Implement `add_room_unlocked(user_id, room_name)` async function
+- [ ] Implement `start_game(user_id, guild_id, ...)` async function
+- [ ] Implement `get_game_state(user_id, guild_id)` async function
+- [ ] Implement `update_current_room(user_id, guild_id, room_name)` async function
+- [ ] Implement `get_all_player_locations(guild_id)` async function
+- [ ] **CRITICAL: every query filters by BOTH `user_id` AND `guild_id`**
+- [ ] Mark every command guild-only so none can run from a DM
 - [ ] Async database operations for all queries
 
 ### Navigation & Room Management (house_utils.py)
@@ -447,13 +512,16 @@ This allows:
 
 ### Commands (bot.py)
 - [ ] Implement `/initialize-haunted-house` admin command
+  - [ ] Take guild_id from command context
   - [ ] Check if caller is admin/has appropriate permissions
-  - [ ] Call `initialize_threads()`
-  - [ ] Confirm success in Discord
+  - [ ] Call `initialize_threads()` with this server's players only
+  - [ ] Confirm success in Discord, naming the server
   - [ ] Handle errors gracefully
 
 - [ ] Implement `/enter-entryway` player command (temporary testing)
-  - [ ] Check if player already in `player_game_state` table
+  - [ ] Take guild_id from command context
+  - [ ] Check if player already in `player_game_state` table for this server
+    - [ ] Query: WHERE user_id = X AND guild_id = <guild_id>
   - [ ] If yes: respond "already in the haunted house"
   - [ ] If no:
     - [ ] Randomly assign cohort A or B
@@ -467,8 +535,9 @@ This allows:
   - [ ] Mark with TODO comment: remove in Phase 3 when game start flow exists
   
 - [ ] Implement `/use [exit_label]` player command
-  - [ ] Get player's current room from database
-  - [ ] Get player's cohort from database
+  - [ ] Take guild_id from command context
+  - [ ] Get player's current room from database (guild-scoped query)
+  - [ ] Get player's cohort from database (guild-scoped query)
   - [ ] Parse exit_label (case-insensitive)
   - [ ] Call `find_exit()` to resolve destination
   - [ ] Validate destination room is unlocked (currently: all rooms are unlocked)
@@ -476,7 +545,7 @@ This allows:
   - [ ] Remove player from current room thread
   - [ ] Add player to destination room thread
   - [ ] Send entry message in destination room
-  - [ ] Update `current_room` in database
+  - [ ] Update `current_room` in database (guild-scoped update)
   - [ ] Handle errors gracefully
 
 ### Threading & Message Management
@@ -501,6 +570,23 @@ This allows:
 - [ ] Test `/enter-entryway` for a player who has never run `/pet` (no `users`
       row yet) - must succeed, not fail on the foreign key
 - [ ] Test error cases: invalid exits, unlocked room checks (currently all unlocked)
+
+### Multi-Server Testing (CRITICAL)
+- [ ] Install the bot on Server 1 and Server 2
+- [ ] Run `/initialize-haunted-house` on Server 1 → creates 18 threads in Server 1
+- [ ] Run `/initialize-haunted-house` on Server 2 → creates 18 threads in Server 2 (independent)
+- [ ] Player A runs `/enter-entryway` on Server 1 → assigned a cohort
+- [ ] Player A runs `/enter-entryway` on Server 2 → may be assigned a different cohort
+- [ ] Player A navigates Server 1 to Living Room
+- [ ] Player A's state on Server 2 still shows Entryway (different guild state)
+- [ ] Player A uses `/use` on Server 1 → moves them only on Server 1
+- [ ] Player A uses `/use` on Server 2 → moves them only on Server 2
+- [ ] Verify database: Player A has two separate `player_game_state` records (one per guild)
+- [ ] Player B can be in the same room on both servers without cross-server conflicts
+- [ ] **The cat too:** Player A pets the cat 5 times on Server 1; `/stats` on Server 2 still shows 0 pets and relationship 50
+- [ ] Player A annoys the Server 1 cat (rapid pets) → Server 2's mood weighting is unaffected
+- [ ] Nightly decay: Player A pets only on Server 1 → next morning Server 1 relationship is unchanged, Server 2 has drifted
+- [ ] Commands are not offered in DMs
 
 ---
 
@@ -572,6 +658,7 @@ exit_flavors = {
 
 ## Success Criteria
 
+### Single-Server Tests
 - [ ] 18 threads created in #halloween with correct naming convention
 - [ ] `/initialize-haunted-house` works and is rerunnable
 - [ ] `/enter-entryway` initializes new players into correct cohort
@@ -585,5 +672,21 @@ exit_flavors = {
 - [ ] Player cohort and current room tracked in database
 - [ ] All 9 rooms reachable via navigation graph
 - [ ] Reinitializing threads preserves player permissions
+
+### Multi-Server Isolation Tests (CRITICAL)
+- [ ] Same player has separate state on Server 1 and Server 2
+- [ ] Player can be assigned different cohorts on different servers
+- [ ] Player can unlock rooms at a different pace on each server
+- [ ] Threads on Server 1 are independent from Server 2
+- [ ] Running `/initialize-haunted-house` on Server 1 doesn't affect Server 2's threads
+- [ ] Player navigation on Server 1 doesn't affect their state on Server 2
+- [ ] Each server has its own cat: pet counts, relationship and decay are per-server
+- [ ] Database contains separate `users` and `player_game_state` records per (user_id, guild_id) pair
+- [ ] All queries properly scope by guild_id
+- [ ] No command can be invoked from a DM
+
+### Readiness for Phase 3
 - [ ] Code ready for Phase 3 content expansion
+- [ ] Guild scoping pattern established for future multi-server expansion
+- [ ] Database schema supports multi-server architecture
 

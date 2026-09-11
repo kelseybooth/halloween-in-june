@@ -49,17 +49,26 @@ The bot token will be needed to run the bot.
 
 ```sql
 CREATE TABLE users (
-  id BIGINT PRIMARY KEY,
+  id BIGINT NOT NULL,
+  guild_id BIGINT NOT NULL,
   pet_count INTEGER DEFAULT 0,
   relationship INTEGER DEFAULT 50,
   last_decay_date DATE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id, guild_id)
 );
 ```
 
+**Each server has its own cat.** The primary key is `(id, guild_id)`, so a
+player's pet count, relationship and mood are tracked separately in every server
+the bot is in. Petting the cat in one server does nothing to the cat in another,
+and the nightly decay runs independently per server. Every query filters by both
+`id` and `guild_id`. All commands are guild-only and do not appear in DMs.
+
 **Schema:**
-- `id` (BIGINT, PRIMARY KEY): Discord user ID
+- `id` (BIGINT): Discord user ID
+- `guild_id` (BIGINT): Discord server ID; together with `id` forms the primary key
 - `pet_count` (INTEGER): Number of times user has petted the cat (default 0)
 - `relationship` (INTEGER): How the cat feels about this user, -100 to 100 (default 50)
 - `last_decay_date` (DATE): Last day the nightly drift was applied for this user
@@ -76,6 +85,7 @@ weighting depends on.
 CREATE TABLE pet_events (
   id INTEGER PRIMARY KEY,
   user_id BIGINT NOT NULL,
+  guild_id BIGINT NOT NULL,
   created_at TIMESTAMP NOT NULL
 );
 ```
@@ -85,7 +95,7 @@ CREATE TABLE pet_events (
 - For `/pet`: Query database → increment → update row → record a `pet_events` row
 - For `/stats`: Query database → retrieve pet_count and relationship
 - If user doesn't exist in database, insert new row with pet_count = 1
-- A user's row is created on their first `/pet`, never before
+- A user's row for a server is created on their first `/pet` in that server, never before
 - All queries are async (non-blocking)
 
 ---
@@ -112,7 +122,9 @@ cat is reliably standoffish until the window clears.
 
 ## Relationship Meter
 
-Every player has a relationship score with the cat, ranging from **-100 to 100**.
+Every player has a relationship score with the cat, ranging from **-100 to 100**,
+**per server** — the same player can be adored in one server and resented in
+another.
 
 **Starting value: 50.** The cat is friendly toward newcomers and has to be annoyed
 into hostility. This is a starting disposition, not a resting one — see the drift
@@ -133,7 +145,8 @@ that day drifts back toward 0:
 | -20 or below | +20 | 0 (never above) |
 
 **Rules and edge cases:**
-- Petting even once during a day cancels that night's drift entirely.
+- Petting even once during a day cancels that night's drift entirely — in that
+  server. Petting in a different server does not protect this one's score.
 - The thresholds are re-evaluated each night, so a score of 15 drops to 5 and then
   stops, because 5 is below the 10 threshold. Drift never crosses zero.
 - **0 is the resting point.** A new player who never returns drifts 50 → 40 → 30 →

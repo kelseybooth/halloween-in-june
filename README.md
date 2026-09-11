@@ -24,6 +24,19 @@ Copy `.env.example` to `.env` and set `DISCORD_TOKEN`. Then:
 python bot.py
 ```
 
+### Multiple servers
+
+The bot can live in several Discord servers at once, and **nothing is shared
+between them**. Every table is keyed by `(user_id, guild_id)`, so the same person
+has a separate pet count, relationship, mood window, cohort and room position in
+each server. Each server also has its own `#halloween` and its own 18 threads.
+Every command is guild-only and won't appear in DMs.
+
+Upgrading from a database created before this change: the bot refuses to start
+and tells you to run `python reset_db.py --yes --fresh`. There's no correct
+`guild_id` to backfill for old rows, so a rebuild is the honest option; the file
+is backed up first.
+
 ### Cat mood
 
 `/pet` picks from two pools of three responses. A user with no pets in the last

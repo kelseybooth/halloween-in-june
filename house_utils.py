@@ -265,8 +265,9 @@ async def initialize_threads(
             log.warning("Failed to restore player %s to %s", user_id, name, exc_info=True)
 
     log.info(
-        "Haunted House initialized with %d threads (deleted %d, restored %d players)",
+        "Haunted House initialized with %d threads in %s (deleted %d, restored %d players)",
         len(threads),
+        channel.guild.name,
         deleted,
         restored,
     )
