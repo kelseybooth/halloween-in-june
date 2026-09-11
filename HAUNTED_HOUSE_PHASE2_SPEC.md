@@ -291,9 +291,16 @@ relationship drift iterates `users`, so such a player would silently never drift
 
 ---
 
-### 3. `/use [exit_label]` (Player Command)
+### 3. `/use [thing]` (Player Command)
 
-**Purpose:** Navigate between rooms using an exit label, **in the current server**.
+**Purpose:** Navigate between rooms by using an exit, **in the current server**.
+
+**As shown in Discord:**
+- Command description: *Attempt to use an object or exit.*
+- Option `thing`: *The object or exit to use.*
+
+The wording is deliberately broader than exits alone: Phase 3 adds objects
+players can interact with, and the same command will handle both.
 
 **Behavior:**
 0. Take the server (guild) ID from the command context; every read and write below
@@ -316,8 +323,13 @@ relationship drift iterates `users`, so such a player would silently never drift
 
 4. **Exit message:**
    - Send exit message in current room thread
-   - Format: `@<username> exits to go to <destination room name>` with clickable link to destination thread
-   - Example: `@Alice exits to go to [Living Room](thread_link)`
+   - Format: `@<username> exits via <exit label>.`
+   - Example: `@Alice exits via EL.` (Phase 3: `@Alice exits via blue door.`)
+   - The label is the exit's canonical label from the navigation graph, not what
+     the player typed: `/use living room` still announces `exits via EL.`
+   - No link to the destination thread. The player who moved gets a private
+     "You head to <room>" reply with the link; onlookers in the room they left
+     see only which exit was taken.
 
 5. **Remove player from current room:**
    - Bot removes player from current room thread
@@ -382,14 +394,16 @@ When a player first joins the game (separate mechanism for starting the game):
 
 **In the room player is leaving:**
 ```
-@<username> exits to go to <destination room name>
+@<username> exits via <exit label>.
 ```
 
-With destination room name as a **clickable link** to the destination thread.
+The exit label is the canonical one from the navigation graph. There is no
+link to the destination: the mover receives that privately, and the room they
+left learns only which exit they took.
 
 **Example in Discord:**
 ```
-@Alice exits to go to [Living Room](https://discord.com/channels/...)
+@Alice exits via EL.
 ```
 
 ### Entry Message Format
@@ -542,14 +556,14 @@ This allows:
   - [ ] Handle database errors gracefully
   - [ ] Mark with TODO comment: remove in Phase 3 when game start flow exists
   
-- [ ] Implement `/use [exit_label]` player command
+- [ ] Implement `/use [thing]` player command
   - [ ] Take guild_id from command context
   - [ ] Get player's current room from database (guild-scoped query)
   - [ ] Get player's cohort from database (guild-scoped query)
-  - [ ] Parse exit_label (case-insensitive)
+  - [ ] Parse `thing` (case-insensitive)
   - [ ] Call `find_exit()` to resolve destination
   - [ ] Validate destination room is unlocked (currently: all rooms are unlocked)
-  - [ ] Send exit message in current room with link
+  - [ ] Send exit message in current room, naming the exit taken
   - [ ] Remove player from current room thread
   - [ ] Add player to destination room thread
   - [ ] Send entry message in destination room
@@ -557,7 +571,7 @@ This allows:
   - [ ] Handle errors gracefully
 
 ### Threading & Message Management
-- [ ] Implement Discord thread link generation (for clickable thread links in messages)
+- [ ] Link the destination thread in the private "You head to" reply (public exit message carries no link)
 - [ ] Implement entry message formatting
 - [ ] Implement exit message formatting
 - [ ] Ensure bot can invite players to private threads
@@ -572,7 +586,7 @@ This allows:
 - [ ] Test `/use` with lowercase (e.g., `/use el`)
 - [ ] Test `/use` with spaces in future (e.g., `/use secret library`)
 - [ ] Test entry/exit messages appear in correct threads
-- [ ] Test Discord links in messages are clickable
+- [ ] Test the private "You head to" reply links to the destination thread
 - [ ] Test `/use` from dead-end rooms (e.g., Bedroom only has one exit)
 - [ ] Test reinitializing threads preserves player permissions
 - [ ] Test cohort consistency: same player always sees same room names
@@ -635,7 +649,7 @@ The room entry/exit messages should use placeholder text that's easy to find and
 
 **Exit Message:**
 ```python
-exit_msg = f"@{player_name} exits to go to [{destination_room}]({thread_link})"
+exit_msg = f"@{player_name} exits via {exit_label}."
 ```
 
 **Entry Message:**
@@ -677,7 +691,7 @@ exit_flavors = {
 - [ ] All players in cohort A see "Entryway", all in cohort B see "The Entryway"
 - [ ] `/use [exit_code]` navigates between rooms correctly
 - [ ] `/use` is case-insensitive
-- [ ] Entry/exit messages appear in correct threads with clickable links
+- [ ] Entry/exit messages appear in correct threads; the exit message names the exit taken
 - [ ] Player removed from room when they leave, added to new room when they enter
 - [ ] Player cohort and current room tracked in database
 - [ ] All 9 rooms reachable via navigation graph

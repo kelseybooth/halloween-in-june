@@ -87,12 +87,21 @@ def all_thread_names() -> list[str]:
     return [get_thread_name(room, cohort) for room in ROOMS for cohort in COHORTS]
 
 
-def find_exit(current_room: str, user_input: str) -> str | None:
-    """Resolve an exit label to a destination room, or None if there is no such exit.
+class Exit(NamedTuple):
+    """A resolved exit: its canonical label and where it leads."""
+
+    label: str
+    destination: str
+
+
+def resolve_exit(current_room: str, user_input: str) -> Exit | None:
+    """Resolve what a player typed to an exit from their room, or None if no match.
 
     Matching ignores case and surrounding whitespace, and accepts either the exit
-    code ("EL") or the destination room name ("living room"), so the command keeps
-    working when Phase 3 swaps codes for descriptive labels.
+    label ("EL") or the destination room name ("living room"), so the command keeps
+    working when Phase 3 swaps codes for descriptive labels. The returned label is
+    the canonical one from the graph, not the player's text - the exit message
+    announces the exit as the house names it, not as the player spelled it.
     """
     exits = NAVIGATION_GRAPH.get(current_room)
     if not exits:
@@ -104,8 +113,14 @@ def find_exit(current_room: str, user_input: str) -> str | None:
 
     for label, destination in exits.items():
         if needle == label.lower() or needle == destination.lower():
-            return destination
+            return Exit(label, destination)
     return None
+
+
+def find_exit(current_room: str, user_input: str) -> str | None:
+    """Destination room for what a player typed, or None. See resolve_exit."""
+    resolved = resolve_exit(current_room, user_input)
+    return resolved.destination if resolved else None
 
 
 def validate_graph() -> list[str]:
