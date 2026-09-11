@@ -609,7 +609,7 @@ def main() -> None:
     except discord.LoginFailure:
         log.error("Discord rejected the token. Check DISCORD_TOKEN in your .env file.")
         sys.exit(1)
-    except database.SchemaOutdatedError as exc:
+    except database.StartupError as exc:
         # Say exactly what to do instead of burying it in a traceback.
         log.error("%s", exc)
         sys.exit(1)

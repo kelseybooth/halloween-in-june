@@ -75,8 +75,16 @@ _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker | None = None
 
 
-class SchemaOutdatedError(RuntimeError):
+class StartupError(RuntimeError):
+    """A problem the bot should stop and report rather than run through."""
+
+
+class SchemaOutdatedError(StartupError):
     """The database predates per-server scoping and must be rebuilt."""
+
+
+class MissingDatabaseError(StartupError):
+    """Running in production with no DATABASE_URL configured."""
 
 
 class Base(DeclarativeBase):
@@ -297,6 +305,16 @@ async def init_db() -> None:
     if raw_url:
         url = _normalise_url(raw_url)
         backend = "PostgreSQL"
+    elif os.getenv("RAILWAY_ENVIRONMENT"):
+        # Railway sets this on every deployment. Falling back to SQLite there
+        # would write to the container's disk, which is discarded on every
+        # redeploy - all player data would silently vanish. Refuse instead.
+        raise MissingDatabaseError(
+            "DATABASE_URL is not set, but this is running on Railway. Add it to "
+            "the service's Variables as a reference to the Postgres service "
+            "(${{Postgres.DATABASE_URL}}). Refusing to fall back to SQLite, which "
+            "would lose all data on the next redeploy."
+        )
     else:
         url = DEFAULT_SQLITE_URL
         backend = "SQLite (local development)"
@@ -310,7 +328,7 @@ async def init_db() -> None:
             await _reject_pre_guild_schema(conn)
             await conn.run_sync(Base.metadata.create_all)
             await _add_missing_columns(conn)
-    except SchemaOutdatedError:
+    except StartupError:
         await _engine.dispose()
         _engine = None
         _session_factory = None
