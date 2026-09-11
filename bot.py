@@ -193,9 +193,10 @@ async def nightly_decay() -> None:
         changes = await database.run_pending_decay()
         for change in changes:
             log.info(
-                "Decay %s: user %s %s -> %s",
+                "Decay %s: user %s in guild %s: %s -> %s",
                 change.day,
                 change.user_id,
+                change.guild_id,
                 change.before,
                 change.after,
             )
@@ -245,14 +246,15 @@ async def _before_keep_alive() -> None:
 
 
 @bot.tree.command(name="pet", description="Pet the cat.")
+@app_commands.guild_only()
 async def pet(interaction: discord.Interaction) -> None:
     # Defer first: the DB round trip can exceed Discord's 3s interaction deadline.
     await interaction.response.defer()
     try:
-        result = await database.increment_pet_count(interaction.user.id)
+        result = await database.increment_pet_count(interaction.user.id, interaction.guild_id)
         reaction = choose_response(result.recent)
         delta = RELATIONSHIP_STEP if reaction.friendly else -RELATIONSHIP_STEP
-        relationship = await database.adjust_relationship(interaction.user.id, delta)
+        relationship = await database.adjust_relationship(interaction.user.id, interaction.guild_id, delta)
     except SQLAlchemyError:
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
         return
@@ -267,6 +269,7 @@ async def pet(interaction: discord.Interaction) -> None:
     name="initialize-haunted-house",
     description="(Admin) Rebuild every haunted house thread from scratch.",
 )
+@app_commands.guild_only()
 @app_commands.default_permissions(administrator=True)
 @app_commands.checks.has_permissions(administrator=True)
 async def initialize_haunted_house(interaction: discord.Interaction) -> None:
@@ -304,7 +307,7 @@ async def initialize_haunted_house(interaction: discord.Interaction) -> None:
         return
 
     try:
-        locations = await database.get_all_player_locations()
+        locations = await database.get_all_player_locations(interaction.guild_id)
     except SQLAlchemyError:
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
         return
@@ -328,7 +331,7 @@ async def initialize_haunted_house(interaction: discord.Interaction) -> None:
         return
 
     lines = [
-        f"Haunted House initialized with {result.created} threads.",
+        f"Haunted House initialized with {result.created} threads in **{interaction.guild.name}**.",
         f"- deleted {result.deleted} existing thread(s)",
         f"- restored {result.restored} player(s) to their current room",
     ]
@@ -361,6 +364,7 @@ async def _initialize_error(
     name="enter-entryway",
     description="Enter the haunted house and begin in the Entryway.",
 )
+@app_commands.guild_only()
 async def enter_entryway(interaction: discord.Interaction) -> None:
     """Enrol the player, assign a cohort, and place them in their Entryway thread."""
     if interaction.guild is None:
@@ -408,7 +412,7 @@ async def enter_entryway(interaction: discord.Interaction) -> None:
         # All rooms start unlocked during the testing phase; Phase 3 gates them
         # behind puzzles and this becomes just the starting room.
         enrolled = await database.start_game(
-            user.id, cohort, house_utils.STARTING_ROOM, list(house_utils.ROOMS)
+            user.id, interaction.guild_id, cohort, house_utils.STARTING_ROOM, list(house_utils.ROOMS)
         )
     except SQLAlchemyError:
         await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
@@ -429,7 +433,7 @@ async def enter_entryway(interaction: discord.Interaction) -> None:
         # inside a house they were never actually let into.
         log.exception("Failed to place %s in the Entryway; rolling back", user.id)
         try:
-            await database.delete_game_state(user.id)
+            await database.delete_game_state(user.id, interaction.guild_id)
         except SQLAlchemyError:
             log.error("Rollback failed for %s - player may be stuck enrolled", user.id)
         await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
@@ -442,6 +446,7 @@ async def enter_entryway(interaction: discord.Interaction) -> None:
 
 
 @bot.tree.command(name="use", description="Take an exit to move to another room.")
+@app_commands.guild_only()
 @app_commands.describe(exit_label="The exit to take, e.g. EL or 'living room'.")
 async def use(interaction: discord.Interaction, exit_label: str) -> None:
     """Move the player through an exit into the adjoining room.
@@ -462,7 +467,7 @@ async def use(interaction: discord.Interaction, exit_label: str) -> None:
     user = interaction.user
 
     try:
-        state = await database.get_game_state(user.id)
+        state = await database.get_game_state(user.id, interaction.guild_id)
     except SQLAlchemyError:
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
         return
@@ -522,7 +527,7 @@ async def use(interaction: discord.Interaction, exit_label: str) -> None:
         return
 
     try:
-        await database.update_current_room(user.id, destination)
+        await database.update_current_room(user.id, interaction.guild_id, destination)
     except SQLAlchemyError:
         # Undo the add so Discord and the database do not disagree about where
         # this player is.
@@ -559,11 +564,12 @@ async def use(interaction: discord.Interaction, exit_label: str) -> None:
 
 
 @bot.tree.command(name="stats", description="See how many times you've petted the cat.")
+@app_commands.guild_only()
 async def stats(interaction: discord.Interaction) -> None:
     await interaction.response.defer()
     try:
-        count = await database.get_pet_count(interaction.user.id)
-        relationship = await database.get_relationship(interaction.user.id)
+        count = await database.get_pet_count(interaction.user.id, interaction.guild_id)
+        relationship = await database.get_relationship(interaction.user.id, interaction.guild_id)
     except SQLAlchemyError:
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
         return
@@ -602,6 +608,10 @@ def main() -> None:
         bot.run(token, log_handler=None)  # log_handler=None: reuse our logging config
     except discord.LoginFailure:
         log.error("Discord rejected the token. Check DISCORD_TOKEN in your .env file.")
+        sys.exit(1)
+    except database.SchemaOutdatedError as exc:
+        # Say exactly what to do instead of burying it in a traceback.
+        log.error("%s", exc)
         sys.exit(1)
 
 

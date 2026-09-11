@@ -77,7 +77,13 @@ async def main(fresh: bool) -> int:
             print(f"{path} did not exist; nothing to delete")
         return 0
 
-    await database.init_db()
+    try:
+        await database.init_db()
+    except database.SchemaOutdatedError:
+        # Rows cannot be cleared from a schema this code no longer understands;
+        # the file has to be rebuilt.
+        print("this database predates per-server scoping - re-run with --fresh to rebuild it")
+        return 1
     before = await _summarise()
     await _wipe()
     after = await _summarise()
