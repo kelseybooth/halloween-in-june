@@ -2,7 +2,7 @@
 
 ## Overview
 
-Phase 2 transforms the bot into a haunted house exploration experience. Players are randomly assigned to one of two cohorts (A or B) and explore a 9-room haunted house through private Discord threads. Each room has two versions (with and without an article) so mods can distinguish cohorts, but players don't explicitly know they're in different versions.
+Phase 2 transforms the bot into a haunted house exploration experience. Players are assigned to one of two cohorts (A or B), balanced so each server's two groups stay the same size, and explore a 9-room haunted house through private Discord threads. Each room has two versions (with and without an article) so mods can distinguish cohorts, but players don't explicitly know they're in different versions.
 
 This phase focuses on infrastructure: room creation, thread management, navigation, and entry/exit mechanics. Phase 3+ will add puzzle content within rooms.
 
@@ -172,7 +172,7 @@ relationship drift iterates `users`, so such a player would silently never drift
 - `user_id` (BIGINT, NOT NULL): Discord user ID
 - `guild_id` (BIGINT, NOT NULL): Discord server ID — what makes every row server-specific
 - `PRIMARY KEY (user_id, guild_id)`: one row per player *per server*
-- `room_version_assignment` (CHAR(1)): 'A' or 'B', randomly assigned **per server** on first game start there
+- `room_version_assignment` (CHAR(1)): 'A' or 'B', assigned **per server** on first game start there so that server's two groups stay balanced
 - `current_room` (VARCHAR(50)): Name of the room player is currently in (e.g., "Entryway")
 - `rooms_unlocked` (JSON): JSON array of room names the player has unlocked/visited
   - **Not `TEXT[]`.** PostgreSQL array types have no SQLite equivalent, and the bot
@@ -261,7 +261,15 @@ relationship drift iterates `users`, so such a player would silently never drift
    - Ensure a `users` row exists for this player *in this server* (create it if
      they have never petted the cat here) so the `player_game_state` foreign key
      is satisfied
-   - Randomly assign cohort: A or B (50/50 chance) — **per server**
+   - Assign cohort to keep this server balanced: whichever of A or B currently
+     has **fewer players** (counting everyone ever enrolled in this server); a
+     coin flip when they are level. Independent 50/50 rolls were replaced because
+     they only balance at scale — a four-player server had a 1-in-8 chance of
+     landing everyone in the same cohort. The groups now never differ by more
+     than one player. The tie-break keeps any individual's cohort unpredictable.
+   - Two players enrolling in the same instant can both read the same counts and
+     land on the same side; this is harmless, since the next enrolment goes to
+     the smaller cohort and corrects it.
    - Set `current_room = "Entryway"`
    - Set `rooms_unlocked = ["Entryway", "Dining Room", "Living Room", "Kitchen", "Courtyard", "Secret Library", "Upstairs Hallway", "Bedroom", "Nursery"]` (all rooms for testing phase)
    - Insert new record into `player_game_state` table with `guild_id`
@@ -357,7 +365,7 @@ When a player first joins the game (separate mechanism for starting the game):
    - **Ensure a `users` row exists for this player in this server, creating one if
      needed** — the foreign key requires it, and a player who has never petted the
      cat here has no row yet
-   - Randomly assign cohort: A or B (50/50)
+   - Assign cohort: whichever of A or B has fewer players in this server, random on a tie
    - Set `current_room = "Entryway"`
    - Set `rooms_unlocked = ["Entryway"]`
    - Insert into `player_game_state`
@@ -524,7 +532,7 @@ This allows:
     - [ ] Query: WHERE user_id = X AND guild_id = <guild_id>
   - [ ] If yes: respond "already in the haunted house"
   - [ ] If no:
-    - [ ] Randomly assign cohort A or B
+    - [ ] Assign cohort to the smaller group in this server (coin flip on a tie)
     - [ ] Create `player_game_state` entry with all 9 rooms unlocked
     - [ ] Set `current_room = "Entryway"`
     - [ ] Determine correct Entryway thread (Entryway for A, The Entryway for B)
@@ -558,7 +566,8 @@ This allows:
 ### Testing (Local & Railway)
 - [ ] Test `/initialize-haunted-house` creates all 18 threads with correct names
 - [ ] Test thread naming: Cohort A threads have no article, Cohort B have article
-- [ ] Test player assignment: New players randomly assigned A or B
+- [ ] Test player assignment: first player is a coin flip, second always lands
+      opposite, N players split as evenly as N allows
 - [ ] Test `/use` with exit code (e.g., `/use EL`)
 - [ ] Test `/use` with lowercase (e.g., `/use el`)
 - [ ] Test `/use` with spaces in future (e.g., `/use secret library`)
@@ -576,7 +585,8 @@ This allows:
 - [ ] Run `/initialize-haunted-house` on Server 1 → creates 18 threads in Server 1
 - [ ] Run `/initialize-haunted-house` on Server 2 → creates 18 threads in Server 2 (independent)
 - [ ] Player A runs `/enter-entryway` on Server 1 → assigned a cohort
-- [ ] Player A runs `/enter-entryway` on Server 2 → may be assigned a different cohort
+- [ ] Player A runs `/enter-entryway` on Server 2 → cohort is decided by Server 2's
+      own counts, independent of Server 1
 - [ ] Player A navigates Server 1 to Living Room
 - [ ] Player A's state on Server 2 still shows Entryway (different guild state)
 - [ ] Player A uses `/use` on Server 1 → moves them only on Server 1
@@ -675,7 +685,8 @@ exit_flavors = {
 
 ### Multi-Server Isolation Tests (CRITICAL)
 - [ ] Same player has separate state on Server 1 and Server 2
-- [ ] Player can be assigned different cohorts on different servers
+- [ ] Player can be assigned different cohorts on different servers, because each
+      server balances its own groups
 - [ ] Player can unlock rooms at a different pace on each server
 - [ ] Threads on Server 1 are independent from Server 2
 - [ ] Running `/initialize-haunted-house` on Server 1 doesn't affect Server 2's threads
