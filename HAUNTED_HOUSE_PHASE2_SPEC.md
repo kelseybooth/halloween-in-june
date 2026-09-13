@@ -94,6 +94,11 @@ Nursery
 └─ Upstairs Hallway (exit code: NH)
 ```
 
+**Exits are things.** An exit is a thing whose effect, when used, is to move
+the player to another room. Objects (see `LOOK_COMMAND_SPEC.md`) are things with
+other effects. `/use` is the single command for both; today it handles exits, and
+Phase 3 extends it to dispatch on what kind of thing was named.
+
 **Every exit has two names.** The codes above (DK, DE, …) are each exit's
 `thing_ID`: a stable identifier that code and tests refer to and that never
 changes. Separately, each exit has a `thing` — the description players see and
@@ -305,8 +310,10 @@ relationship drift iterates `users`, so such a player would silently never drift
 - Command description: *Attempt to use an object or exit.*
 - Option `thing`: *The object or exit to use.*
 
-The wording is deliberately broader than exits alone: Phase 3 adds objects
-players can interact with, and the same command will handle both.
+The wording is deliberately broader than exits alone: exits are one kind of
+thing, and Phase 3 adds objects - things with other effects - which the same
+command will handle. `/use blue door` moves you; `/use cat food` does whatever
+cat food does.
 
 **Behavior:**
 0. Take the server (guild) ID from the command context; every read and write below

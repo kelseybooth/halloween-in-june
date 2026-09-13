@@ -44,10 +44,17 @@ ROOM_NAMES_B = [f"The {room}" for room in ROOMS]
 class Exit(NamedTuple):
     """One way out of a room.
 
-    `thing_id` is the stable identifier code and tests refer to - "EL". It never
-    changes. `thing` is what players see - the description announced when the exit
-    is taken and what they can type to use it. Phase 3 replaces each placeholder
-    with real copy ("blue door"); only the `thing=` argument in the graph changes.
+    An exit is a *thing* - the same kind of thing as an object in a room - whose
+    effect, when used, is to move the player to another room. That is why its
+    fields share the `thing` vocabulary: `thing_id` is the stable identifier code
+    and tests refer to ("EL") and never changes; `thing` is what players see - the
+    description announced when the exit is taken and what they can type to use
+    it. Phase 3 replaces each placeholder with real copy ("blue door"); only the
+    `thing=` argument in the graph changes.
+
+    Today /use handles only exits. In Phase 3 it resolves any thing - exit or
+    object - and dispatches on what kind it is: "/use blue door" moves the player,
+    "/use cat food" does whatever the design says cat food does.
     """
 
     thing_id: str

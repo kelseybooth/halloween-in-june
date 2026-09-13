@@ -175,10 +175,12 @@ You enter a grand dining hall. Chandeliers hang from the ceiling, casting dancin
 - The description shown is the first matching instance's. An instance with no
   description falls back to "You see <what they typed>."
 
-**Replies are ephemeral** (visible only to the player). `/look` can be typed in
-any channel of the server, and a public reply would leak room and thing
-descriptions to people who are not playing. It also keeps a busy room thread from
-filling with everyone's looks.
+**Replies are private** (ephemeral - visible only to the player who ran the
+command). This is a requirement, not an implementation choice: players must be
+able to explore a room without spamming its thread with their `/look` and
+`/inventory` calls. It also means a public reply can never leak room or thing
+descriptions to people who are not playing, since either command can be typed in
+any channel of the server.
 
 **Error Handling:**
 - If player is not in a valid room: "You must be in a room to look around."
@@ -457,11 +459,15 @@ Phase 3+ will add:
 - Should `/look` suggest things available in the room? (Nice to have; could list thing names if desired)
 - Should `/inventory` show thing_descriptions along with names? (Nice to have; currently just names and counts)
 - Any logging recommendations for `/look` searches? (Standard logging module fine)
-- **Naming collision to resolve before Phase 3:** `house_utils.Exit` already uses
-  `thing_id` (a string code such as `EL`) and `thing` (its description) for
-  exits, while this spec's `things` table uses `thing_id` for an integer primary
-  key and `thing_name` for the name. When `/use` grows to handle objects as well
-  as exits, one vocabulary should win.
+- ~~Naming collision to resolve before Phase 3~~ **Resolved: exits are things.**
+  An exit is a thing whose effect, when used, is to move the player to another
+  room; an object is a thing with some other effect. `/use` will resolve any thing
+  and dispatch on its kind: `/use blue door` moves the player if the destination
+  is unlocked; `/use cat food` opens the can or feeds the cat, whichever Phase 3
+  design decides. The Phase 3 data model should therefore unify
+  `house_utils.Exit` and the `things` table under one vocabulary. Until then the
+  two coexist: exits live in code (`NAVIGATION_GRAPH`) and objects in the
+  database, and `/look` reports only objects.
 
 ---
 
