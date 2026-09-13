@@ -306,9 +306,9 @@ Your inventory is empty.
 ## Content Loading (Phase 3+)
 
 **The long-term source of every piece of flavour text is a single content file
-in the repository, loaded into each server.** Room descriptions, the things in
-each room and their descriptions, and exit descriptions all come from it. Nothing
-is authored per server by hand.
+in the repository, loaded into each server.** Room descriptions and the things
+in each room - exits included, since an exit is a thing - all come from it.
+Nothing is authored per server by hand.
 
 **Why this is a requirement, not a convenience.** Game mechanics depend on
 specific things existing in specific rooms: a puzzle may need "the blue door" to
@@ -319,17 +319,28 @@ The content file guarantees every server presents the same world. Per-server
 tables then hold only *state* - which player carries which instance - not
 *content*.
 
-**Shape of the file** (illustrative; the exact format is Phase 3 design):
+**Shape of the file** (illustrative; the exact format is Phase 3 design).
+There is one list of things per room. **An exit is a thing** with the same
+`name` and `description` as any other; what makes it an exit is a `leads_to`.
+There is no separate exit section and no separate "exit description" field.
 
 ```yaml
 rooms:
   Kitchen:
     description: "A dusty kitchen with cracked tiles and a rusty stove."
-    exits:
-      KD: { to: "Dining Room", description: "a swinging door" }
-      KH: { to: "Upstairs Hallway", description: "a narrow secret staircase" }
-      KC: { to: "Courtyard", description: "a cracked glass door" }
     things:
+      KD:
+        name: "swinging door"
+        description: "A swinging door on shrieking hinges. Light leaks under it."
+        leads_to: "Dining Room"
+      KH:
+        name: "secret staircase"
+        description: "Narrow stone steps behind the pantry, climbing into the dark."
+        leads_to: "Upstairs Hallway"
+      KC:
+        name: "glass door"
+        description: "A cracked glass door. Something moves in the courtyard beyond."
+        leads_to: "Courtyard"
       cat_food:
         name: "cat food"
         description: "A can of tuna-flavored cat food."
@@ -339,6 +350,16 @@ rooms:
         description: "Cold for decades. Something rattles inside."
 ```
 
+For every thing, exit or not:
+- `name` is what a player types (`/use swinging door`, `/look cat food`) and what
+  the "exits via …" announcement uses: `@Alice exits via swinging door.`
+- `description` is what `/look <name>` shows.
+- The key (`KD`, `cat_food`) is the stable content key mechanics refer to.
+- `leads_to` makes it an exit. `count` makes several instances.
+
+Today's `Exit.thing` serves as the name; a `/look`-able description for exits
+does not exist yet and arrives with the unified model.
+
 **Consequences for the schema, to plan for now:**
 
 - **Things need a content key.** Mechanics must be able to say "the cat food",
@@ -346,13 +367,18 @@ rooms:
   `things` table needs a stable `thing_key` (e.g. `cat_food`) from the content
   file, alongside the per-server instance `thing_id`. This is the same split the
   exits already have: `thing_id` ("EL", stable, from content) versus the runtime
-  row. Phase 3 should give objects and exits one model.
+  row.
+- **One model for every thing.** Exits and objects are the same kind of row,
+  distinguished only by whether `leads_to` is set. `/look swinging door` works
+  like `/look cat food`; `/use` resolves either and acts on its kind. The
+  exit-specific `house_utils.Exit` and the `things` table converge on this.
 - **Loading must be idempotent and state-preserving.** Reloading the file into a
   server that already has players updates descriptions, adds instances that are
   missing, and never duplicates instances or touches inventories. A player
   holding a can of cat food must still hold it after a content reload.
-- **Exit descriptions leave the code.** Today they are the `thing=` argument in
-  `house_utils.NAVIGATION_GRAPH`; with the content file they come from it, and
+- **Exit names and descriptions leave the code.** Today an exit's player-facing
+  text is the `thing=` argument in `house_utils.NAVIGATION_GRAPH`; with the
+  content file it comes from the exit's thing entry like any other thing's, and
   the graph in code carries only structure (ids and destinations).
 - **`/look` on a room could list its things and exits**, since the file makes the
   full set known - the "nice to have" below becomes straightforward.

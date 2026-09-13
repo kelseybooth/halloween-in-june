@@ -103,9 +103,10 @@ door" or "ornate doorway", and *only the description changes*. The `/use` comman
 accepts the `thing_ID`, the description, or the destination room name.
 
 **Where descriptions come from long term:** the content file described in
-`LOOK_COMMAND_SPEC.md` (*Content Loading*). It supplies every server's exit
-descriptions, room descriptions and things, so all servers present the same world
-and mechanics can rely on specific exits and objects existing. The graph in code
+`LOOK_COMMAND_SPEC.md` (*Content Loading*). It supplies every server's room
+descriptions and things - and an exit is a thing, with the same name and
+description fields as any other, plus a destination - so all servers present the
+same world and mechanics can rely on specific things existing. The graph in code
 then carries structure only - `thing_ID`s and destinations - and the `thing=`
 placeholder mechanism is superseded.
 

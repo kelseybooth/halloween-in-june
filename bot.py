@@ -652,8 +652,9 @@ async def inventory(interaction: discord.Interaction) -> None:
 # --- Admin helpers for populating content without touching the database -------
 # TESTING TOOLS, not the long-term source of content. Game mechanics depend on
 # specific things existing in specific rooms, which hand entry per server cannot
-# guarantee; Phase 3+ loads every server's rooms, things and exit descriptions
-# from one content file (see LOOK_COMMAND_SPEC.md, "Content Loading"). Keep these
+# guarantee; Phase 3+ loads every server's rooms and things (exits included -
+# an exit is a thing) from one content file (see LOOK_COMMAND_SPEC.md, "Content
+# Loading"). Keep these
 # as debugging aids until then, and consider removing them after.
 #
 # Both act on the admin's *current room*, so an admin walks to a room and
