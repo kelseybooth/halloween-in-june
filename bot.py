@@ -650,13 +650,20 @@ async def inventory(interaction: discord.Interaction) -> None:
 
 
 # --- Admin helpers for populating content without touching the database -------
+# TESTING TOOLS, not the long-term source of content. Game mechanics depend on
+# specific things existing in specific rooms, which hand entry per server cannot
+# guarantee; Phase 3+ loads every server's rooms and things (exits included -
+# an exit is a thing) from one content file (see LOOK_COMMAND_SPEC.md, "Content
+# Loading"). Keep these
+# as debugging aids until then, and consider removing them after.
+#
 # Both act on the admin's *current room*, so an admin walks to a room and
 # describes it or drops things into it from inside the game.
 
 
 @bot.tree.command(
     name="add-thing",
-    description="(Admin) Place a thing in the room you're standing in.",
+    description="(Admin, testing) Place a thing in the room you're standing in.",
 )
 @app_commands.guild_only()
 @app_commands.default_permissions(administrator=True)
@@ -698,7 +705,7 @@ async def add_thing(
 
 @bot.tree.command(
     name="add-room-desc",
-    description="(Admin) Set the description of the room you're standing in.",
+    description="(Admin, testing) Set the description of the room you're standing in.",
 )
 @app_commands.guild_only()
 @app_commands.default_permissions(administrator=True)

@@ -107,6 +107,14 @@ description is `EL_desc`); Phase 3 replaces each with real copy such as "blue
 door" or "ornate doorway", and *only the description changes*. The `/use` command
 accepts the `thing_ID`, the description, or the destination room name.
 
+**Where descriptions come from long term:** the content file described in
+`LOOK_COMMAND_SPEC.md` (*Content Loading*). It supplies every server's room
+descriptions and things - and an exit is a thing, with the same name and
+description fields as any other, plus a destination - so all servers present the
+same world and mechanics can rely on specific things existing. The graph in code
+then carries structure only - `thing_ID`s and destinations - and the `thing=`
+placeholder mechanism is superseded.
+
 ---
 
 ## Database Schema
@@ -471,6 +479,8 @@ This allows:
 - Easy updates if exits change
 - **Phase 3 is a one-argument change per exit:** `_exit("EL", "Living Room", thing="blue door")`.
   The ID, the key, the destination and every test referring to `EL` stay as they are.
+  (Or, once the content file exists, the description comes from there and the
+  argument is not needed at all - see `LOOK_COMMAND_SPEC.md`, *Content Loading*.)
 
 A startup self-check validates the graph: every room present, every exit's
 destination real, every exit bidirectional, every room reachable from the
