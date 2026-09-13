@@ -49,7 +49,9 @@ exist, so rebuilding the house never discards a writer's description.
 
 **Notes:**
 - Room descriptions populated during game setup (via seed data or `/initialize-haunted-house`)
-- Writers can update descriptions later without code changes
+- **Long term, all flavour text comes from a content file** loaded into every
+  server - see *Content Loading (Phase 3+)* below. Per-server hand entry is a
+  testing convenience only.
 - Empty/null descriptions show generic message: "You see a room."
 
 ---
@@ -301,20 +303,93 @@ Your inventory is empty.
 
 ---
 
+## Content Loading (Phase 3+)
+
+**The long-term source of every piece of flavour text is a single content file
+in the repository, loaded into each server.** Room descriptions, the things in
+each room and their descriptions, and exit descriptions all come from it. Nothing
+is authored per server by hand.
+
+**Why this is a requirement, not a convenience.** Game mechanics depend on
+specific things existing in specific rooms: a puzzle may need "the blue door" to
+exist in the Entryway and "cat food" to exist in the Kitchen. If content were
+entered by each server's admin, a server could be missing the very object a
+puzzle needs, or have it under a different name, and the game would break there.
+The content file guarantees every server presents the same world. Per-server
+tables then hold only *state* - which player carries which instance - not
+*content*.
+
+**Shape of the file** (illustrative; the exact format is Phase 3 design):
+
+```yaml
+rooms:
+  Kitchen:
+    description: "A dusty kitchen with cracked tiles and a rusty stove."
+    exits:
+      KD: { to: "Dining Room", description: "a swinging door" }
+      KH: { to: "Upstairs Hallway", description: "a narrow secret staircase" }
+      KC: { to: "Courtyard", description: "a cracked glass door" }
+    things:
+      cat_food:
+        name: "cat food"
+        description: "A can of tuna-flavored cat food."
+        count: 3
+      rusty_stove:
+        name: "rusty stove"
+        description: "Cold for decades. Something rattles inside."
+```
+
+**Consequences for the schema, to plan for now:**
+
+- **Things need a content key.** Mechanics must be able to say "the cat food",
+  not "thing_id 47" - instance ids are auto-assigned and differ per server. The
+  `things` table needs a stable `thing_key` (e.g. `cat_food`) from the content
+  file, alongside the per-server instance `thing_id`. This is the same split the
+  exits already have: `thing_id` ("EL", stable, from content) versus the runtime
+  row. Phase 3 should give objects and exits one model.
+- **Loading must be idempotent and state-preserving.** Reloading the file into a
+  server that already has players updates descriptions, adds instances that are
+  missing, and never duplicates instances or touches inventories. A player
+  holding a can of cat food must still hold it after a content reload.
+- **Exit descriptions leave the code.** Today they are the `thing=` argument in
+  `house_utils.NAVIGATION_GRAPH`; with the content file they come from it, and
+  the graph in code carries only structure (ids and destinations).
+- **`/look` on a room could list its things and exits**, since the file makes the
+  full set known - the "nice to have" below becomes straightforward.
+
+**How the file reaches a server:** loaded on `/initialize-haunted-house` (which
+already seeds room rows), or by a dedicated admin command such as
+`/load-content`. Either way the file is versioned in the repository, so writers
+edit it through pull requests and every server picks up the same version on its
+next load.
+
+**The admin commands `/add-thing` and `/add-room-desc` are testing tools.** They
+exist so `/look` can be exercised before the content file exists. They should be
+kept as debugging aids or removed once loading works; they must not become the
+way content is authored, for the reasons above.
+
+---
+
 ## Seed Data / Initial Setup
 
 ### Phase 2 Testing
 
+The setup below is for exercising the mechanics before the content file exists.
+See *Content Loading (Phase 3+)* for the real source of content.
+
 For this testing phase, rooms and things should be:
 
-1. **Room Descriptions:** Initially empty/null (writers provide later)
+1. **Room Descriptions:** Initially empty/null
    - Players see generic "You see a room." when `/look` with no args
-   - Later: Writers populate room_description column with flavor text
+   - For testing: an admin sets one from inside the room with `/add-room-desc`
+   - Phase 3+: populated from the content file
 
 2. **Things:** Sample things created for testing (optional)
    - Example: Add 3-5 test things per room so players can test `/look` command
    - Examples: "dusty painting", "cat food", "ornate mirror", "cobweb"
+   - For testing: an admin places them from inside the room with `/add-thing`
    - These are optional; game functions work fine with no things
+   - Phase 3+: populated from the content file, which is what mechanics rely on
 
 3. **Inventory:** Starts empty
    - Players test `/look` on things in rooms
@@ -365,12 +440,18 @@ For this testing phase, rooms and things should be:
   - [ ] Handle empty inventory case
   - [ ] Handle errors gracefully
 
-### Thing & Room Management (Admin Commands)
+### Thing & Room Management (Admin Commands - TESTING ONLY)
 
 Built rather than optional: with the bot on Railway, "add rows to the database by
 hand" means the Railway data browser, which is a poor way to write flavour text.
 Both act on the admin's **current room**, so an admin walks to a room and works
 from inside the game.
+
+**These are not how content is authored long term.** Game mechanics depend on
+specific things existing in specific rooms, which hand entry per server cannot
+guarantee. Real content comes from the content file - see *Content Loading
+(Phase 3+)*. These commands stay as testing and debugging aids until loading
+exists, and may be removed after.
 
 - [x] `/add-thing [name] [description]` admin command
   - [x] Creates a thing instance in the admin's current room; `description` optional
@@ -445,7 +526,9 @@ Phase 3+ will add:
 
 ### Readiness for Phase 3
 - [ ] Schema supports Phase 3 puzzle mechanics (things added to inventory)
-- [ ] Writers can easily update room_description column
+- [ ] Writers update flavour text in the content file, not per-server columns
+- [ ] Schema anticipates a stable content key on things (`thing_key`) so mechanics
+      can reference "the cat food" independent of instance id or server
 - [ ] Code ready for thing interaction mechanics (`/use thing`)
 - [ ] Inventory system ready for item properties/mechanics
 
@@ -454,7 +537,8 @@ Phase 3+ will add:
 ## Questions for Claude Code
 
 - Should we add an optional `/describe [thing]` command as an alias for `/look [thing]`? (Not built; nice to have)
-- Should `/look` suggest things available in the room? (Nice to have; could list thing names if desired)
+- Should `/look` suggest things available in the room? (Nice to have; becomes
+  straightforward once the content file defines the full set per room)
 - Should `/inventory` show thing_descriptions along with names? (Nice to have; currently just names and counts)
 - Any logging recommendations for `/look` searches? (Standard logging module fine)
 - **Naming collision to resolve before Phase 3:** `house_utils.Exit` already uses

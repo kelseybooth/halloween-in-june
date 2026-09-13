@@ -14,8 +14,8 @@ each user's total persists in a database and is readable via `/stats`.
 | `/look [thing]` | Describe your room, or one thing in it or in your bag. |
 | `/inventory` | List what you're carrying. |
 | `/initialize-haunted-house` | Admin. Rebuild every room thread. |
-| `/add-thing name [description]` | Admin. Place a thing in the room you're in. |
-| `/add-room-desc description` | Admin. Describe the room you're in. |
+| `/add-thing name [description]` | Admin, testing only. Place a thing in the room you're in. |
+| `/add-room-desc description` | Admin, testing only. Describe the room you're in. |
 
 ## Local setup
 
@@ -46,8 +46,10 @@ promise on a small server.
 Things are *instances* — five cans of cat food are five rows — so `/look` reports
 "There are 5." when several match, counting what's in the room plus what you're
 carrying. A thing someone is carrying has left the room. Room and thing text is
-per-server and set from inside the game by an admin with `/add-room-desc` and
-`/add-thing`; nothing needs a database edit.
+per-server. For testing, an admin sets it from inside the game with
+`/add-room-desc` and `/add-thing`. Long term, all of it comes from a content file
+loaded into every server, so mechanics can rely on specific things existing - see
+`LOOK_COMMAND_SPEC.md`, *Content Loading*.
 
 ### Multiple servers
 
