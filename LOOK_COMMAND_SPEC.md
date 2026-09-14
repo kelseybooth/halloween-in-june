@@ -65,6 +65,9 @@ CREATE TABLE things (
   room_id INTEGER NOT NULL,
   thing_name VARCHAR(100) NOT NULL,
   thing_description TEXT,
+  cohort CHAR(1) CHECK (cohort IN ('A', 'B')),   -- NULL = present in both versions
+  can_take BOOLEAN NOT NULL DEFAULT FALSE,
+  removed_on_take BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (room_id) REFERENCES rooms(room_id)
@@ -78,10 +81,30 @@ CREATE TABLE things (
 - `thing_name`: What players type in `/look` command (e.g., "cat food")
 - `thing_description`: Flavor text shown when player looks at it
 - Each thing instance is unique (5 cans of cat food = 5 separate rows)
-- **An instance someone is carrying has left the room.** `room_id` records where
-  it was placed, but an instance with an `inventory` row is excluded from room
-  lookups. Without this rule, a player's own carried cans would be counted once
-  in the room and again in their bag - "There are 7." for five cans.
+
+**Three properties every thing has:**
+
+- **`cohort`** — which *version* of the room it is in. Every room exists twice,
+  once per cohort ("Entryway" for A, "The Entryway" for B). A thing with
+  `cohort = 'B'` is in The Entryway but not Entryway; `'A'` the reverse; `NULL`
+  means it is in both. This is how the two cohorts come to see different
+  content. `/look` and every room lookup filter by the looking player's cohort.
+- **`can_take`** — whether `/take` (a later phase) may move it into an
+  inventory. Exits, furniture and scenery cannot be taken. Default `FALSE`, the
+  safe direction: a thing must be marked takeable, never accidentally be so.
+- **`removed_on_take`** — if taken, does it leave the room for everyone else?
+  `TRUE` for a unique item such as a secret note: once one player has it, no one
+  else can find or take it. `FALSE` for something a player merely receives a copy
+  of, such as a pamphlet from a stack: it stays in the room for the next player,
+  and several players may each hold one. Default `TRUE`, matching a physical
+  object.
+
+**Room visibility follows from those properties.** An instance is hidden from its
+room only when it is `removed_on_take` *and* someone holds it. `room_id` records
+where it was placed either way, so an exclusive item can be put back. Without
+this rule a player's own carried cans would be counted once in the room and
+again in their bag - "There are 7." for five cans - and a taken secret note would
+still appear to be lying around.
 
 **Multi-Instance Example:**
 ```
@@ -89,6 +112,20 @@ thing_id=1: guild_id=456, room_id=1, thing_name="cat food", thing_description="A
 thing_id=2: guild_id=456, room_id=1, thing_name="cat food", thing_description="A can of tuna-flavored cat food..."
 thing_id=3: guild_id=456, room_id=1, thing_name="cat food", thing_description="A can of tuna-flavored cat food..."
 thing_id=47: guild_id=456, room_id=5, thing_name="cat food", thing_description="A can of chicken-flavored cat food..."
+```
+
+**Cohort Example:** the same room, different contents per version:
+```
+thing_id=10: room_id=2 (Entryway), thing_name="cat food",   cohort='B'  -> only in "The Entryway"
+thing_id=11: room_id=2 (Entryway), thing_name="portrait",   cohort='A'  -> only in "Entryway"
+thing_id=12: room_id=2 (Entryway), thing_name="cobweb",     cohort=NULL -> in both
+```
+
+**Take Example:**
+```
+secret note:  can_take=TRUE,  removed_on_take=TRUE   -> first taker keeps it; gone for everyone else
+pamphlet:     can_take=TRUE,  removed_on_take=FALSE  -> each taker gets a copy; stays in the room
+oak door:     can_take=FALSE                         -> cannot be taken (exits and scenery)
 ```
 
 ---
@@ -168,10 +205,15 @@ You enter a grand dining hall. Chandeliers hang from the ceiling, casting dancin
 **Important:** Search BOTH room and inventory. If they have 3 cans in inventory and 2 in the room, count is 5.
 
 **Counting rules:**
-- "In the room" means placed in this room *and not carried by anyone*. An
-  instance the looking player carries is counted via their inventory, never via
-  the room, so nothing is counted twice.
-- An instance *another* player carries is not counted at all: it has left the room.
+- "In the room" means placed in this room, **for the looking player's cohort**
+  (its `cohort` is theirs or NULL), and not an exclusive item someone is
+  carrying. A player in cohort A never sees a cohort-B thing, and vice versa.
+- An exclusive instance (`removed_on_take`) the looking player carries is counted
+  via their inventory, never via the room, so it is not counted twice. An
+  exclusive instance *another* player carries is not counted at all: it has left
+  the room.
+- A non-exclusive instance the player holds a copy of is counted in both: there
+  is one on the shelf and one in their bag.
 - The player's carried instances are found from any room, not only the one they
   were picked up in.
 - The description shown is the first matching instance's. An instance with no
@@ -347,6 +389,14 @@ rooms:
         name: "cat food"
         description: "A can of tuna-flavored cat food."
         count: 3
+        cohort: B            # only in "The Kitchen"; omit for both versions
+        can_take: true
+        removed_on_take: true
+      pamphlet:
+        name: "pamphlet"
+        description: "TAKE ONE, says the sign. The stack never seems to shrink."
+        can_take: true
+        removed_on_take: false   # each taker gets a copy; it stays for others
       rusty_stove:
         name: "rusty stove"
         description: "Cold for decades. Something rattles inside."
@@ -358,6 +408,9 @@ For every thing, exit or not:
 - `description` is what `/look <name>` shows.
 - The key (`KD`, `cat_food`) is the stable content key mechanics refer to.
 - `leads_to` makes it an exit. `count` makes several instances.
+- `cohort` (`A`, `B`, or omitted for both) is which version of the room it is in.
+- `can_take` (default false) and `removed_on_take` (default true) govern `/take`,
+  a later phase. Exits are never takeable.
 
 Today's `Exit.thing` serves as the name; a `/look`-able description for exits
 does not exist yet and arrives with the unified model.
@@ -481,8 +534,10 @@ guarantee. Real content comes from the content file - see *Content Loading
 (Phase 3+)*. These commands stay as testing and debugging aids until loading
 exists, and may be removed after.
 
-- [x] `/add-thing [name] [description]` admin command
+- [x] `/add-thing [name] [description] [cohort] [can_take] [removed_on_take]` admin command
   - [x] Creates a thing instance in the admin's current room; `description` optional
+  - [x] `cohort`: `both` (default), `A` or `B` - which version of the room
+  - [x] `can_take` (default no) and `removed_on_take` (default yes)
   - [x] Admin must be in the house (`/enter-entryway`) to have a current room
 - [x] `/add-room-desc [description]` admin command
   - [x] Sets/overwrites room_description for the admin's current room
@@ -495,6 +550,11 @@ exists, and may be removed after.
 - [ ] Test `/look [thing]` with multiple instances → displays "There are (count)."
 - [ ] Test `/look [thing]` with thing not in room/inventory → "You can't look at that."
 - [ ] Test `/look` case-insensitivity: "/look CAT FOOD", "/look cat food", etc.
+- [ ] Test cohort placement: a thing with `cohort=B` is seen by a cohort-B player and
+      not by a cohort-A player in the same room; `cohort` unset is seen by both
+- [ ] Test exclusive items: once held, gone from the room for other players
+- [ ] Test non-exclusive items: still in the room after being held; several players
+      may each hold a copy
 - [ ] Test `/inventory` with empty inventory → "Your inventory is empty."
 - [ ] Test `/inventory` with items → grouped list with counts
 - [ ] Test multi-server isolation: Same thing_name in different servers has separate thing_ids
@@ -516,6 +576,9 @@ For this testing phase:
 ### Future Phase Expansions
 
 Phase 3+ will add:
+- `/take [thing]`: moves a `can_take` thing into the player's inventory, removing
+  it from the room if `removed_on_take`. The properties and the visibility rules
+  are already in place; `/take` only has to honour them.
 - Puzzle mechanics that add things to inventory
 - Room descriptions written by writers
 - Thing descriptions crafted by writers

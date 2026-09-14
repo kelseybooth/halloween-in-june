@@ -10,7 +10,7 @@ import os
 import random
 import sys
 from datetime import time as dt_time
-from typing import NamedTuple
+from typing import Literal, NamedTuple
 
 import discord
 from discord import app_commands
@@ -610,7 +610,7 @@ async def look(interaction: discord.Interaction, thing: str | None = None) -> No
 
     try:
         found = await database.look_at_thing(
-            user.id, interaction.guild_id, state.current_room, thing
+            user.id, interaction.guild_id, state.current_room, state.cohort, thing
         )
     except SQLAlchemyError:
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
@@ -671,9 +671,17 @@ async def inventory(interaction: discord.Interaction) -> None:
 @app_commands.describe(
     name="What players will type to look at it, e.g. 'cat food'.",
     description="What they see when they look. Optional.",
+    cohort="Which version of the room it's in. Default: both.",
+    can_take="Whether /take (future) may pick it up. Default: no.",
+    removed_on_take="If taken, does it leave the room for everyone else? Default: yes.",
 )
 async def add_thing(
-    interaction: discord.Interaction, name: str, description: str | None = None
+    interaction: discord.Interaction,
+    name: str,
+    description: str | None = None,
+    cohort: Literal["both", "A", "B"] = "both",
+    can_take: bool = False,
+    removed_on_take: bool = True,
 ) -> None:
     await interaction.response.defer(ephemeral=True, thinking=True)
 
@@ -691,14 +699,28 @@ async def add_thing(
             )
             return
         thing_id = await database.add_thing(
-            interaction.guild_id, state.current_room, name, description
+            interaction.guild_id,
+            state.current_room,
+            name,
+            description,
+            cohort=None if cohort == "both" else cohort,
+            can_take=can_take,
+            removed_on_take=removed_on_take,
         )
     except SQLAlchemyError:
         await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
         return
 
+    where = state.current_room if cohort == "both" else house_utils.get_thread_name(
+        state.current_room, cohort
+    )
+    traits = []
+    if can_take:
+        traits.append("takeable, " + ("leaves the room when taken" if removed_on_take else "stays for others"))
+    else:
+        traits.append("not takeable")
     await interaction.followup.send(
-        f"Placed **{name.strip()}** in {state.current_room} (thing_id {thing_id}).",
+        f"Placed **{name.strip()}** in {where} (thing_id {thing_id}; {'; '.join(traits)}).",
         ephemeral=True,
     )
 

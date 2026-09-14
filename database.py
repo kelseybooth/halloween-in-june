@@ -21,6 +21,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import (
     JSON,
     BigInteger,
+    Boolean,
     Date,
     DateTime,
     ForeignKey,
@@ -260,9 +261,23 @@ class Thing(Base):
     """One row per *instance* of a thing in a server's house.
 
     Five cans of cat food in the Kitchen are five rows sharing a thing_name.
-    `room_id` is where the instance was placed; an instance that a player has
-    picked up (an `inventory` row exists for it) is no longer visible in that
-    room, but keeps its room_id so it can be put back.
+    `room_id` is where the instance was placed.
+
+    Three properties shape what players can do with it:
+
+    - `cohort`: 'A' or 'B' places it only in that cohort's version of the room
+      (a can of cat food in "The Entryway" but not "Entryway"); NULL places it in
+      both. This is how the two cohorts come to see different content.
+    - `can_take`: whether /take (a later phase) may move it into an inventory.
+      Exits and scenery cannot be taken.
+    - `removed_on_take`: whether taking it removes it from the room. True for a
+      unique item like a secret note - once one player has it, nobody else can -
+      and False for something a player merely gets a copy of, which stays in the
+      room for everyone.
+
+    Room visibility follows from these: an instance is hidden from its room only
+    when it is `removed_on_take` AND someone holds it. An instance a player
+    merely has a copy of is still there for the next player.
     """
 
     __tablename__ = "things"
@@ -273,6 +288,13 @@ class Thing(Base):
     room_id: Mapped[int] = mapped_column(Integer, ForeignKey("rooms.room_id"), nullable=False)
     thing_name: Mapped[str] = mapped_column(String(100), nullable=False)
     thing_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cohort: Mapped[str | None] = mapped_column(String(1), nullable=True)
+    can_take: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("0")
+    )
+    removed_on_take: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("1")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -341,33 +363,36 @@ async def _reject_pre_guild_schema(conn) -> None:
         )
 
 
+# Columns added after a table first shipped, as (table, column, DDL). `create_all`
+# creates missing tables but never missing columns, so each is ALTERed in if
+# absent. Both backends accept this form, and re-running is a no-op once present.
+# DDL defaults cannot take bound parameters, so values are interpolated - every
+# one is a constant defined in this file, never user input.
+_LATER_COLUMNS: list[tuple[str, str, str]] = [
+    ("users", "relationship", f"INTEGER NOT NULL DEFAULT {RELATIONSHIP_START}"),
+    ("users", "last_decay_date", "DATE"),
+    ("things", "cohort", "VARCHAR(1)"),
+    ("things", "can_take", "BOOLEAN NOT NULL DEFAULT FALSE"),
+    ("things", "removed_on_take", "BOOLEAN NOT NULL DEFAULT TRUE"),
+]
+
+
 async def _add_missing_columns(conn) -> None:
-    """Add columns introduced after a database was first created.
+    """Add every column in _LATER_COLUMNS that the database does not have yet."""
 
-    `create_all` creates missing *tables* but never missing *columns*. Both
-    backends accept this ALTER form, and re-running it is a no-op once the
-    columns exist.
-    """
+    def _columns_of(sync_conn):
+        insp = inspect(sync_conn)
+        return {
+            table: {col["name"] for col in insp.get_columns(table)}
+            for table in {t for t, _, _ in _LATER_COLUMNS}
+            if table in insp.get_table_names()
+        }
 
-    def _existing(sync_conn):
-        return {col["name"] for col in inspect(sync_conn).get_columns("users")}
-
-    existing = await conn.run_sync(_existing)
-
-    if "relationship" not in existing:
-        # Interpolated rather than bound: DDL defaults cannot take a parameter.
-        # RELATIONSHIP_START is an int constant defined above, never user input.
-        await conn.execute(
-            text(
-                "ALTER TABLE users ADD COLUMN relationship "
-                f"INTEGER NOT NULL DEFAULT {RELATIONSHIP_START}"
-            )
-        )
-        log.info("Schema upgrade: added users.relationship")
-
-    if "last_decay_date" not in existing:
-        await conn.execute(text("ALTER TABLE users ADD COLUMN last_decay_date DATE"))
-        log.info("Schema upgrade: added users.last_decay_date")
+    existing = await conn.run_sync(_columns_of)
+    for table, column, ddl in _LATER_COLUMNS:
+        if table in existing and column not in existing[table]:
+            await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
+            log.info("Schema upgrade: added %s.%s", table, column)
 
 
 async def init_db() -> None:
@@ -864,13 +889,22 @@ async def set_room_description(guild_id: int, room_name: str, description: str) 
 
 
 async def add_thing(
-    guild_id: int, room_name: str, thing_name: str, description: str | None
+    guild_id: int,
+    room_name: str,
+    thing_name: str,
+    description: str | None,
+    cohort: str | None = None,
+    can_take: bool = False,
+    removed_on_take: bool = True,
 ) -> int:
     """Place a new thing instance in a room of this server. Returns its thing_id.
 
-    Creates the room row if it does not exist yet, so things can be added before
-    the house has been initialized or described.
+    `cohort` of 'A' or 'B' places it only in that cohort's version of the room;
+    None places it in both. Creates the room row if it does not exist yet, so
+    things can be added before the house has been initialized or described.
     """
+    if cohort is not None and cohort not in ("A", "B"):
+        raise ValueError(f"cohort must be 'A', 'B' or None, not {cohort!r}")
     session_factory = _require_session()
     insert = _upsert_statement()
     try:
@@ -888,6 +922,9 @@ async def add_thing(
                 room_id=room_id,
                 thing_name=thing_name.strip(),
                 thing_description=description,
+                cohort=cohort,
+                can_take=can_take,
+                removed_on_take=removed_on_take,
             )
             session.add(thing)
             await session.commit()
@@ -909,11 +946,25 @@ def _held_thing_ids():
     return select(InventoryItem.thing_id)
 
 
-async def get_things_in_room(guild_id: int, room_name: str) -> list[tuple[int, str]]:
-    """(thing_id, thing_name) for every instance visible in a room of this server.
+def _visible_in_room(cohort: str):
+    """Filters that make an instance visible in a room to a player of `cohort`.
 
-    An instance someone is carrying is not in the room any more, so instances
-    with an inventory row are excluded.
+    The instance must be for this cohort or for both, and must not be an
+    exclusive item (`removed_on_take`) that someone is carrying. A non-exclusive
+    item stays visible however many players hold copies of it.
+    """
+    return (
+        (Thing.cohort.is_(None)) | (Thing.cohort == cohort),
+        ~((Thing.removed_on_take.is_(True)) & (Thing.thing_id.in_(_held_thing_ids()))),
+    )
+
+
+async def get_things_in_room(
+    guild_id: int, room_name: str, cohort: str
+) -> list[tuple[int, str]]:
+    """(thing_id, thing_name) for every instance a player of `cohort` sees in a room.
+
+    See _visible_in_room for what "sees" means.
     """
     session_factory = _require_session()
     try:
@@ -925,7 +976,7 @@ async def get_things_in_room(guild_id: int, room_name: str) -> list[tuple[int, s
                     Thing.guild_id == guild_id,
                     Room.guild_id == guild_id,
                     Room.room_name == room_name,
-                    ~Thing.thing_id.in_(_held_thing_ids()),
+                    *_visible_in_room(cohort),
                 )
                 .order_by(Thing.thing_id)
             )
@@ -936,7 +987,7 @@ async def get_things_in_room(guild_id: int, room_name: str) -> list[tuple[int, s
 
 
 async def look_at_thing(
-    user_id: int, guild_id: int, room_name: str, thing_name: str
+    user_id: int, guild_id: int, room_name: str, cohort: str, thing_name: str
 ) -> LookResult | None:
     """Find every matching instance in the player's room or their inventory.
 
@@ -944,9 +995,12 @@ async def look_at_thing(
     Otherwise returns the first match's description and the combined count -
     three in the room and two in the player's bag is "There are 5."
 
-    Instances in the room that another player is carrying are not counted;
-    they have left the room. The player's own carried instances are counted
-    via the inventory half, never the room half, so nothing is counted twice.
+    The room half shows only what this player's cohort can see (see
+    _visible_in_room). An exclusive instance another player carries has left
+    the room and is not counted; an exclusive instance this player carries is
+    counted via the inventory half, never the room half, so nothing is counted
+    twice. A non-exclusive instance the player holds a copy of is counted in
+    both - there is one on the shelf and one in their bag.
     """
     session_factory = _require_session()
     needle = thing_name.strip().lower()
@@ -961,7 +1015,7 @@ async def look_at_thing(
             Room.guild_id == guild_id,
             Room.room_name == room_name,
             func.lower(Thing.thing_name) == needle,
-            ~Thing.thing_id.in_(_held_thing_ids()),
+            *_visible_in_room(cohort),
         )
     )
     in_bag = (

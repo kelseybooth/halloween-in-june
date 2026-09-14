@@ -48,6 +48,11 @@ This phase focuses on infrastructure: room creation, thread management, navigati
 
 **Why:** Mods can easily see which cohort a thread belongs to. Players likely won't notice, or if they do, they might not realize it's systematic (could be flavor text).
 
+**The two versions can differ in content.** A thing can be placed in one
+version of a room and not the other - a can of cat food in "The Entryway" but not
+"Entryway" - via the `cohort` property on things (see `LOOK_COMMAND_SPEC.md`).
+This is what makes the cohorts an experiment rather than a label.
+
 ---
 
 ## Navigation Graph
