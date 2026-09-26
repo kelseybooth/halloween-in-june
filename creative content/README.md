@@ -66,25 +66,30 @@ in the house.
 
 ## What changed since the copy you sent back
 
-**45 rows added, 1 removed, 6 of your cells edited.** Everything else of yours is
+**48 rows added, 1 removed, 10 of your cells edited.** Everything else of yours is
 byte-for-byte intact.
 
 The removed row is `grocery_list`, renamed to `to_do_list` — the text carried over
 verbatim, only the key changed.
 
-Your six edited cells, all approved in conversation:
+Your ten edited cells, all approved in conversation:
 
 |Cell|Why|
 |-|-|
 |`ritual_diagram.look`|"pinned to the wall" → "pinned to the shelf edge", to match where it now lives|
 |`halloween_box.use`|gained the cookie cutter clause|
-|`rolltop_desk.use`|names the drawer full of cat food; no longer names the glasses|
 |`rolltop_desk.look`|no longer names the reading glasses (they're inside it)|
+|`rolltop_desk.use`|the bottom drawer is jammed shut, and no longer names the glasses|
 |`amazon_box.look`|no longer names the spice jar (it's inside it)|
 |`amazon_box.use`|same|
+|`lumber.use_fail`|the 48-hour cooldown message, replacing "you've already done your part"|
+|`graphite_powder.look`|a carried twist of paper, not the tin — the tin's own words moved to `graphite_tin`|
+|`graphite_powder.take`|same|
+|`graphite_powder.drop`|same|
 
-The 45 new rows are 34 scenery fixtures, 9 sources, `cat_food_duck`, and
-`amazon_box`'s companion text.
+The 48 new rows are 34 scenery fixtures, 9 sources, `cat_food_expired`, `bad_smell`,
+`graphite_tin`, `amazon_box`'s companion text, and the `drawer_unjammed` state row on
+`rolltop_desk`.
 
 ## Lumber: one plank per player per 48 hours
 
