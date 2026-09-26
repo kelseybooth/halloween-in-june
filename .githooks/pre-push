@@ -1,0 +1,44 @@
+#!/bin/sh
+# Run the test suite before anything leaves this machine.
+#
+# Branch protection is not available on a private repository under this
+# account's plan, so CI reports a failure but cannot block a merge. This hook
+# is the substitute: it catches a red suite before the push rather than after.
+#
+# Enable it once per clone:
+#     git config core.hooksPath .githooks
+#
+# Skip it for a single push (a docs-only change, or a deliberately broken
+# work-in-progress branch):
+#     git push --no-verify
+
+set -e
+
+# Prefer the project virtualenv, since that is where the test dependencies are
+# installed; fall back to whatever python is on PATH.
+if [ -x ".venv/Scripts/python.exe" ]; then
+    PYTHON=".venv/Scripts/python.exe"      # Windows
+elif [ -x ".venv/bin/python" ]; then
+    PYTHON=".venv/bin/python"              # macOS and Linux
+elif command -v python3 >/dev/null 2>&1; then
+    PYTHON="python3"
+else
+    PYTHON="python"
+fi
+
+if ! "$PYTHON" -c "import pytest" >/dev/null 2>&1; then
+    echo "pre-push: pytest is not installed for $PYTHON."
+    echo "          Run: $PYTHON -m pip install -r requirements-dev.txt"
+    echo "          Or skip this check once with: git push --no-verify"
+    exit 1
+fi
+
+echo "pre-push: running the test suite..."
+if ! "$PYTHON" -m pytest -q; then
+    echo
+    echo "pre-push: tests failed - push aborted."
+    echo "          Fix them, or push anyway with: git push --no-verify"
+    exit 1
+fi
+
+echo "pre-push: all tests passed."

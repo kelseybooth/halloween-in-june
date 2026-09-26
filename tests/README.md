@@ -5,6 +5,16 @@ python -m pip install -r requirements-dev.txt
 python -m pytest
 ```
 
+## Before you push
+
+```
+git config core.hooksPath .githooks
+```
+
+One command per clone. It points git at `.githooks/pre-push`, which runs this suite
+and refuses the push if it fails — the stand-in for a required status check, which
+this repository's plan does not offer. `git push --no-verify` skips it.
+
 Everything runs against a throwaway SQLite file, one per test — no Postgres, no
 Discord, no network. CI runs the same command on Python 3.13.
 
