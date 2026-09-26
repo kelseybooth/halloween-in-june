@@ -182,3 +182,31 @@ async def test_guild_ids_above_32_bits_round_trip(db):
     assert GUILD_B > 2**32
     await db.increment_pet_count(ALICE, GUILD_B)
     assert await db.get_pet_count(ALICE, GUILD_B) == 1
+
+
+# --------------------------------------------------------------------------
+# Nothing debug-shaped reaches players
+# --------------------------------------------------------------------------
+
+
+def test_debug_output_is_off():
+    """A tripwire, not a tautology.
+
+    SHOW_DEBUG_INFO appends the mood roll and the relationship score to every
+    /pet reply, which shows players the dice behind the cat. It is useful
+    locally and must never ship, so turning it on and forgetting fails here.
+    """
+    assert bot.SHOW_DEBUG_INFO is False
+
+
+def test_a_pet_reply_carries_no_diagnostics(fixed_rng):
+    """What the player actually sees: the response and their total, nothing more."""
+    reaction = bot.choose_response(0, rng=fixed_rng.queue(0.1))
+    message = f"{reaction.text}\n\nTotal pets: 7"
+    if bot.SHOW_DEBUG_INFO:
+        message += bot._debug_lines(reaction, 0, 50)
+
+    assert "[testing]" not in message
+    assert "mood:" not in message
+    assert "relationship:" not in message
+    assert "% friendly chance" not in message
