@@ -39,6 +39,7 @@ from sqlalchemy import (
     text,
     update,
 )
+from sqlalchemy import event
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -395,6 +396,26 @@ async def _add_missing_columns(conn) -> None:
             log.info("Schema upgrade: added %s.%s", table, column)
 
 
+def _enforce_sqlite_foreign_keys(engine: AsyncEngine) -> None:
+    """Turn on foreign key enforcement for SQLite, which defaults it off.
+
+    PostgreSQL enforces the foreign keys in this file; SQLite ignores them
+    entirely unless each connection issues this pragma. Left off, the local and
+    CI backend accepts rows production would refuse - an inventory row pointing
+    at a thing that does not exist, say, which `get_inventory` then drops on its
+    join while `inventory_count` still counts. Bugs like that reach production
+    precisely because the cheap backend was more permissive than the real one.
+    """
+    if engine.dialect.name != "sqlite":
+        return
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def _set_pragma(dbapi_connection, _record):  # pragma: no cover - driver callback
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
+
 async def init_db() -> None:
     """Create the engine and ensure the schema exists. Safe to call once at startup."""
     global _engine, _session_factory
@@ -422,6 +443,7 @@ async def init_db() -> None:
         log.warning("DATABASE_URL not set - falling back to local SQLite file catbot.db")
 
     _engine = create_async_engine(url, pool_pre_ping=True)
+    _enforce_sqlite_foreign_keys(_engine)
     _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
 
     try:
