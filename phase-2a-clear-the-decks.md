@@ -33,7 +33,18 @@ Then the workflow:
 - GitHub Actions, on push and on pull request
 - Python 3.13, install dependencies, run the suite
 - Run against the SQLite fallback; do not require Postgres in CI
-- Make it a required check for merges to main
+
+**A required check is not available here.** Branch protection on a private repository
+needs a paid plan: rulesets need Team or Enterprise, classic protection needs Pro. This
+repository is private on a plan that has neither, so CI reports a red suite on the pull
+request but cannot stop the merge.
+
+The substitute is a `pre-push` hook in `.githooks/`, which runs the suite before anything
+leaves the machine and refuses the push if it fails. That is earlier than a required check
+would catch it, and it costs nothing. Its limits are worth naming: `--no-verify` skips it,
+it does nothing for edits made in the GitHub web UI, and each clone has to opt in with
+`git config core.hooksPath .githooks`. With one maintainer those are acceptable; with a
+second engineer, revisit and buy the plan.
 
 **If the full suite is too much to front-load,** the defensible minimum before step 4 is
 regression coverage of the queries step 4 rewrites, plus the cross-server isolation
@@ -122,7 +133,9 @@ it belongs in 2b or 2c and should be moved there rather than blocked here.
 ## Definition of done
 
 - A committed test suite covers the queries step 4 rewrites plus cross-server
-  isolation; CI runs it on every push and PR and is required to merge
+  isolation, and CI runs it on every push and PR
+- The `pre-push` hook is enabled locally, since a required check is not available on
+  this plan (see step 1)
 - `/pet` shows no debug output
 - The three stale specs are out of the working tree
 - No code reads or writes cohort; `/initialize-haunted-house` builds 9 threads; the
