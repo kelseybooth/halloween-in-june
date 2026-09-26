@@ -9,11 +9,15 @@ The same model and queries run on both, so local behaviour matches production.
 Everything is scoped per Discord server. A player who meets the bot in two
 servers has two independent cats and two independent haunted-house positions:
 every table is keyed by (user_id, guild_id), and every query filters on both.
+
+Cohorts were removed in phase 2a. Two columns survive them - see
+PlayerGameState.room_version_assignment and Thing.cohort - because dropping a
+column is not something the additive startup migration can do. Nothing reads
+either one.
 """
 
 import logging
 import os
-import random
 from datetime import date, datetime, time, timedelta, timezone
 from typing import NamedTuple
 from zoneinfo import ZoneInfo
@@ -78,6 +82,10 @@ DECAY_NEGATIVE_STEP = 20        # ...by this much, never past 0
 # Ceiling on catch-up work after a long outage.
 MAX_CATCHUP_DAYS = 30
 
+# Written into the vestigial room_version_assignment column, which is NOT NULL
+# and which nothing reads. See PlayerGameState.
+VESTIGIAL_ROOM_VERSION = "A"
+
 _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker | None = None
 
@@ -110,7 +118,6 @@ class GameState(NamedTuple):
 
     user_id: int
     guild_id: int
-    cohort: str
     current_room: str
     rooms_unlocked: list[str]
 
@@ -220,9 +227,15 @@ class PlayerGameState(Base):
 
     user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
     guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
-    # 'A' sees rooms without a leading article, 'B' with one. Assigned per server,
-    # so the same player can be in different cohorts in different servers.
-    room_version_assignment: Mapped[str] = mapped_column(String(1), nullable=False)
+    # Vestigial. Cohorts are gone: every player now sees the same nine rooms, and
+    # nothing reads this. It stays because the column is NOT NULL and the startup
+    # migration can only add columns, never alter or drop one - and on SQLite a
+    # primary key cannot be altered in place at all. A constant is written on
+    # insert purely to satisfy the constraint. Drop the column in a later cleanup
+    # once the new schema has settled.
+    room_version_assignment: Mapped[str] = mapped_column(
+        String(1), nullable=False, default=VESTIGIAL_ROOM_VERSION
+    )
     current_room: Mapped[str] = mapped_column(String(50), nullable=False)
     # JSON rather than a PostgreSQL array: arrays have no SQLite equivalent, and
     # SQLite is what runs locally whenever DATABASE_URL is unset.
@@ -264,11 +277,8 @@ class Thing(Base):
     Five cans of cat food in the Kitchen are five rows sharing a thing_name.
     `room_id` is where the instance was placed.
 
-    Three properties shape what players can do with it:
+    Two properties shape what players can do with it:
 
-    - `cohort`: 'A' or 'B' places it only in that cohort's version of the room
-      (a can of cat food in "The Entryway" but not "Entryway"); NULL places it in
-      both. This is how the two cohorts come to see different content.
     - `can_take`: whether /take (a later phase) may move it into an inventory.
       Exits and scenery cannot be taken.
     - `removed_on_take`: whether taking it removes it from the room. True for a
@@ -289,6 +299,8 @@ class Thing(Base):
     room_id: Mapped[int] = mapped_column(Integer, ForeignKey("rooms.room_id"), nullable=False)
     thing_name: Mapped[str] = mapped_column(String(100), nullable=False)
     thing_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Vestigial, like room_version_assignment above. Already nullable, so nothing
+    # writes it and it simply stays NULL. Dropped in a later cleanup.
     cohort: Mapped[str | None] = mapped_column(String(1), nullable=True)
     can_take: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("0")
@@ -634,57 +646,15 @@ async def ensure_user_exists(user_id: int, guild_id: int) -> None:
         raise
 
 
-async def cohort_counts(guild_id: int) -> dict[str, int]:
-    """How many players each cohort has in this server, counting everyone ever enrolled."""
-    session_factory = _require_session()
-    try:
-        async with session_factory() as session:
-            rows = await session.execute(
-                select(PlayerGameState.room_version_assignment, func.count())
-                .where(PlayerGameState.guild_id == guild_id)
-                .group_by(PlayerGameState.room_version_assignment)
-            )
-            counts = {"A": 0, "B": 0}
-            counts.update({row[0]: row[1] for row in rows})
-            return counts
-    except SQLAlchemyError:
-        log.exception("Failed to count cohorts for guild %s", guild_id)
-        raise
-
-
-def _pick_cohort(counts: dict[str, int], rng=random) -> str:
-    """The cohort with fewer players; a coin flip when they are level.
-
-    Keeps the two groups within one player of each other at every point, which
-    independent 50/50 rolls do not - a four-player server has a 1-in-8 chance of
-    landing everyone in the same cohort. The tie-break keeps it unpredictable for
-    any individual player.
-    """
-    if counts["A"] < counts["B"]:
-        return "A"
-    if counts["B"] < counts["A"]:
-        return "B"
-    return rng.choice(("A", "B"))
-
-
 async def start_game(
     user_id: int,
     guild_id: int,
     starting_room: str,
     rooms_unlocked: list[str],
-    cohort: str | None = None,
-    rng=random,
-) -> str | None:
+) -> bool:
     """Enrol a player in this server's haunted house.
 
-    Returns the cohort they were placed in, or None if they were already enrolled.
-
-    Cohort is chosen to keep this server's groups balanced (see _pick_cohort),
-    counting everyone ever enrolled here. Pass `cohort` explicitly to override -
-    useful for tests and admin tooling. The count and the insert share one
-    transaction. Two players enrolling in the same instant can still both read
-    the same counts and land on the same side, but that is harmless: the next
-    enrolment goes to the smaller cohort, so any imbalance self-corrects.
+    Returns True if this call enrolled them, False if they were already in.
 
     The `users` row is ensured first to satisfy the foreign key, then the game
     state is inserted with ON CONFLICT DO NOTHING so two rapid invocations for
@@ -696,22 +666,12 @@ async def start_game(
     insert = _upsert_statement()
     try:
         async with session_factory() as session:
-            if cohort is None:
-                rows = await session.execute(
-                    select(PlayerGameState.room_version_assignment, func.count())
-                    .where(PlayerGameState.guild_id == guild_id)
-                    .group_by(PlayerGameState.room_version_assignment)
-                )
-                counts = {"A": 0, "B": 0}
-                counts.update({row[0]: row[1] for row in rows})
-                cohort = _pick_cohort(counts, rng)
-
             stmt = (
                 insert(PlayerGameState)
                 .values(
                     user_id=user_id,
                     guild_id=guild_id,
-                    room_version_assignment=cohort,
+                    room_version_assignment=VESTIGIAL_ROOM_VERSION,
                     current_room=starting_room,
                     rooms_unlocked=rooms_unlocked,
                 )
@@ -724,15 +684,9 @@ async def start_game(
             created = result.scalar_one_or_none() is not None
             await session.commit()
 
-            if not created:
-                return None
-            log.info(
-                "Player %s entered the house in guild %s as cohort %s",
-                user_id,
-                guild_id,
-                cohort,
-            )
-            return cohort
+            if created:
+                log.info("Player %s entered the house in guild %s", user_id, guild_id)
+            return created
     except SQLAlchemyError:
         log.exception("Failed to start game for %s in guild %s", user_id, guild_id)
         raise
@@ -748,7 +702,6 @@ async def get_game_state(user_id: int, guild_id: int) -> GameState | None:
                     select(
                         PlayerGameState.user_id,
                         PlayerGameState.guild_id,
-                        PlayerGameState.room_version_assignment,
                         PlayerGameState.current_room,
                         PlayerGameState.rooms_unlocked,
                     ).where(
@@ -759,7 +712,7 @@ async def get_game_state(user_id: int, guild_id: int) -> GameState | None:
             ).one_or_none()
             if row is None:
                 return None
-            return GameState(row[0], row[1], row[2], row[3], list(row[4] or []))
+            return GameState(row[0], row[1], row[2], list(row[3] or []))
     except SQLAlchemyError:
         log.exception("Failed to read game state for %s in guild %s", user_id, guild_id)
         raise
@@ -807,8 +760,8 @@ async def delete_game_state(user_id: int, guild_id: int) -> None:
         raise
 
 
-async def get_all_player_locations(guild_id: int) -> list[tuple[int, str, str]]:
-    """Every player's (user_id, cohort, current_room) in one server.
+async def get_all_player_locations(guild_id: int) -> list[tuple[int, str]]:
+    """Every player's (user_id, current_room) in one server.
 
     Used when rebuilding that server's house: the database says who belongs in
     which thread, so recreating threads does not strand anyone. Filtered by
@@ -820,11 +773,10 @@ async def get_all_player_locations(guild_id: int) -> list[tuple[int, str, str]]:
             rows = await session.execute(
                 select(
                     PlayerGameState.user_id,
-                    PlayerGameState.room_version_assignment,
                     PlayerGameState.current_room,
                 ).where(PlayerGameState.guild_id == guild_id)
             )
-            return [(row[0], row[1], row[2]) for row in rows]
+            return [(row[0], row[1]) for row in rows]
     except SQLAlchemyError:
         log.exception("Failed to read player locations for guild %s", guild_id)
         raise
@@ -915,18 +867,14 @@ async def add_thing(
     room_name: str,
     thing_name: str,
     description: str | None,
-    cohort: str | None = None,
     can_take: bool = False,
     removed_on_take: bool = True,
 ) -> int:
     """Place a new thing instance in a room of this server. Returns its thing_id.
 
-    `cohort` of 'A' or 'B' places it only in that cohort's version of the room;
-    None places it in both. Creates the room row if it does not exist yet, so
-    things can be added before the house has been initialized or described.
+    Creates the room row if it does not exist yet, so things can be added before
+    the house has been initialized or described.
     """
-    if cohort is not None and cohort not in ("A", "B"):
-        raise ValueError(f"cohort must be 'A', 'B' or None, not {cohort!r}")
     session_factory = _require_session()
     insert = _upsert_statement()
     try:
@@ -944,7 +892,6 @@ async def add_thing(
                 room_id=room_id,
                 thing_name=thing_name.strip(),
                 thing_description=description,
-                cohort=cohort,
                 can_take=can_take,
                 removed_on_take=removed_on_take,
             )
@@ -968,23 +915,20 @@ def _held_thing_ids():
     return select(InventoryItem.thing_id)
 
 
-def _visible_in_room(cohort: str):
-    """Filters that make an instance visible in a room to a player of `cohort`.
+def _visible_in_room():
+    """Filters that make an instance visible in a room.
 
-    The instance must be for this cohort or for both, and must not be an
-    exclusive item (`removed_on_take`) that someone is carrying. A non-exclusive
-    item stays visible however many players hold copies of it.
+    An instance must not be an exclusive item (`removed_on_take`) that someone is
+    carrying. A non-exclusive item stays visible however many players hold copies
+    of it.
     """
     return (
-        (Thing.cohort.is_(None)) | (Thing.cohort == cohort),
         ~((Thing.removed_on_take.is_(True)) & (Thing.thing_id.in_(_held_thing_ids()))),
     )
 
 
-async def get_things_in_room(
-    guild_id: int, room_name: str, cohort: str
-) -> list[tuple[int, str]]:
-    """(thing_id, thing_name) for every instance a player of `cohort` sees in a room.
+async def get_things_in_room(guild_id: int, room_name: str) -> list[tuple[int, str]]:
+    """(thing_id, thing_name) for every instance a player sees in a room.
 
     See _visible_in_room for what "sees" means.
     """
@@ -998,7 +942,7 @@ async def get_things_in_room(
                     Thing.guild_id == guild_id,
                     Room.guild_id == guild_id,
                     Room.room_name == room_name,
-                    *_visible_in_room(cohort),
+                    *_visible_in_room(),
                 )
                 .order_by(Thing.thing_id)
             )
@@ -1009,7 +953,7 @@ async def get_things_in_room(
 
 
 async def look_at_thing(
-    user_id: int, guild_id: int, room_name: str, cohort: str, thing_name: str
+    user_id: int, guild_id: int, room_name: str, thing_name: str
 ) -> LookResult | None:
     """Find every matching instance in the player's room or their inventory.
 
@@ -1017,12 +961,11 @@ async def look_at_thing(
     Otherwise returns the first match's description and the combined count -
     three in the room and two in the player's bag is "There are 5."
 
-    The room half shows only what this player's cohort can see (see
-    _visible_in_room). An exclusive instance another player carries has left
-    the room and is not counted; an exclusive instance this player carries is
-    counted via the inventory half, never the room half, so nothing is counted
-    twice. A non-exclusive instance the player holds a copy of is counted in
-    both - there is one on the shelf and one in their bag.
+    An exclusive instance another player carries has left the room and is not
+    counted; an exclusive instance this player carries is counted via the
+    inventory half, never the room half, so nothing is counted twice. A
+    non-exclusive instance the player holds a copy of is counted in both -
+    there is one on the shelf and one in their bag.
     """
     session_factory = _require_session()
     needle = thing_name.strip().lower()
@@ -1037,7 +980,7 @@ async def look_at_thing(
             Room.guild_id == guild_id,
             Room.room_name == room_name,
             func.lower(Thing.thing_name) == needle,
-            *_visible_in_room(cohort),
+            *_visible_in_room(),
         )
     )
     in_bag = (

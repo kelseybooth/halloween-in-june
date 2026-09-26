@@ -49,7 +49,7 @@ async def test_rebuilding_deletes_what_was_there_first():
     assert result.created == len(ALL_NAMES)
 
 
-async def test_rebuilding_twice_leaves_eighteen_not_thirty_six():
+async def test_rebuilding_twice_leaves_nine_not_eighteen():
     """The idempotence phase 2a asks for: run it again, get the same house."""
     channel = FakeChannel()
     await house_utils.initialize_threads(channel, [])
@@ -59,9 +59,9 @@ async def test_rebuilding_twice_leaves_eighteen_not_thirty_six():
     assert sorted(t.name for t in channel.threads) == sorted(ALL_NAMES)
 
 
-async def test_rebuilding_after_a_half_finished_run_still_lands_on_eighteen():
+async def test_rebuilding_after_a_half_finished_run_still_lands_on_nine():
     """An admin re-running after a partial failure must not accumulate rooms."""
-    channel = FakeChannel().add_active("Entryway", "The Entryway", "Kitchen")
+    channel = FakeChannel().add_active("Entryway", "Kitchen")
     await house_utils.initialize_threads(channel, [])
 
     assert len(channel.threads) == len(ALL_NAMES)
@@ -69,10 +69,21 @@ async def test_rebuilding_after_a_half_finished_run_still_lands_on_eighteen():
 
 async def test_archived_threads_are_deleted_too():
     """They are invisible in `channel.threads` but their names still collide."""
-    channel = FakeChannel(archived=["Entryway", "The Entryway"])
+    channel = FakeChannel(archived=["Entryway", "Kitchen"])
     result = await house_utils.initialize_threads(channel, [])
 
     assert result.deleted == 2
+
+
+async def test_a_rebuild_sweeps_away_the_old_cohort_threads():
+    """The phase 2a migration in one call: an admin re-runs the command, the
+    "The Room" copies go with everything else, and nine threads come back."""
+    channel = FakeChannel().add_active(*(f"The {room}" for room in house_utils.ROOMS))
+    result = await house_utils.initialize_threads(channel, [])
+
+    assert result.deleted == 9
+    assert sorted(t.name for t in channel.threads) == sorted(ALL_NAMES)
+    assert not [t for t in channel.threads if t.name.startswith("The ")]
 
 
 async def test_stray_threads_that_are_not_rooms_are_also_cleared():
@@ -90,27 +101,18 @@ async def test_stray_threads_that_are_not_rooms_are_also_cleared():
 
 async def test_players_are_restored_to_the_room_they_were_in():
     channel = FakeChannel()
-    locations = [(111, "A", "Kitchen"), (222, "B", "Bedroom")]
+    locations = [(111, "Kitchen"), (222, "Bedroom")]
     result = await house_utils.initialize_threads(channel, locations)
 
     assert result.restored == 2
     by_name = {t.name: t for t in channel.threads}
     assert by_name["Kitchen"].added_users == [111]
-    assert by_name["The Bedroom"].added_users == [222]
-
-
-async def test_a_players_cohort_decides_which_copy_of_the_room_they_return_to():
-    channel = FakeChannel()
-    await house_utils.initialize_threads(channel, [(111, "B", "Kitchen")])
-
-    by_name = {t.name: t for t in channel.threads}
-    assert by_name["The Kitchen"].added_users == [111]
-    assert by_name["Kitchen"].added_users == []
+    assert by_name["Bedroom"].added_users == [222]
 
 
 async def test_several_players_in_one_room_all_come_back():
     channel = FakeChannel()
-    locations = [(111, "A", "Kitchen"), (222, "A", "Kitchen"), (333, "A", "Kitchen")]
+    locations = [(111, "Kitchen"), (222, "Kitchen"), (333, "Kitchen")]
     result = await house_utils.initialize_threads(channel, locations)
 
     assert result.restored == 3
@@ -135,21 +137,23 @@ async def test_a_failed_creation_is_reported_and_the_rest_continue():
 
     assert result.created == len(ALL_NAMES) - 1
     assert any("Kitchen" in e for e in result.errors)
-    assert "The Kitchen" in channel.created  # the others still went up
+    assert "Bedroom" in channel.created  # the others still went up
+    assert "Kitchen" not in channel.created
 
 
 async def test_a_player_whose_room_failed_to_build_is_reported_not_dropped_silently():
     channel = FakeChannel()
     channel.create_fails = {"Kitchen"}
-    result = await house_utils.initialize_threads(channel, [(111, "A", "Kitchen")])
+    result = await house_utils.initialize_threads(channel, [(111, "Kitchen")])
 
     assert result.restored == 0
     assert any("111" in e for e in result.errors)
 
 
-async def test_a_player_with_an_impossible_cohort_is_reported():
+async def test_a_player_in_a_room_that_does_not_exist_is_reported():
+    """Stale state from before a layout change must not vanish quietly."""
     channel = FakeChannel()
-    result = await house_utils.initialize_threads(channel, [(111, "Z", "Kitchen")])
+    result = await house_utils.initialize_threads(channel, [(111, "Attic")])
 
     assert result.restored == 0
     assert any("111" in e for e in result.errors)

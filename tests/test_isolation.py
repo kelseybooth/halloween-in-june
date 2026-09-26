@@ -68,27 +68,19 @@ async def test_nightly_decay_treats_each_server_separately(db):
 
 
 async def test_game_state_is_per_server(db):
-    await db.start_game(ALICE, GUILD_A, "Entryway", ["Entryway"], cohort="A")
+    await db.start_game(ALICE, GUILD_A, "Entryway", ["Entryway"])
     assert await db.get_game_state(ALICE, GUILD_B) is None
 
-    await db.start_game(ALICE, GUILD_B, "Entryway", ["Entryway"], cohort="B")
+    await db.start_game(ALICE, GUILD_B, "Entryway", ["Entryway"])
     await db.update_current_room(ALICE, GUILD_A, "Kitchen")
 
     assert (await db.get_game_state(ALICE, GUILD_A)).current_room == "Kitchen"
     assert (await db.get_game_state(ALICE, GUILD_B)).current_room == "Entryway"
 
 
-async def test_a_player_can_hold_different_cohorts_in_different_servers(db):
-    await db.start_game(ALICE, GUILD_A, "Entryway", [], cohort="A")
-    await db.start_game(ALICE, GUILD_B, "Entryway", [], cohort="B")
-
-    assert (await db.get_game_state(ALICE, GUILD_A)).cohort == "A"
-    assert (await db.get_game_state(ALICE, GUILD_B)).cohort == "B"
-
-
 async def test_deleting_game_state_in_one_server_leaves_the_other(db):
-    await db.start_game(ALICE, GUILD_A, "Entryway", [], cohort="A")
-    await db.start_game(ALICE, GUILD_B, "Entryway", [], cohort="A")
+    await db.start_game(ALICE, GUILD_A, "Entryway", [])
+    await db.start_game(ALICE, GUILD_B, "Entryway", [])
 
     await db.delete_game_state(ALICE, GUILD_A)
 
@@ -111,8 +103,8 @@ async def test_a_room_described_in_one_server_is_blank_in_another(db):
 
 async def test_things_are_per_server(db):
     await db.add_thing(GUILD_A, "Kitchen", "cat food", "a can")
-    things_a = await db.get_things_in_room(GUILD_A, "Kitchen", "A")
-    things_b = await db.get_things_in_room(GUILD_B, "Kitchen", "A")
+    things_a = await db.get_things_in_room(GUILD_A, "Kitchen")
+    things_b = await db.get_things_in_room(GUILD_B, "Kitchen")
 
     assert [name for _, name in things_a] == ["cat food"]
     assert things_b == []
@@ -120,8 +112,8 @@ async def test_things_are_per_server(db):
 
 async def test_looking_at_a_thing_does_not_reach_across_servers(db):
     await db.add_thing(GUILD_A, "Kitchen", "cat food", "a can")
-    assert await db.look_at_thing(ALICE, GUILD_A, "Kitchen", "A", "cat food") is not None
-    assert await db.look_at_thing(ALICE, GUILD_B, "Kitchen", "A", "cat food") is None
+    assert await db.look_at_thing(ALICE, GUILD_A, "Kitchen", "cat food") is not None
+    assert await db.look_at_thing(ALICE, GUILD_B, "Kitchen", "cat food") is None
 
 
 async def test_inventories_are_per_server(db):
@@ -146,14 +138,14 @@ async def test_carrying_a_thing_in_one_server_does_not_hide_it_in_another(db):
 
     await db.add_to_inventory(ALICE, GUILD_A, thing_a)
 
-    assert await db.get_things_in_room(GUILD_A, "Kitchen", "A") == []
-    assert len(await db.get_things_in_room(GUILD_B, "Kitchen", "A")) == 1
+    assert await db.get_things_in_room(GUILD_A, "Kitchen") == []
+    assert len(await db.get_things_in_room(GUILD_B, "Kitchen")) == 1
 
 
 async def test_player_locations_are_listed_per_server(db):
-    await db.start_game(ALICE, GUILD_A, "Entryway", [], cohort="A")
-    await db.start_game(BOB, GUILD_A, "Entryway", [], cohort="B")
-    await db.start_game(ALICE, GUILD_B, "Entryway", [], cohort="A")
+    await db.start_game(ALICE, GUILD_A, "Entryway", [])
+    await db.start_game(BOB, GUILD_A, "Entryway", [])
+    await db.start_game(ALICE, GUILD_B, "Entryway", [])
 
     assert len(await db.get_all_player_locations(GUILD_A)) == 2
     assert len(await db.get_all_player_locations(GUILD_B)) == 1

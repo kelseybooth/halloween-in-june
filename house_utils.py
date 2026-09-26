@@ -1,8 +1,8 @@
 """Haunted house layout and Discord thread management (Phase 2).
 
-Every room exists as two threads whose names differ only by a leading article:
-cohort A sees "Entryway", cohort B sees "The Entryway". Players are not told this;
-it exists so mods can tell at a glance which cohort a thread belongs to.
+One thread per room, nine in all. Cohorts were removed in phase 2a: every
+player now sees the same house, so the second set of threads - the ones named
+with a leading article - is gone.
 """
 
 import logging
@@ -21,8 +21,6 @@ HALLOWEEN_CHANNEL_NAME = "halloween"
 # slips through, which is what actually keeps the rooms open indefinitely.
 THREAD_AUTO_ARCHIVE_MINUTES = 10080
 
-COHORTS = ("A", "B")
-
 # Canonical room names, in the order the spec lists them.
 ROOMS = [
     "Dining Room",
@@ -37,9 +35,6 @@ ROOMS = [
 ]
 
 STARTING_ROOM = "Entryway"
-
-ROOM_NAMES_A = list(ROOMS)
-ROOM_NAMES_B = [f"The {room}" for room in ROOMS]
 
 class Exit(NamedTuple):
     """One way out of a room.
@@ -125,16 +120,9 @@ class InitResult(NamedTuple):
     errors: list[str]
 
 
-def get_thread_name(room_name: str, cohort: str) -> str:
-    """Thread name for a room in a given cohort: "Entryway" or "The Entryway"."""
-    if cohort not in COHORTS:
-        raise ValueError(f"unknown cohort {cohort!r}; expected one of {COHORTS}")
-    return f"The {room_name}" if cohort == "B" else room_name
-
-
 def all_thread_names() -> list[str]:
-    """Every thread name the house needs - 9 rooms x 2 cohorts, in creation order."""
-    return [get_thread_name(room, cohort) for room in ROOMS for cohort in COHORTS]
+    """Every thread name the house needs - one per room, in creation order."""
+    return list(ROOMS)
 
 
 def resolve_exit(current_room: str, user_input: str) -> Exit | None:
@@ -279,12 +267,15 @@ async def initialize_threads(
     channel: discord.TextChannel,
     locations: list[tuple[int, str, str]],
 ) -> InitResult:
-    """Delete every thread in the channel and recreate the full set of 18.
+    """Delete every thread in the channel and recreate the full set of nine.
 
-    `locations` is (user_id, cohort, current_room) for each player with game state.
-    After the threads exist, each player is re-added to the thread for the room they
+    `locations` is (user_id, current_room) for each player with game state. After
+    the threads exist, each player is re-added to the thread for the room they
     were in, which is what makes the command rerunnable without stranding anyone -
     the database, not Discord, is the source of truth for who belongs where.
+
+    Deleting everything first is also what migrates a server off cohorts: the old
+    eighteen threads go with the rest, and nine come back.
     """
     errors: list[str] = []
 
@@ -313,24 +304,18 @@ async def initialize_threads(
             log.error("Failed to create thread %s", name, exc_info=True)
 
     restored = 0
-    for user_id, cohort, room in locations:
-        try:
-            name = get_thread_name(room, cohort)
-        except ValueError as exc:
-            errors.append(f"player {user_id}: {exc}")
-            continue
-
-        thread = threads.get(name)
+    for user_id, room in locations:
+        thread = threads.get(room)
         if thread is None:
-            errors.append(f"player {user_id}: thread {name!r} was not created")
+            errors.append(f"player {user_id}: thread {room!r} was not created")
             continue
 
         try:
             await thread.add_user(discord.Object(id=user_id))
             restored += 1
         except discord.HTTPException as exc:
-            errors.append(f"could not restore player {user_id} to {name!r}: {exc}")
-            log.warning("Failed to restore player %s to %s", user_id, name, exc_info=True)
+            errors.append(f"could not restore player {user_id} to {room!r}: {exc}")
+            log.warning("Failed to restore player %s to %s", user_id, room, exc_info=True)
 
     log.info(
         "Haunted House initialized with %d threads in %s (deleted %d, restored %d players)",
@@ -357,7 +342,10 @@ async def unarchive_all(channel: discord.TextChannel) -> tuple[int, list[str]]:
 
     Discord's longest auto-archive is 7 days, so a room with no traffic for a week
     would archive and drop out of the channel's active list. Running this on a
-    schedule keeps all 18 rooms permanently open.
+    schedule keeps all nine rooms permanently open.
+
+    The set it revives comes from all_thread_names(), so it cannot drift out of
+    step with the set initialize_threads builds.
     """
     wanted = set(all_thread_names())
     revived = 0
@@ -382,17 +370,16 @@ async def unarchive_all(channel: discord.TextChannel) -> tuple[int, list[str]]:
     return revived, errors
 
 
-async def get_thread_by_room_and_cohort(
-    channel: discord.TextChannel, room_name: str, cohort: str
+async def get_thread_for_room(
+    channel: discord.TextChannel, room_name: str
 ) -> discord.Thread | None:
-    """Find the thread for a room/cohort pair by name.
+    """Find a room's thread by name.
 
     Searches archived threads as well as active ones: `channel.threads` omits
     archived threads, so an active-only lookup would fail during the window between
     a thread archiving and the next keep-alive pass reviving it.
     """
-    name = get_thread_name(room_name, cohort)
     for thread in await _existing_threads(channel):
-        if thread.name == name:
+        if thread.name == room_name:
             return thread
     return None
