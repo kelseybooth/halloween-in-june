@@ -10,7 +10,7 @@ import os
 import random
 import sys
 from datetime import time as dt_time
-from typing import Literal, NamedTuple
+from typing import NamedTuple
 
 import discord
 from discord import app_commands
@@ -373,7 +373,7 @@ async def _initialize_error(
 )
 @app_commands.guild_only()
 async def enter_entryway(interaction: discord.Interaction) -> None:
-    """Enrol the player, assign a cohort, and place them in their Entryway thread."""
+    """Enrol the player and place them in the Entryway thread."""
     if interaction.guild is None:
         await interaction.response.send_message(
             "This command only works inside a server.", ephemeral=True
@@ -392,23 +392,17 @@ async def enter_entryway(interaction: discord.Interaction) -> None:
         )
         return
 
-    # The cohort is chosen by the database to keep this server's groups balanced,
-    # so it is not known until enrolment. Check that BOTH Entryway threads exist
-    # first: enrolling a player and then discovering the house was never built
-    # would leave them marked as inside a room that does not exist.
+    # Check the Entryway thread exists before enrolling anyone: enrolling a
+    # player and then discovering the house was never built would leave them
+    # marked as inside a room that does not exist.
     try:
-        entryways = {
-            cohort: await house_utils.get_thread_by_room_and_cohort(
-                channel, house_utils.STARTING_ROOM, cohort
-            )
-            for cohort in house_utils.COHORTS
-        }
+        thread = await house_utils.get_thread_for_room(channel, house_utils.STARTING_ROOM)
     except discord.HTTPException:
-        log.exception("Could not look up the Entryway threads")
+        log.exception("Could not look up the Entryway thread")
         await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
         return
 
-    if any(thread is None for thread in entryways.values()):
+    if thread is None:
         await interaction.followup.send(
             "The haunted house hasn't been built yet. "
             "Ask an admin to run `/initialize-haunted-house`.",
@@ -419,18 +413,16 @@ async def enter_entryway(interaction: discord.Interaction) -> None:
     try:
         # All rooms start unlocked during the testing phase; Phase 3 gates them
         # behind puzzles and this becomes just the starting room.
-        cohort = await database.start_game(
+        enrolled = await database.start_game(
             user.id, interaction.guild_id, house_utils.STARTING_ROOM, list(house_utils.ROOMS)
         )
     except SQLAlchemyError:
         await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
         return
 
-    if cohort is None:
+    if not enrolled:
         await interaction.followup.send("You're already in the haunted house!", ephemeral=True)
         return
-
-    thread = entryways[cohort]
 
     try:
         await house_utils.add_player_to_thread(thread, user.id)
@@ -509,12 +501,8 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
         return
 
     try:
-        destination_thread = await house_utils.get_thread_by_room_and_cohort(
-            channel, destination, state.cohort
-        )
-        origin_thread = await house_utils.get_thread_by_room_and_cohort(
-            channel, state.current_room, state.cohort
-        )
+        destination_thread = await house_utils.get_thread_for_room(channel, destination)
+        origin_thread = await house_utils.get_thread_for_room(channel, state.current_room)
     except discord.HTTPException:
         log.exception("Could not look up room threads")
         await interaction.followup.send(MOVE_ERROR_MESSAGE, ephemeral=True)
@@ -614,7 +602,7 @@ async def look(interaction: discord.Interaction, thing: str | None = None) -> No
 
     try:
         found = await database.look_at_thing(
-            user.id, interaction.guild_id, state.current_room, state.cohort, thing
+            user.id, interaction.guild_id, state.current_room, thing
         )
     except SQLAlchemyError:
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
@@ -675,7 +663,6 @@ async def inventory(interaction: discord.Interaction) -> None:
 @app_commands.describe(
     name="What players will type to look at it, e.g. 'cat food'.",
     description="What they see when they look. Optional.",
-    cohort="Which version of the room it's in. Default: both.",
     can_take="Whether /take (future) may pick it up. Default: no.",
     removed_on_take="If taken, does it leave the room for everyone else? Default: yes.",
 )
@@ -683,7 +670,6 @@ async def add_thing(
     interaction: discord.Interaction,
     name: str,
     description: str | None = None,
-    cohort: Literal["both", "A", "B"] = "both",
     can_take: bool = False,
     removed_on_take: bool = True,
 ) -> None:
@@ -707,7 +693,6 @@ async def add_thing(
             state.current_room,
             name,
             description,
-            cohort=None if cohort == "both" else cohort,
             can_take=can_take,
             removed_on_take=removed_on_take,
         )
@@ -715,16 +700,14 @@ async def add_thing(
         await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
         return
 
-    where = state.current_room if cohort == "both" else house_utils.get_thread_name(
-        state.current_room, cohort
-    )
     traits = []
     if can_take:
         traits.append("takeable, " + ("leaves the room when taken" if removed_on_take else "stays for others"))
     else:
         traits.append("not takeable")
     await interaction.followup.send(
-        f"Placed **{name.strip()}** in {where} (thing_id {thing_id}; {'; '.join(traits)}).",
+        f"Placed **{name.strip()}** in {state.current_room} "
+        f"(thing_id {thing_id}; {'; '.join(traits)}).",
         ephemeral=True,
     )
 

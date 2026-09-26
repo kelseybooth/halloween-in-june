@@ -155,32 +155,20 @@ def test_placeholder_descriptions_are_obvious():
 # --------------------------------------------------------------------------
 
 
-def test_cohort_a_sees_the_bare_room_name():
-    assert house_utils.get_thread_name("Entryway", "A") == "Entryway"
-
-
-def test_cohort_b_sees_the_article():
-    assert house_utils.get_thread_name("Entryway", "B") == "The Entryway"
-
-
-@pytest.mark.parametrize("cohort", ["C", "a", "", None, "AB"])
-def test_an_unknown_cohort_is_refused(cohort):
-    with pytest.raises(ValueError):
-        house_utils.get_thread_name("Entryway", cohort)
-
-
-def test_the_house_needs_eighteen_threads():
-    """Nine rooms in two cohorts. Step 4 drops this to nine."""
+def test_the_house_needs_nine_threads():
+    """One per room, since step 4 removed the second cohort's copy."""
     names = house_utils.all_thread_names()
-    assert len(names) == 18
-    assert len(set(names)) == 18
+    assert len(names) == 9
+    assert len(set(names)) == 9
 
 
-def test_every_room_appears_once_per_cohort():
-    names = set(house_utils.all_thread_names())
-    for room in ROOMS:
-        assert room in names
-        assert f"The {room}" in names
+def test_every_room_has_exactly_one_thread():
+    assert house_utils.all_thread_names() == ROOMS
+
+
+def test_no_thread_is_named_with_the_old_article_form():
+    """The "The Entryway" copies are gone, not merely unused."""
+    assert not [n for n in house_utils.all_thread_names() if n.startswith("The ")]
 
 
 def test_the_starting_room_is_a_real_room():

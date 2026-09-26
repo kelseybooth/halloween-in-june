@@ -1,7 +1,7 @@
 """Rooms, things and inventory - the queries `/look` and `/inventory` run on.
 
-This is the suite phase 2a step 4 leans on: removing cohorts rewrites every
-query here, so the behaviour that must survive that change is pinned down first.
+This is the suite phase 2a step 4 leaned on: removing cohorts rewrote every
+query here, and these are the behaviours that had to come through unchanged.
 """
 
 import pytest
@@ -69,71 +69,46 @@ async def test_an_unknown_room_has_no_description(db):
 async def test_adding_a_thing_creates_its_room_if_needed(db):
     """Things can be placed before the house has been initialized."""
     await db.add_thing(GUILD_A, "Kitchen", "cat food", "a can")
-    assert [n for _, n in await db.get_things_in_room(GUILD_A, "Kitchen", "A")] == ["cat food"]
+    assert [n for _, n in await db.get_things_in_room(GUILD_A, "Kitchen")] == ["cat food"]
 
 
 async def test_thing_names_are_stored_stripped(db):
     await db.add_thing(GUILD_A, "Kitchen", "  cat food  ", "a can")
-    assert [n for _, n in await db.get_things_in_room(GUILD_A, "Kitchen", "A")] == ["cat food"]
+    assert [n for _, n in await db.get_things_in_room(GUILD_A, "Kitchen")] == ["cat food"]
 
 
 async def test_the_same_name_can_be_placed_many_times(db):
     """Five cans in the Kitchen are five rows sharing a name."""
     for _ in range(5):
         await db.add_thing(GUILD_A, "Kitchen", "cat food", "a can")
-    assert len(await db.get_things_in_room(GUILD_A, "Kitchen", "A")) == 5
-
-
-@pytest.mark.parametrize("bad", ["C", "a", "", "AB"])
-async def test_an_unknown_cohort_is_refused(db, bad):
-    with pytest.raises(ValueError):
-        await db.add_thing(GUILD_A, "Kitchen", "cat food", "a can", cohort=bad)
+    assert len(await db.get_things_in_room(GUILD_A, "Kitchen")) == 5
 
 
 async def test_an_empty_room_lists_nothing(db):
     await db.seed_rooms(GUILD_A, ["Kitchen"])
-    assert await db.get_things_in_room(GUILD_A, "Kitchen", "A") == []
-
-
-# --------------------------------------------------------------------------
-# Cohort placement
-#
-# Step 4 removes cohorts. These assert only that placement is honoured while it
-# exists; the visibility rules below are the ones that must outlive the change.
-# --------------------------------------------------------------------------
-
-
-async def test_a_thing_with_no_cohort_is_visible_to_both(db):
-    await db.add_thing(GUILD_A, "Entryway", "mirror", "cloudy", cohort=None)
-    assert len(await db.get_things_in_room(GUILD_A, "Entryway", "A")) == 1
-    assert len(await db.get_things_in_room(GUILD_A, "Entryway", "B")) == 1
-
-
-async def test_a_cohort_thing_is_visible_only_to_that_cohort(db):
-    await db.add_thing(GUILD_A, "Entryway", "cat food", "a can", cohort="A")
-    assert len(await db.get_things_in_room(GUILD_A, "Entryway", "A")) == 1
-    assert await db.get_things_in_room(GUILD_A, "Entryway", "B") == []
+    assert await db.get_things_in_room(GUILD_A, "Kitchen") == []
 
 
 # --------------------------------------------------------------------------
 # Visibility once something is carried
 #
 # An instance leaves its room only when it is exclusive (`removed_on_take`) and
-# somebody holds it. Anything else stays put for the next player.
+# somebody holds it. Anything else stays put for the next player. These rules
+# came through the removal of cohorts unchanged, which is what they were for.
 # --------------------------------------------------------------------------
 
 
 async def test_an_exclusive_thing_disappears_from_the_room_when_taken(db):
     note = await db.add_thing(GUILD_A, "Kitchen", "note", "a secret", removed_on_take=True)
     await db.add_to_inventory(ALICE, GUILD_A, note)
-    assert await db.get_things_in_room(GUILD_A, "Kitchen", "A") == []
+    assert await db.get_things_in_room(GUILD_A, "Kitchen") == []
 
 
 async def test_an_exclusive_thing_is_gone_for_everyone_not_just_the_taker(db):
     note = await db.add_thing(GUILD_A, "Kitchen", "note", "a secret", removed_on_take=True)
     await db.add_to_inventory(ALICE, GUILD_A, note)
 
-    assert await db.look_at_thing(BOB, GUILD_A, "Kitchen", "A", "note") is None
+    assert await db.look_at_thing(BOB, GUILD_A, "Kitchen", "note") is None
 
 
 async def test_a_copyable_thing_stays_in_the_room_when_taken(db):
@@ -142,7 +117,7 @@ async def test_a_copyable_thing_stays_in_the_room_when_taken(db):
         GUILD_A, "Kitchen", "poster", "a notice", removed_on_take=False
     )
     await db.add_to_inventory(ALICE, GUILD_A, poster)
-    assert len(await db.get_things_in_room(GUILD_A, "Kitchen", "A")) == 1
+    assert len(await db.get_things_in_room(GUILD_A, "Kitchen")) == 1
 
 
 async def test_dropping_an_exclusive_thing_returns_it_to_the_room(db):
@@ -150,7 +125,7 @@ async def test_dropping_an_exclusive_thing_returns_it_to_the_room(db):
     await db.add_to_inventory(ALICE, GUILD_A, note)
     await db.remove_from_inventory(ALICE, GUILD_A, note)
 
-    assert len(await db.get_things_in_room(GUILD_A, "Kitchen", "A")) == 1
+    assert len(await db.get_things_in_room(GUILD_A, "Kitchen")) == 1
 
 
 async def test_one_instance_taken_does_not_hide_its_siblings(db):
@@ -159,7 +134,7 @@ async def test_one_instance_taken_does_not_hide_its_siblings(db):
         for _ in range(3)
     ]
     await db.add_to_inventory(ALICE, GUILD_A, ids[0])
-    assert len(await db.get_things_in_room(GUILD_A, "Kitchen", "A")) == 2
+    assert len(await db.get_things_in_room(GUILD_A, "Kitchen")) == 2
 
 
 # --------------------------------------------------------------------------
@@ -169,7 +144,7 @@ async def test_one_instance_taken_does_not_hide_its_siblings(db):
 
 async def test_look_finds_a_thing_in_the_room(db):
     await db.add_thing(GUILD_A, "Kitchen", "cat food", "A dented can.")
-    result = await db.look_at_thing(ALICE, GUILD_A, "Kitchen", "A", "cat food")
+    result = await db.look_at_thing(ALICE, GUILD_A, "Kitchen", "cat food")
     assert result.description == "A dented can."
     assert result.count == 1
 
@@ -177,24 +152,24 @@ async def test_look_finds_a_thing_in_the_room(db):
 @pytest.mark.parametrize("typed", ["CAT FOOD", "Cat Food", "  cat food  ", "cAt FoOd"])
 async def test_look_is_case_and_whitespace_insensitive(db, typed):
     await db.add_thing(GUILD_A, "Kitchen", "cat food", "A dented can.")
-    assert await db.look_at_thing(ALICE, GUILD_A, "Kitchen", "A", typed) is not None
+    assert await db.look_at_thing(ALICE, GUILD_A, "Kitchen", typed) is not None
 
 
 async def test_look_at_something_absent_finds_nothing(db):
     await db.add_thing(GUILD_A, "Kitchen", "cat food", "A dented can.")
-    assert await db.look_at_thing(ALICE, GUILD_A, "Kitchen", "A", "hammer") is None
+    assert await db.look_at_thing(ALICE, GUILD_A, "Kitchen", "hammer") is None
 
 
 @pytest.mark.parametrize("blank", ["", "   "])
 async def test_look_at_nothing_finds_nothing(db, blank):
     await db.add_thing(GUILD_A, "Kitchen", "cat food", "A dented can.")
-    assert await db.look_at_thing(ALICE, GUILD_A, "Kitchen", "A", blank) is None
+    assert await db.look_at_thing(ALICE, GUILD_A, "Kitchen", blank) is None
 
 
 async def test_look_counts_every_matching_instance_in_the_room(db):
     for _ in range(3):
         await db.add_thing(GUILD_A, "Kitchen", "cat food", "A dented can.")
-    assert (await db.look_at_thing(ALICE, GUILD_A, "Kitchen", "A", "cat food")).count == 3
+    assert (await db.look_at_thing(ALICE, GUILD_A, "Kitchen", "cat food")).count == 3
 
 
 async def test_look_does_not_count_a_carried_exclusive_thing_twice(db):
@@ -202,7 +177,7 @@ async def test_look_does_not_count_a_carried_exclusive_thing_twice(db):
     note = await db.add_thing(GUILD_A, "Kitchen", "note", "a secret", removed_on_take=True)
     await db.add_to_inventory(ALICE, GUILD_A, note)
 
-    result = await db.look_at_thing(ALICE, GUILD_A, "Kitchen", "A", "note")
+    result = await db.look_at_thing(ALICE, GUILD_A, "Kitchen", "note")
     assert result.count == 1
 
 
@@ -213,7 +188,7 @@ async def test_look_counts_a_copyable_thing_in_both_places(db):
     )
     await db.add_to_inventory(ALICE, GUILD_A, poster)
 
-    result = await db.look_at_thing(ALICE, GUILD_A, "Kitchen", "A", "poster")
+    result = await db.look_at_thing(ALICE, GUILD_A, "Kitchen", "poster")
     assert result.count == 2
 
 
@@ -222,7 +197,7 @@ async def test_look_finds_a_carried_thing_from_another_room(db):
     note = await db.add_thing(GUILD_A, "Kitchen", "note", "a secret", removed_on_take=True)
     await db.add_to_inventory(ALICE, GUILD_A, note)
 
-    assert await db.look_at_thing(ALICE, GUILD_A, "Bedroom", "A", "note") is not None
+    assert await db.look_at_thing(ALICE, GUILD_A, "Bedroom", "note") is not None
 
 
 async def test_look_falls_through_to_the_first_description_that_exists(db):
@@ -230,23 +205,17 @@ async def test_look_falls_through_to_the_first_description_that_exists(db):
     await db.add_thing(GUILD_A, "Kitchen", "can", None)
     await db.add_thing(GUILD_A, "Kitchen", "can", "A dented can.")
 
-    result = await db.look_at_thing(ALICE, GUILD_A, "Kitchen", "A", "can")
+    result = await db.look_at_thing(ALICE, GUILD_A, "Kitchen", "can")
     assert result.description == "A dented can."
     assert result.count == 2
 
 
 async def test_look_reports_a_match_with_no_description_at_all(db):
     await db.add_thing(GUILD_A, "Kitchen", "can", None)
-    result = await db.look_at_thing(ALICE, GUILD_A, "Kitchen", "A", "can")
+    result = await db.look_at_thing(ALICE, GUILD_A, "Kitchen", "can")
     assert result is not None
     assert result.description is None
     assert result.count == 1
-
-
-async def test_look_respects_cohort_placement(db):
-    await db.add_thing(GUILD_A, "Kitchen", "cat food", "a can", cohort="A")
-    assert await db.look_at_thing(ALICE, GUILD_A, "Kitchen", "A", "cat food") is not None
-    assert await db.look_at_thing(ALICE, GUILD_A, "Kitchen", "B", "cat food") is None
 
 
 # --------------------------------------------------------------------------
@@ -351,7 +320,7 @@ async def test_wiping_player_records_succeeds_with_foreign_keys_enforced(db):
     """
     import reset_db
 
-    await db.start_game(ALICE, GUILD_A, "Entryway", [], cohort="A")
+    await db.start_game(ALICE, GUILD_A, "Entryway", [])
     can = await db.add_thing(GUILD_A, "Kitchen", "cat food", "a can")
     await db.add_to_inventory(ALICE, GUILD_A, can)
     await db.increment_pet_count(ALICE, GUILD_A)
@@ -362,4 +331,65 @@ async def test_wiping_player_records_succeeds_with_foreign_keys_enforced(db):
     assert await db.get_game_state(ALICE, GUILD_A) is None
     assert await db.inventory_count(ALICE, GUILD_A) == 0
     # The room's contents are a writer's work and must survive a player wipe.
-    assert len(await db.get_things_in_room(GUILD_A, "Kitchen", "A")) == 1
+    assert len(await db.get_things_in_room(GUILD_A, "Kitchen")) == 1
+
+
+# --------------------------------------------------------------------------
+# Migrating a server that was running with cohorts
+#
+# The two cohort columns still exist and still hold whatever they held before
+# phase 2a. Nothing reads them, so the old values have to be inert rather than
+# merely ignored on the happy path.
+# --------------------------------------------------------------------------
+
+
+async def set_old_cohort_data(db, guild_id, thing_ids, version):
+    """Backfill the vestigial columns the way a pre-2a database would have them."""
+    from sqlalchemy import update
+
+    async with db._require_session()() as session:
+        await session.execute(
+            update(db.PlayerGameState)
+            .where(db.PlayerGameState.guild_id == guild_id)
+            .values(room_version_assignment=version)
+        )
+        if thing_ids:
+            await session.execute(
+                update(db.Thing).where(db.Thing.thing_id.in_(thing_ids)).values(cohort=version)
+            )
+        await session.commit()
+
+
+async def test_a_thing_left_over_from_cohort_b_is_visible_to_everyone(db):
+    """Content only half a server could see is now seen by all of it."""
+    can = await db.add_thing(GUILD_A, "Kitchen", "cat food", "a can")
+    await db.start_game(ALICE, GUILD_A, "Entryway", [])
+    await set_old_cohort_data(db, GUILD_A, [can], "B")
+
+    assert len(await db.get_things_in_room(GUILD_A, "Kitchen")) == 1
+    assert await db.look_at_thing(ALICE, GUILD_A, "Kitchen", "cat food") is not None
+
+
+async def test_an_old_cohort_assignment_does_not_affect_where_a_player_is(db):
+    await db.start_game(ALICE, GUILD_A, "Entryway", [])
+    await db.update_current_room(ALICE, GUILD_A, "Kitchen")
+    await set_old_cohort_data(db, GUILD_A, [], "B")
+
+    state = await db.get_game_state(ALICE, GUILD_A)
+    assert state.current_room == "Kitchen"
+    assert not hasattr(state, "cohort")
+
+
+async def test_a_rebuild_reads_no_cohort_from_an_old_row(db):
+    """`/initialize-haunted-house` restores players by room alone."""
+    await db.start_game(ALICE, GUILD_A, "Entryway", [])
+    await db.update_current_room(ALICE, GUILD_A, "Bedroom")
+    await set_old_cohort_data(db, GUILD_A, [], "B")
+
+    assert await db.get_all_player_locations(GUILD_A) == [(ALICE, "Bedroom")]
+
+
+async def test_enrolling_still_works_against_the_not_null_column(db):
+    """The column cannot be dropped additively, so a constant is written to it."""
+    assert await db.start_game(ALICE, GUILD_A, "Entryway", []) is True
+    assert await db.start_game(ALICE, GUILD_A, "Entryway", []) is False

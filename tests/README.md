@@ -38,7 +38,11 @@ as an unrelated failure somewhere else.
 
 ## Cohorts
 
-Cohort *placement* has light coverage; cohort *assignment* has none, because
-phase 2a step 4 deletes it. What the tests pin down instead is thing visibility
-— exclusive versus copyable, carried versus not — which has to survive that
-change unaltered.
+Gone as of phase 2a step 4. Two columns survive the removal —
+`player_game_state.room_version_assignment` and `things.cohort` — because the
+startup migration can only add columns, never drop them. Nothing reads either.
+
+`test_world.py` ends with a short section that backfills both columns the way a
+pre-2a database would have them and checks the old values are genuinely inert:
+a thing that used to be cohort-B only is visible to everyone, and a rebuild
+places players by room alone.
