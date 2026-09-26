@@ -30,10 +30,14 @@ logging.basicConfig(
 )
 log = logging.getLogger("catbot")
 
-# TEMPORARY (testing): append the relationship score, the mood weighting that
-# produced this reaction, and the pet count to every /pet reply. Flip to False
-# to return to the plain response, or delete the _debug_lines() call below.
-SHOW_DEBUG_INFO = True
+# Append the relationship score, the mood weighting that produced this reaction,
+# and the pet count to every /pet reply. A local testing aid: it shows players
+# the dice behind the cat, which is exactly what the mechanic relies on not
+# doing. Off in anything players can reach.
+#
+# test_debug_output_is_off asserts this is False, so turning it on for a local
+# session and forgetting fails the suite before the push rather than after.
+SHOW_DEBUG_INFO = False
 
 # Placeholder copy - writers will replace these in Phase 2.
 FRIENDLY_RESPONSES = [
