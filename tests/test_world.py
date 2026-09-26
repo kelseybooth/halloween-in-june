@@ -273,25 +273,17 @@ async def test_taking_the_same_instance_twice_is_refused(db):
     assert await db.inventory_count(ALICE, GUILD_A) == 1
 
 
-@pytest.mark.xfail(
-    reason="SQLite does not enforce foreign keys unless PRAGMA foreign_keys=ON is "
-    "set per connection, so the IntegrityError add_to_inventory catches is never "
-    "raised here. PostgreSQL does enforce it, so this passes in production and "
-    "fails locally and in CI - the divergence CI exists to catch.",
-    strict=False,
-)
 async def test_taking_a_thing_that_does_not_exist_is_refused(db):
+    """The foreign key is what refuses it, so this only holds while it is enforced."""
     assert await db.add_to_inventory(ALICE, GUILD_A, 424242) is False
 
 
-@pytest.mark.xfail(
-    reason="Same root cause: without foreign key enforcement an orphaned "
-    "inventory row survives, and the two readers disagree about it because "
-    "get_inventory joins `things` while inventory_count does not.",
-    strict=False,
-)
 async def test_the_two_inventory_readers_always_agree(db):
-    """`/inventory` shows names; anything counting the bag must see the same set."""
+    """`/inventory` shows names; anything counting the bag must see the same set.
+
+    They can only diverge over a row pointing at a thing that does not exist,
+    which the foreign key now makes unreachable on both backends.
+    """
     await db.add_to_inventory(ALICE, GUILD_A, 424242)
 
     listed = sum(count for _, count in await db.get_inventory(ALICE, GUILD_A))
@@ -335,3 +327,39 @@ async def test_taking_a_thing_works_for_a_player_who_never_petted(db):
     """The users row is a foreign key; entering the house must not require /pet."""
     can = await db.add_thing(GUILD_A, "Kitchen", "cat food", "a can")
     assert await db.add_to_inventory(ALICE, GUILD_A, can) is True
+
+
+async def test_foreign_keys_are_enforced_on_this_backend(db):
+    """The guard behind the two tests above.
+
+    SQLite defaults foreign key enforcement off, so without the pragma the
+    local and CI backend accepts rows PostgreSQL refuses. Assert the setting
+    itself, not just its effect, so a regression names its own cause.
+    """
+    from sqlalchemy import text
+
+    async with db._engine.connect() as conn:
+        if db._engine.dialect.name == "sqlite":
+            assert (await conn.execute(text("PRAGMA foreign_keys"))).scalar() == 1
+
+
+async def test_wiping_player_records_succeeds_with_foreign_keys_enforced(db):
+    """`reset_db.py --yes` deletes users, who are referenced by two other tables.
+
+    Deleting them in the wrong order fails the constraint on PostgreSQL, and
+    used to pass locally only because SQLite was not checking.
+    """
+    import reset_db
+
+    await db.start_game(ALICE, GUILD_A, "Entryway", [], cohort="A")
+    can = await db.add_thing(GUILD_A, "Kitchen", "cat food", "a can")
+    await db.add_to_inventory(ALICE, GUILD_A, can)
+    await db.increment_pet_count(ALICE, GUILD_A)
+
+    await reset_db._wipe()
+
+    assert await db.get_pet_count(ALICE, GUILD_A) == 0
+    assert await db.get_game_state(ALICE, GUILD_A) is None
+    assert await db.inventory_count(ALICE, GUILD_A) == 0
+    # The room's contents are a writer's work and must survive a player wipe.
+    assert len(await db.get_things_in_room(GUILD_A, "Kitchen", "A")) == 1

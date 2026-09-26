@@ -52,7 +52,20 @@ async def _summarise() -> tuple[int, int]:
 
 
 async def _wipe() -> None:
+    """Delete every player record, children before parents.
+
+    `inventory` and `player_game_state` both carry a foreign key to `users`, so
+    deleting users first fails the constraint. That is not hypothetical: it has
+    always failed on PostgreSQL for any server where somebody had entered the
+    house. It appeared to work locally only because SQLite ignored the
+    constraint and left the rows orphaned instead.
+
+    Rooms and things are left alone - they are a server's content, not a
+    player's record, and rebuilding them is a writer's work to redo.
+    """
     async with database._session_factory() as session:
+        await session.execute(delete(database.InventoryItem))
+        await session.execute(delete(database.PlayerGameState))
         await session.execute(delete(database.PetEvent))
         await session.execute(delete(database.User))
         await session.commit()

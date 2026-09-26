@@ -17,18 +17,14 @@ Discord, no network. CI runs the same command on Python 3.13.
 | `test_house.py` | The navigation graph, exit resolution, thread naming |
 | `test_threads.py` | Thread build, rebuild, the keep-alive sweep and permission reporting, against `fake_discord.py` |
 
-## Two known divergences, marked `xfail`
+## Foreign keys
 
-SQLite does not enforce foreign keys unless `PRAGMA foreign_keys=ON` is set on
-each connection, and nothing sets it. PostgreSQL does enforce them. So
-`add_to_inventory` with a `thing_id` that does not exist is refused in
-production and silently accepted locally, leaving an orphaned row that
-`inventory_count` counts and `get_inventory` does not.
-
-Both tests are marked `xfail(strict=False)`: they fail here, pass on Postgres,
-and will turn green everywhere if the pragma is ever enabled. They are left in
-rather than deleted because the divergence is the point — it is the class of bug
-running CI on the fallback backend can hide.
+SQLite ignores foreign keys unless `PRAGMA foreign_keys=ON` is set on every
+connection. `database._enforce_sqlite_foreign_keys` sets it, so the fallback
+backend refuses the same rows PostgreSQL refuses and the suite means the same
+thing in both places. `test_foreign_keys_are_enforced_on_this_backend` asserts
+the setting directly, so a regression names its own cause rather than surfacing
+as an unrelated failure somewhere else.
 
 ## Cohorts
 
