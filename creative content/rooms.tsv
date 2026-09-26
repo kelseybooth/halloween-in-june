@@ -1,0 +1,10 @@
+room_id	name	sort_order	open_at_launch
+EN	Entryway	1	yes
+DI	Dining Room	2	yes
+KI	Kitchen	3	yes
+CO	Courtyard	4	yes
+LI	Living Room	5	yes
+SE	Secret Library	6	no
+UH	Upstairs Hallway	7	yes
+BE	Bedroom	8	yes
+NU	Nursery	9	yes
