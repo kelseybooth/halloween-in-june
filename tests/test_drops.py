@@ -55,7 +55,7 @@ def a_calendar(*drops, things=(), room_text=(), thing_text=()):
         TextRow(entity_id=t.thing_id, state="default", since_drop=1, text={"look": "A thing."})
         for t in things
     ]
-    parsed.defaults = {"take.default": "You take the {name}."}
+    parsed.defaults = dict(content_module.load_files().defaults)
     parsed.drops = list(drops)
     return parsed
 
@@ -316,7 +316,8 @@ async def test_a_blank_cell_resolves_to_nothing_so_a_default_can_apply(guild):
     await content_loader.load_content(parsed)
 
     assert await resolve.thing_text(GUILD_A, "spoon", "take", today=TODAY) is None
-    assert await resolve.default_text("take.default") == "You take the {name}."
+    fallback = await resolve.default_text("take.default")
+    assert fallback and "{name}" in fallback
 
 
 async def test_asking_for_a_column_that_does_not_exist_is_refused(guild):

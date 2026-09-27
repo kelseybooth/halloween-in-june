@@ -22,6 +22,8 @@ import content
 import content_loader
 import database
 import house_utils
+import phrasing
+import reach
 import resolve
 
 load_dotenv()
@@ -736,6 +738,201 @@ async def inventory(interaction: discord.Interaction) -> None:
     lines.extend(f"- {name} ({count})" for name, count in items)
     lines.append(f"\nTotal items: {sum(count for _, count in items)}")
     await interaction.followup.send("\n".join(lines), ephemeral=True)
+
+
+# --------------------------------------------------------------------------
+# /take and /drop
+#
+# Both are thin. Resolution decides which thing and which copy, the refusal
+# tables below decide whether the verb may act, and phrasing.py decides what
+# the reply says. Anything else living here would be logic the other verbs
+# then need their own copy of.
+# --------------------------------------------------------------------------
+
+
+async def _player_room(interaction: discord.Interaction) -> str | None:
+    state = await database.get_game_state(interaction.user.id, interaction.guild_id)
+    return state.current_room if state else None
+
+
+@bot.tree.command(name="take", description="Pick something up.")
+@app_commands.guild_only()
+@app_commands.describe(thing="What to pick up.")
+async def take(interaction: discord.Interaction, thing: str) -> None:
+    """Take one copy of something in the room.
+
+    Scoped to the room, never the bag. A player carrying chicken beside the
+    salmon cupboard who types `/take cat food` gets the salmon, and is not asked
+    a question they could not answer.
+    """
+    await interaction.response.defer(thinking=True)
+    user, guild_id = interaction.user, interaction.guild_id
+
+    try:
+        room_id = await _player_room(interaction)
+        if room_id is None:
+            await interaction.followup.send(NOT_IN_ROOM_MESSAGE, ephemeral=True)
+            return
+
+        found = await reach.find(guild_id, user.id, room_id, thing, reach.Scope.ROOM)
+
+        if isinstance(found, reach.Ambiguous):
+            await interaction.followup.send(
+                await phrasing.default_say(
+                    "ambiguous.match", options=", ".join(found.options)
+                ),
+                ephemeral=True,
+            )
+            return
+
+        if isinstance(found, reach.NotFound):
+            await interaction.followup.send(
+                await _take_refusal(guild_id, found, thing), ephemeral=True
+            )
+            return
+
+        row = await phrasing.thing_row(found.thing_id)
+        refusal = await _cannot_take(guild_id, user.id, found, row)
+        if refusal:
+            await interaction.followup.send(refusal, ephemeral=True)
+            return
+
+        # A source hands over what it yields and is not itself consumed; a
+        # finite object moves out of the room. Either way the player ends up
+        # holding `taken`, whose text the reply uses.
+        taken = found.yields or found.thing_id
+        if found.is_source:
+            await database.take_from_source(user.id, guild_id, taken)
+        elif not await database.take_from_room(
+            user.id, guild_id, room_id, found.container_id or database.LOOSE_IN_ROOM,
+            found.thing_id,
+        ):
+            # Somebody else took the last one between resolving and acting.
+            await interaction.followup.send(
+                await phrasing.default_say("take_fail.absent", name=found.name),
+                ephemeral=True,
+            )
+            return
+
+        taken_row = await phrasing.thing_row(taken)
+        name = taken_row.name if taken_row else found.name
+        await interaction.followup.send(
+            await phrasing.say(
+                guild_id, taken, "take", fallback="take.default", name=name
+            )
+            or f"You take the {name}.",
+        )
+    except SQLAlchemyError:
+        log.exception("Failed to take %r in guild %s", thing, guild_id)
+        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+
+
+async def _take_refusal(guild_id: int, found: reach.NotFound, typed: str) -> str:
+    """Why nothing was taken, when resolution found nothing to take.
+
+    The order matters: already-carrying is checked before absent, because
+    take_fail.absent would be a lie to someone holding the thing.
+    """
+    if found.carried:
+        return await phrasing.default_say("take_fail.already_carried", name=typed.strip())
+    if found.exists_elsewhere:
+        return await phrasing.default_say("take_fail.absent", name=typed.strip())
+    return await phrasing.default_say("unknown.noun", name=typed.strip())
+
+
+async def _cannot_take(
+    guild_id: int, user_id: int, found: reach.Found, row
+) -> str | None:
+    """The refusal table, in the spec's order. None means go ahead."""
+    if row is None:
+        return await phrasing.default_say("take_fail.absent", name=found.name)
+
+    if row.type == "exit":
+        return await phrasing.default_say("take_fail.exit", name=found.name)
+
+    # A source is never takeable itself; what matters is whether its yield is.
+    if not found.is_source and not row.takeable:
+        return await phrasing.say(
+            guild_id, found.thing_id, "take_fail",
+            fallback="take_fail.fixture", name=found.name,
+        )
+
+    # The cap applies to what the player ends up holding, which for a source is
+    # the thing it yields rather than the source itself.
+    taken = found.yields or found.thing_id
+    capped = await phrasing.thing_row(taken) if found.is_source else row
+    if capped is None or capped.max_per_player is None:
+        return None
+
+    held = await database.carried_of(user_id, guild_id, taken)
+    if held < capped.max_per_player:
+        return None
+    return await phrasing.say(
+        guild_id, taken, "take_fail", fallback="take_fail.fixture", name=capped.name
+    )
+
+
+@bot.tree.command(name="drop", description="Put something down.")
+@app_commands.guild_only()
+@app_commands.describe(thing="What to put down.")
+async def drop(interaction: discord.Interaction, thing: str) -> None:
+    """Drop one copy of something you are carrying, loose in the room."""
+    await interaction.response.defer(thinking=True)
+    user, guild_id = interaction.user, interaction.guild_id
+
+    try:
+        room_id = await _player_room(interaction)
+        if room_id is None:
+            await interaction.followup.send(NOT_IN_ROOM_MESSAGE, ephemeral=True)
+            return
+
+        found = await reach.find(guild_id, user.id, room_id, thing, reach.Scope.CARRIED)
+
+        if isinstance(found, reach.Ambiguous):
+            await interaction.followup.send(
+                await phrasing.default_say(
+                    "ambiguous.match", options=", ".join(found.options)
+                ),
+                ephemeral=True,
+            )
+            return
+
+        if isinstance(found, reach.NotFound):
+            await interaction.followup.send(
+                await phrasing.default_say("drop_fail.not_carried", name=thing.strip()),
+                ephemeral=True,
+            )
+            return
+
+        row = await phrasing.thing_row(found.thing_id)
+        if row is not None and not row.droppable:
+            # The flag refuses; the written line says why. Both things set this
+            # have their own drop_fail written.
+            await interaction.followup.send(
+                await phrasing.say(
+                    guild_id, found.thing_id, "drop_fail",
+                    fallback="drop_fail.undroppable", name=found.name,
+                ),
+                ephemeral=True,
+            )
+            return
+
+        if not await database.drop_into_room(user.id, guild_id, room_id, found.thing_id):
+            await interaction.followup.send(
+                await phrasing.default_say("drop_fail.not_carried", name=found.name),
+                ephemeral=True,
+            )
+            return
+
+        await interaction.followup.send(
+            await phrasing.say(
+                guild_id, found.thing_id, "drop", fallback="drop.default", name=found.name
+            )
+            or f"You set the {found.name} down.",
+        )
+    except SQLAlchemyError:
+        log.exception("Failed to drop %r in guild %s", thing, guild_id)
+        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
 
 
 RETIRED_TOOL_MESSAGE = (

@@ -348,8 +348,19 @@ def test_dishware_is_not_drawable(shipped):
     assert not any(e.drawable for e in dishware)
 
 
-def test_everything_else_is_drawable(shipped):
-    assert len(shipped.craving_pool) == 125
+def test_the_drawable_pool_is_everything_edible(shipped):
+    """125 non-dishware rows, less the salt shaker, which is food-prepared in
+    Unicode but is not a craving anyone wants."""
+    assert len(shipped.craving_pool) == 124
+
+
+def test_salt_is_not_a_possible_craving(shipped):
+    """A writer's call, made in the file rather than in code - which is the
+    whole reason `drawable` is a column."""
+    salt = next(e for e in shipped.emoji_groups if e.emoji == "🧂")
+
+    assert salt.subgroup == "food-prepared"
+    assert salt.drawable is False
 
 
 def test_a_plate_still_resolves_to_a_subgroup(shipped):
@@ -387,7 +398,7 @@ def test_emoji_are_normalised_on_load(shipped):
 def test_the_pool_is_large_enough_for_the_game(shipped):
     """The spec sizes the daily guess at roughly 1-in-130, narrowed by subgroup
     to something a room closes out in a few tries."""
-    assert 100 <= len(shipped.craving_pool) <= 160
+    assert 100 <= len(shipped.craving_pool) <= 160  # noqa: PLR2004
     by_group = {}
     for e in shipped.craving_pool:
         by_group.setdefault(e.subgroup, []).append(e)

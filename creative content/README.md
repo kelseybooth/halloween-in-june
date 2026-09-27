@@ -30,7 +30,9 @@ Two things worth knowing if you edit it:
   Unicode 18.0 has no such thing — crab, lobster, shrimp, squid and oyster are all in
   Animals & Nature. The pool is the Food & Drink group, so they are out.
 - **Salt (🧂) is `food-prepared`, not dishware**, whatever the spec's parenthetical
-  says. It is drawable. Flip its `drawable` cell to `no` if a salt craving reads badly.
+  says, so it arrived drawable and was switched off by hand. That leaves 124 in the
+  pool. It is the one row where `drawable` disagrees with the Unicode grouping, and
+  it is here rather than in code precisely so a writer can make that call.
 
 Replacing the Unicode subgroups with smaller hand-made groups is a content change:
 edit the `subgroup` column and nothing in the code needs to know.
