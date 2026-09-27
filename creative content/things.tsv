@@ -53,7 +53,7 @@ spirit_board	spirit board	spirit board|board|ouija|planchette	fixture	SE	1	no	ye
 key_nail	ring of iron keys	keys|key ring|ring of keys|iron keys|nail|skeleton keys	source	SE	1	no	yes	0						skeleton_key		library_shelves		1	48
 skeleton_key	skeleton key	skeleton key|key|iron key	object		0	yes	no	0	1									1	48
 rolltop_desk	roll-top desk	roll-top desk|desk|rolltop|papers	fixture	UH	1	no	yes	0										1	49
-reading_glasses	reading glasses	glasses|reading glasses|specs	object	UH	1	yes	yes	1								rolltop_desk		1	50
+reading_glasses	reading glasses	glasses|reading glasses|specs	object	UH	1	no	yes	1								rolltop_desk		1	50
 door_manual	door-hardware manual	manual|door manual|hardware manual	fixture	UH	1	no	yes	0										1	51
 crowbar	small crowbar	crowbar|pry bar|bar	fixture	UH	1	no	yes	0										1	52
 bad_smell	bad smell	bad smell|smell|stink|stench|odour|odor	fixture	UH	1	no	yes	0										1	53
