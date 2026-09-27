@@ -26,7 +26,25 @@ FILES = {
     "things": "things.tsv",
     "thing_text": "thing_text.tsv",
     "defaults": "defaults.tsv",
+    "drops": "drops.tsv",
+    "restocks": "restocks.tsv",
 }
+
+# How a drop arrives. `date` is answered by the calendar every time it is asked and
+# stores nothing; `event` and `manual` are recorded per guild the first time they
+# fire, because a condition that stops being true must not un-ship content.
+DROP_TRIGGERS = {"date", "event", "manual"}
+
+# A `date` drop whose date is this arrives the moment a server initializes.
+LAUNCH = "launch"
+
+# Conditions an `event` drop may name. Release 1 ships none; the registry exists so
+# the second one needs no migration, and so a typo in the file is caught at load
+# rather than becoming a drop that never arrives.
+KNOWN_DROP_EVENTS: set[str] = set()
+
+# Where a restock puts what it adds.
+RESTOCK_PLACEMENTS = {"container", "random", "room"}
 
 # The four kinds of thing. `exit` moves a player; `source` is an inexhaustible
 # supply that yields objects; `object` can be carried; `fixture` is scenery that
@@ -87,7 +105,7 @@ class Thing:
     destination_room_id: str | None
     contained_in: str | None
     use_cooldown_hours: int | None
-    since_release: int
+    since_drop: int
     sort_order: int
 
     @property
@@ -105,10 +123,55 @@ class Thing:
 
 
 @dataclass(frozen=True)
+class Drop:
+    """One entry in the unlock calendar.
+
+    A drop is a moment when content becomes visible; a release is a deployment.
+    One release can carry a dozen drops that arrive over the following weeks,
+    which is why nothing in the database records a release number.
+    """
+
+    drop_id: int
+    trigger: str
+    date: str | None
+    event: str | None
+    name: str
+    notes: str | None
+
+    @property
+    def arrives_at_launch(self) -> bool:
+        return self.trigger == "date" and (self.date or "").lower() == LAUNCH
+
+
+@dataclass(frozen=True)
+class Restock:
+    """A scheduled top-up: what reappears, where, and how often.
+
+    The third way a thing enters the world, alongside being placed in a room and
+    being yielded by a source. Several things exist only through this - the
+    bottles and the diapers are never placed anywhere at load.
+    """
+
+    restock_id: int
+    thing_id: str
+    placement: str
+    container: str | None
+    amount: int
+    times_per_day: int
+    first_day: int
+    every_n_days: int
+    window_start: str
+    window_end: str
+    config_key: str | None
+    since_drop: int
+    notes: str | None
+
+
+@dataclass(frozen=True)
 class TextRow:
     entity_id: str
     state: str
-    since_release: int
+    since_drop: int
     text: dict[str, str]
 
 
@@ -121,10 +184,20 @@ class Content:
     things: list[Thing] = field(default_factory=list)
     thing_text: list[TextRow] = field(default_factory=list)
     defaults: dict[str, str] = field(default_factory=dict)
+    drops: list[Drop] = field(default_factory=list)
+    restocks: list[Restock] = field(default_factory=list)
 
     @property
     def rooms_by_id(self) -> dict[str, Room]:
         return {r.room_id: r for r in self.rooms}
+
+    @property
+    def drops_by_id(self) -> dict[int, Drop]:
+        return {d.drop_id: d for d in self.drops}
+
+    @property
+    def restocked_thing_ids(self) -> set[str]:
+        return {r.thing_id for r in self.restocks}
 
     @property
     def things_by_id(self) -> dict[str, Thing]:
@@ -204,12 +277,12 @@ def _rows(path: Path, expected: tuple[str, ...]) -> list[dict[str, str]]:
 
 def _text_rows(path: Path, id_column: str, columns: tuple[str, ...]) -> list[TextRow]:
     out = []
-    for row in _rows(path, (id_column, "state", "since_release")):
+    for row in _rows(path, (id_column, "state", "since_drop")):
         out.append(
             TextRow(
                 entity_id=row[id_column].strip(),
                 state=_text(row.get("state")) or "default",
-                since_release=_int(row.get("since_release"), default=1) or 1,
+                since_drop=_int(row.get("since_drop"), default=1) or 1,
                 text={c: row[c].strip() for c in columns if _text(row.get(c))},
             )
         )
@@ -258,7 +331,7 @@ def load_files(directory: Path | None = None) -> Content:
                 destination_room_id=_text(row.get("destination_room_id")),
                 contained_in=_text(row.get("contained_in")),
                 use_cooldown_hours=_int(row.get("use_cooldown_hours")),
-                since_release=_int(row.get("since_release"), default=1) or 1,
+                since_drop=_int(row.get("since_drop"), default=1) or 1,
                 sort_order=_int(row.get("sort_order"), default=0) or 0,
             )
         )
@@ -268,6 +341,37 @@ def load_files(directory: Path | None = None) -> Content:
 
     for row in _rows(base / FILES["defaults"], ("key", "text")):
         content.defaults[row["key"].strip()] = row["text"]
+
+    for row in _rows(base / FILES["drops"], ("drop_id", "trigger")):
+        content.drops.append(
+            Drop(
+                drop_id=_int(row.get("drop_id"), default=0) or 0,
+                trigger=(_text(row.get("trigger")) or "").lower(),
+                date=_text(row.get("date")),
+                event=_text(row.get("event")),
+                name=_text(row.get("name")) or "",
+                notes=_text(row.get("notes")),
+            )
+        )
+
+    for row in _rows(base / FILES["restocks"], ("restock_id", "thing_id", "placement")):
+        content.restocks.append(
+            Restock(
+                restock_id=_int(row.get("restock_id"), default=0) or 0,
+                thing_id=row["thing_id"].strip(),
+                placement=(_text(row.get("placement")) or "").lower(),
+                container=_text(row.get("container")),
+                amount=_int(row.get("amount"), default=1) or 1,
+                times_per_day=_int(row.get("times_per_day"), default=1) or 1,
+                first_day=_int(row.get("first_day"), default=1) or 1,
+                every_n_days=_int(row.get("every_n_days"), default=1) or 1,
+                window_start=_text(row.get("window_start")) or "00:00",
+                window_end=_text(row.get("window_end")) or "23:59",
+                config_key=_text(row.get("config_key")),
+                since_drop=_int(row.get("since_drop"), default=1) or 1,
+                notes=_text(row.get("notes")),
+            )
+        )
 
     return content
 
@@ -298,6 +402,10 @@ def validate(content: Content) -> list[str]:
     problems += _check_reachable_rooms(content, rooms)
     problems += _check_obtainable_things(content, things)
     problems += _check_states(content, things)
+    problems += _check_drops(content)
+    problems += _check_drop_references(content)
+    problems += _check_restocks(content, things)
+    problems += _check_sources_are_named_in_prose(content, rooms)
     return problems
 
 
@@ -494,13 +602,15 @@ def _check_reachable_rooms(content: Content, rooms: dict[str, Room]) -> list[str
 def _check_obtainable_things(content: Content, things: dict[str, Thing]) -> list[str]:
     """Nothing may exist that no player could ever hold.
 
-    A roomless object is one that is never placed - it comes into being when a
-    source yields it or another thing transforms into it. If neither happens, it
-    is unreachable: no check on dangling references catches this, because every
+    A roomless object is one that is never placed at load. It comes into being
+    three ways: a source yields it, another thing transforms into it, or a
+    restock schedule puts it somewhere. If none of those happens it is
+    unreachable, and no check on dangling references catches that - every
     reference it makes is fine. It simply never appears in the game.
     """
     produced = {t.yields for t in content.things if t.yields}
     produced |= {t.transforms_to for t in content.things if t.transforms_to}
+    produced |= content.restocked_thing_ids
 
     problems = []
     for thing in content.things:
@@ -545,6 +655,160 @@ def _check_states(content: Content, things: dict[str, Thing]) -> list[str]:
             problems.append(
                 f"thing {thing.thing_id} is gated on state {name!r}, which nothing sets "
                 "and no text row describes"
+            )
+    return problems
+
+
+def _check_drops(content: Content) -> list[str]:
+    """The calendar has to be answerable: every drop needs a way to arrive."""
+    problems = []
+    seen = set()
+    for drop in content.drops:
+        if drop.drop_id in seen:
+            problems.append(f"duplicate drop_id {drop.drop_id}")
+        seen.add(drop.drop_id)
+
+        if drop.trigger not in DROP_TRIGGERS:
+            problems.append(
+                f"drop {drop.drop_id} has trigger {drop.trigger!r}; "
+                f"expected one of {', '.join(sorted(DROP_TRIGGERS))}"
+            )
+            continue
+
+        if drop.trigger == "date" and not drop.date:
+            problems.append(f"drop {drop.drop_id} is date-triggered but has no date")
+        if drop.trigger == "event":
+            if not drop.event:
+                problems.append(f"drop {drop.drop_id} is event-triggered but names no event")
+            elif drop.event not in KNOWN_DROP_EVENTS:
+                problems.append(
+                    f"drop {drop.drop_id} waits on event {drop.event!r}, which the engine "
+                    "does not know how to fire; add it to KNOWN_DROP_EVENTS or fix the name"
+                )
+    return problems
+
+
+def _check_drop_references(content: Content) -> list[str]:
+    """Content waiting on a drop that does not exist would never appear."""
+    known = set(content.drops_by_id)
+    problems = []
+
+    def check(label: str, identifier: str, since_drop: int) -> None:
+        if since_drop not in known:
+            problems.append(
+                f"{label} {identifier} waits for drop {since_drop}, which is not in drops.tsv"
+            )
+
+    for thing in content.things:
+        check("thing", thing.thing_id, thing.since_drop)
+    for row in content.room_text:
+        check("room_text row for", row.entity_id, row.since_drop)
+    for row in content.thing_text:
+        check("thing_text row for", row.entity_id, row.since_drop)
+    for restock in content.restocks:
+        check("restock", str(restock.restock_id), restock.since_drop)
+    return problems
+
+
+def _check_restocks(content: Content, things: dict[str, Thing]) -> list[str]:
+    """A schedule must name a real thing and a reachable place to put it."""
+    problems = []
+    seen = set()
+    for restock in content.restocks:
+        label = f"restock {restock.restock_id}"
+        if restock.restock_id in seen:
+            problems.append(f"duplicate restock_id {restock.restock_id}")
+        seen.add(restock.restock_id)
+
+        if restock.thing_id not in things:
+            problems.append(f"{label} restocks {restock.thing_id!r}, which is not a thing")
+
+        if restock.placement not in RESTOCK_PLACEMENTS:
+            problems.append(
+                f"{label} has placement {restock.placement!r}; "
+                f"expected one of {', '.join(sorted(RESTOCK_PLACEMENTS))}"
+            )
+        elif restock.placement == "container":
+            if not restock.container:
+                problems.append(f"{label} places into a container but names none")
+            elif restock.container not in things:
+                problems.append(
+                    f"{label} places into {restock.container!r}, which is not a thing"
+                )
+        elif restock.container:
+            problems.append(
+                f"{label} names container {restock.container!r} but its placement is "
+                f"{restock.placement!r}, which ignores it"
+            )
+
+        for field_name in ("amount", "times_per_day", "every_n_days", "first_day"):
+            value = getattr(restock, field_name)
+            if value < 1:
+                problems.append(f"{label} has {field_name}={value}; must be at least 1")
+
+        for field_name in ("window_start", "window_end"):
+            value = getattr(restock, field_name)
+            if not _is_clock_time(value):
+                problems.append(f"{label} has {field_name}={value!r}; expected HH:MM")
+
+        if (
+            _is_clock_time(restock.window_start)
+            and _is_clock_time(restock.window_end)
+            and restock.window_start > restock.window_end
+        ):
+            problems.append(
+                f"{label} has a window from {restock.window_start} to {restock.window_end}, "
+                "which ends before it starts"
+            )
+    return problems
+
+
+def _is_clock_time(value: str) -> bool:
+    parts = value.split(":")
+    if len(parts) != 2 or not all(p.isdigit() for p in parts):
+        return False
+    hours, minutes = int(parts[0]), int(parts[1])
+    return 0 <= hours <= 23 and 0 <= minutes <= 59
+
+
+def _check_sources_are_named_in_prose(content: Content, rooms: dict[str, Room]) -> list[str]:
+    """A source is never listed, so the prose around it has to name it.
+
+    Nothing takeable and finite appears in room prose - the engine lists those, so
+    the prose cannot go stale. Sources are the exception in the other direction:
+    they are inexhaustible, they never appear in an `Also here:` line, and a
+    player who is not told about one has no way to find it. So a source must be
+    named either in its room's description or in the text of the thing holding it.
+    """
+    text_by_entity: dict[str, str] = {}
+    for row in content.room_text:
+        text_by_entity[row.entity_id] = " ".join(
+            (text_by_entity.get(row.entity_id, ""), *row.text.values())
+        ).lower()
+    for row in content.thing_text:
+        text_by_entity[row.entity_id] = " ".join(
+            (text_by_entity.get(row.entity_id, ""), *row.text.values())
+        ).lower()
+
+    problems = []
+    for thing in content.things:
+        if not thing.is_source:
+            continue
+        haystacks = []
+        if thing.contained_in:
+            haystacks.append(text_by_entity.get(thing.contained_in, ""))
+        elif thing.room_id:
+            haystacks.append(text_by_entity.get(thing.room_id, ""))
+        blob = " ".join(haystacks)
+        if not any(name.lower() in blob for name in thing.names):
+            where = (
+                f"the text of {thing.contained_in}"
+                if thing.contained_in
+                else f"the description of room {thing.room_id}"
+            )
+            problems.append(
+                f"source {thing.thing_id} is named nowhere in {where}; it is never listed, "
+                "so no player could learn it is there"
             )
     return problems
 

@@ -6,12 +6,14 @@ and turn OFF any "convert text to numbers/dates" option so ids stay as written).
 |File|Rows|What it is|
 |-|-|-|
 |`rooms.tsv`|9|Room ids and names. Structure, not text.|
-|`room_text.tsv`|11|Room `look` text. 9 rooms + 2 rows for the repaired staircase.|
-|`things.tsv`|135|Every object, source, fixture and exit: ids, placement, flags. Structure, not text.|
-|`thing_text.tsv`|142|`look`, `look_carried`, `use`, `take`, `drop` plus the three refusal strings.|
-|`defaults.tsv`|15|Fallback strings used wherever a cell is left blank.|
+|`room\_text.tsv`|11|Room `look` text. 9 rooms + 2 rows for the repaired staircase.|
+|`things.tsv`|140|Every object, source, fixture and exit: ids, placement, flags. Structure, not text.|
+|`thing\_text.tsv`|147|`look`, `look\_carried`, `use`, `take`, `drop` plus the three refusal strings.|
+|`defaults.tsv`|16|Fallback strings used wherever a cell is left blank.|
+|`drops.tsv`|1|The unlock calendar: which drop each row of content waits for.|
+|`restocks.tsv`|3|Scheduled top-ups: what gets added to which container, how often.|
 
-Writers edit `room_text.tsv`, `thing_text.tsv` and `defaults.tsv`.
+Writers edit `room\_text.tsv`, `thing\_text.tsv` and `defaults.tsv`.
 `rooms.tsv` and `things.tsv` carry game rules — changing those is a design decision.
 
 **Leave a cell blank to accept the house default.** Most things have no `take` or `drop`
@@ -50,9 +52,9 @@ must be named in its room's description or in the text of the thing that holds i
 
 ## Where the cat food is
 
-Four flavours, one stash per room, so collecting a set means ranging around the house.
+Four flavors, one stash per room, so collecting a set means ranging around the house.
 
-|Room|Flavour|Hidden in|
+|Room|Flavor|Hidden in|
 |-|-|-|
 |Kitchen|tuna|the pantry|
 |Living Room|chicken|under the sofa|
@@ -61,7 +63,7 @@ Four flavours, one stash per room, so collecting a set means ranging around the 
 |Bedroom|chicken|a crate under the bed|
 |Dining Room|salmon|the sideboard cupboard|
 
-The single gourmet tin is under the bed behind the chicken crate, and it is the only one
+The single gourmet can is under the bed behind the chicken crate, and it is the only one
 in the house.
 
 ## What changed since the copy you sent back
@@ -69,32 +71,32 @@ in the house.
 **48 rows added, 1 removed, 10 of your cells edited.** Everything else of yours is
 byte-for-byte intact.
 
-The removed row is `grocery_list`, renamed to `to_do_list` — the text carried over
+The removed row is `grocery\_list`, renamed to `to\_do\_list` — the text carried over
 verbatim, only the key changed.
 
 Your ten edited cells, all approved in conversation:
 
 |Cell|Why|
 |-|-|
-|`ritual_diagram.look`|"pinned to the wall" → "pinned to the shelf edge", to match where it now lives|
-|`halloween_box.use`|gained the cookie cutter clause|
-|`rolltop_desk.look`|no longer names the reading glasses (they're inside it)|
-|`rolltop_desk.use`|the bottom drawer is jammed shut, and no longer names the glasses|
-|`amazon_box.look`|no longer names the spice jar (it's inside it)|
-|`amazon_box.use`|same|
-|`lumber.use_fail`|the 48-hour cooldown message, replacing "you've already done your part"|
-|`graphite_powder.look`|a carried twist of paper, not the tin — the tin's own words moved to `graphite_tin`|
-|`graphite_powder.take`|same|
-|`graphite_powder.drop`|same|
+|`ritual\_diagram.look`|"pinned to the wall" → "pinned to the shelf edge", to match where it now lives|
+|`halloween\_box.use`|gained the cookie cutter clause|
+|`rolltop\_desk.look`|no longer names the reading glasses (they're inside it)|
+|`rolltop\_desk.use`|the bottom drawer is jammed shut, and no longer names the glasses|
+|`amazon\_box.look`|no longer names the spice jar (it's inside it)|
+|`amazon\_box.use`|same|
+|`lumber.use\_fail`|the 48-hour cooldown message, replacing "you've already done your part"|
+|`graphite\_powder.look`|a carried twist of paper, not the tin — the tin's own words moved to `graphite\_tin`|
+|`graphite\_powder.take`|same|
+|`graphite\_powder.drop`|same|
 
-The 48 new rows are 34 scenery fixtures, 9 sources, `cat_food_expired`, `bad_smell`,
-`graphite_tin`, `amazon_box`'s companion text, and the `drawer_unjammed` state row on
-`rolltop_desk`.
+The 48 new rows are 34 scenery fixtures, 9 sources, `cat\_food\_expired`, `bad\_smell`,
+`graphite\_tin`, `amazon\_box`'s companion text, and the `drawer\_unjammed` state row on
+`rolltop\_desk`.
 
 ## Lumber: one plank per player per 48 hours
 
-New column `use_cooldown_hours` on `things.tsv`, set to `48` on `lumber` and blank
-everywhere else. New default `use_fail.cooldown`. Lumber's own `use_fail` was rewritten,
+New column `use\_cooldown\_hours` on `things.tsv`, set to `48` on `lumber` and blank
+everywhere else. New default `use\_fail.cooldown`. Lumber's own `use\_fail` was rewritten,
 because "You've already done your part" was true under the old one-plank-ever rule and
 is wrong now:
 
@@ -104,27 +106,27 @@ is wrong now:
 needs adding to the Templating section of the Content Schema.
 
 The engine side is the real cost: nothing currently records a per-player, per-thing last
-used time. `pet_events` is the only behavioural log and it is shaped for the mood window.
+used time. `pet\_events` is the only behavioral log and it is shaped for the mood window.
 
 `{total}`, the number of planks the staircase needs, becomes per-server configuration
 rather than content — see the Delivery Plan.
 
 ## Expired cat food, the jammed drawer, and graphite
 
-**Duck is gone** — `cat_food_duck` and the Upstairs Hallway duck stash are both removed.
-The five flavours are now chicken, salmon, tuna, gourmet and **expired**, which matches
+**Duck is gone** — `cat\_food\_duck` and the Upstairs Hallway duck stash are both removed.
+The five flavors are now chicken, salmon, tuna, gourmet and **expired**, which matches
 the "Charcuterie Board" achievement exactly.
 
 **The desk's lid opens; only the bottom drawer is jammed.** The glasses, the manual and
 the papers stay reachable at launch, so "Found the Specs" isn't gated behind this.
-`rolltop_desk` has a second text row, `drawer_unjammed`. The expired cat food source
-sits `contained_in` the desk with `present_when = drawer_unjammed`.
+`rolltop\_desk` has a second text row, `drawer\_unjammed`. The expired cat food source
+sits `contained\_in` the desk with `present\_when = drawer\_unjammed`.
 
 **The bad smell is in the Upstairs Hallway from day one** — a non-takeable fixture named
 in the room description. Looking at it points you at the desk; the source stays hidden
 until the drawer opens.
 
-**Graphite is now a source.** `graphite_tin` in the Nursery yields `graphite_powder`.
+**Graphite is now a source.** `graphite\_tin` in the Nursery yields `graphite\_powder`.
 This was forced: as a single tin only one player could ever unjam anything, and
 achievement 5 sends graphite to David, so the two uses destroyed each other. Because
 sources may appear in room prose, the tin is back in the Nursery description it was cut
@@ -135,13 +137,13 @@ preserved word for word — it just sits on the source row now, where it belongs
 object's `look`, `take` and `drop` are new, because a carried portion is a twist of
 paper, not the tin.
 
-**New column `since_release` on `things.tsv`**, so a thing can appear in a later release
+**New column `since\_drop` on `things.tsv`**, so a thing can appear at a later drop
 rather than existing from launch. Every row is `1` today; nothing uses it yet. The text
 files already had this column — structure rows did not.
 
-The rule that `/use graphite` sets `drawer_unjammed` is **not** in the content files. It
+The rule that `/use graphite` sets `drawer\_unjammed` is **not** in the content files. It
 lives in the Content Schema, like every other state rule. The TSVs say what a thing
-looks like in a state and gate visibility with `present_when`; they never say how a
+looks like in a state and gate visibility with `present\_when`; they never say how a
 state is reached.
 
 ## What was built
@@ -152,21 +154,21 @@ the coat rack, the fireplace, the high chair, the dining table, the bed, and so 
 * **The `quantity = many` split.** Nine sources; the six affected objects are now
 roomless and start at zero. `lumber` deliberately keeps `quantity = many` — it's a
 shared pool of repair charges, not a source, and yields nothing.
-* **`contained_in`.** Sixteen chains, all one level deep, host and content in the same
+* **`contained\_in`.** Sixteen chains, all one level deep, host and content in the same
 room.
 * **The room pass.** Five takeable-finite things moved out of prose into `Also here:`.
 The Nursery and the Kitchen were redrafted rather than trimmed, because the sentences
 being cut were also carrying the shelf, the window and the counter.
 * **The Amazon box transform was withdrawn**, not built. The listing rule above already
 keeps the box's description true, and building it would have needed a trigger type
-the engine doesn't have — the one real transform, `used_baby_bottle` →
-`sanitized_baby_bottle`, fires on *use in a room*, whereas a box that empties fires on
+the engine doesn't have — the one real transform, `used\_baby\_bottle` →
+`sanitized\_baby\_bottle`, fires on *use in a room*, whereas a box that empties fires on
 *something else being taken out of it*. Reasoning is in the Content Schema.
 
 ## Checks that pass
 
 Nothing unreachable; no alias collisions in any room; every thing has a text row and
-every text row a thing; every `yields` and `transforms_to` target exists; all container
+every text row a thing; every `yields` and `transforms\_to` target exists; all container
 chains one level deep; no stray tabs; valid UTF-8 throughout.
 
 Nothing from the rebuild is outstanding.
