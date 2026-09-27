@@ -91,6 +91,10 @@ keys yield gates two states.
 **The cake box is new.** A fixture on the Kitchen counter, not takeable, promising
 caramel apple cake and holding the gourmet cans instead.
 
+**Alexa answers the message for David.** Asking her to remind him about the delivery
+gets a written reply rather than her stock non-answer; it lives on the `reminded`
+state row of `alexa`, and the engine reads that row only for this one exchange.
+
 **Renames.** `chip_case` → `chip_box`. `cat_food_stash_hall` is now "pack of salmon cat
 food" (it was a "flat", which nobody says). `cat_food_stash_drawer` is now "cans of
 expired cat food". All three kept their old aliases and gained new ones, so anything a
