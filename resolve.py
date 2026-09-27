@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date
+from typing import NamedTuple
 
 from sqlalchemy import select
 
@@ -221,3 +222,129 @@ async def visible_thing_ids(guild_id: int, *, today: date | None = None) -> set[
             )
         ).all()
     return {thing_id for thing_id, since_drop in rows if since_drop in arrived}
+
+
+# --------------------------------------------------------------------------
+# The house itself
+#
+# The room list and the navigation graph used to live in house_utils.py. They
+# come from the content files now: rooms from rooms.tsv, exits from the
+# `type = exit` rows in things.tsv with destination_room_id as the graph. What
+# stays in house_utils is Discord plumbing - creating threads and moving people
+# in and out of them - because that is not content.
+# --------------------------------------------------------------------------
+
+
+class Exit(NamedTuple):
+    """One way out of a room. An exit is a thing whose use moves the player."""
+
+    thing_id: str
+    name: str
+    aliases: tuple[str, ...]
+    destination: str
+
+
+async def all_rooms() -> list[tuple[str, str]]:
+    """(room_id, name) for every room, in the order the files give them."""
+    session_factory = database._require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(database.RoomType.room_id, database.RoomType.name).order_by(
+                database.RoomType.sort_order, database.RoomType.room_id
+            )
+        )
+        return [(row[0], row[1]) for row in rows]
+
+
+async def room_names() -> list[str]:
+    """Every room's display name, which is also its thread name."""
+    return [name for _, name in await all_rooms()]
+
+
+async def room_name(room_id: str) -> str | None:
+    session_factory = database._require_session()
+    async with session_factory() as session:
+        return await session.scalar(
+            select(database.RoomType.name).where(database.RoomType.room_id == room_id)
+        )
+
+
+async def starting_room() -> str | None:
+    """Where a new player begins: the first room open at launch."""
+    session_factory = database._require_session()
+    async with session_factory() as session:
+        return await session.scalar(
+            select(database.RoomType.room_id)
+            .where(database.RoomType.open_at_launch.is_(True))
+            .order_by(database.RoomType.sort_order, database.RoomType.room_id)
+            .limit(1)
+        )
+
+
+async def rooms_open_at_launch() -> list[str]:
+    """The room_ids a new player starts with unlocked.
+
+    The Secret Library is not among them. It is found by climbing the oak and
+    coming in through the window, which is a discovery rather than a door, and
+    the mechanism that records it belongs to 2c.
+    """
+    session_factory = database._require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(database.RoomType.room_id)
+            .where(database.RoomType.open_at_launch.is_(True))
+            .order_by(database.RoomType.sort_order, database.RoomType.room_id)
+        )
+        return [row[0] for row in rows]
+
+
+async def exits_from(
+    guild_id: int, room_id: str, *, today: date | None = None
+) -> list[Exit]:
+    """Every exit out of a room whose drop has arrived on this server."""
+    arrived = await arrived_drop_ids(guild_id, today=today)
+    session_factory = database._require_session()
+    async with session_factory() as session:
+        rows = (
+            await session.execute(
+                select(
+                    database.ThingType.thing_id,
+                    database.ThingType.name,
+                    database.ThingType.aliases,
+                    database.ThingType.destination_room_id,
+                    database.ThingType.since_drop,
+                )
+                .where(
+                    database.ThingType.type == "exit",
+                    database.ThingType.room_id == room_id,
+                )
+                .order_by(database.ThingType.sort_order, database.ThingType.thing_id)
+            )
+        ).all()
+
+    return [
+        Exit(thing_id, name, tuple(aliases or ()), destination)
+        for thing_id, name, aliases, destination, since_drop in rows
+        if since_drop in arrived and destination
+    ]
+
+
+async def resolve_exit(
+    guild_id: int, room_id: str, typed: str, *, today: date | None = None
+) -> Exit | None:
+    """Match what a player typed against the exits out of their room.
+
+    Case-insensitive, whitespace-trimmed, and matching the exit's name or any of
+    its aliases. Aliases are unique within a room - the loader checks it - so a
+    name never matches two exits.
+    """
+    needle = typed.strip().lower()
+    if not needle:
+        return None
+
+    for exit_ in await exits_from(guild_id, room_id, today=today):
+        if needle == exit_.name.lower() or needle in {a.lower() for a in exit_.aliases}:
+            return exit_
+        if needle == exit_.thing_id.lower():
+            return exit_
+    return None

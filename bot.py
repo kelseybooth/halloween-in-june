@@ -22,6 +22,7 @@ import content
 import content_loader
 import database
 import house_utils
+import resolve
 
 load_dotenv()
 
@@ -150,6 +151,14 @@ async def load_content_at_startup() -> None:
         return
 
     log.info("Content loaded. %s", report.summary().replace(chr(10), " | "))
+
+    # Positions were stored as room names before 2b and as room ids after. This
+    # needs the rooms in place to translate against, so it runs here rather than
+    # with the schema migrations.
+    try:
+        await database.migrate_room_names_to_ids()
+    except SQLAlchemyError:
+        log.exception("Could not migrate player positions to room ids")
     for orphan in report.orphans_ignored:
         log.warning(
             "Thing %r is gone from the content files but world state still refers "
@@ -167,11 +176,8 @@ class CatBot(commands.Bot):
         """Runs once before the gateway connects - open the DB and register commands."""
         await database.init_db()
 
-        # A broken layout would surface as a player hitting a dead end mid-game,
-        # so check it once at startup instead.
-        for problem in house_utils.validate_graph():
-            log.error("Navigation graph problem: %s", problem)
-
+        # The layout is content now, so a broken one is caught by the loader's
+        # validation rather than by a separate graph check here.
         await load_content_at_startup()
 
         # Settle any nights the bot was offline for before serving commands.
@@ -272,12 +278,24 @@ async def keep_threads_alive() -> None:
     Discord offers no auto-archive setting long enough to express that, so archived
     rooms are revived here instead.
     """
+    try:
+        # One read for the whole sweep: the room list is the same everywhere, and
+        # it has to match what initialize_threads built or rooms archive and stay
+        # archived a week after launch.
+        room_names = await resolve.room_names()
+    except SQLAlchemyError:
+        log.exception("Keep-alive sweep could not read the room list")
+        return
+
+    if not room_names:
+        return
+
     for guild in bot.guilds:
         channel = house_utils.find_channel(guild)
         if channel is None:
             continue
         try:
-            revived, errors = await house_utils.unarchive_all(channel)
+            revived, errors = await house_utils.unarchive_all(channel, room_names)
         except discord.Forbidden:
             log.warning("No permission to manage threads in #%s (%s)", channel.name, guild.name)
             continue
@@ -358,16 +376,32 @@ async def initialize_haunted_house(interaction: discord.Interaction) -> None:
         return
 
     try:
-        locations = await database.get_all_player_locations(interaction.guild_id)
-        # Room rows hold writer descriptions; make sure each room has one to
-        # fill in. Existing descriptions are never overwritten by a rebuild.
-        await database.seed_rooms(interaction.guild_id, house_utils.ROOMS)
+        rooms = await resolve.all_rooms()
+        names_by_id = dict(rooms)
+        # (user_id, room name) - house_utils works in thread names, not room ids.
+        locations = [
+            (user_id, names_by_id[room_id])
+            for user_id, room_id in await database.get_all_player_locations(
+                interaction.guild_id
+            )
+            if room_id in names_by_id
+        ]
     except SQLAlchemyError:
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
         return
 
+    if not rooms:
+        await interaction.followup.send(
+            "No rooms are loaded. The content files have not been read yet - "
+            "check the logs, or run `python load_content.py --check`.",
+            ephemeral=True,
+        )
+        return
+
     try:
-        result = await house_utils.initialize_threads(channel, locations)
+        result = await house_utils.initialize_threads(
+            channel, [name for _, name in rooms], locations
+        )
     except discord.Forbidden:
         log.exception("Missing permissions to manage threads in #%s", channel.name)
         await interaction.followup.send(
@@ -443,7 +477,15 @@ async def enter_entryway(interaction: discord.Interaction) -> None:
     # player and then discovering the house was never built would leave them
     # marked as inside a room that does not exist.
     try:
-        thread = await house_utils.get_thread_for_room(channel, house_utils.STARTING_ROOM)
+        start_id = await resolve.starting_room()
+        start_name = await resolve.room_name(start_id) if start_id else None
+        if start_name is None:
+            await interaction.followup.send(
+                "No rooms are loaded yet. Ask an admin to check the logs.",
+                ephemeral=True,
+            )
+            return
+        thread = await house_utils.get_thread_for_room(channel, start_name)
     except discord.HTTPException:
         log.exception("Could not look up the Entryway thread")
         await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
@@ -458,10 +500,14 @@ async def enter_entryway(interaction: discord.Interaction) -> None:
         return
 
     try:
-        # All rooms start unlocked during the testing phase; Phase 3 gates them
-        # behind puzzles and this becomes just the starting room.
+        # Everything open at launch starts unlocked. The Secret Library does not:
+        # it is found by climbing the oak and coming in through the window, and
+        # the mechanism that records that is 2c.
         enrolled = await database.start_game(
-            user.id, interaction.guild_id, house_utils.STARTING_ROOM, list(house_utils.ROOMS)
+            user.id,
+            interaction.guild_id,
+            start_id,
+            await resolve.rooms_open_at_launch(),
         )
     except SQLAlchemyError:
         await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
@@ -528,7 +574,9 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
         )
         return
 
-    chosen_exit = house_utils.resolve_exit(state.current_room, thing)
+    chosen_exit = await resolve.resolve_exit(
+        interaction.guild_id, state.current_room, thing
+    )
     if chosen_exit is None:
         await interaction.followup.send("You don't see that exit here.", ephemeral=True)
         return
@@ -548,16 +596,20 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
         return
 
     try:
-        destination_thread = await house_utils.get_thread_for_room(channel, destination)
-        origin_thread = await house_utils.get_thread_for_room(channel, state.current_room)
-    except discord.HTTPException:
+        destination_name = await resolve.room_name(destination)
+        origin_name = await resolve.room_name(state.current_room)
+        destination_thread = await house_utils.get_thread_for_room(channel, destination_name)
+        origin_thread = await house_utils.get_thread_for_room(channel, origin_name)
+    except (discord.HTTPException, SQLAlchemyError):
+        # Two room-name reads happen here now, so a database failure has to be
+        # caught alongside a Discord one or it escapes to the generic handler.
         log.exception("Could not look up room threads")
         await interaction.followup.send(MOVE_ERROR_MESSAGE, ephemeral=True)
         return
 
     if destination_thread is None:
         await interaction.followup.send(
-            f"I couldn't find the thread for {destination}. "
+            f"I couldn't find the thread for {destination_name or destination}. "
             "Ask an admin to run `/initialize-haunted-house`.",
             ephemeral=True,
         )
@@ -588,7 +640,7 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
     # a failure is logged rather than surfaced - the player has already moved.
     if origin_thread is not None:
         try:
-            await origin_thread.send(f"{user.mention} exits via {chosen_exit.thing}.")
+            await origin_thread.send(f"{user.mention} exits via {chosen_exit.name}.")
         except discord.HTTPException:
             log.warning("Could not post exit message in %s", state.current_room, exc_info=True)
 
@@ -598,7 +650,7 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
             log.warning("Could not remove %s from %s", user.id, state.current_room, exc_info=True)
 
     try:
-        await destination_thread.send(f"{user.mention} enters {destination}")
+        await destination_thread.send(f"{user.mention} enters {destination_name}")
     except discord.HTTPException:
         log.warning("Could not post entry message in %s", destination, exc_info=True)
 
@@ -638,9 +690,7 @@ async def look(interaction: discord.Interaction, thing: str | None = None) -> No
 
     if thing is None or not thing.strip():
         try:
-            description = await database.get_room_description(
-                interaction.guild_id, state.current_room
-            )
+            description = await resolve.room_look(interaction.guild_id, state.current_room)
         except SQLAlchemyError:
             await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
             return
@@ -648,7 +698,7 @@ async def look(interaction: discord.Interaction, thing: str | None = None) -> No
         return
 
     try:
-        found = await database.look_at_thing(
+        found = await database.look_at_thing_here(
             user.id, interaction.guild_id, state.current_room, thing
         )
     except SQLAlchemyError:
@@ -673,7 +723,7 @@ async def inventory(interaction: discord.Interaction) -> None:
     await interaction.response.defer(ephemeral=True, thinking=True)
 
     try:
-        items = await database.get_inventory(interaction.user.id, interaction.guild_id)
+        items = await database.get_carried(interaction.user.id, interaction.guild_id)
     except SQLAlchemyError:
         await interaction.followup.send(INVENTORY_ERROR_MESSAGE, ephemeral=True)
         return
@@ -688,120 +738,42 @@ async def inventory(interaction: discord.Interaction) -> None:
     await interaction.followup.send("\n".join(lines), ephemeral=True)
 
 
-# --- Admin helpers for populating content without touching the database -------
-# TESTING TOOLS, not the long-term source of content. Game mechanics depend on
-# specific things existing in specific rooms, which hand entry per server cannot
-# guarantee; Phase 3+ loads every server's rooms and things (exits included -
-# an exit is a thing) from one content file (see LOOK_COMMAND_SPEC.md, "Content
-# Loading"). Keep these
-# as debugging aids until then, and consider removing them after.
-#
-# Both act on the admin's *current room*, so an admin walks to a room and
-# describes it or drops things into it from inside the game.
+RETIRED_TOOL_MESSAGE = (
+    "That tool is retired. Rooms and things come from the content files in "
+    "`creative content/` now, not from the database, so this would have written "
+    "somewhere nothing reads.\n\n"
+    "Edit the TSV, check it with `python load_content.py --check`, and the bot "
+    "picks it up on its next restart."
+)
 
 
 @bot.tree.command(
     name="add-thing",
-    description="(Admin, testing) Place a thing in the room you're standing in.",
+    description="(Retired) Things come from the content files now.",
 )
 @app_commands.guild_only()
 @app_commands.default_permissions(administrator=True)
 @app_commands.checks.has_permissions(administrator=True)
-@app_commands.describe(
-    name="What players will type to look at it, e.g. 'cat food'.",
-    description="What they see when they look. Optional.",
-    can_take="Whether /take (future) may pick it up. Default: no.",
-    removed_on_take="If taken, does it leave the room for everyone else? Default: yes.",
-)
-async def add_thing(
-    interaction: discord.Interaction,
-    name: str,
-    description: str | None = None,
-    can_take: bool = False,
-    removed_on_take: bool = True,
-) -> None:
-    await interaction.response.defer(ephemeral=True, thinking=True)
+async def add_thing(interaction: discord.Interaction) -> None:
+    """Kept registered, and honest about doing nothing.
 
-    if not name.strip():
-        await interaction.followup.send("The thing needs a name.", ephemeral=True)
-        return
-
-    try:
-        state = await database.get_game_state(interaction.user.id, interaction.guild_id)
-        if state is None:
-            await interaction.followup.send(
-                "Enter the house first (`/enter-entryway`) and walk to the room "
-                "you want to place it in.",
-                ephemeral=True,
-            )
-            return
-        thing_id = await database.add_thing(
-            interaction.guild_id,
-            state.current_room,
-            name,
-            description,
-            can_take=can_take,
-            removed_on_take=removed_on_take,
-        )
-    except SQLAlchemyError:
-        await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
-        return
-
-    traits = []
-    if can_take:
-        traits.append("takeable, " + ("leaves the room when taken" if removed_on_take else "stays for others"))
-    else:
-        traits.append("not takeable")
-    await interaction.followup.send(
-        f"Placed **{name.strip()}** in {state.current_room} "
-        f"(thing_id {thing_id}; {'; '.join(traits)}).",
-        ephemeral=True,
-    )
+    Removing it is a command-list change, and those are batched into 2c to pay
+    the hour of propagation once. Until then it has to say so rather than
+    silently write a row that /look will never read - a testing tool that
+    reports success and changes nothing is worse than one that is gone.
+    """
+    await interaction.response.send_message(RETIRED_TOOL_MESSAGE, ephemeral=True)
 
 
 @bot.tree.command(
     name="add-room-desc",
-    description="(Admin, testing) Set the description of the room you're standing in.",
+    description="(Retired) Room descriptions come from the content files now.",
 )
 @app_commands.guild_only()
 @app_commands.default_permissions(administrator=True)
 @app_commands.checks.has_permissions(administrator=True)
-@app_commands.describe(description="What players see when they /look here.")
-async def add_room_desc(interaction: discord.Interaction, description: str) -> None:
-    await interaction.response.defer(ephemeral=True, thinking=True)
-
-    try:
-        state = await database.get_game_state(interaction.user.id, interaction.guild_id)
-        if state is None:
-            await interaction.followup.send(
-                "Enter the house first (`/enter-entryway`) and walk to the room "
-                "you want to describe.",
-                ephemeral=True,
-            )
-            return
-        await database.set_room_description(
-            interaction.guild_id, state.current_room, description.strip()
-        )
-    except SQLAlchemyError:
-        await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
-        return
-
-    await interaction.followup.send(
-        f"Description set for **{state.current_room}**. Try `/look`.", ephemeral=True
-    )
-
-
-@add_thing.error
-@add_room_desc.error
-async def _content_admin_error(
-    interaction: discord.Interaction, error: app_commands.AppCommandError
-) -> None:
-    if isinstance(error, app_commands.MissingPermissions):
-        await interaction.response.send_message(
-            "You need to be a server administrator to run this.", ephemeral=True
-        )
-        return
-    raise error
+async def add_room_desc(interaction: discord.Interaction) -> None:
+    await interaction.response.send_message(RETIRED_TOOL_MESSAGE, ephemeral=True)
 
 
 @bot.tree.command(name="stats", description="See how many times you've petted the cat.")

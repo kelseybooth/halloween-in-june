@@ -20,11 +20,14 @@ Discord, no network. CI runs the same command on Python 3.13.
 
 | File | Covers |
 | --- | --- |
-| `test_cat.py` | Pet counting, the recent-pet window, mood weighting, the relationship meter and its clamps |
+| `test_cat.py` | Pet counting, the recent-pet window, mood weighting, the relationship meter, `relationship_at_pet` |
 | `test_decay.py` | The nightly drift toward neutral, catch-up after an outage, and Pacific day boundaries across DST |
-| `test_isolation.py` | Cross-server scoping, table by table |
-| `test_world.py` | Rooms, things, `/look` and inventory — the queries phase 2a step 4 rewrites |
-| `test_house.py` | The navigation graph, exit resolution, thread naming |
+| `test_isolation.py` | Cross-server scoping, and where phase 2b moved that line |
+| `test_content.py` | Parsing and validating the seven content files; every validator, fed the break it exists to catch |
+| `test_schema.py` | The content/world-state split, table by table, and migrating a database that predates 2b |
+| `test_loader.py` | Loading content, first placement, reload semantics, the orphan abort, `--fresh`, load-on-boot |
+| `test_drops.py` | Drop arrival — dated, event and manual — and the text each one resolves to |
+| `test_world.py` | The house from the content tables: rooms, exits, `/look`, `/inventory` |
 | `test_threads.py` | Thread build, rebuild, the keep-alive sweep and permission reporting, against `fake_discord.py` |
 
 ## Foreign keys
@@ -35,6 +38,17 @@ backend refuses the same rows PostgreSQL refuses and the suite means the same
 thing in both places. `test_foreign_keys_are_enforced_on_this_backend` asserts
 the setting directly, so a regression names its own cause rather than surfacing
 as an unrelated failure somewhere else.
+
+## Content versus world state
+
+The split phase 2b introduced, and the one most worth not breaking. Content —
+rooms, things, text, defaults, drops, restocks — is global and loaded from the
+files; nothing mutates it at runtime, which is what makes a reload safe. World
+state is per guild and is the only thing a player can change.
+
+`test_schema.py` asserts it per table in both directions, because a content
+table that grew a `guild_id` or a world-state table that lost one would fail
+quietly and in opposite ways.
 
 ## Cohorts
 

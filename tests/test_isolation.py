@@ -88,60 +88,6 @@ async def test_deleting_game_state_in_one_server_leaves_the_other(db):
     assert await db.get_game_state(ALICE, GUILD_B) is not None
 
 
-async def test_room_descriptions_are_per_server(db):
-    await db.set_room_description(GUILD_A, "Kitchen", "A in the kitchen")
-    await db.set_room_description(GUILD_B, "Kitchen", "B in the kitchen")
-
-    assert await db.get_room_description(GUILD_A, "Kitchen") == "A in the kitchen"
-    assert await db.get_room_description(GUILD_B, "Kitchen") == "B in the kitchen"
-
-
-async def test_a_room_described_in_one_server_is_blank_in_another(db):
-    await db.set_room_description(GUILD_A, "Kitchen", "only here")
-    assert await db.get_room_description(GUILD_B, "Kitchen") is None
-
-
-async def test_things_are_per_server(db):
-    await db.add_thing(GUILD_A, "Kitchen", "cat food", "a can")
-    things_a = await db.get_things_in_room(GUILD_A, "Kitchen")
-    things_b = await db.get_things_in_room(GUILD_B, "Kitchen")
-
-    assert [name for _, name in things_a] == ["cat food"]
-    assert things_b == []
-
-
-async def test_looking_at_a_thing_does_not_reach_across_servers(db):
-    await db.add_thing(GUILD_A, "Kitchen", "cat food", "a can")
-    assert await db.look_at_thing(ALICE, GUILD_A, "Kitchen", "cat food") is not None
-    assert await db.look_at_thing(ALICE, GUILD_B, "Kitchen", "cat food") is None
-
-
-async def test_inventories_are_per_server(db):
-    thing_a = await db.add_thing(GUILD_A, "Kitchen", "cat food", "a can")
-    thing_b = await db.add_thing(GUILD_B, "Kitchen", "cat food", "a can")
-
-    await db.add_to_inventory(ALICE, GUILD_A, thing_a)
-
-    assert await db.get_inventory(ALICE, GUILD_A) == [("cat food", 1)]
-    assert await db.get_inventory(ALICE, GUILD_B) == []
-    assert await db.inventory_count(ALICE, GUILD_B) == 0
-
-    await db.add_to_inventory(ALICE, GUILD_B, thing_b)
-    assert await db.inventory_count(ALICE, GUILD_A) == 1
-    assert await db.inventory_count(ALICE, GUILD_B) == 1
-
-
-async def test_carrying_a_thing_in_one_server_does_not_hide_it_in_another(db):
-    """Visibility is decided from that server's own inventory rows."""
-    thing_a = await db.add_thing(GUILD_A, "Kitchen", "note", "a note", removed_on_take=True)
-    await db.add_thing(GUILD_B, "Kitchen", "note", "a note", removed_on_take=True)
-
-    await db.add_to_inventory(ALICE, GUILD_A, thing_a)
-
-    assert await db.get_things_in_room(GUILD_A, "Kitchen") == []
-    assert len(await db.get_things_in_room(GUILD_B, "Kitchen")) == 1
-
-
 async def test_player_locations_are_listed_per_server(db):
     await db.start_game(ALICE, GUILD_A, "Entryway", [])
     await db.start_game(BOB, GUILD_A, "Entryway", [])
@@ -151,10 +97,85 @@ async def test_player_locations_are_listed_per_server(db):
     assert len(await db.get_all_player_locations(GUILD_B)) == 1
 
 
-async def test_seeding_rooms_in_one_server_does_not_seed_another(db):
-    created = await db.seed_rooms(GUILD_A, house_utils.ROOMS)
-    assert created == len(house_utils.ROOMS)
 
-    # Rerunning is a no-op for A, but B still needs all of them.
-    assert await db.seed_rooms(GUILD_A, house_utils.ROOMS) == 0
-    assert await db.seed_rooms(GUILD_B, house_utils.ROOMS) == len(house_utils.ROOMS)
+
+# --------------------------------------------------------------------------
+# Where the line moved in phase 2b
+#
+# Rooms and things used to be per guild, and the tests here asserted that two
+# servers could describe the same room differently. That is deliberately no
+# longer true: the house is one house, loaded from the files, shared by every
+# server. What stayed per guild is everything a player can change.
+#
+# So the boundary is now content versus world state rather than server versus
+# server, and these check it from the behavioural side - test_schema.py checks
+# the same split at the column level.
+# --------------------------------------------------------------------------
+
+
+async def test_the_house_itself_is_shared(db):
+    """One house, one set of descriptions, however many servers are playing."""
+    import content_loader
+    import resolve
+    from test_world import a_house
+
+    await db.ensure_user_exists(ALICE, GUILD_A)
+    await db.ensure_user_exists(BOB, GUILD_B)
+    await content_loader.load_content(a_house())
+
+    assert await resolve.room_look(GUILD_A, "EN") == await resolve.room_look(GUILD_B, "EN")
+
+
+async def test_stock_is_not_shared(db):
+    """Two servers start with the same things and diverge the moment anyone
+    picks something up."""
+    import content_loader
+    from test_loader import a_thing, contents
+    from test_world import a_house
+
+    await db.ensure_user_exists(ALICE, GUILD_A)
+    await db.ensure_user_exists(BOB, GUILD_B)
+    await content_loader.load_content(a_house(a_thing("chips")))
+
+    assert await contents(db, GUILD_A) == await contents(db, GUILD_B)
+
+    async with db._require_session()() as session:
+        await session.execute(
+            db.RoomContents.__table__.update()
+            .where(db.RoomContents.guild_id == GUILD_A)
+            .values(count=0)
+        )
+        await session.commit()
+
+    assert await contents(db, GUILD_A) != await contents(db, GUILD_B)
+
+
+async def test_what_a_player_carries_is_per_server(db):
+    import content_loader
+    from test_loader import a_thing
+    from test_world import a_house, carry
+
+    await db.ensure_user_exists(ALICE, GUILD_A)
+    await db.ensure_user_exists(ALICE, GUILD_B)
+    await content_loader.load_content(a_house(a_thing("spoon")))
+    await carry(db, ALICE, GUILD_A, "spoon")
+
+    assert len(await db.get_carried(ALICE, GUILD_A)) == 1
+    assert await db.get_carried(ALICE, GUILD_B) == []
+
+
+async def test_a_drop_fired_on_one_server_does_not_fire_on_another(db):
+    """The per-guild half of the drop calendar, which is new in 2b."""
+    import content_loader
+    import resolve
+    from test_drops import a_calendar, a_drop
+
+    await db.ensure_user_exists(ALICE, GUILD_A)
+    await db.ensure_user_exists(BOB, GUILD_B)
+    await content_loader.load_content(
+        a_calendar(a_drop(1, value="launch"), a_drop(2, trigger="manual"))
+    )
+    await resolve.record_arrival(GUILD_A, 2)
+
+    assert await resolve.arrived_drop_ids(GUILD_A) == {1, 2}
+    assert await resolve.arrived_drop_ids(GUILD_B) == {1}

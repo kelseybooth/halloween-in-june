@@ -1,8 +1,11 @@
-"""Haunted house layout and Discord thread management (Phase 2).
+"""Discord thread management for the haunted house.
 
-One thread per room, nine in all. Cohorts were removed in phase 2a: every
-player now sees the same house, so the second set of threads - the ones named
-with a leading article - is gone.
+Creating threads, deleting them, and moving players in and out. Nothing here
+knows what the house looks like: the room list and the navigation graph moved
+into the content files in phase 2b, and callers pass room names in.
+
+That split is the point. A room being renamed, added or removed is a content
+change; how a thread gets created is not.
 """
 
 import logging
@@ -21,96 +24,6 @@ HALLOWEEN_CHANNEL_NAME = "halloween"
 # slips through, which is what actually keeps the rooms open indefinitely.
 THREAD_AUTO_ARCHIVE_MINUTES = 10080
 
-# Canonical room names, in the order the spec lists them.
-ROOMS = [
-    "Dining Room",
-    "Entryway",
-    "Living Room",
-    "Kitchen",
-    "Courtyard",
-    "Secret Library",
-    "Upstairs Hallway",
-    "Bedroom",
-    "Nursery",
-]
-
-STARTING_ROOM = "Entryway"
-
-class Exit(NamedTuple):
-    """One way out of a room.
-
-    An exit is a *thing* - the same kind of thing as an object in a room - whose
-    effect, when used, is to move the player to another room. That is why its
-    fields share the `thing` vocabulary: `thing_id` is the stable identifier code
-    and tests refer to ("EL") and never changes; `thing` is what players see - the
-    description announced when the exit is taken and what they can type to use
-    it. Phase 3 replaces each placeholder with real copy ("blue door"); only the
-    `thing=` argument in the graph changes.
-
-    Today /use handles only exits. In Phase 3 it resolves any thing - exit or
-    object - and dispatches on what kind it is: "/use blue door" moves the player,
-    "/use cat food" does whatever the design says cat food does.
-    """
-
-    thing_id: str
-    thing: str
-    destination: str
-
-
-def _exit(thing_id: str, destination: str, thing: str | None = None) -> Exit:
-    """Build an Exit; the description defaults to `<thing_id>_desc` until Phase 3.
-
-    The default is deliberately obvious placeholder text, so any exit a writer has
-    not yet named stands out in play rather than passing for finished copy.
-    """
-    return Exit(thing_id, thing if thing is not None else f"{thing_id}_desc", destination)
-
-
-# Exits keyed by thing_id. Codes are the first letter of the current room plus the
-# first letter of the destination. resolve_exit matches case-insensitively against
-# the thing_id, the description, and the destination room name, so any of those
-# work as input.
-NAVIGATION_GRAPH: dict[str, dict[str, Exit]] = {
-    "Dining Room": {
-        "DK": _exit("DK", "Kitchen"),
-        "DE": _exit("DE", "Entryway"),
-    },
-    "Entryway": {
-        "ED": _exit("ED", "Dining Room"),
-        "EL": _exit("EL", "Living Room"),
-        "EH": _exit("EH", "Upstairs Hallway"),
-    },
-    "Living Room": {
-        "LE": _exit("LE", "Entryway"),
-        "LS": _exit("LS", "Secret Library"),
-    },
-    "Kitchen": {
-        "KD": _exit("KD", "Dining Room"),
-        "KH": _exit("KH", "Upstairs Hallway"),
-        "KC": _exit("KC", "Courtyard"),
-    },
-    "Courtyard": {
-        "CK": _exit("CK", "Kitchen"),
-        "CS": _exit("CS", "Secret Library"),
-    },
-    "Secret Library": {
-        "SL": _exit("SL", "Living Room"),
-        "SC": _exit("SC", "Courtyard"),
-    },
-    # HE was missing from the spec's original diagram, which gave Entryway an exit
-    # up (EH) with no way back down. Confirmed as an oversight rather than a
-    # one-way door, and added to the spec to match.
-    "Upstairs Hallway": {
-        "HK": _exit("HK", "Kitchen"),
-        "HB": _exit("HB", "Bedroom"),
-        "HN": _exit("HN", "Nursery"),
-        "HE": _exit("HE", "Entryway"),
-    },
-    "Bedroom": {"BH": _exit("BH", "Upstairs Hallway")},
-    "Nursery": {"NH": _exit("NH", "Upstairs Hallway")},
-}
-
-
 class InitResult(NamedTuple):
     """What one run of initialize_threads did."""
 
@@ -118,87 +31,6 @@ class InitResult(NamedTuple):
     created: int
     restored: int
     errors: list[str]
-
-
-def all_thread_names() -> list[str]:
-    """Every thread name the house needs - one per room, in creation order."""
-    return list(ROOMS)
-
-
-def resolve_exit(current_room: str, user_input: str) -> Exit | None:
-    """Resolve what a player typed to an exit from their room, or None if no match.
-
-    Matching ignores case and surrounding whitespace, and accepts the thing_id
-    ("EL"), the description ("EL_desc", later "blue door"), or the destination
-    room name ("living room"). Whatever they typed, the returned Exit carries the
-    canonical description, which is what the exit message announces.
-    """
-    exits = NAVIGATION_GRAPH.get(current_room)
-    if not exits:
-        return None
-
-    needle = user_input.strip().lower()
-    if not needle:
-        return None
-
-    for exit_ in exits.values():
-        if needle in (exit_.thing_id.lower(), exit_.thing.lower(), exit_.destination.lower()):
-            return exit_
-    return None
-
-
-def find_exit(current_room: str, user_input: str) -> str | None:
-    """Destination room for what a player typed, or None. See resolve_exit."""
-    resolved = resolve_exit(current_room, user_input)
-    return resolved.destination if resolved else None
-
-
-def validate_graph() -> list[str]:
-    """Return a list of structural problems with NAVIGATION_GRAPH; empty means sound.
-
-    Run as a startup self-check so a typo in the layout surfaces immediately rather
-    than as a player hitting a dead end mid-game.
-    """
-    problems: list[str] = []
-    known = set(ROOMS)
-
-    for room in ROOMS:
-        if room not in NAVIGATION_GRAPH:
-            problems.append(f"{room} has no entry in NAVIGATION_GRAPH")
-
-    for room, exits in NAVIGATION_GRAPH.items():
-        if room not in known:
-            problems.append(f"NAVIGATION_GRAPH has unknown room {room!r}")
-        for thing_id, exit_ in exits.items():
-            if thing_id != exit_.thing_id:
-                problems.append(f"{room}: key {thing_id!r} does not match its exit's id {exit_.thing_id!r}")
-            destination = exit_.destination
-            if destination not in known:
-                problems.append(f"{room}/{thing_id} leads to unknown room {destination!r}")
-                continue
-            # The spec states every exit is bidirectional.
-            returns = {e.destination for e in NAVIGATION_GRAPH.get(destination, {}).values()}
-            if room not in returns:
-                problems.append(f"{room} -> {destination} has no return exit")
-
-    # Within one room, no two exits may share a description or a player's input
-    # would be ambiguous. (Across rooms it is fine: the player is only ever in one.)
-    for room, exits in NAVIGATION_GRAPH.items():
-        things = [e.thing.lower() for e in exits.values()]
-        for dup in {t for t in things if things.count(t) > 1}:
-            problems.append(f"{room} has two exits described as {dup!r}")
-
-    # Every room must be reachable from the start, or a player could be stranded.
-    seen, queue = {STARTING_ROOM}, [STARTING_ROOM]
-    while queue:
-        for exit_ in NAVIGATION_GRAPH.get(queue.pop(), {}).values():
-            if exit_.destination not in seen:
-                seen.add(exit_.destination)
-                queue.append(exit_.destination)
-    for room in known - seen:
-        problems.append(f"{room} is unreachable from {STARTING_ROOM}")
-
-    return problems
 
 
 # What the bot needs in #halloween, mapped to the labels Discord shows in its
@@ -265,17 +97,19 @@ async def _existing_threads(channel: discord.TextChannel) -> list[discord.Thread
 
 async def initialize_threads(
     channel: discord.TextChannel,
-    locations: list[tuple[int, str, str]],
+    room_names: list[str],
+    locations: list[tuple[int, str]],
 ) -> InitResult:
-    """Delete every thread in the channel and recreate the full set of nine.
+    """Delete every thread in the channel and recreate one per room.
 
-    `locations` is (user_id, current_room) for each player with game state. After
-    the threads exist, each player is re-added to the thread for the room they
-    were in, which is what makes the command rerunnable without stranding anyone -
-    the database, not Discord, is the source of truth for who belongs where.
+    `room_names` comes from the content files; `locations` is (user_id, room name)
+    for each player with game state. After the threads exist, each player is
+    re-added to the thread for the room they were in, which is what makes the
+    command rerunnable without stranding anyone - the database, not Discord, is
+    the source of truth for who belongs where.
 
-    Deleting everything first is also what migrates a server off cohorts: the old
-    eighteen threads go with the rest, and nine come back.
+    Deleting everything first is also how a server migrates: threads for rooms
+    that no longer exist go with the rest, and only current rooms come back.
     """
     errors: list[str] = []
 
@@ -290,7 +124,7 @@ async def initialize_threads(
             log.warning("Failed to delete thread %s", thread.name, exc_info=True)
 
     threads: dict[str, discord.Thread] = {}
-    for name in all_thread_names():
+    for name in room_names:
         try:
             thread = await channel.create_thread(
                 name=name,
@@ -318,7 +152,7 @@ async def initialize_threads(
             log.warning("Failed to restore player %s to %s", user_id, room, exc_info=True)
 
     log.info(
-        "Haunted House initialized with %d threads in %s (deleted %d, restored %d players)",
+        "Haunted house initialized with %d thread(s) in %s (deleted %d, restored %d players)",
         len(threads),
         channel.guild.name,
         deleted,
@@ -337,17 +171,20 @@ async def remove_player_from_thread(thread: discord.Thread, player_id: int) -> N
     await thread.remove_user(discord.Object(id=player_id))
 
 
-async def unarchive_all(channel: discord.TextChannel) -> tuple[int, list[str]]:
+async def unarchive_all(
+    channel: discord.TextChannel, room_names: list[str]
+) -> tuple[int, list[str]]:
     """Revive every archived house thread. Returns (revived count, errors).
 
     Discord's longest auto-archive is 7 days, so a room with no traffic for a week
     would archive and drop out of the channel's active list. Running this on a
-    schedule keeps all nine rooms permanently open.
+    schedule keeps every room permanently open.
 
-    The set it revives comes from all_thread_names(), so it cannot drift out of
-    step with the set initialize_threads builds.
+    `room_names` is the same list initialize_threads was given, so the set revived
+    cannot drift from the set built. Miss that and the rooms quietly vanish a week
+    after launch.
     """
-    wanted = set(all_thread_names())
+    wanted = set(room_names)
     revived = 0
     errors: list[str] = []
 
