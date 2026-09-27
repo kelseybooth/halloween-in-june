@@ -43,8 +43,9 @@ LAUNCH = "launch"
 # rather than becoming a drop that never arrives.
 KNOWN_DROP_EVENTS: set[str] = set()
 
-# Where a restock puts what it adds.
-RESTOCK_PLACEMENTS = {"container", "random", "room"}
+# Where a restock puts what it adds. `container` names one; `random` draws a slot
+# from every room and every container at equal probability.
+RESTOCK_PLACEMENTS = {"container", "random"}
 
 # The four kinds of thing. `exit` moves a player; `source` is an inexhaustible
 # supply that yields objects; `object` can be carried; `fixture` is scenery that
@@ -737,8 +738,8 @@ def _check_restocks(content: Content, things: dict[str, Thing]) -> list[str]:
                 )
         elif restock.container:
             problems.append(
-                f"{label} names container {restock.container!r} but its placement is "
-                f"{restock.placement!r}, which ignores it"
+                f"{label} scatters at random but also names container "
+                f"{restock.container!r}; leave that cell empty"
             )
 
         for field_name in ("amount", "times_per_day", "every_n_days", "first_day"):
@@ -772,40 +773,53 @@ def _is_clock_time(value: str) -> bool:
 
 
 def _check_sources_are_named_in_prose(content: Content, rooms: dict[str, Room]) -> list[str]:
-    """A source is never listed, so the prose around it has to name it.
+    """A source is never listed, so the prose that reveals it has to name it.
 
     Nothing takeable and finite appears in room prose - the engine lists those, so
     the prose cannot go stale. Sources are the exception in the other direction:
-    they are inexhaustible, they never appear in an `Also here:` line, and a
-    player who is not told about one has no way to find it. So a source must be
-    named either in its room's description or in the text of the thing holding it.
+    they are inexhaustible, no listing anywhere shows one, and a player who is not
+    told about it has no way to find it. Content that fails this check is
+    unreachable rather than merely unpolished, which is why it is an error.
+
+    Where to look, and what counts as naming it, both follow the 2b work order: a
+    contained source must be named in its container's `look` or `use`, a
+    free-standing one in its room's `look`, in either case for the same state.
+    Either the source's own name, one of its aliases, or the name of the thing it
+    yields will do - "a bowl of candy" reveals the candy bowl.
     """
-    text_by_entity: dict[str, str] = {}
+    room_look: dict[tuple[str, str], str] = {}
     for row in content.room_text:
-        text_by_entity[row.entity_id] = " ".join(
-            (text_by_entity.get(row.entity_id, ""), *row.text.values())
-        ).lower()
+        room_look[(row.entity_id, row.state)] = row.text.get("look", "").lower()
+
+    thing_prose: dict[tuple[str, str], str] = {}
     for row in content.thing_text:
-        text_by_entity[row.entity_id] = " ".join(
-            (text_by_entity.get(row.entity_id, ""), *row.text.values())
+        key = (row.entity_id, row.state)
+        thing_prose[key] = " ".join(
+            (thing_prose.get(key, ""), row.text.get("look", ""), row.text.get("use", ""))
         ).lower()
 
+    things = content.things_by_id
     problems = []
     for thing in content.things:
         if not thing.is_source:
             continue
-        haystacks = []
+
+        state = thing.present_when.lstrip("!") if thing.present_when else "default"
         if thing.contained_in:
-            haystacks.append(text_by_entity.get(thing.contained_in, ""))
+            prose = thing_prose.get((thing.contained_in, state), "")
+            where = f"the look or use text of {thing.contained_in}"
         elif thing.room_id:
-            haystacks.append(text_by_entity.get(thing.room_id, ""))
-        blob = " ".join(haystacks)
-        if not any(name.lower() in blob for name in thing.names):
-            where = (
-                f"the text of {thing.contained_in}"
-                if thing.contained_in
-                else f"the description of room {thing.room_id}"
-            )
+            prose = room_look.get((thing.room_id, state), "")
+            where = f"the description of room {thing.room_id}"
+        else:
+            continue
+
+        wanted = list(thing.names)
+        produced = things.get(thing.yields or "")
+        if produced is not None:
+            wanted.append(produced.name)
+
+        if not any(name.lower() in prose for name in wanted if name):
             problems.append(
                 f"source {thing.thing_id} is named nowhere in {where}; it is never listed, "
                 "so no player could learn it is there"
