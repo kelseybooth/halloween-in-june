@@ -392,3 +392,255 @@ async def test_the_gourmet_tin_is_capped_at_one(house):
     await take(thing="gourmet")
     await take(thing="gourmet")
     assert list((await bag()).values()) == [1]
+
+
+# --------------------------------------------------------------------------
+# /use, four branches
+#
+# What is deliberately absent: placing a plank counts toward nothing and
+# graphite unjams nothing. Both are Phase 2c.5, as is the public reply a plank
+# earns. Every /use reply here is private.
+# --------------------------------------------------------------------------
+
+
+async def use(user_id=ALICE, guild_id=GUILD_A, thing="spoon", guild=None):
+    # /use guards on interaction.guild before anything else, so a fake needs
+    # one even for the branches that never look at a channel.
+    from types import SimpleNamespace
+
+    interaction = FakeInteraction(
+        user_id, guild_id, guild=guild or SimpleNamespace(name="Test", text_channels=[])
+    )
+    await bot.use.callback(interaction, thing)
+    return interaction
+
+
+async def uses_of(user_id, guild_id, thing_id):
+    from sqlalchemy import select
+
+    async with database._require_session()() as session:
+        return await session.scalar(
+            select(database.ThingUse.use_count).where(
+                database.ThingUse.guild_id == guild_id,
+                database.ThingUse.user_id == user_id,
+                database.ThingUse.thing_id == thing_id,
+            )
+        )
+
+
+async def test_using_an_ordinary_thing_prints_its_use_text(house):
+    await content_loader.load_content(
+        a_house(
+            a_thing("radio", name="radio", type="fixture", takeable=False),
+            thing_text=[
+                TextRow(
+                    entity_id="radio",
+                    state="default",
+                    since_drop=1,
+                    text={"look": "A radio.", "use": "It hisses at you."},
+                )
+            ],
+        )
+    )
+
+    interaction = await use(thing="radio")
+    assert interaction.reply == "It hisses at you."
+    assert interaction.was_private
+
+
+async def test_a_blank_use_cell_falls_through_to_the_default(house):
+    await content_loader.load_content(
+        a_house(a_thing("rock", name="rock", type="fixture", takeable=False))
+    )
+    assert "Nothing obvious happens" in (await use(thing="rock")).reply
+
+
+async def test_every_successful_use_is_counted_once(house):
+    await content_loader.load_content(
+        a_house(a_thing("radio", name="radio", type="fixture", takeable=False))
+    )
+
+    for expected in range(1, 4):
+        await use(thing="radio")
+        assert await uses_of(ALICE, GUILD_A, "radio") == expected
+
+
+async def test_using_something_out_of_reach(house):
+    await content_loader.load_content(
+        a_house(a_thing("spoon"), a_thing("kettle", name="kettle", room_id="KI"))
+    )
+    assert "don" in (await use(thing="kettle")).reply
+
+
+async def test_using_a_word_the_game_does_not_know(house):
+    await content_loader.load_content(a_house(a_thing("spoon")))
+    assert "doesn" in (await use(thing="helicopter")).reply
+
+
+async def test_an_ambiguous_use_asks(house):
+    await content_loader.load_content(
+        a_house(
+            a_thing("chicken", name="chicken cat food", aliases=("cat food",)),
+            a_thing("salmon", name="salmon cat food", aliases=("cat food",)),
+        )
+    )
+    assert "Which one" in (await use(thing="cat food")).reply
+
+
+# --- the transform branch ---------------------------------------------------
+
+
+def bottles():
+    return a_house(
+        a_thing("used", name="used bottle", transforms_to="clean", transform_room="KI"),
+        a_thing("clean", name="clean bottle", room_id=None, quantity=0),
+        thing_text=[
+            TextRow(
+                entity_id="used",
+                state="default",
+                since_drop=1,
+                text={
+                    "look": "A grubby bottle.",
+                    "use": "You scrub it clean.",
+                    "use_fail": "It needs a sink, and there is none here.",
+                },
+            ),
+            TextRow(
+                entity_id="clean",
+                state="default",
+                since_drop=1,
+                text={"look": "A clean bottle."},
+            ),
+        ],
+    )
+
+
+async def test_a_transform_in_the_right_room_swaps_the_thing(house):
+    await content_loader.load_content(bottles())
+    await take(thing="used bottle")
+    await database.update_current_room(ALICE, GUILD_A, "KI")
+
+    interaction = await use(thing="used bottle")
+    assert interaction.reply == "You scrub it clean."
+    assert await bag() == {"clean bottle": 1}
+
+
+async def test_a_transform_in_the_wrong_room_refuses_and_changes_nothing(house):
+    await content_loader.load_content(bottles())
+    await take(thing="used bottle")
+
+    interaction = await use(thing="used bottle")
+    assert "needs a sink" in interaction.reply
+    assert await bag() == {"used bottle": 1}
+
+
+async def test_a_transform_is_one_way(house):
+    await content_loader.load_content(bottles())
+    await take(thing="used bottle")
+    await database.update_current_room(ALICE, GUILD_A, "KI")
+    await use(thing="used bottle")
+
+    assert await bag() == {"clean bottle": 1}
+    await use(thing="clean bottle")
+    assert await bag() == {"clean bottle": 1}
+
+
+async def test_a_failed_transform_is_not_counted_as_a_use(house):
+    await content_loader.load_content(bottles())
+    await take(thing="used bottle")
+
+    await use(thing="used bottle")  # wrong room
+    assert await uses_of(ALICE, GUILD_A, "used") is None
+
+
+# --- the cooldown branch ------------------------------------------------------
+
+
+def lumber():
+    return a_house(
+        a_thing(
+            "lumber", name="lumber", type="fixture", takeable=False, use_cooldown_hours=48
+        ),
+        thing_text=[
+            TextRow(
+                entity_id="lumber",
+                state="default",
+                since_drop=1,
+                text={
+                    "look": "A stack of planks.",
+                    "use": "You hammer a plank into place.",
+                    "use_fail": "Your shoulders want {time} first.",
+                },
+            )
+        ],
+    )
+
+
+async def test_a_first_use_is_allowed(house):
+    await content_loader.load_content(lumber())
+    assert (await use(thing="lumber")).reply == "You hammer a plank into place."
+
+
+async def test_a_second_use_inside_the_window_is_refused(house):
+    await content_loader.load_content(lumber())
+    await use(thing="lumber")
+
+    interaction = await use(thing="lumber")
+    assert "shoulders want" in interaction.reply
+    assert "2 days" in interaction.reply
+
+
+async def test_a_refused_use_does_not_slide_the_window_forward(house):
+    """A refused use is not a use, so trying repeatedly must not keep resetting
+    the clock and lock the player out for ever."""
+    await content_loader.load_content(lumber())
+    await use(thing="lumber")
+    first = await database.last_used(ALICE, GUILD_A, "lumber")
+
+    for _ in range(3):
+        await use(thing="lumber")
+
+    assert await database.last_used(ALICE, GUILD_A, "lumber") == first
+    assert await uses_of(ALICE, GUILD_A, "lumber") == 1
+
+
+async def test_the_cooldown_expires(house):
+    from datetime import timedelta
+
+    from sqlalchemy import update
+
+    await content_loader.load_content(lumber())
+    await use(thing="lumber")
+
+    async with database._require_session()() as session:
+        await session.execute(
+            update(database.ThingUse).values(
+                last_used_at=database._utcnow() - timedelta(hours=49)
+            )
+        )
+        await session.commit()
+
+    assert (await use(thing="lumber")).reply == "You hammer a plank into place."
+    assert await uses_of(ALICE, GUILD_A, "lumber") == 2
+
+
+async def test_the_cooldown_is_per_player(house):
+    await content_loader.load_content(lumber())
+    await use(thing="lumber")
+
+    assert (await use(BOB, thing="lumber")).reply == "You hammer a plank into place."
+
+
+async def test_placing_a_plank_does_nothing_to_the_world_yet(house):
+    """2c counts the use; the staircase opening is 2c.5. A tester who reaches
+    the target and sees nothing happen is seeing the split, not a bug."""
+    from sqlalchemy import select
+
+    await content_loader.load_content(lumber())
+    await use(thing="lumber")
+    await use(BOB, thing="lumber")
+
+    assert await database.distinct_users_of(GUILD_A, "lumber") == 2
+    async with database._require_session()() as session:
+        states = (await session.execute(select(database.ServerState))).all()
+    assert states == []

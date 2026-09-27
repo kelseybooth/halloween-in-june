@@ -9,7 +9,7 @@ import logging
 import os
 import random
 import sys
-from datetime import time as dt_time
+from datetime import time as dt_time, timedelta
 from typing import NamedTuple
 
 import discord
@@ -546,13 +546,16 @@ async def enter_entryway(interaction: discord.Interaction) -> None:
 @app_commands.guild_only()
 @app_commands.describe(thing="The object or exit to use.")
 async def use(interaction: discord.Interaction, thing: str) -> None:
-    """Move the player through an exit into the adjoining room.
+    """Use something: an exit, a transform, something on a cooldown, or anything else.
 
-    Ordering note: the spec's numbered steps post the exit message and remove the
-    player before adding them to the destination, but its error handling requires
-    that a failed add must not have already removed them. The latter wins - the
-    player is added to the destination first, so any failure leaves them exactly
-    where they were.
+    Four branches, taken in order. The reply is always private - a use is a
+    small private moment, and making every one public would bury the thread.
+    Movement is the exception in that it *also* posts in both rooms, because
+    the people standing there need to see someone leave.
+
+    What is deliberately absent is the two uses that change the world. Placing
+    a plank counts toward nothing yet and graphite unjams nothing; both are
+    Phase 2c.5, along with the public reply that placing a plank earns.
     """
     if interaction.guild is None:
         await interaction.response.send_message(
@@ -561,31 +564,162 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
         return
 
     await interaction.response.defer(ephemeral=True, thinking=True)
-    user = interaction.user
+    user, guild_id = interaction.user, interaction.guild_id
 
     try:
-        state = await database.get_game_state(user.id, interaction.guild_id)
-    except SQLAlchemyError:
-        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
-        return
+        state = await database.get_game_state(user.id, guild_id)
+        if state is None:
+            await interaction.followup.send(
+                "You're not in the haunted house yet. Use `/enter-entryway` first.",
+                ephemeral=True,
+            )
+            return
 
-    if state is None:
+        found = await reach.find(guild_id, user.id, state.current_room, thing, reach.Scope.REACH)
+
+        if isinstance(found, reach.Ambiguous):
+            await interaction.followup.send(
+                await phrasing.default_say(
+                    "ambiguous.match", options=", ".join(found.options)
+                ),
+                ephemeral=True,
+            )
+            return
+
+        if isinstance(found, reach.NotFound):
+            key = "use_fail.absent" if found.exists_elsewhere else "unknown.noun"
+            await interaction.followup.send(
+                await phrasing.default_say(key, name=thing.strip()), ephemeral=True
+            )
+            return
+
+        row = await phrasing.thing_row(found.thing_id)
+        if row is None:
+            await interaction.followup.send(
+                await phrasing.default_say("use_fail.absent", name=found.name),
+                ephemeral=True,
+            )
+            return
+
+        if row.type == "exit":
+            await _use_exit(interaction, state, found, row)
+            return
+
+        if row.transforms_to:
+            await _use_transform(interaction, state, found, row)
+            return
+
+        if row.use_cooldown_hours:
+            await _use_with_cooldown(interaction, found, row)
+            return
+
+        await database.record_use(user.id, guild_id, found.thing_id)
         await interaction.followup.send(
-            "You're not in the haunted house yet. Use `/enter-entryway` first.",
+            await phrasing.say(
+                guild_id, found.thing_id, "use", fallback="use.default", name=found.name
+            ),
+            ephemeral=True,
+        )
+    except SQLAlchemyError:
+        log.exception("Failed to use %r in guild %s", thing, guild_id)
+        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+
+
+async def _use_transform(interaction, state, found, row) -> None:
+    """One thing becomes another, in the room that allows it.
+
+    The only row using this is the used baby bottle, which needs a sink and hot
+    water. Outside the Kitchen its own use_fail explains why.
+    """
+    user, guild_id = interaction.user, interaction.guild_id
+
+    if row.transform_room and state.current_room != row.transform_room:
+        await interaction.followup.send(
+            await phrasing.say(
+                guild_id, found.thing_id, "use_fail",
+                fallback="use_fail.default", name=found.name,
+            ),
             ephemeral=True,
         )
         return
 
-    chosen_exit = await resolve.resolve_exit(
-        interaction.guild_id, state.current_room, thing
-    )
-    if chosen_exit is None:
-        await interaction.followup.send("You don't see that exit here.", ephemeral=True)
+    if not await database.transform_carried(
+        user.id, guild_id, found.thing_id, row.transforms_to
+    ):
+        # Resolution found it in the room rather than the bag: a transform acts
+        # on what you are holding, so there is nothing to consume.
+        await interaction.followup.send(
+            await phrasing.say(
+                guild_id, found.thing_id, "use_fail",
+                fallback="use_fail.default", name=found.name,
+            ),
+            ephemeral=True,
+        )
         return
 
-    destination = chosen_exit.destination
+    await database.record_use(user.id, guild_id, found.thing_id)
+    await interaction.followup.send(
+        await phrasing.say(
+            guild_id, found.thing_id, "use", fallback="use.default", name=found.name
+        ),
+        ephemeral=True,
+    )
+
+
+async def _use_with_cooldown(interaction, found, row) -> None:
+    """A thing that cannot be used again for a while.
+
+    Only lumber, at 48 hours. The refusal carries {time}, and a refused use is
+    not a use: nothing is recorded, so the window does not slide forward every
+    time somebody tries.
+    """
+    user, guild_id = interaction.user, interaction.guild_id
+    window = timedelta(hours=row.use_cooldown_hours)
+
+    previous = await database.last_used(user.id, guild_id, found.thing_id)
+    if previous is not None:
+        elapsed = database._utcnow() - previous
+        if elapsed < window:
+            await interaction.followup.send(
+                await phrasing.say(
+                    guild_id, found.thing_id, "use_fail",
+                    fallback="use_fail.cooldown",
+                    name=found.name,
+                    time=phrasing.approximate_duration(window - elapsed),
+                ),
+                ephemeral=True,
+            )
+            return
+
+    await database.record_use(user.id, guild_id, found.thing_id)
+    await interaction.followup.send(
+        await phrasing.say(
+            guild_id, found.thing_id, "use", fallback="use.default", name=found.name
+        ),
+        ephemeral=True,
+    )
+
+
+async def _use_exit(interaction, state, found, row) -> None:
+    """Move the player through an exit into the adjoining room.
+
+    Ordering note: the spec's numbered steps post the exit message and remove
+    the player before adding them to the destination, but its error handling
+    requires that a failed add must not have already removed them. The latter
+    wins - the player is added to the destination first, so any failure leaves
+    them exactly where they were.
+    """
+    user, guild_id = interaction.user, interaction.guild_id
+    destination = row.destination_room_id
+
     if destination not in state.rooms_unlocked:
-        await interaction.followup.send("You can't access that room yet.", ephemeral=True)
+        await interaction.followup.send(
+            await phrasing.say(
+                guild_id, found.thing_id, "use_fail",
+                fallback="use_fail.default", name=found.name,
+            ),
+            ephemeral=True,
+        )
         return
 
     channel = house_utils.find_channel(interaction.guild)
@@ -603,8 +737,6 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
         destination_thread = await house_utils.get_thread_for_room(channel, destination_name)
         origin_thread = await house_utils.get_thread_for_room(channel, origin_name)
     except (discord.HTTPException, SQLAlchemyError):
-        # Two room-name reads happen here now, so a database failure has to be
-        # caught alongside a Discord one or it escapes to the generic handler.
         log.exception("Could not look up room threads")
         await interaction.followup.send(MOVE_ERROR_MESSAGE, ephemeral=True)
         return
@@ -617,8 +749,8 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
         )
         return
 
-    # Add before removing: if this fails, the player has not been moved or removed
-    # from anywhere, so they are exactly where they started and can retry.
+    # Add before removing: if this fails the player has not been moved or
+    # removed from anywhere, so they are where they started and can retry.
     try:
         await house_utils.add_player_to_thread(destination_thread, user.id)
     except discord.HTTPException:
@@ -627,10 +759,9 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
         return
 
     try:
-        await database.update_current_room(user.id, interaction.guild_id, destination)
+        await database.update_current_room(user.id, guild_id, destination)
+        await database.record_use(user.id, guild_id, found.thing_id)
     except SQLAlchemyError:
-        # Undo the add so Discord and the database do not disagree about where
-        # this player is.
         try:
             await house_utils.remove_player_from_thread(destination_thread, user.id)
         except discord.HTTPException:
@@ -638,23 +769,29 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
         await interaction.followup.send(MOVE_ERROR_MESSAGE, ephemeral=True)
         return
 
-    # From here the move has happened. The remaining steps are presentational, so
-    # a failure is logged rather than surfaced - the player has already moved.
+    # The move has happened. What follows is presentational, so a failure is
+    # logged rather than surfaced - the player is already through the door.
+    depart = await phrasing.default_say(
+        "move.depart", player=user.mention, name=found.name, room=origin_name
+    )
+    arrive = await phrasing.default_say(
+        "move.arrive", player=user.mention, name=found.name, room=origin_name
+    )
+
     if origin_thread is not None:
         try:
-            await origin_thread.send(f"{user.mention} exits via {chosen_exit.name}.")
+            await origin_thread.send(depart)
         except discord.HTTPException:
-            log.warning("Could not post exit message in %s", state.current_room, exc_info=True)
-
+            log.warning("Could not post departure in %s", origin_name, exc_info=True)
         try:
             await house_utils.remove_player_from_thread(origin_thread, user.id)
         except discord.HTTPException:
-            log.warning("Could not remove %s from %s", user.id, state.current_room, exc_info=True)
+            log.warning("Could not remove %s from %s", user.id, origin_name, exc_info=True)
 
     try:
-        await destination_thread.send(f"{user.mention} enters {destination_name}")
+        await destination_thread.send(arrive)
     except discord.HTTPException:
-        log.warning("Could not post entry message in %s", destination, exc_info=True)
+        log.warning("Could not post arrival in %s", destination_name, exc_info=True)
 
     await interaction.followup.send(
         f"You head to {destination_thread.mention}.", ephemeral=True

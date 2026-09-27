@@ -43,7 +43,7 @@ The Functional Spec has the behavior verb by verb and this does not repeat it. W
 
 **`/look`** keeps its name and loses its old body. Three shapes: bare, a thing, a container. The listing rules are the fiddly part — loose objects only, no sources anywhere, contained things shown when the container is looked at rather than in the room. `look_carried` replaces a thing's `look` while it is in the bag, which six things rely on.
 
-**`/take`** is new. It branches on what resolved: a source hands over its `yields` and is not itself consumed, a finite object moves from `room_contents` to `player_inventory`, and `max_per_player` is checked before either. The reply uses the **yielded object's** `take` text, never the source's — sources have none written.
+**`/take`** is new. It branches on what resolved: a source hands over its `yields` and is not itself consumed, and a finite object moves from `room_contents` to `player_inventory`. The reply uses the **yielded object's** `take` text, never the source's — sources have none written. Per-player caps are 2c.5, so `/take` ships uncapped.
 
 **`/drop`** is new and is the mirror image: scoped to the inventory, and the thing lands loose in the room with `container_id` empty. Dropping a spice jar in the Entryway does not put it back in the Amazon box.
 
@@ -130,6 +130,10 @@ Register `/stats` with no options. Adding the optional member argument later cos
 
 **No achievements.** Not the triggers, not the public announcements, not the private descriptions. `relationship_at_pet` and `use_count` are written from now on so 2d has history to read, and that is the whole of 2c's involvement.
 
+**No state changes, and no take caps.** The staircase (`stairs_repaired`, server-wide), the graphite drawer (`drawer_unjammed`, per player) and `max_per_player` are **Phase 2c.5**, which has its own tab. 2c builds the `/use` branches and the `thing_uses` row the lumber cooldown reads, and stops there: counting planks is 2c, opening the staircase is not. Two consequences worth saying out loud. **`/take` ships without caps**, so until 2c.5 lands a player can take as many gourmet cans and carving tool sets as they like and the "There's only one" refusals never fire. And **the staircase is unfinishable**, so a tester who gets a group to `planks_required` will see nothing happen and report it as a bug.
+
+**No Secret Library discovery.** The tree, the skeleton key and the two per-player exit flags (`library_found`, `passage_open`) stay in 2e. They are a different mechanism from the two state changes above — per-player exit visibility, reusing 2a's `rooms_unlocked` plumbing — and nothing else in Release 1 depends on them. One consequence to expect while testing: until 2e lands the Secret Library is unreachable, so the scattered bottles and diapers that the restock scheduler drops there will pile up where nobody can collect them. That is correct behavior, not a bug.
+
 **No events beyond the staircase.** Placing a plank is the only public event interaction in Release 1. The doorbell, the ghost of the day, the bedsheet and the spirit board belong to later releases and have no spec yet.
 
 **No cat transport.** `cross_weight` carries 0, 1 or 5 on every row and nothing reads it — it is for the cat moving things between dimensions, a later release. Same for `requires`, which is populated on nothing. A developer who finds either column and infers behavior from it will invent a mechanic nobody asked for.
@@ -141,7 +145,7 @@ Register `/stats` with no options. Adding the optional member argument later cos
 - The two failing source-prose rows are fixed and the loader starts clean against the content files
 - One resolver serves all four verbs and takes the scope as an argument, with a test for the carrying-chicken-at-the-salmon-cupboard case on both `/take` and `/drop`
 - `/take` and `/drop` move things correctly between `room_contents`, `player_inventory` and containers, `container_id` written on the way in and cleared on the way out
-- `/take` respects `max_per_player` and prints the thing's own `take_fail` rather than a generic one
+- `/take` refuses correctly on a fixture, on an exit, and on a name that matches only something already carried
 - `/use` covers all four branches, and every successful use increments `use_count` exactly once
 - `/look` works in all three shapes, with sources absent from every listing
 - Movement posts publicly in both the room left and the room entered
