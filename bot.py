@@ -18,6 +18,8 @@ from discord.ext import commands, tasks
 from dotenv import load_dotenv
 from sqlalchemy.exc import SQLAlchemyError
 
+import content
+import content_loader
 import database
 import house_utils
 
@@ -113,6 +115,49 @@ def _debug_lines(reaction: Reaction, recent: int, relationship: int) -> str:
     )
 
 
+async def load_content_at_startup() -> None:
+    """Load the content files, and keep serving the old content if they are bad.
+
+    This is how Railway gets content: the files ship with the code, and there is
+    no shell there to run load_content.py from.
+
+    A bad file does not stop the bot. Whatever is in the content tables came from
+    the last good load and still works, so a writer's typo costs the new text
+    rather than the whole game - "a half-loaded house is worse than a stale one"
+    cuts this way too. The failure is logged at error level, and
+    `python load_content.py --check` reports it in full.
+
+    Orphans are ignored here rather than refused, for the same reason: refusing
+    would let a thing removed from the files take the bot down at the next
+    restart, which is worse than a stale row nobody can see. Each one is logged,
+    and the script reports them properly.
+    """
+    try:
+        parsed = content.load()
+    except content.ContentError as exc:
+        log.error(
+            "Content files did not load, so the database keeps the content it "
+            "already had. Run `python load_content.py --check` for the full "
+            "report. %s",
+            exc,
+        )
+        return
+
+    try:
+        report = await content_loader.load_content(parsed, allow_orphans=True)
+    except SQLAlchemyError:
+        log.exception("Content load failed against the database")
+        return
+
+    log.info("Content loaded. %s", report.summary().replace(chr(10), " | "))
+    for orphan in report.orphans_ignored:
+        log.warning(
+            "Thing %r is gone from the content files but world state still refers "
+            "to it; run load_content.py to see who holds it",
+            orphan,
+        )
+
+
 class CatBot(commands.Bot):
     def __init__(self) -> None:
         # Slash commands need no privileged intents; defaults keep the bot lightweight.
@@ -126,6 +171,8 @@ class CatBot(commands.Bot):
         # so check it once at startup instead.
         for problem in house_utils.validate_graph():
             log.error("Navigation graph problem: %s", problem)
+
+        await load_content_at_startup()
 
         # Settle any nights the bot was offline for before serving commands.
         caught_up = await database.run_pending_decay()
