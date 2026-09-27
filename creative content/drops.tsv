@@ -1,0 +1,2 @@
+drop_id	trigger	date	event	name	notes
+1	date	launch		Launch	Everything in Release 1. Arrives the moment a server initializes.

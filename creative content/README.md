@@ -7,9 +7,11 @@ and turn OFF any "convert text to numbers/dates" option so ids stay as written).
 |-|-|-|
 |`rooms.tsv`|9|Room ids and names. Structure, not text.|
 |`room_text.tsv`|11|Room `look` text. 9 rooms + 2 rows for the repaired staircase.|
-|`things.tsv`|135|Every object, source, fixture and exit: ids, placement, flags. Structure, not text.|
-|`thing_text.tsv`|142|`look`, `look_carried`, `use`, `take`, `drop` plus the three refusal strings.|
-|`defaults.tsv`|15|Fallback strings used wherever a cell is left blank.|
+|`things.tsv`|140|Every object, source, fixture and exit: ids, placement, flags. Structure, not text.|
+|`thing_text.tsv`|147|`look`, `look_carried`, `use`, `take`, `drop` plus the three refusal strings.|
+|`defaults.tsv`|16|Fallback strings used wherever a cell is left blank.|
+|`drops.tsv`|1|The unlock calendar: which drop each row of content waits for.|
+|`restocks.tsv`|3|Scheduled top-ups: what gets added to which container, how often.|
 
 Writers edit `room_text.tsv`, `thing_text.tsv` and `defaults.tsv`.
 `rooms.tsv` and `things.tsv` carry game rules — changing those is a design decision.
@@ -50,9 +52,9 @@ must be named in its room's description or in the text of the thing that holds i
 
 ## Where the cat food is
 
-Four flavours, one stash per room, so collecting a set means ranging around the house.
+Four flavors, one stash per room, so collecting a set means ranging around the house.
 
-|Room|Flavour|Hidden in|
+|Room|Flavor|Hidden in|
 |-|-|-|
 |Kitchen|tuna|the pantry|
 |Living Room|chicken|under the sofa|
@@ -61,7 +63,7 @@ Four flavours, one stash per room, so collecting a set means ranging around the 
 |Bedroom|chicken|a crate under the bed|
 |Dining Room|salmon|the sideboard cupboard|
 
-The single gourmet tin is under the bed behind the chicken crate, and it is the only one
+The single gourmet can is under the bed behind the chicken crate, and it is the only one
 in the house.
 
 ## What changed since the copy you sent back
@@ -104,7 +106,7 @@ is wrong now:
 needs adding to the Templating section of the Content Schema.
 
 The engine side is the real cost: nothing currently records a per-player, per-thing last
-used time. `pet_events` is the only behavioural log and it is shaped for the mood window.
+used time. `pet_events` is the only behavioral log and it is shaped for the mood window.
 
 `{total}`, the number of planks the staircase needs, becomes per-server configuration
 rather than content — see the Delivery Plan.
@@ -112,7 +114,7 @@ rather than content — see the Delivery Plan.
 ## Expired cat food, the jammed drawer, and graphite
 
 **Duck is gone** — `cat_food_duck` and the Upstairs Hallway duck stash are both removed.
-The five flavours are now chicken, salmon, tuna, gourmet and **expired**, which matches
+The five flavors are now chicken, salmon, tuna, gourmet and **expired**, which matches
 the "Charcuterie Board" achievement exactly.
 
 **The desk's lid opens; only the bottom drawer is jammed.** The glasses, the manual and
@@ -135,7 +137,7 @@ preserved word for word — it just sits on the source row now, where it belongs
 object's `look`, `take` and `drop` are new, because a carried portion is a twist of
 paper, not the tin.
 
-**New column `since_release` on `things.tsv`**, so a thing can appear in a later release
+**New column `since_drop` on `things.tsv`**, so a thing can appear at a later drop
 rather than existing from launch. Every row is `1` today; nothing uses it yet. The text
 files already had this column — structure rows did not.
 

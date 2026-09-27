@@ -210,6 +210,16 @@ class PetEvent(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    # The relationship score as it stood *before* this pet applied. Two
+    # achievements count 200 pets while the relationship was positive or
+    # negative, and no other table can answer that after the fact - the score is
+    # a running total, so history cannot be reconstructed from it. Recorded now,
+    # ahead of the achievements themselves, because the only moment backfill is
+    # free is before a real server starts petting. Rows written before this
+    # column existed read 0; reset_db.py is the intended way past that.
+    relationship_at_pet: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
 
 
 class PlayerGameState(Base):
@@ -339,6 +349,304 @@ class InventoryItem(Base):
     )
 
 
+# --------------------------------------------------------------------------
+# Content, loaded from the files in `creative content/`
+#
+# Global, not keyed by guild: the house is the same house in every server. These
+# tables are never mutated at runtime, which is what makes a reload safe - the
+# loader can replace them wholesale without touching anything a player did.
+#
+# The three tables above this comment - rooms, things, inventory - are the
+# per-guild content tables these replace. They are left in place and unread, as
+# the cohort columns were: dropping a table is not something the additive startup
+# migration can do. Nothing writes them once the loader lands.
+# --------------------------------------------------------------------------
+
+# Written into room_contents.container_id for a thing lying loose in a room.
+# An empty string rather than NULL, because it is part of a composite primary key
+# and NULLs in a key compare as distinct from each other on some backends.
+LOOSE_IN_ROOM = ""
+
+# server_config key holding the Pacific date a guild first initialized its house.
+# Restock day numbers count from it, so it is per-server rather than global.
+CONFIG_INITIALIZED_ON = "initialized_on"
+
+
+class RoomType(Base):
+    """One row per room in the house, from rooms.tsv."""
+
+    __tablename__ = "room_types"
+
+    room_id: Mapped[str] = mapped_column(String(8), primary_key=True)
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    open_at_launch: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class ThingType(Base):
+    """One row per thing, from things.tsv.
+
+    A *type*, not an instance: five baby bottles in a room are one row here and a
+    count of five in room_contents. See "Why types" in the phase 2b work order -
+    the finite world is six copies across six things, while sources feed fourteen
+    objects with no cap, so per-copy rows would grow without bound to model the
+    part of the world that does not need them.
+    """
+
+    __tablename__ = "thing_types"
+
+    thing_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    # JSON rather than a delimited string: the files use pipes, but a list is what
+    # the resolver wants, and JSON is already how rooms_unlocked is stored.
+    aliases: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    type: Mapped[str] = mapped_column(String(16), nullable=False)
+    room_id: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    # NULL means `many` - a shared pool with no count, which only lumber uses.
+    quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    takeable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    droppable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    cross_weight: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    max_per_player: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    requires: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    present_when: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    transforms_to: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    transform_room: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    yields: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    destination_room_id: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    contained_in: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    use_cooldown_hours: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    since_drop: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class RoomText(Base):
+    """A room's description for one state, at one drop."""
+
+    __tablename__ = "room_text"
+
+    room_id: Mapped[str] = mapped_column(String(8), primary_key=True)
+    state: Mapped[str] = mapped_column(String(64), primary_key=True)
+    since_drop: Mapped[int] = mapped_column(Integer, primary_key=True)
+    look: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ThingText(Base):
+    """A thing's text for one state, at one drop.
+
+    Every column is nullable: a blank cell means "use the house default", which is
+    the whole point of defaults.tsv. Most things fill only `look`.
+    """
+
+    __tablename__ = "thing_text"
+
+    thing_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    state: Mapped[str] = mapped_column(String(64), primary_key=True)
+    since_drop: Mapped[int] = mapped_column(Integer, primary_key=True)
+    look: Mapped[str | None] = mapped_column(Text, nullable=True)
+    look_carried: Mapped[str | None] = mapped_column(Text, nullable=True)
+    use: Mapped[str | None] = mapped_column(Text, nullable=True)
+    take: Mapped[str | None] = mapped_column(Text, nullable=True)
+    drop: Mapped[str | None] = mapped_column(Text, nullable=True)
+    use_fail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    take_fail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    drop_fail: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class DefaultText(Base):
+    """House fallback strings, used wherever a content cell is blank."""
+
+    __tablename__ = "defaults"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    text_value: Mapped[str] = mapped_column("text", Text, nullable=False)
+
+
+class Drop(Base):
+    """The unlock calendar: when each slice of content becomes visible.
+
+    A drop is a moment content reaches players; a release is a deployment. One
+    release can carry a month of drops, which is why no release number is stored
+    anywhere and no command advances one.
+    """
+
+    __tablename__ = "drops"
+
+    drop_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    trigger: Mapped[str] = mapped_column(String(16), nullable=False)
+    # Either an ISO date or the literal "launch", which arrives immediately.
+    date: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    event: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class Restock(Base):
+    """A schedule for things that reappear over time, from restocks.tsv.
+
+    Loaded and validated in 2b; the job that acts on it is 2c. Nothing here runs
+    on a clock yet.
+    """
+
+    __tablename__ = "restocks"
+
+    restock_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    thing_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    placement: Mapped[str] = mapped_column(String(16), nullable=False)
+    container: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    amount: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # Separate occurrences, not one delivery of `amount` - eight bottles a day is
+    # eight arrivals at eight independently drawn times.
+    times_per_day: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    first_day: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    every_n_days: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    window_start: Mapped[str] = mapped_column(String(5), nullable=False, default="00:00")
+    window_end: Mapped[str] = mapped_column(String(5), nullable=False, default="23:59")
+    # Where set, names a server_config key an admin can retune mid-game.
+    config_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    since_drop: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+# --------------------------------------------------------------------------
+# World state: per guild, mutable, and never written by the loader except when
+# it first places things in a server that has none.
+# --------------------------------------------------------------------------
+
+
+class PlayerInventory(Base):
+    """What a player carries, as counts rather than rows per copy."""
+
+    __tablename__ = "player_inventory"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    thing_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class RoomContents(Base):
+    """What is in a room, or in a container in a room.
+
+    `container_id` is LOOSE_IN_ROOM for something lying out in the open, and a
+    thing_id for something inside a container. It is part of the key because the
+    same thing can be both at once: a spice jar in the Amazon box and another one
+    dropped on the floor beside it are two rows, and only the loose one shows in
+    the room's `Also here:` line.
+    """
+
+    __tablename__ = "room_contents"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    room_id: Mapped[str] = mapped_column(String(8), primary_key=True)
+    container_id: Mapped[str] = mapped_column(
+        String(64), primary_key=True, default=LOOSE_IN_ROOM, server_default=text("''")
+    )
+    thing_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class PlayerState(Base):
+    """A discovery one player has made: has_key, drawer_unjammed and the rest.
+
+    Per player because the discovery *is* the content - making these server-wide
+    would mean only the first player ever experiences them.
+    """
+
+    __tablename__ = "player_states"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    state: Mapped[str] = mapped_column(String(64), primary_key=True)
+    set_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class ServerState(Base):
+    """A state the whole server shares. Only stairs_repaired today.
+
+    Collective labour earns a collective reward, so the staircase lands for
+    everyone at once.
+    """
+
+    __tablename__ = "server_states"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    state: Mapped[str] = mapped_column(String(64), primary_key=True)
+    set_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class ServerConfig(Base):
+    """Per-server numbers an admin can retune: planks_required, bottles_per_day.
+
+    Values are strings so one table serves every type; callers coerce. Also holds
+    CONFIG_INITIALIZED_ON, the date restock day numbers count from.
+    """
+
+    __tablename__ = "server_config"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(String(255), nullable=False)
+
+
+class ThingUse(Base):
+    """One row per (player, thing): when they last used it, and how many times.
+
+    Three jobs in one table. `last_used_at` answers the 48-hour lumber cooldown;
+    counting distinct rows for a thing answers "{n} of {total} repairs done", which
+    the staircase needs by distinct player; and `use_count` answers "do this N
+    times" achievements, of which ten frozen burritos is the first.
+    """
+
+    __tablename__ = "thing_uses"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    thing_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    last_used_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    use_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class ServerDrop(Base):
+    """A drop that has arrived on this server, recorded so it cannot un-arrive.
+
+    Only `event` and `manual` drops need rows. A `date` drop is answered by the
+    calendar every time it is asked, so storing it would be a second source of
+    truth. The reason arrival is recorded at all is that a condition can stop
+    being true - a counter falls back, a thing is taken - and content must not
+    vanish from a house it has already changed.
+    """
+
+    __tablename__ = "server_drops"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    drop_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    arrived_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class ServerRestock(Base):
+    """Where a server has got to in one restock schedule.
+
+    Written by the 2c scheduler, created empty here. `last_applied_at` is what
+    makes a window missed during an outage get applied at the next opportunity
+    rather than skipped; `next_at` holds the random time already drawn, so a
+    restart does not redraw it and double-place.
+    """
+
+    __tablename__ = "server_restocks"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    restock_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    last_applied_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    next_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 def _normalise_url(raw: str) -> str:
     """Convert a stock PostgreSQL URL into the async (asyncpg) form SQLAlchemy needs.
 
@@ -387,6 +695,12 @@ _LATER_COLUMNS: list[tuple[str, str, str]] = [
     ("things", "cohort", "VARCHAR(1)"),
     ("things", "can_take", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ("things", "removed_on_take", "BOOLEAN NOT NULL DEFAULT TRUE"),
+    # Rows written before this column existed read 0 rather than their true score,
+    # which cannot be recovered. Acceptable only because every such row is test
+    # data; reset_db.py is the way past it.
+    ("pet_events", "relationship_at_pet", "INTEGER NOT NULL DEFAULT 0"),
+    ("room_contents", "container_id", "VARCHAR(64) NOT NULL DEFAULT ''"),
+    ("thing_uses", "use_count", "INTEGER NOT NULL DEFAULT 0"),
 ]
 
 
@@ -426,6 +740,41 @@ def _enforce_sqlite_foreign_keys(engine: AsyncEngine) -> None:
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
+
+
+async def migrate_room_names_to_ids() -> int:
+    """Translate current_room from a room name to a room id, once.
+
+    Before phase 2b a player's position was a name - "Entryway". The content
+    files key on ids - "EN" - and everything now joins on those, so a row still
+    holding a name matches no room and its owner is nowhere: no description, no
+    exits, no thread.
+
+    Matched on the name, so it can only ever affect rows written by the old code;
+    a row already holding an id matches no room name and is left alone, which is
+    what makes this safe to run on every boot. Runs after content loads, since it
+    needs room_types to translate against.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rooms = (
+            await session.execute(select(RoomType.room_id, RoomType.name))
+        ).all()
+        if not rooms:
+            return 0
+
+        moved = 0
+        for room_id, name in rooms:
+            result = await session.execute(
+                update(PlayerGameState)
+                .where(PlayerGameState.current_room == name)
+                .values(current_room=room_id)
+            )
+            moved += result.rowcount or 0
+        if moved:
+            await session.commit()
+            log.info("Migrated %d player position(s) from room names to room ids", moved)
+        return moved
 
 
 async def init_db() -> None:
@@ -518,7 +867,7 @@ async def increment_pet_count(user_id: int, guild_id: int) -> PetResult:
             index_elements=[User.id, User.guild_id],
             set_={"pet_count": User.pet_count + 1, "updated_at": func.now()},
         )
-        .returning(User.pet_count)
+        .returning(User.pet_count, User.relationship)
     )
 
     try:
@@ -532,9 +881,19 @@ async def increment_pet_count(user_id: int, guild_id: int) -> PetResult:
                     PetEvent.created_at >= cutoff,
                 )
             )
-            result = await session.execute(stmt)
-            total = result.scalar_one()
-            session.add(PetEvent(user_id=user_id, guild_id=guild_id, created_at=now))
+            total, relationship_before = (await session.execute(stmt)).one()
+            # The upsert touches pet_count, never relationship, so what comes back
+            # is the score as it stood before this pet - which is exactly what the
+            # achievements need, and what nothing could reconstruct afterwards. A
+            # brand-new player reads RELATIONSHIP_START, their score at that moment.
+            session.add(
+                PetEvent(
+                    user_id=user_id,
+                    guild_id=guild_id,
+                    created_at=now,
+                    relationship_at_pet=relationship_before,
+                )
+            )
             await session.commit()
 
             log.info(
@@ -783,7 +1142,15 @@ async def get_all_player_locations(guild_id: int) -> list[tuple[int, str]]:
 
 
 # --------------------------------------------------------------------------
-# Rooms, things and inventory (/look, /inventory), per server
+# Rooms, things and inventory
+#
+# The per-guild query layer that used to live here is gone: it read the rooms,
+# things and inventory tables, which the phase 2b loader no longer writes. Its
+# replacement reads the content tables instead and is further down, under
+# "Reading the world".
+#
+# The tables themselves stay, unread, because dropping a table is not something
+# the additive startup migration can do.
 # --------------------------------------------------------------------------
 
 
@@ -792,314 +1159,6 @@ class LookResult(NamedTuple):
 
     description: str | None
     count: int
-
-
-async def seed_rooms(guild_id: int, room_names: list[str]) -> int:
-    """Create a `rooms` row for each named room in this server if absent.
-
-    Descriptions are left empty for writers to fill in. Returns how many rows
-    were newly created. Safe to rerun: existing rows and their descriptions are
-    untouched, so rebuilding the house never loses a writer's work.
-    """
-    session_factory = _require_session()
-    insert = _upsert_statement()
-    created = 0
-    try:
-        async with session_factory() as session:
-            for name in room_names:
-                stmt = (
-                    insert(Room)
-                    .values(guild_id=guild_id, room_name=name)
-                    .on_conflict_do_nothing(index_elements=[Room.guild_id, Room.room_name])
-                    .returning(Room.room_id)
-                )
-                if (await session.execute(stmt)).scalar_one_or_none() is not None:
-                    created += 1
-            await session.commit()
-        if created:
-            log.info("Seeded %d room row(s) for guild %s", created, guild_id)
-        return created
-    except SQLAlchemyError:
-        log.exception("Failed to seed rooms for guild %s", guild_id)
-        raise
-
-
-async def get_room_description(guild_id: int, room_name: str) -> str | None:
-    """The writer-supplied description of a room in this server, or None if unset."""
-    session_factory = _require_session()
-    try:
-        async with session_factory() as session:
-            value = await session.scalar(
-                select(Room.room_description).where(
-                    Room.guild_id == guild_id, Room.room_name == room_name
-                )
-            )
-            return value.strip() if value and value.strip() else None
-    except SQLAlchemyError:
-        log.exception("Failed to read description of %s in guild %s", room_name, guild_id)
-        raise
-
-
-async def set_room_description(guild_id: int, room_name: str, description: str) -> None:
-    """Set a room's description in this server, creating the row if needed."""
-    session_factory = _require_session()
-    insert = _upsert_statement()
-    stmt = (
-        insert(Room)
-        .values(guild_id=guild_id, room_name=room_name, room_description=description)
-        .on_conflict_do_update(
-            index_elements=[Room.guild_id, Room.room_name],
-            set_={"room_description": description, "updated_at": func.now()},
-        )
-    )
-    try:
-        async with session_factory() as session:
-            await session.execute(stmt)
-            await session.commit()
-            log.info("Description set for %s in guild %s", room_name, guild_id)
-    except SQLAlchemyError:
-        log.exception("Failed to set description of %s in guild %s", room_name, guild_id)
-        raise
-
-
-async def add_thing(
-    guild_id: int,
-    room_name: str,
-    thing_name: str,
-    description: str | None,
-    can_take: bool = False,
-    removed_on_take: bool = True,
-) -> int:
-    """Place a new thing instance in a room of this server. Returns its thing_id.
-
-    Creates the room row if it does not exist yet, so things can be added before
-    the house has been initialized or described.
-    """
-    session_factory = _require_session()
-    insert = _upsert_statement()
-    try:
-        async with session_factory() as session:
-            await session.execute(
-                insert(Room)
-                .values(guild_id=guild_id, room_name=room_name)
-                .on_conflict_do_nothing(index_elements=[Room.guild_id, Room.room_name])
-            )
-            room_id = await session.scalar(
-                select(Room.room_id).where(Room.guild_id == guild_id, Room.room_name == room_name)
-            )
-            thing = Thing(
-                guild_id=guild_id,
-                room_id=room_id,
-                thing_name=thing_name.strip(),
-                thing_description=description,
-                can_take=can_take,
-                removed_on_take=removed_on_take,
-            )
-            session.add(thing)
-            await session.commit()
-            log.info(
-                "Added thing %r (id %s) to %s in guild %s",
-                thing.thing_name,
-                thing.thing_id,
-                room_name,
-                guild_id,
-            )
-            return thing.thing_id
-    except SQLAlchemyError:
-        log.exception("Failed to add thing %r to %s in guild %s", thing_name, room_name, guild_id)
-        raise
-
-
-def _held_thing_ids():
-    """Subquery of every thing instance currently in someone's inventory."""
-    return select(InventoryItem.thing_id)
-
-
-def _visible_in_room():
-    """Filters that make an instance visible in a room.
-
-    An instance must not be an exclusive item (`removed_on_take`) that someone is
-    carrying. A non-exclusive item stays visible however many players hold copies
-    of it.
-    """
-    return (
-        ~((Thing.removed_on_take.is_(True)) & (Thing.thing_id.in_(_held_thing_ids()))),
-    )
-
-
-async def get_things_in_room(guild_id: int, room_name: str) -> list[tuple[int, str]]:
-    """(thing_id, thing_name) for every instance a player sees in a room.
-
-    See _visible_in_room for what "sees" means.
-    """
-    session_factory = _require_session()
-    try:
-        async with session_factory() as session:
-            rows = await session.execute(
-                select(Thing.thing_id, Thing.thing_name)
-                .join(Room, Room.room_id == Thing.room_id)
-                .where(
-                    Thing.guild_id == guild_id,
-                    Room.guild_id == guild_id,
-                    Room.room_name == room_name,
-                    *_visible_in_room(),
-                )
-                .order_by(Thing.thing_id)
-            )
-            return [(row[0], row[1]) for row in rows]
-    except SQLAlchemyError:
-        log.exception("Failed to list things in %s for guild %s", room_name, guild_id)
-        raise
-
-
-async def look_at_thing(
-    user_id: int, guild_id: int, room_name: str, thing_name: str
-) -> LookResult | None:
-    """Find every matching instance in the player's room or their inventory.
-
-    Case-insensitive on thing_name. Returns None if nothing matches anywhere.
-    Otherwise returns the first match's description and the combined count -
-    three in the room and two in the player's bag is "There are 5."
-
-    An exclusive instance another player carries has left the room and is not
-    counted; an exclusive instance this player carries is counted via the
-    inventory half, never the room half, so nothing is counted twice. A
-    non-exclusive instance the player holds a copy of is counted in both -
-    there is one on the shelf and one in their bag.
-    """
-    session_factory = _require_session()
-    needle = thing_name.strip().lower()
-    if not needle:
-        return None
-
-    in_room = (
-        select(Thing.thing_id, Thing.thing_description)
-        .join(Room, Room.room_id == Thing.room_id)
-        .where(
-            Thing.guild_id == guild_id,
-            Room.guild_id == guild_id,
-            Room.room_name == room_name,
-            func.lower(Thing.thing_name) == needle,
-            *_visible_in_room(),
-        )
-    )
-    in_bag = (
-        select(Thing.thing_id, Thing.thing_description)
-        .join(InventoryItem, InventoryItem.thing_id == Thing.thing_id)
-        .where(
-            InventoryItem.user_id == user_id,
-            InventoryItem.guild_id == guild_id,
-            func.lower(Thing.thing_name) == needle,
-        )
-    )
-
-    try:
-        async with session_factory() as session:
-            room_rows = (await session.execute(in_room)).all()
-            bag_rows = (await session.execute(in_bag)).all()
-    except SQLAlchemyError:
-        log.exception("Failed to look at %r in %s for guild %s", thing_name, room_name, guild_id)
-        raise
-
-    matches = room_rows + bag_rows
-    if not matches:
-        return None
-    description = next((row[1] for row in matches if row[1]), None)
-    return LookResult(description=description, count=len(matches))
-
-
-async def get_inventory(user_id: int, guild_id: int) -> list[tuple[str, int]]:
-    """(thing_name, count) for everything the player carries in this server.
-
-    Grouped by name and ordered alphabetically, ready to display.
-    """
-    session_factory = _require_session()
-    try:
-        async with session_factory() as session:
-            rows = await session.execute(
-                select(Thing.thing_name, func.count())
-                .join(InventoryItem, InventoryItem.thing_id == Thing.thing_id)
-                .where(InventoryItem.user_id == user_id, InventoryItem.guild_id == guild_id)
-                .group_by(Thing.thing_name)
-                .order_by(Thing.thing_name)
-            )
-            return [(row[0], row[1]) for row in rows]
-    except SQLAlchemyError:
-        log.exception("Failed to read inventory for %s in guild %s", user_id, guild_id)
-        raise
-
-
-async def inventory_count(user_id: int, guild_id: int) -> int:
-    """How many thing instances the player carries in this server."""
-    session_factory = _require_session()
-    try:
-        async with session_factory() as session:
-            return (
-                await session.scalar(
-                    select(func.count())
-                    .select_from(InventoryItem)
-                    .where(InventoryItem.user_id == user_id, InventoryItem.guild_id == guild_id)
-                )
-            ) or 0
-    except SQLAlchemyError:
-        log.exception("Failed to count inventory for %s in guild %s", user_id, guild_id)
-        raise
-
-
-async def add_to_inventory(user_id: int, guild_id: int, thing_id: int) -> bool:
-    """Give the player a specific thing instance. False if they already hold it.
-
-    Ensures the player's `users` row exists first, as the foreign key requires.
-    The unique constraint is the source of truth for "already held": a second
-    insert is refused by the database rather than checked and raced.
-    """
-    session_factory = _require_session()
-    await ensure_user_exists(user_id, guild_id)
-    insert = _upsert_statement()
-    stmt = (
-        insert(InventoryItem)
-        .values(user_id=user_id, guild_id=guild_id, thing_id=thing_id)
-        .on_conflict_do_nothing(
-            index_elements=[InventoryItem.user_id, InventoryItem.guild_id, InventoryItem.thing_id]
-        )
-        .returning(InventoryItem.inventory_id)
-    )
-    try:
-        async with session_factory() as session:
-            added = (await session.execute(stmt)).scalar_one_or_none() is not None
-            await session.commit()
-            if added:
-                log.info("User %s in guild %s picked up thing %s", user_id, guild_id, thing_id)
-            return added
-    except IntegrityError:
-        # A thing_id that does not exist fails the foreign key; report, don't crash.
-        log.warning("add_to_inventory: thing %s does not exist in guild %s", thing_id, guild_id)
-        return False
-    except SQLAlchemyError:
-        log.exception("Failed to add thing %s to inventory of %s in guild %s", thing_id, user_id, guild_id)
-        raise
-
-
-async def remove_from_inventory(user_id: int, guild_id: int, thing_id: int) -> bool:
-    """Take a specific thing instance from the player. False if they did not hold it."""
-    session_factory = _require_session()
-    try:
-        async with session_factory() as session:
-            result = await session.execute(
-                delete(InventoryItem).where(
-                    InventoryItem.user_id == user_id,
-                    InventoryItem.guild_id == guild_id,
-                    InventoryItem.thing_id == thing_id,
-                )
-            )
-            await session.commit()
-            removed = result.rowcount > 0
-            if removed:
-                log.info("User %s in guild %s dropped thing %s", user_id, guild_id, thing_id)
-            return removed
-    except SQLAlchemyError:
-        log.exception("Failed to remove thing %s from inventory of %s in guild %s", thing_id, user_id, guild_id)
-        raise
 
 
 # --------------------------------------------------------------------------
@@ -1215,3 +1274,154 @@ async def close_db() -> None:
         _engine = None
         _session_factory = None
         log.info("Database connection closed")
+
+
+# --------------------------------------------------------------------------
+# Reading the world (/look, /inventory) from the content tables
+#
+# These replace the per-guild rooms/things queries above, which read tables the
+# loader no longer writes. Behaviour is deliberately unchanged from phase 2a:
+# the resolution ladder, `Also here:`, containers and sources are 2c.
+# --------------------------------------------------------------------------
+
+
+async def _thing_names(session, thing_ids: set[str]) -> dict[str, tuple[str, list[str]]]:
+    if not thing_ids:
+        return {}
+    rows = await session.execute(
+        select(ThingType.thing_id, ThingType.name, ThingType.aliases).where(
+            ThingType.thing_id.in_(thing_ids)
+        )
+    )
+    return {row[0]: (row[1], list(row[2] or [])) for row in rows}
+
+
+def _matches(typed: str, name: str, aliases: list[str]) -> bool:
+    needle = typed.strip().lower()
+    return bool(needle) and (
+        needle == name.lower() or needle in {a.strip().lower() for a in aliases}
+    )
+
+
+async def look_at_thing_here(
+    user_id: int, guild_id: int, room_id: str, typed: str
+) -> LookResult | None:
+    """Find a thing by what the player typed, in their room or their bag.
+
+    Three places a thing can be. Fixtures, sources and exits sit in the room by
+    virtue of `thing_types.room_id` and are never stock, so they are not counted -
+    there is one fireplace. Objects sit in `room_contents`, which is where a count
+    above one is real. What the player carries comes from `player_inventory`.
+
+    Matching is on name or alias, case-insensitively. The loader guarantees
+    aliases are unique within a room, so a name cannot mean two things at once.
+    """
+    if not typed or not typed.strip():
+        return None
+
+    session_factory = _require_session()
+    try:
+        async with session_factory() as session:
+            fixed = (
+                await session.execute(
+                    select(ThingType.thing_id, ThingType.name, ThingType.aliases, ThingType.type)
+                    .where(ThingType.room_id == room_id)
+                )
+            ).all()
+
+            stock = {
+                row[0]: row[1]
+                for row in await session.execute(
+                    select(RoomContents.thing_id, RoomContents.count).where(
+                        RoomContents.guild_id == guild_id,
+                        RoomContents.room_id == room_id,
+                        RoomContents.count > 0,
+                    )
+                )
+            }
+            carried = {
+                row[0]: row[1]
+                for row in await session.execute(
+                    select(PlayerInventory.thing_id, PlayerInventory.count).where(
+                        PlayerInventory.guild_id == guild_id,
+                        PlayerInventory.user_id == user_id,
+                        PlayerInventory.count > 0,
+                    )
+                )
+            }
+
+            named = await _thing_names(session, set(stock) | set(carried))
+
+            candidates: dict[str, tuple[str, list[str], str | None]] = {}
+            for thing_id, name, aliases, kind in fixed:
+                candidates[thing_id] = (name, list(aliases or []), kind)
+            for thing_id, (name, aliases) in named.items():
+                candidates.setdefault(thing_id, (name, aliases, "object"))
+
+            match = next(
+                (
+                    thing_id
+                    for thing_id, (name, aliases, _) in candidates.items()
+                    if _matches(typed, name, aliases)
+                ),
+                None,
+            )
+            if match is None:
+                return None
+
+            count = stock.get(match, 0) + carried.get(match, 0)
+            if count == 0:
+                # A fixture, a source or an exit: present, but not stock.
+                kind = candidates[match][2]
+                if kind == "object":
+                    return None
+                count = 1
+
+            description = await session.scalar(
+                select(ThingText.look).where(
+                    ThingText.thing_id == match, ThingText.state == "default"
+                )
+            )
+            return LookResult(description=description, count=count)
+    except SQLAlchemyError:
+        log.exception("Failed to look at %r in %s for guild %s", typed, room_id, guild_id)
+        raise
+
+
+async def get_carried(user_id: int, guild_id: int) -> list[tuple[str, int]]:
+    """(name, count) for everything the player carries, alphabetical."""
+    session_factory = _require_session()
+    try:
+        async with session_factory() as session:
+            rows = await session.execute(
+                select(ThingType.name, PlayerInventory.count)
+                .join(ThingType, ThingType.thing_id == PlayerInventory.thing_id)
+                .where(
+                    PlayerInventory.user_id == user_id,
+                    PlayerInventory.guild_id == guild_id,
+                    PlayerInventory.count > 0,
+                )
+                .order_by(ThingType.name)
+            )
+            return [(row[0], row[1]) for row in rows]
+    except SQLAlchemyError:
+        log.exception("Failed to read inventory for %s in guild %s", user_id, guild_id)
+        raise
+
+
+async def carried_count(user_id: int, guild_id: int) -> int:
+    """How many things the player is carrying, counting duplicates."""
+    session_factory = _require_session()
+    try:
+        async with session_factory() as session:
+            return (
+                await session.scalar(
+                    select(func.coalesce(func.sum(PlayerInventory.count), 0)).where(
+                        PlayerInventory.user_id == user_id,
+                        PlayerInventory.guild_id == guild_id,
+                    )
+                )
+            ) or 0
+    except SQLAlchemyError:
+        log.exception("Failed to count inventory for %s in guild %s", user_id, guild_id)
+        raise
