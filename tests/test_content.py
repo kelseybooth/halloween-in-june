@@ -325,3 +325,108 @@ def test_the_error_message_names_the_count_and_lists_them():
     assert "2 problem(s)" in message
     assert "first thing wrong" in message
     assert "second thing wrong" in message
+
+
+# --------------------------------------------------------------------------
+# The craving lookup
+#
+# Generated from Unicode's emoji-test.txt rather than written by hand, because
+# a mis-grouped emoji shows up as the bot saying "right subgroup" to a wrong
+# guess - which nobody would trace back to a data file.
+# --------------------------------------------------------------------------
+
+
+def test_the_emoji_file_loads(shipped):
+    assert len(shipped.emoji_groups) == 132
+
+
+def test_dishware_is_not_drawable(shipped):
+    """A plate as the cat's craving of the day is a strange day."""
+    dishware = [e for e in shipped.emoji_groups if e.subgroup == content.DISHWARE_SUBGROUP]
+
+    assert len(dishware) == 7
+    assert not any(e.drawable for e in dishware)
+
+
+def test_everything_else_is_drawable(shipped):
+    assert len(shipped.craving_pool) == 125
+
+
+def test_a_plate_still_resolves_to_a_subgroup(shipped):
+    """It can never be the answer, but it is a legal guess and must not crash -
+    which is why `drawable` is a separate column from the grouping."""
+    plate = next(e for e in shipped.emoji_groups if e.subgroup == content.DISHWARE_SUBGROUP)
+
+    assert plate.subgroup
+    assert plate.drawable is False
+
+
+def test_every_subgroup_the_spec_names_is_present_except_marine(shipped):
+    """food-marine is in the Functional Spec's list but not in Unicode 18.0:
+    crab, lobster, shrimp, squid and oyster are Animals & Nature/animal-marine.
+    The pool is the Food & Drink group, so there is no seafood in it."""
+    found = {e.subgroup for e in shipped.emoji_groups}
+
+    assert found == {
+        "food-fruit",
+        "food-vegetable",
+        "food-prepared",
+        "food-asian",
+        "food-sweet",
+        "drink",
+        "dishware",
+    }
+
+
+def test_emoji_are_normalised_on_load(shipped):
+    """Not at compare time: normalising there lets the file and a reaction
+    disagree invisibly for one emoji nobody thinks to test."""
+    assert not any("\ufe0f" in e.emoji for e in shipped.emoji_groups)
+
+
+def test_the_pool_is_large_enough_for_the_game(shipped):
+    """The spec sizes the daily guess at roughly 1-in-130, narrowed by subgroup
+    to something a room closes out in a few tries."""
+    assert 100 <= len(shipped.craving_pool) <= 160
+    by_group = {}
+    for e in shipped.craving_pool:
+        by_group.setdefault(e.subgroup, []).append(e)
+    assert all(5 <= len(v) <= 40 for v in by_group.values())
+
+
+def test_a_duplicate_emoji_is_caught(shipped):
+    broken = copy.deepcopy(shipped)
+    broken.emoji_groups.append(broken.emoji_groups[0])
+
+    assert problems_matching(broken, "appears twice")
+
+
+def test_a_duplicate_that_differs_only_by_variation_selector_is_caught():
+    """They normalise to the same string, so one would shadow the other and
+    which won would depend on row order."""
+    from content import EmojiGroup
+
+    c = content.Content()
+    c.emoji_groups = [
+        EmojiGroup(emoji=content.normalise_emoji("\u2615\ufe0f"), subgroup="drink", drawable=True),
+        EmojiGroup(emoji=content.normalise_emoji("\u2615"), subgroup="drink", drawable=True),
+    ]
+    assert any("appears twice" in p for p in content._check_emoji_groups(c))
+
+
+def test_an_emoji_with_no_subgroup_is_caught(shipped):
+    from dataclasses import replace
+
+    broken = copy.deepcopy(shipped)
+    broken.emoji_groups[0] = replace(broken.emoji_groups[0], subgroup="")
+
+    assert problems_matching(broken, "has no subgroup")
+
+
+def test_a_file_with_nothing_drawable_is_caught(shipped):
+    from dataclasses import replace
+
+    broken = copy.deepcopy(shipped)
+    broken.emoji_groups = [replace(e, drawable=False) for e in broken.emoji_groups]
+
+    assert problems_matching(broken, "could never be drawn")
