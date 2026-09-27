@@ -15,3 +15,10 @@ ambiguous.match	Which one do you mean: {options}?
 also_here.prefix	Also here: 
 also_here.entry_multiple	{name} x{n}
 also_here.separator	, 
+also_here.truncated	…and {more} more. The room is getting crowded.
+unknown.noun	Whatever that is, this house doesn't have one.
+contents.prefix	Here you find: 
+move.depart	{player} exits via the {name}.
+move.arrive	{player} arrives from the {room}.
+inventory.prefix	You're carrying: 
+inventory.empty	Your bag is empty.

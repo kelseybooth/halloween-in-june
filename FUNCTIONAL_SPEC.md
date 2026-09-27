@@ -104,6 +104,8 @@ Resolution is scoped to the room, never the inventory (see Resolution). Resolve,
 
 **The used baby bottle is deliberately uncapped.** Eight are scattered through the house every day, so *Catproof the House* is earnable by everyone without a cap doing that work — the restock schedule is what spreads them, not a limit. Capping it would only penalize a player who collected diligently. Do not add one.
 
+*(Reapplied 26 September after a spec edit reverted it. `things.tsv` sets `max_per_player` on three rows; the files are authoritative where this document disagrees with them.)*
+
 Refusals, in order of checking:
 
 | Situation | Reply |
@@ -271,19 +273,19 @@ Text resolves by `(entity, state, since_drop)`: the row matching the player's st
 
 **Private:** `/look`, `/inventory`, `/stats`. Looking around should not spam a shared thread, and a private reply is also what keeps one player's `drawer_unjammed` view from confusing everyone else in the room.
 
-**Public in the room thread:** `/take`, `/drop`, movement via `/use`, and the two event interactions. The rooms are shared, so the room's state has to be legible to the people standing in it — if someone takes the last of something, the others need to see it happen rather than discover it later.
+**Public in the room thread:** `/take`, `/drop`, movement via `/use`, and placing a plank in the staircase — the only public event interaction in Release 1. Later releases add others. The rooms are shared, so the room's state has to be legible to the people standing in it — if someone takes the last of something, the others need to see it happen rather than discover it later.
 
 **`/use` on a thing** should be private in all but one case. Most `use` text is a small private moment ("you take one deliberate breath, which is a mistake"), and making every use public would bury the thread. The single exception should be a plank placed in the staircase, which should post publicly as well as privately, because it is a collaborative effort across many players.
 
 ### Limits
 
-- A Discord message caps at **2,000 characters**. The longest room description plus a full `Also here:` line is well inside that, but a room where many things have been dropped is not bounded by anything today. Truncate the listing with a count rather than letting the send fail.
+- A Discord message caps at **2,000 characters**. The longest room description plus a full `Also here:` line is well inside that, but a room where many things have been dropped is not bounded by anything today. Truncate the listing with a count rather than letting the send fail, using `also_here.truncated`.
 - A message caps at **20 distinct reactions**, which the craving game is built around.
 - Ephemeral replies require an interaction. Reactions and plain messages have none.
 
 ### Templating
 
-Tokens the engine substitutes: `{name}` the thing's name, `{room}`, `{n}` and `{total}` for the lumber counter, `{options}` for the ambiguity list, and `{time}` for a remaining cooldown. `{time}` is new with the lumber cooldown and needs adding to the Content Schema's Templating section.
+Tokens the engine substitutes: `{name}` the thing's name, `{room}`, `{n}` and `{total}` for the lumber counter, `{options}` for the ambiguity list, `{time}` for a remaining cooldown, `{more}` for the count omitted from a truncated `Also here:` line, and `{player}` for the member a public movement line is about. The last three are new with 2c and are in the Content Schema's Templating section.
 
 ## Open questions
 
