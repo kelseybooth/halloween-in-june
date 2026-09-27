@@ -27,6 +27,7 @@ from sqlalchemy import delete, select
 
 import content as content_module
 import database
+import resolve
 from content import Content
 
 log = logging.getLogger(__name__)
@@ -79,6 +80,7 @@ class LoadReport:
     guilds: list[int] = field(default_factory=list)
     placed: int = 0
     already_present: int = 0
+    waiting_on_drops: int = 0
     orphans_ignored: list[str] = field(default_factory=list)
     fresh: bool = False
 
@@ -88,10 +90,13 @@ class LoadReport:
         if self.fresh:
             lines.append("world state: wiped (--fresh)")
         if self.guilds:
-            lines.append(
+            line = (
                 f"placed {self.placed} thing(s) across {len(self.guilds)} server(s); "
                 f"{self.already_present} already present and left alone"
             )
+            if self.waiting_on_drops:
+                line += f"; {self.waiting_on_drops} waiting on a later drop"
+            lines.append(line)
         else:
             lines.append("no servers in the database yet; nothing to place")
         if self.orphans_ignored:
@@ -190,13 +195,16 @@ def _rows_for(parsed: Content) -> dict[str, list[dict]]:
     }
 
 
-def things_to_place(parsed: Content) -> list[tuple[str, str, str, int]]:
-    """(room_id, container_id, thing_id, count) for everything placed at first load.
+def things_to_place(parsed: Content) -> list[tuple[str, str, str, int, int]]:
+    """(room_id, container_id, thing_id, count, since_drop) for placeable things.
 
     Only finite objects. A source is inexhaustible and is not stock, a fixture is
     scenery, and an exit is a door - none of them move, so none belong in
     room_contents. Anything roomless starts nowhere: it arrives when a source
     yields it, something transforms into it, or a restock scatters it.
+
+    `since_drop` rides along because whether a thing may be placed *yet* depends
+    on the server, not on the file - see _arrived_drops.
     """
     placements = []
     for thing in parsed.things:
@@ -210,9 +218,35 @@ def things_to_place(parsed: Content) -> list[tuple[str, str, str, int]]:
                 thing.contained_in or database.LOOSE_IN_ROOM,
                 thing.thing_id,
                 thing.quantity,
+                thing.since_drop,
             )
         )
     return placements
+
+
+async def _arrived_drops(session, guild_id: int, parsed: Content, today) -> set[int]:
+    """Which drops have arrived on this server, judged from the files in hand.
+
+    Deliberately not resolve.arrived_drop_ids: that reads the drops table, which
+    this transaction has just rewritten and not yet committed. The parsed
+    calendar is the same data and is already here.
+    """
+    recorded = {
+        row[0]
+        for row in await session.execute(
+            select(database.ServerDrop.drop_id).where(
+                database.ServerDrop.guild_id == guild_id
+            )
+        )
+    }
+    arrived = set()
+    for drop in parsed.drops:
+        if drop.trigger == "date":
+            if resolve._has_date_arrived(drop.date, today):
+                arrived.add(drop.drop_id)
+        elif drop.drop_id in recorded:
+            arrived.add(drop.drop_id)
+    return arrived
 
 
 async def _known_guilds(session) -> list[int]:
@@ -270,13 +304,19 @@ async def _replace_content(session, rows: dict[str, list[dict]]) -> dict[str, in
     return counts
 
 
-async def _place_for_guild(session, guild_id: int, placements) -> tuple[int, int]:
+async def _place_for_guild(
+    session, guild_id: int, placements, arrived: set[int]
+) -> tuple[int, int, int]:
     """Put a server's starting stock in place, once and only once per thing.
 
     "Once" is judged per thing rather than per server, so a thing added to the
     files later reaches a server that has been running for weeks. A thing this
     server already knows - still in a room, in somebody's bag, or taken and its
     row left at zero - is left exactly as it is.
+
+    A thing whose drop has not arrived here is skipped rather than placed. Since
+    placement is judged per thing and the loader runs on every boot, it lands by
+    itself on the first start after the drop comes due - no migration, no deploy.
     """
     seen_in_rooms = await session.execute(
         select(database.RoomContents.thing_id).where(database.RoomContents.guild_id == guild_id)
@@ -288,10 +328,13 @@ async def _place_for_guild(session, guild_id: int, placements) -> tuple[int, int
     )
     known = {row[0] for row in seen_in_rooms} | {row[0] for row in seen_in_bags}
 
-    placed = skipped = 0
-    for room_id, container_id, thing_id, count in placements:
+    placed = skipped = waiting = 0
+    for room_id, container_id, thing_id, count, since_drop in placements:
         if thing_id in known:
             skipped += 1
+            continue
+        if since_drop not in arrived:
+            waiting += 1
             continue
         session.add(
             database.RoomContents(
@@ -304,7 +347,7 @@ async def _place_for_guild(session, guild_id: int, placements) -> tuple[int, int
         )
         known.add(thing_id)
         placed += 1
-    return placed, skipped
+    return placed, skipped, waiting
 
 
 async def load_content(
@@ -352,10 +395,15 @@ async def load_content(
 
         guilds = guild_ids if guild_ids is not None else await _known_guilds(session)
         report.guilds = list(guilds)
+        today = database.pacific_today()
         for guild_id in guilds:
-            placed, skipped = await _place_for_guild(session, guild_id, placements)
+            arrived = await _arrived_drops(session, guild_id, parsed, today)
+            placed, skipped, waiting = await _place_for_guild(
+                session, guild_id, placements, arrived
+            )
             report.placed += placed
             report.already_present += skipped
+            report.waiting_on_drops += waiting
 
         await session.commit()
 
