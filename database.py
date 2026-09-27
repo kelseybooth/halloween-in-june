@@ -1425,3 +1425,258 @@ async def carried_count(user_id: int, guild_id: int) -> int:
     except SQLAlchemyError:
         log.exception("Failed to count inventory for %s in guild %s", user_id, guild_id)
         raise
+
+
+# --------------------------------------------------------------------------
+# Moving things: /take, /drop, /use
+#
+# Counts, not rows. Every write is an upsert that adds to a count, or an update
+# conditional on the count still being positive - never a read followed by a
+# write. Two players reaching for the last of something in the same instant
+# resolve correctly because the decrement itself is the check.
+# --------------------------------------------------------------------------
+
+
+async def carried_of(user_id: int, guild_id: int, thing_id: str) -> int:
+    """How many of one thing this player is carrying."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        return (
+            await session.scalar(
+                select(PlayerInventory.count).where(
+                    PlayerInventory.user_id == user_id,
+                    PlayerInventory.guild_id == guild_id,
+                    PlayerInventory.thing_id == thing_id,
+                )
+            )
+        ) or 0
+
+
+def _add_to_inventory(insert, user_id: int, guild_id: int, thing_id: str, delta: int):
+    return (
+        insert(PlayerInventory)
+        .values(user_id=user_id, guild_id=guild_id, thing_id=thing_id, count=delta)
+        .on_conflict_do_update(
+            index_elements=[
+                PlayerInventory.guild_id,
+                PlayerInventory.user_id,
+                PlayerInventory.thing_id,
+            ],
+            set_={"count": PlayerInventory.count + delta},
+        )
+    )
+
+
+def _add_to_room(
+    insert, guild_id: int, room_id: str, container_id: str, thing_id: str, delta: int
+):
+    return (
+        insert(RoomContents)
+        .values(
+            guild_id=guild_id,
+            room_id=room_id,
+            container_id=container_id,
+            thing_id=thing_id,
+            count=delta,
+        )
+        .on_conflict_do_update(
+            index_elements=[
+                RoomContents.guild_id,
+                RoomContents.room_id,
+                RoomContents.container_id,
+                RoomContents.thing_id,
+            ],
+            set_={"count": RoomContents.count + delta},
+        )
+    )
+
+
+async def take_from_source(user_id: int, guild_id: int, thing_id: str) -> None:
+    """Hand a player one of what a source yields. The source is not consumed."""
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    await ensure_user_exists(user_id, guild_id)
+    async with session_factory() as session:
+        await session.execute(_add_to_inventory(insert, user_id, guild_id, thing_id, 1))
+        await session.commit()
+    log.info("User %s drew %s from a source in guild %s", user_id, thing_id, guild_id)
+
+
+async def take_from_room(
+    user_id: int, guild_id: int, room_id: str, container_id: str, thing_id: str
+) -> bool:
+    """Move one copy out of the room and into the bag. False if none was left.
+
+    The decrement is conditional on the count still being above zero, so two
+    players racing for the last of something cannot both win it.
+    """
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    await ensure_user_exists(user_id, guild_id)
+
+    async with session_factory() as session:
+        taken = await session.execute(
+            update(RoomContents)
+            .where(
+                RoomContents.guild_id == guild_id,
+                RoomContents.room_id == room_id,
+                RoomContents.container_id == container_id,
+                RoomContents.thing_id == thing_id,
+                RoomContents.count > 0,
+            )
+            .values(count=RoomContents.count - 1)
+        )
+        if not taken.rowcount:
+            await session.rollback()
+            return False
+
+        await session.execute(_add_to_inventory(insert, user_id, guild_id, thing_id, 1))
+        await session.commit()
+
+    log.info("User %s took %s in guild %s", user_id, thing_id, guild_id)
+    return True
+
+
+async def drop_into_room(user_id: int, guild_id: int, room_id: str, thing_id: str) -> bool:
+    """Move one copy out of the bag and into the room, loose.
+
+    Always loose: dropping a spice jar in the Entryway does not put it back
+    inside the Amazon box.
+    """
+    session_factory = _require_session()
+    insert = _upsert_statement()
+
+    async with session_factory() as session:
+        dropped = await session.execute(
+            update(PlayerInventory)
+            .where(
+                PlayerInventory.guild_id == guild_id,
+                PlayerInventory.user_id == user_id,
+                PlayerInventory.thing_id == thing_id,
+                PlayerInventory.count > 0,
+            )
+            .values(count=PlayerInventory.count - 1)
+        )
+        if not dropped.rowcount:
+            await session.rollback()
+            return False
+
+        await session.execute(
+            _add_to_room(insert, guild_id, room_id, LOOSE_IN_ROOM, thing_id, 1)
+        )
+        await session.commit()
+
+    log.info("User %s dropped %s in %s, guild %s", user_id, thing_id, room_id, guild_id)
+    return True
+
+
+async def transform_carried(user_id: int, guild_id: int, thing_id: str, into: str) -> bool:
+    """Swap one carried thing for another: one used bottle becomes one sanitized."""
+    session_factory = _require_session()
+    insert = _upsert_statement()
+
+    async with session_factory() as session:
+        used = await session.execute(
+            update(PlayerInventory)
+            .where(
+                PlayerInventory.guild_id == guild_id,
+                PlayerInventory.user_id == user_id,
+                PlayerInventory.thing_id == thing_id,
+                PlayerInventory.count > 0,
+            )
+            .values(count=PlayerInventory.count - 1)
+        )
+        if not used.rowcount:
+            await session.rollback()
+            return False
+
+        await session.execute(_add_to_inventory(insert, user_id, guild_id, into, 1))
+        await session.commit()
+
+    log.info("User %s transformed %s into %s in guild %s", user_id, thing_id, into, guild_id)
+    return True
+
+
+class UseRecord(NamedTuple):
+    """When this player last used a thing, and how many times including this one."""
+
+    last_used_at: datetime | None
+    use_count: int
+
+
+async def record_use(user_id: int, guild_id: int, thing_id: str) -> UseRecord:
+    """Stamp a use, and report what the row said *before* it.
+
+    One row, three jobs. `last_used_at` answers the cooldown, counting distinct
+    rows answers "how many players have placed a plank", and `use_count` answers
+    "do this N times". The previous timestamp is returned because the cooldown
+    needs the value from before this use overwrote it.
+
+    2b added the use_count column and wired nothing to it; this is the only
+    place that increments, so it cannot be double-counted.
+    """
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    now = _utcnow()
+
+    async with session_factory() as session:
+        previous = (
+            await session.execute(
+                select(ThingUse.last_used_at, ThingUse.use_count).where(
+                    ThingUse.guild_id == guild_id,
+                    ThingUse.user_id == user_id,
+                    ThingUse.thing_id == thing_id,
+                )
+            )
+        ).one_or_none()
+
+        await session.execute(
+            insert(ThingUse)
+            .values(
+                guild_id=guild_id,
+                user_id=user_id,
+                thing_id=thing_id,
+                last_used_at=now,
+                use_count=1,
+            )
+            .on_conflict_do_update(
+                index_elements=[ThingUse.guild_id, ThingUse.user_id, ThingUse.thing_id],
+                set_={"last_used_at": now, "use_count": ThingUse.use_count + 1},
+            )
+        )
+        await session.commit()
+
+    return UseRecord(
+        last_used_at=previous[0] if previous else None,
+        use_count=(previous[1] if previous else 0) + 1,
+    )
+
+
+async def last_used(user_id: int, guild_id: int, thing_id: str) -> datetime | None:
+    """When this player last used a thing, without recording a new use."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        return await session.scalar(
+            select(ThingUse.last_used_at).where(
+                ThingUse.guild_id == guild_id,
+                ThingUse.user_id == user_id,
+                ThingUse.thing_id == thing_id,
+            )
+        )
+
+
+async def distinct_users_of(guild_id: int, thing_id: str) -> int:
+    """How many different players have used a thing in this server.
+
+    The staircase counts planks by distinct player, so somebody using lumber
+    twice still contributes one.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        return (
+            await session.scalar(
+                select(func.count(func.distinct(ThingUse.user_id))).where(
+                    ThingUse.guild_id == guild_id, ThingUse.thing_id == thing_id
+                )
+            )
+        ) or 0
