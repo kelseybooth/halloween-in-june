@@ -331,10 +331,13 @@ async def test_the_entryway_reads_properly(house):
     assert len(reply) <= phrasing.MESSAGE_LIMIT
 
 
-async def test_the_cake_box_reveals_the_gourmet_tin(house):
-    """A contained thing is absent from the room listing and present when the
-    container is looked at - which is how the tin stays a discovery rather than
-    something the room description hands over."""
+async def test_the_cake_box_does_not_list_the_gourmet_cans(house):
+    """The cans are a source, and no listing anywhere names a source.
+
+    So looking at the box describes a cake box, and it is *using* it that
+    reveals what is inside - which is the joke, and which is also why the
+    loader insists the box's own text names them.
+    """
     await content_loader.load_content(content_module.load_files())
     await database.update_current_room(ALICE, GUILD_A, "KI")
 
@@ -342,7 +345,18 @@ async def test_the_cake_box_reveals_the_gourmet_tin(house):
     assert "gourmet" not in room.lower()
 
     box = (await look(thing="cake box")).reply
-    assert "gourmet" in box.lower()
+    assert "Here you find" not in box
+    assert "caramel apple cake" in box.lower()
+
+
+async def test_using_the_cake_box_reveals_the_cans(house):
+    await content_loader.load_content(content_module.load_files())
+    await database.update_current_room(ALICE, GUILD_A, "KI")
+
+    import phrasing
+
+    said = await phrasing.say(GUILD_A, "cake_box", "use", fallback="use.default")
+    assert "gourmet" in said.lower()
 
 
 async def test_no_room_in_the_house_lists_a_source(house):

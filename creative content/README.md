@@ -7,8 +7,8 @@ and turn OFF any "convert text to numbers/dates" option so ids stay as written).
 |-|-|-|
 |`rooms.tsv`|9|Room ids and names. Structure, not text.|
 |`room_text.tsv`|11|Room `look` text. 9 rooms + 2 rows for the repaired staircase.|
-|`things.tsv`|141|Every object, source, fixture and exit: ids, placement, flags. Structure, not text.|
-|`thing_text.tsv`|149|`look`, `look_carried`, `use`, `take`, `drop` plus the three refusal strings.|
+|`things.tsv`|142|Every object, source, fixture and exit: ids, placement, flags. Structure, not text.|
+|`thing_text.tsv`|150|`look`, `look_carried`, `use`, `take`, `drop` plus the three refusal strings.|
 |`defaults.tsv`|23|Fallback strings used wherever a cell is left blank.|
 |`drops.tsv`|1|The unlock calendar: which drop each row of content waits for.|
 |`restocks.tsv`|3|Scheduled top-ups: what gets added to which container, how often.|
@@ -98,7 +98,7 @@ player could previously type still works.
 
 ## Where the cat food is
 
-Four flavors, one stash per room, so collecting a set means ranging around the house.
+Five flavors, one stash per room, so collecting a set means ranging around the house.
 
 |Room|Flavor|Hidden in|
 |-|-|-|
@@ -109,9 +109,15 @@ Four flavors, one stash per room, so collecting a set means ranging around the h
 |Bedroom|chicken|a crate under the bed|
 |Dining Room|salmon|the sideboard cupboard|
 
-The single gourmet can is in the Kitchen, inside the plain white cake box on the
-counter — the label promises caramel apple cake and the box does not contain one. It is
-the only gourmet can in the house, and it moved there from under the bed on 27 September.
+Gourmet is the fifth flavour and works differently: it is a **source** in the plain
+white cake box on the Kitchen counter, where the label promises caramel apple cake and
+the box does not contain one. A source never runs out, so every player can earn the
+five-flavour achievement rather than only whoever reaches the Kitchen first — and
+`max_per_player` is 1, so nobody can hoard them. It moved there from under the bed, and
+became a source, on 27 September.
+
+Because it is a source, looking at the cake box does not list the cans: no listing
+anywhere names a source. It is *using* the box that reveals them, which is the joke.
 
 ## What changed since the copy you sent back
 

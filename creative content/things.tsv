@@ -28,7 +28,7 @@ cat_food_chicken	chicken cat food	chicken cat food|chicken|cat food	object		0	ye
 cat_food_salmon	salmon cat food	salmon cat food|salmon|cat food	object		0	yes	yes	1										1	25
 cat_food_tuna	tuna cat food	tuna cat food|tuna|cat food	object		0	yes	yes	1										1	26
 cat_food_expired	expired cat food	expired cat food|expired|off cat food	object		0	yes	yes	1										1	27
-cat_food_gourmet	gourmet wet cat food	gourmet|gourmet cat food|good cat food|can|tin|gold can	object	KI	1	yes	yes	1	1							cake_box		1	28
+cat_food_gourmet	gourmet wet cat food	gourmet|gourmet cat food|good cat food|can|tin|gold can	object		0	yes	yes	1	1									1	28
 herb_garden	herb garden	herb garden|herb bed|garden|lavender|sage|rosemary|herbs	source	CO	1	no	yes	0						herbs				1	29
 herbs	herbs	herbs|sprigs|cut herbs|herb	object		0	yes	yes	1										1	30
 pumpkins	pumpkins	pumpkins|pumpkin	fixture	CO	6	no	yes	0										1	31
@@ -140,3 +140,4 @@ BH	bedroom door	bedroom door|hallway|door|out	exit	BE	1	no	yes	0							UH			1	13
 HN	nursery door	nursery door|nursery	exit	UH	1	no	yes	0							NU			1	134
 NH	nursery door	nursery door|hallway|door|out	exit	NU	1	no	yes	0							UH			1	135
 cake_box	cake box	cake box|white box|bakery box|caramel apple cake|cake	fixture	KI	1	no	yes	0										1	136
+cat_food_stash_gourmet	cans of gourmet cat food	gourmet cans|two cans|gourmet wet food|gourmet wet cat food|gourmet food|gourmet|gourmet cat food|good cat food|fancy cat food|gold cans	source	KI	1	no	yes	0						cat_food_gourmet		cake_box		1	137

@@ -47,7 +47,7 @@ def problems_matching(c, fragment):
 def test_the_shipped_content_parses():
     c = content.load_files()
     assert len(c.rooms) == 9
-    assert len(c.things) == 141
+    assert len(c.things) == 142
     assert len(c.defaults) == 23
     assert len(c.drops) == 1
     assert len(c.restocks) == 3
