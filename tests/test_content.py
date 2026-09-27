@@ -47,56 +47,30 @@ def problems_matching(c, fragment):
 def test_the_shipped_content_parses():
     c = content.load_files()
     assert len(c.rooms) == 9
-    assert len(c.things) == 140
+    assert len(c.things) == 141
     assert len(c.defaults) == 23
     assert len(c.drops) == 1
     assert len(c.restocks) == 3
 
 
-# Two sources are currently named in no prose a player can read, so the shipped
-# content does not pass every check. That is a content gap, not a code one: see
-# test_two_sources_are_currently_unfindable below, which names them and is the
-# test to delete once the prose lands. Until then this asserts everything else,
-# so the other twenty-odd checks still guard against a bad edit.
-UNFINDABLE_SOURCES = {"chip_case", "key_nail"}
+def test_the_shipped_content_validates():
+    """If this fails, someone edited a TSV into a state the loader would refuse.
 
-
-def test_the_shipped_content_passes_every_check_but_the_known_gap():
-    """If this fails, someone edited a TSV into a state the loader would refuse."""
-    problems = [
-        p
-        for p in content.validate(content.load_files())
-        if not any(s in p for s in UNFINDABLE_SOURCES)
-    ]
-    assert problems == []
-
-
-@pytest.mark.xfail(
-    strict=True,
-    reason="Content gap, not a code one. chip_case (the tortilla chips in the "
-    "Kitchen pantry) and key_nail (the ring of iron keys on the Secret Library "
-    "shelves) are sources, so they never appear in an `Also here:` line, and "
-    "neither is named in its container's text or its room's description. Both "
-    "things they yield - nacho_chips and skeleton_key - have no room placement "
-    "of their own, so they are obtainable only through these sources and are "
-    "therefore unobtainable in play. skeleton_key additionally gates has_key and "
-    "passage_open. Needs two lines of prose from a writer; delete this test then.",
-)
-def test_two_sources_are_currently_unfindable():
+    Clean since 27 September. Three sources were unreachable before that - the
+    tortilla chips, the ring of iron keys and the coil of copper wire - and each
+    was fixed by naming it in the prose that reveals it rather than by relaxing
+    the check.
+    """
     assert content.validate(content.load_files()) == []
 
 
-def test_the_unfindable_sources_are_exactly_the_two_we_know_about():
-    """A tripwire on the gap itself: a third one must not slip in unnoticed."""
-    flagged = {
-        match.group(1)
-        for match in (
-            re.match(r"source (\w+) is named nowhere", p)
-            for p in content.validate(content.load_files())
-        )
-        if match
-    }
-    assert flagged == UNFINDABLE_SOURCES
+def test_every_source_is_findable():
+    """The check with no counterpart elsewhere: a source appears in no listing,
+    so prose that fails to name it makes it unobtainable rather than untidy."""
+    problems = [
+        p for p in content.validate(content.load_files()) if "named nowhere" in p
+    ]
+    assert problems == []
 
 
 def test_there_are_twenty_exits_and_they_match_the_rooms(shipped):

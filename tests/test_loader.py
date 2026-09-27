@@ -469,7 +469,7 @@ async def test_the_shipped_content_loads(two_servers):
     report = await content_loader.load_content(parsed)
 
     assert report.content_rows["room_types"] == 9
-    assert report.content_rows["thing_types"] == 140
+    assert report.content_rows["thing_types"] == 141
     assert report.content_rows["drops"] == 1
     assert report.content_rows["restocks"] == 3
 
@@ -489,7 +489,9 @@ async def test_the_shipped_content_respects_containment(two_servers):
     await content_loader.load_content(parsed)
 
     by_thing = {row[2]: row for row in await contents(two_servers, GUILD_A)}
-    assert by_thing["cat_food_gourmet"][1] == "bed"
+    # The gourmet can moved from under the bed into the Kitchen cake box on
+    # 27 September; the glasses have always been in the desk.
+    assert by_thing["cat_food_gourmet"][1] == "cake_box"
     assert by_thing["reading_glasses"][1] == "rolltop_desk"
 
 

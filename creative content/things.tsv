@@ -20,7 +20,7 @@ sink	kitchen sink	sink|basin|tap|faucet	fixture	KI	1	no	yes	0										1	18
 coffee_maker	Keurig	keurig|coffee maker|coffee machine|coffee|pods|pod|k-cup|k-cups|mug	fixture	KI	1	no	yes	0										1	19
 trash_can	trash can	trash can|bin|rubbish bin|garbage	fixture	KI	1	no	yes	0										1	20
 pasta_pot	pasta pot	pasta pot|stockpot|big pot	fixture	KI	1	no	yes	0										1	21
-chip_case	case of tortilla chips	case of chips|chip case|chips|tortilla chips|nachos	source	KI	1	no	yes	0						nacho_chips		pantry		1	22
+chip_box	box of tortilla chips	case of chips|chip case|chips|tortilla chips|nachos|case of tortilla chips|chip box|box|bulk box|bulk box of tortilla chips	source	KI	1	no	yes	0						nacho_chips		pantry		1	22
 nacho_chips	nacho chips	nacho chips|chips|nachos|tortilla chips	object		0	yes	yes	1										1	22
 burritos	freezer of burritos	burritos|freezer|fridge|fridge-freezer|breakfast burritos|aunt sue	source	KI	1	no	yes	0						frozen_burrito				1	23
 frozen_burrito	frozen burrito	burrito|frozen burrito|foil brick|breakfast burrito	object		0	yes	yes	1										1	24
@@ -28,7 +28,7 @@ cat_food_chicken	chicken cat food	chicken cat food|chicken|cat food	object		0	ye
 cat_food_salmon	salmon cat food	salmon cat food|salmon|cat food	object		0	yes	yes	1										1	25
 cat_food_tuna	tuna cat food	tuna cat food|tuna|cat food	object		0	yes	yes	1										1	26
 cat_food_expired	expired cat food	expired cat food|expired|off cat food	object		0	yes	yes	1										1	27
-cat_food_gourmet	gourmet wet cat food	gourmet|gourmet cat food|good cat food|can|tin|gold can	object	BE	1	yes	yes	1	1							bed		1	28
+cat_food_gourmet	gourmet wet cat food	gourmet|gourmet cat food|good cat food|can|tin|gold can	object	KI	1	yes	yes	1	1							cake_box		1	28
 herb_garden	herb garden	herb garden|herb bed|garden|lavender|sage|rosemary|herbs	source	CO	1	no	yes	0						herbs				1	29
 herbs	herbs	herbs|sprigs|cut herbs|herb	object		0	yes	yes	1										1	30
 pumpkins	pumpkins	pumpkins|pumpkin	fixture	CO	6	no	yes	0										1	31
@@ -111,8 +111,8 @@ nursery_shelf	shelf	shelf|shelves|nursery shelf	fixture	NU	1	no	yes	0										1
 nursery_window	window	window|windowsill|sill	fixture	NU	1	no	yes	0										1	105
 cat_food_stash_pantry	stack of tuna cat food	tuna cat food|tuna|cat food|cans|stack|stash	source	KI	1	no	yes	0						cat_food_tuna		pantry		1	106
 cat_food_stash_sofa	stash of chicken cat food	chicken cat food|chicken|cat food|cans|stash	source	LI	1	no	yes	0						cat_food_chicken		sofa		1	107
-cat_food_stash_hall	flat of salmon cat food	salmon cat food|salmon|cat food|cans|flat|stash	source	EN	1	no	yes	0						cat_food_salmon		coat_rack		1	108
-cat_food_stash_drawer	drawer of expired cat food	expired cat food|expired|cat food|cans|drawer|stash	source	UH	1	no	yes	0			drawer_unjammed			cat_food_expired		rolltop_desk		1	109
+cat_food_stash_hall	pack of salmon cat food	salmon cat food|salmon|cat food|cans|flat|stash|pack|pack of cat food	source	EN	1	no	yes	0						cat_food_salmon		coat_rack		1	108
+cat_food_stash_drawer	cans of expired cat food	expired cat food|expired|cat food|cans|drawer|stash|drawer of expired cat food|drawer of cat food	source	UH	1	no	yes	0			drawer_unjammed			cat_food_expired		rolltop_desk		1	109
 graphite_tin	tin of graphite powder	graphite|graphite powder|tin|graphite tin	source	NU	1	no	yes	0						graphite_powder				1	110
 cat_food_stash_bed	crate of chicken cat food	chicken cat food|chicken|cat food|cans|crate|stash	source	BE	1	no	yes	0						cat_food_chicken		bed		1	111
 cat_food_stash_sideboard	cupboard of salmon cat food	salmon cat food|salmon|cat food|cans|cupboard|stash	source	DI	1	no	yes	0						cat_food_salmon		sideboard		1	112
@@ -139,3 +139,4 @@ HB	bedroom door	bedroom door|bedroom	exit	UH	1	no	yes	0							BE			1	132
 BH	bedroom door	bedroom door|hallway|door|out	exit	BE	1	no	yes	0							UH			1	133
 HN	nursery door	nursery door|nursery	exit	UH	1	no	yes	0							NU			1	134
 NH	nursery door	nursery door|hallway|door|out	exit	NU	1	no	yes	0							UH			1	135
+cake_box	cake box	cake box|white box|bakery box|caramel apple cake|cake	fixture	KI	1	no	yes	0										1	136

@@ -388,11 +388,11 @@ async def test_taking_cat_food_in_the_kitchen_reaches_the_pantry_stash(house):
     assert result.yields == "cat_food_tuna"
 
 
-async def test_the_gourmet_tin_is_reachable_inside_the_bed(house):
+async def test_the_gourmet_tin_is_reachable_inside_the_cake_box(house):
     """Contained things resolve by bare name; discovery is preserved by what the
     listing shows, not by what the player has to type."""
     await content_loader.load_content(content_module.load_files())
 
-    result = await reach.find(GUILD_A, ALICE, "BE", "gourmet", Scope.ROOM)
+    result = await reach.find(GUILD_A, ALICE, "KI", "gourmet", Scope.ROOM)
     assert isinstance(result, Found)
-    assert result.container_id == "bed"
+    assert result.container_id == "cake_box"

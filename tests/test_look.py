@@ -331,15 +331,18 @@ async def test_the_entryway_reads_properly(house):
     assert len(reply) <= phrasing.MESSAGE_LIMIT
 
 
-async def test_the_bed_reveals_the_gourmet_tin(house):
+async def test_the_cake_box_reveals_the_gourmet_tin(house):
+    """A contained thing is absent from the room listing and present when the
+    container is looked at - which is how the tin stays a discovery rather than
+    something the room description hands over."""
     await content_loader.load_content(content_module.load_files())
-    await database.update_current_room(ALICE, GUILD_A, "BE")
+    await database.update_current_room(ALICE, GUILD_A, "KI")
 
     room = (await look()).reply
     assert "gourmet" not in room.lower()
 
-    bed = (await look(thing="bed")).reply
-    assert "gourmet" in bed.lower()
+    box = (await look(thing="cake box")).reply
+    assert "gourmet" in box.lower()
 
 
 async def test_no_room_in_the_house_lists_a_source(house):

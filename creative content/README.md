@@ -7,9 +7,9 @@ and turn OFF any "convert text to numbers/dates" option so ids stay as written).
 |-|-|-|
 |`rooms.tsv`|9|Room ids and names. Structure, not text.|
 |`room_text.tsv`|11|Room `look` text. 9 rooms + 2 rows for the repaired staircase.|
-|`things.tsv`|140|Every object, source, fixture and exit: ids, placement, flags. Structure, not text.|
-|`thing_text.tsv`|147|`look`, `look_carried`, `use`, `take`, `drop` plus the three refusal strings.|
-|`defaults.tsv`|16|Fallback strings used wherever a cell is left blank.|
+|`things.tsv`|141|Every object, source, fixture and exit: ids, placement, flags. Structure, not text.|
+|`thing_text.tsv`|149|`look`, `look_carried`, `use`, `take`, `drop` plus the three refusal strings.|
+|`defaults.tsv`|23|Fallback strings used wherever a cell is left blank.|
 |`drops.tsv`|1|The unlock calendar: which drop each row of content waits for.|
 |`restocks.tsv`|3|Scheduled top-ups: what gets added to which container, how often.|
 |`emoji_groups.tsv`|132|The craving lookup: every Food & Drink emoji, its Unicode subgroup, and whether it can be the answer.|
@@ -74,6 +74,28 @@ that never runs out and can't be carried; a can is an `object` with no room of i
 that exists once drawn. Sources never appear in the `Also here:` line, so every source
 must be named in its room's description or in the text of the thing that holds it.
 
+## Changes on 27 September
+
+**Every cat food stash now names its flavour in the prose that reveals it.** A source
+never appears in a listing, so the only way a player learns one is there is the room
+description or the container's own text — and five of the six said only "cat food".
+They now read *tuna*, *chicken*, *salmon*, *chicken* and *salmon* respectively, and the
+expired drawer says so in its `drawer_unjammed` text, which is the state that reveals it.
+
+**Three sources were unreachable and are not any more.** `chip_case` became `chip_box`
+("box of tortilla chips") and the pantry names it; the ring of iron keys is named on the
+library shelves; and the coil of copper wire is named in the Secret Library description.
+Before this, none of the three could be found by any player, and the skeleton key those
+keys yield gates two states.
+
+**The cake box is new.** A fixture on the Kitchen counter, not takeable, promising
+caramel apple cake and holding the gourmet cans instead.
+
+**Renames.** `chip_case` → `chip_box`. `cat_food_stash_hall` is now "pack of salmon cat
+food" (it was a "flat", which nobody says). `cat_food_stash_drawer` is now "cans of
+expired cat food". All three kept their old aliases and gained new ones, so anything a
+player could previously type still works.
+
 ## Where the cat food is
 
 Four flavors, one stash per room, so collecting a set means ranging around the house.
@@ -87,8 +109,9 @@ Four flavors, one stash per room, so collecting a set means ranging around the h
 |Bedroom|chicken|a crate under the bed|
 |Dining Room|salmon|the sideboard cupboard|
 
-The single gourmet can is under the bed behind the chicken crate, and it is the only one
-in the house.
+The single gourmet can is in the Kitchen, inside the plain white cake box on the
+counter — the label promises caramel apple cake and the box does not contain one. It is
+the only gourmet can in the house, and it moved there from under the bed on 27 September.
 
 ## What changed since the copy you sent back
 
@@ -178,7 +201,7 @@ the coat rack, the fireplace, the high chair, the dining table, the bed, and so 
 * **The `quantity = many` split.** Nine sources; the six affected objects are now
 roomless and start at zero. `lumber` deliberately keeps `quantity = many` — it's a
 shared pool of repair charges, not a source, and yields nothing.
-* **`contained_in`.** Sixteen chains, all one level deep, host and content in the same
+* **`contained_in`.** 18 chains, all one level deep, host and content in the same
 room.
 * **The room pass.** Five takeable-finite things moved out of prose into `Also here:`.
 The Nursery and the Kitchen were redrafted rather than trimmed, because the sentences
