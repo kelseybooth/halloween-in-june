@@ -1,0 +1,4 @@
+restock_id	thing_id	placement	container	amount	times_per_day	first_day	every_n_days	window_start	window_end	config_key	since_drop	notes
+1	spice_jar	container	amazon_box	4	1	2	3	00:00	23:59		1	David's spice order arrives in batches. Day 1 the box is empty; day 2 and every third day after, four more appear at one random time. Stock accumulates.
+2	used_baby_bottle	random		1	8	1	1	00:00	23:59	bottles_per_day	1	Bottles keep turning up. Eight a day from day 1, each at its own random time, each in a randomly chosen room or container. Admin-configurable.
+3	dirty_diaper	random		1	2	1	1	00:00	23:59		1	Two a day from day 1, same scatter rule as the bottles.

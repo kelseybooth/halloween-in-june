@@ -210,3 +210,68 @@ def test_a_pet_reply_carries_no_diagnostics(fixed_rng):
     assert "mood:" not in message
     assert "relationship:" not in message
     assert "% friendly chance" not in message
+
+
+# --------------------------------------------------------------------------
+# relationship_at_pet
+#
+# Recorded ahead of the achievements that read it, because it is the one value
+# that cannot be reconstructed later: the relationship is a running total, so a
+# pet's score at the time is gone the moment the next pet moves it.
+# --------------------------------------------------------------------------
+
+
+async def pet_scores(db, user_id, guild_id):
+    from sqlalchemy import select
+
+    async with db._require_session()() as session:
+        rows = await session.execute(
+            select(db.PetEvent.relationship_at_pet)
+            .where(db.PetEvent.user_id == user_id, db.PetEvent.guild_id == guild_id)
+            .order_by(db.PetEvent.id)
+        )
+        return [r[0] for r in rows]
+
+
+async def test_a_first_pet_records_the_starting_score(db):
+    await db.increment_pet_count(ALICE, GUILD_A)
+    assert await pet_scores(db, ALICE, GUILD_A) == [db.RELATIONSHIP_START]
+
+
+async def test_each_pet_records_the_score_before_it_applied(db):
+    """The point of the column: the value as it stood, not as it ended up."""
+    await db.increment_pet_count(ALICE, GUILD_A)
+    await db.adjust_relationship(ALICE, GUILD_A, 5)
+    await db.increment_pet_count(ALICE, GUILD_A)
+    await db.adjust_relationship(ALICE, GUILD_A, -5)
+    await db.increment_pet_count(ALICE, GUILD_A)
+
+    start = db.RELATIONSHIP_START
+    assert await pet_scores(db, ALICE, GUILD_A) == [start, start + 5, start]
+
+
+async def test_the_recorded_score_survives_later_movement(db):
+    """A pet at 50 still reads 50 after the relationship has moved on."""
+    await db.increment_pet_count(ALICE, GUILD_A)
+    await db.adjust_relationship(ALICE, GUILD_A, -100)
+
+    assert await pet_scores(db, ALICE, GUILD_A) == [db.RELATIONSHIP_START]
+
+
+async def test_a_negative_relationship_is_recorded_as_negative(db):
+    """One achievement counts pets at a negative score, so the sign has to land."""
+    await db.increment_pet_count(ALICE, GUILD_A)
+    await db.adjust_relationship(ALICE, GUILD_A, -80)
+    await db.increment_pet_count(ALICE, GUILD_A)
+
+    scores = await pet_scores(db, ALICE, GUILD_A)
+    assert scores[1] == db.RELATIONSHIP_START - 80 < 0
+
+
+async def test_scores_are_recorded_per_server(db):
+    await db.increment_pet_count(ALICE, GUILD_A)
+    await db.adjust_relationship(ALICE, GUILD_A, -60)
+    await db.increment_pet_count(ALICE, GUILD_A)
+    await db.increment_pet_count(ALICE, GUILD_B)
+
+    assert await pet_scores(db, ALICE, GUILD_B) == [db.RELATIONSHIP_START]

@@ -6,7 +6,10 @@ module-level global, so each test resets that global and builds a fresh schema:
 tests never share rows, and one test's failure cannot leave state behind.
 """
 
+import asyncio
+import os
 import pathlib
+import shutil
 import sys
 
 import pytest
@@ -15,6 +18,10 @@ import pytest_asyncio
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 import database  # noqa: E402
+from sqlalchemy.ext.asyncio import (  # noqa: E402
+    async_sessionmaker,
+    create_async_engine,
+)
 
 # Two servers used throughout, so "scoped per guild" is always exercised rather
 # than assumed. Real Discord snowflakes are 64-bit, and a value above 2**32 is
@@ -26,17 +33,60 @@ ALICE = 100000000000000001
 BOB = 100000000000000002
 
 
+@pytest.fixture(scope="session")
+def schema_template(tmp_path_factory):
+    """Build the schema once, and hand back a file to copy.
+
+    Creating 21 tables costs about half a second, which was most of the suite's
+    runtime once it was paid per test. It is built by running init_db itself, so
+    the template cannot drift from what a real startup produces.
+    """
+    path = tmp_path_factory.mktemp("template") / "schema.db"
+    url = f"sqlite+aiosqlite:///{path.as_posix()}"
+
+    async def build():
+        await database.init_db()
+        await database.close_db()
+
+    previous = os.environ.get("DATABASE_URL")
+    os.environ["DATABASE_URL"] = url
+    os.environ.pop("RAILWAY_ENVIRONMENT", None)
+    database._engine = None
+    database._session_factory = None
+    try:
+        # Its own loop, so this stays a plain fixture and does not drag the
+        # per-test event loop up to session scope.
+        asyncio.run(build())
+    finally:
+        database._engine = None
+        database._session_factory = None
+        if previous is None:
+            os.environ.pop("DATABASE_URL", None)
+        else:
+            os.environ["DATABASE_URL"] = previous
+
+    return path
+
+
 @pytest_asyncio.fixture
-async def db(tmp_path, monkeypatch):
-    """A fresh, empty database for one test."""
-    url = f"sqlite+aiosqlite:///{(tmp_path / 'test.db').as_posix()}"
+async def db(tmp_path, monkeypatch, schema_template):
+    """A fresh, empty database for one test.
+
+    The schema arrives by copying the session template rather than being created
+    again; the engine is then wired up exactly as init_db wires it, minus the
+    schema step the copy already did. init_db's own behaviour - the migration,
+    the guards, the backend choice - is covered directly in test_schema.py.
+    """
+    path = tmp_path / "test.db"
+    shutil.copyfile(schema_template, path)
+
+    url = f"sqlite+aiosqlite:///{path.as_posix()}"
     monkeypatch.setenv("DATABASE_URL", url)
     monkeypatch.delenv("RAILWAY_ENVIRONMENT", raising=False)
 
-    database._engine = None
-    database._session_factory = None
-
-    await database.init_db()
+    database._engine = create_async_engine(url, pool_pre_ping=True)
+    database._enforce_sqlite_foreign_keys(database._engine)
+    database._session_factory = async_sessionmaker(database._engine, expire_on_commit=False)
     try:
         yield database
     finally:
