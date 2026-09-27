@@ -462,6 +462,22 @@ class DefaultText(Base):
     text_value: Mapped[str] = mapped_column("text", Text, nullable=False)
 
 
+class EmojiGroup(Base):
+    """The craving lookup, from emoji_groups.tsv.
+
+    Content like any other: global, replaced wholesale on load, never mutated
+    at runtime. `drawable` is separate from `subgroup` so a plate can never be
+    the craving while still resolving to a known group - which is what lets a
+    player guess one and get a straight "no" rather than an error.
+    """
+
+    __tablename__ = "emoji_groups"
+
+    emoji: Mapped[str] = mapped_column(String(32), primary_key=True)
+    subgroup: Mapped[str] = mapped_column(String(32), nullable=False)
+    drawable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
 class Drop(Base):
     """The unlock calendar: when each slice of content becomes visible.
 
@@ -645,6 +661,51 @@ class ServerRestock(Base):
     restock_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
     last_applied_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     next_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+# --------------------------------------------------------------------------
+# The daily craving
+#
+# One emoji a day per server, guessed by reacting to anything the bot posted.
+# Both tables are per guild: the craving is shared by everyone on a server so
+# they can tell each other, which is the whole point of one per server.
+# --------------------------------------------------------------------------
+
+
+class CravingDay(Base):
+    """What the cat wanted on one day, on one server.
+
+    Stored rather than derived from the date. A derived craving would change
+    under the players if a writer edited emoji_groups.tsv mid-day, and the one
+    thing this game cannot survive is the answer moving while people guess.
+    """
+
+    __tablename__ = "craving_days"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    emoji: Mapped[str] = mapped_column(String(32), nullable=False)
+    # Who found it first, and when. Nobody scores extra for it - this is for
+    # knowing whether the day is already solved, and for 2d to look back on.
+    found_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    found_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class CravingTally(Base):
+    """How many distinct days a player has guessed the craving on.
+
+    `last_credited_day` is what stops a player scoring twice for one day by
+    removing and re-adding a reaction, or by reacting on a second bot message.
+    The count measures showing up, not solving: a player who reacts after
+    somebody else has already found it still scores the day.
+    """
+
+    __tablename__ = "craving_tally"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    days: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_credited_day: Mapped[date | None] = mapped_column(Date, nullable=True)
 
 
 def _normalise_url(raw: str) -> str:

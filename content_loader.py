@@ -174,6 +174,10 @@ def _rows_for(parsed: Content) -> dict[str, list[dict]]:
             }
             for d in parsed.drops
         ],
+        "emoji_groups": [
+            {"emoji": e.emoji, "subgroup": e.subgroup, "drawable": e.drawable}
+            for e in parsed.emoji_groups
+        ],
         "restocks": [
             {
                 "restock_id": r.restock_id,
@@ -293,7 +297,16 @@ async def _replace_content(session, rows: dict[str, list[dict]]) -> dict[str, in
     added later does not turn this into a puzzle.
     """
     counts = {}
-    order = ("thing_text", "room_text", "restocks", "thing_types", "room_types", "drops", "defaults")
+    order = (
+        "thing_text",
+        "room_text",
+        "restocks",
+        "thing_types",
+        "room_types",
+        "drops",
+        "defaults",
+        "emoji_groups",
+    )
     for table in order:
         await session.execute(database.Base.metadata.tables[table].delete())
     for table in reversed(order):

@@ -18,8 +18,10 @@ from discord.ext import commands, tasks
 from dotenv import load_dotenv
 from sqlalchemy.exc import SQLAlchemyError
 
+import alexa
 import content
 import content_loader
+import craving
 import database
 import house_utils
 import phrasing
@@ -177,8 +179,13 @@ async def load_content_at_startup() -> None:
 
 class CatBot(commands.Bot):
     def __init__(self) -> None:
-        # Slash commands need no privileged intents; defaults keep the bot lightweight.
-        super().__init__(command_prefix="!", intents=discord.Intents.default())
+        # Slash commands need no privileged intents, but Alexa does: without
+        # message_content every message arrives with an empty body and she
+        # never answers anybody. It is enabled in the developer portal, which
+        # is necessary and not sufficient - it has to be asked for here too.
+        intents = discord.Intents.default()
+        intents.message_content = True
+        super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self) -> None:
         """Runs once before the gateway connects - open the DB and register commands."""
@@ -353,6 +360,154 @@ async def restock_sweep() -> None:
 @restock_sweep.before_loop
 async def _before_restock() -> None:
     await bot.wait_until_ready()
+
+
+# --------------------------------------------------------------------------
+# Two event handlers that are not commands
+#
+# Neither registers a slash command, which is why the command list stays at
+# ten. Talking to a speaker by typing `/use alexa` would be a strange way to
+# talk to a speaker, and a reaction carries no interaction token at all.
+# --------------------------------------------------------------------------
+
+# The thing whose text Alexa speaks with, and the state she uses once a player
+# has asked her to pass the message on.
+ALEXA_THING = "alexa"
+ALEXA_REMINDED = "reminded"
+
+
+async def _is_game_thread(channel) -> bool:
+    """Whether this is one of the house's room threads.
+
+    Scoped deliberately: Alexa answering in every channel of the server would
+    make her a nuisance rather than a fixture in the rooms.
+    """
+    if not isinstance(channel, discord.Thread):
+        return False
+    parent = channel.parent
+    if parent is None or parent.name != house_utils.HALLOWEEN_CHANNEL_NAME:
+        return False
+    try:
+        return channel.name in set(await resolve.room_names())
+    except SQLAlchemyError:
+        log.exception("Could not check whether %s is a game thread", channel.name)
+        return False
+
+
+@bot.event
+async def on_message(message: discord.Message) -> None:
+    """Answer anybody talking to the smart speaker.
+
+    Nothing is stored. The handler reads what was typed, decides which of two
+    replies it earns, and forgets it - the Message Content intent changes what
+    the bot receives, not what it keeps.
+    """
+    if message.author.bot or message.guild is None:
+        return
+
+    if not alexa.is_addressed(message.content):
+        return
+    if not await _is_game_thread(message.channel):
+        return
+
+    try:
+        if alexa.is_message_for_david(message.content):
+            # The words for this live in the content files as a `reminded`
+            # state row on alexa. Until a writer adds one, she falls back to
+            # her stock non-answer rather than the bot inventing dialogue.
+            reply = await phrasing.say(
+                message.guild.id, ALEXA_THING, "use", state=ALEXA_REMINDED
+            )
+            if not reply:
+                log.warning(
+                    "No `%s` state text for %s: a player asked Alexa to pass the "
+                    "message to David and got her stock reply instead. One row in "
+                    "thing_text.tsv fixes it.",
+                    ALEXA_REMINDED,
+                    ALEXA_THING,
+                )
+                reply = await phrasing.say(message.guild.id, ALEXA_THING, "use")
+        else:
+            reply = await phrasing.say(message.guild.id, ALEXA_THING, "use")
+    except SQLAlchemyError:
+        log.exception("Could not read Alexa's text")
+        return
+
+    if reply:
+        try:
+            await message.channel.send(reply)
+        except discord.HTTPException:
+            log.warning("Could not answer as Alexa", exc_info=True)
+
+
+@bot.event
+async def on_raw_reaction_add(payload: discord.RawReactionActionEvent) -> None:
+    """Judge a guess at the cat's craving.
+
+    Raw rather than on_reaction_add: the latter only fires for messages still
+    in the bot's cache, so every guess on anything posted before the last
+    restart would do nothing at all and nobody would know why.
+    """
+    if payload.guild_id is None or payload.user_id == bot.user.id:
+        return
+
+    channel = bot.get_channel(payload.channel_id)
+    if channel is None:
+        return
+
+    try:
+        message = await channel.fetch_message(payload.message_id)
+    except discord.HTTPException:
+        return
+
+    # Only on the bot's own messages: reacting to another player's line is a
+    # conversation, not a guess.
+    if message.author.id != bot.user.id:
+        return
+
+    try:
+        guess = await craving.judge(
+            payload.guild_id, payload.user_id, str(payload.emoji)
+        )
+    except SQLAlchemyError:
+        log.exception("Could not judge a craving guess")
+        return
+
+    await _answer_guess(message, guess)
+
+
+async def _answer_guess(message: discord.Message, guess) -> None:
+    """React with the bot's answer, if it has not already said it.
+
+    Checks whether *the bot* is among a reaction's users rather than whether
+    the emoji is present: a player can add any of the three by hand, and
+    Discord merges identical emoji into one reaction with a count.
+    """
+    mine = {str(r.emoji) for r in message.reactions if r.me}
+
+    async def react(emoji: str) -> None:
+        if emoji in mine:
+            return
+        try:
+            await message.add_reaction(emoji)
+        except discord.HTTPException:
+            log.warning("Could not add %s", emoji, exc_info=True)
+
+    if guess.verdict is craving.CORRECT or guess.verdict == craving.CORRECT:
+        # Public by design - a reaction carries no interaction token, so there
+        # is no private confirmation available. The cat is the confirmation.
+        await react(craving.FOUND)
+        return
+
+    if guess.verdict == craving.SAME_GROUP:
+        await react(craving.RIGHT_GROUP)
+        return
+
+    # Discord caps a message at 20 distinct reactions. Spend the last one
+    # saying "no more guesses here", or a correct guess in the final slot
+    # would leave the bot no room to answer.
+    if craving.FOUND not in mine and len(message.reactions) >= craving.MAX_REACTIONS - 1:
+        await react(craving.NO_ROOM)
 
 
 @bot.tree.command(name="pet", description="Pet the cat.")
