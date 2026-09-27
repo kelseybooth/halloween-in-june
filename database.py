@@ -210,6 +210,16 @@ class PetEvent(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    # The relationship score as it stood *before* this pet applied. Two
+    # achievements count 200 pets while the relationship was positive or
+    # negative, and no other table can answer that after the fact - the score is
+    # a running total, so history cannot be reconstructed from it. Recorded now,
+    # ahead of the achievements themselves, because the only moment backfill is
+    # free is before a real server starts petting. Rows written before this
+    # column existed read 0; reset_db.py is the intended way past that.
+    relationship_at_pet: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
 
 
 class PlayerGameState(Base):
@@ -339,6 +349,304 @@ class InventoryItem(Base):
     )
 
 
+# --------------------------------------------------------------------------
+# Content, loaded from the files in `creative content/`
+#
+# Global, not keyed by guild: the house is the same house in every server. These
+# tables are never mutated at runtime, which is what makes a reload safe - the
+# loader can replace them wholesale without touching anything a player did.
+#
+# The three tables above this comment - rooms, things, inventory - are the
+# per-guild content tables these replace. They are left in place and unread, as
+# the cohort columns were: dropping a table is not something the additive startup
+# migration can do. Nothing writes them once the loader lands.
+# --------------------------------------------------------------------------
+
+# Written into room_contents.container_id for a thing lying loose in a room.
+# An empty string rather than NULL, because it is part of a composite primary key
+# and NULLs in a key compare as distinct from each other on some backends.
+LOOSE_IN_ROOM = ""
+
+# server_config key holding the Pacific date a guild first initialized its house.
+# Restock day numbers count from it, so it is per-server rather than global.
+CONFIG_INITIALIZED_ON = "initialized_on"
+
+
+class RoomType(Base):
+    """One row per room in the house, from rooms.tsv."""
+
+    __tablename__ = "room_types"
+
+    room_id: Mapped[str] = mapped_column(String(8), primary_key=True)
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    open_at_launch: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class ThingType(Base):
+    """One row per thing, from things.tsv.
+
+    A *type*, not an instance: five baby bottles in a room are one row here and a
+    count of five in room_contents. See "Why types" in the phase 2b work order -
+    the finite world is six copies across six things, while sources feed fourteen
+    objects with no cap, so per-copy rows would grow without bound to model the
+    part of the world that does not need them.
+    """
+
+    __tablename__ = "thing_types"
+
+    thing_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    # JSON rather than a delimited string: the files use pipes, but a list is what
+    # the resolver wants, and JSON is already how rooms_unlocked is stored.
+    aliases: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    type: Mapped[str] = mapped_column(String(16), nullable=False)
+    room_id: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    # NULL means `many` - a shared pool with no count, which only lumber uses.
+    quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    takeable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    droppable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    cross_weight: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    max_per_player: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    requires: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    present_when: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    transforms_to: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    transform_room: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    yields: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    destination_room_id: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    contained_in: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    use_cooldown_hours: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    since_drop: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class RoomText(Base):
+    """A room's description for one state, at one drop."""
+
+    __tablename__ = "room_text"
+
+    room_id: Mapped[str] = mapped_column(String(8), primary_key=True)
+    state: Mapped[str] = mapped_column(String(64), primary_key=True)
+    since_drop: Mapped[int] = mapped_column(Integer, primary_key=True)
+    look: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ThingText(Base):
+    """A thing's text for one state, at one drop.
+
+    Every column is nullable: a blank cell means "use the house default", which is
+    the whole point of defaults.tsv. Most things fill only `look`.
+    """
+
+    __tablename__ = "thing_text"
+
+    thing_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    state: Mapped[str] = mapped_column(String(64), primary_key=True)
+    since_drop: Mapped[int] = mapped_column(Integer, primary_key=True)
+    look: Mapped[str | None] = mapped_column(Text, nullable=True)
+    look_carried: Mapped[str | None] = mapped_column(Text, nullable=True)
+    use: Mapped[str | None] = mapped_column(Text, nullable=True)
+    take: Mapped[str | None] = mapped_column(Text, nullable=True)
+    drop: Mapped[str | None] = mapped_column(Text, nullable=True)
+    use_fail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    take_fail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    drop_fail: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class DefaultText(Base):
+    """House fallback strings, used wherever a content cell is blank."""
+
+    __tablename__ = "defaults"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    text_value: Mapped[str] = mapped_column("text", Text, nullable=False)
+
+
+class Drop(Base):
+    """The unlock calendar: when each slice of content becomes visible.
+
+    A drop is a moment content reaches players; a release is a deployment. One
+    release can carry a month of drops, which is why no release number is stored
+    anywhere and no command advances one.
+    """
+
+    __tablename__ = "drops"
+
+    drop_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    trigger: Mapped[str] = mapped_column(String(16), nullable=False)
+    # Either an ISO date or the literal "launch", which arrives immediately.
+    date: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    event: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class Restock(Base):
+    """A schedule for things that reappear over time, from restocks.tsv.
+
+    Loaded and validated in 2b; the job that acts on it is 2c. Nothing here runs
+    on a clock yet.
+    """
+
+    __tablename__ = "restocks"
+
+    restock_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    thing_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    placement: Mapped[str] = mapped_column(String(16), nullable=False)
+    container: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    amount: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # Separate occurrences, not one delivery of `amount` - eight bottles a day is
+    # eight arrivals at eight independently drawn times.
+    times_per_day: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    first_day: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    every_n_days: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    window_start: Mapped[str] = mapped_column(String(5), nullable=False, default="00:00")
+    window_end: Mapped[str] = mapped_column(String(5), nullable=False, default="23:59")
+    # Where set, names a server_config key an admin can retune mid-game.
+    config_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    since_drop: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+# --------------------------------------------------------------------------
+# World state: per guild, mutable, and never written by the loader except when
+# it first places things in a server that has none.
+# --------------------------------------------------------------------------
+
+
+class PlayerInventory(Base):
+    """What a player carries, as counts rather than rows per copy."""
+
+    __tablename__ = "player_inventory"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    thing_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class RoomContents(Base):
+    """What is in a room, or in a container in a room.
+
+    `container_id` is LOOSE_IN_ROOM for something lying out in the open, and a
+    thing_id for something inside a container. It is part of the key because the
+    same thing can be both at once: a spice jar in the Amazon box and another one
+    dropped on the floor beside it are two rows, and only the loose one shows in
+    the room's `Also here:` line.
+    """
+
+    __tablename__ = "room_contents"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    room_id: Mapped[str] = mapped_column(String(8), primary_key=True)
+    container_id: Mapped[str] = mapped_column(
+        String(64), primary_key=True, default=LOOSE_IN_ROOM, server_default=text("''")
+    )
+    thing_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class PlayerState(Base):
+    """A discovery one player has made: has_key, drawer_unjammed and the rest.
+
+    Per player because the discovery *is* the content - making these server-wide
+    would mean only the first player ever experiences them.
+    """
+
+    __tablename__ = "player_states"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    state: Mapped[str] = mapped_column(String(64), primary_key=True)
+    set_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class ServerState(Base):
+    """A state the whole server shares. Only stairs_repaired today.
+
+    Collective labour earns a collective reward, so the staircase lands for
+    everyone at once.
+    """
+
+    __tablename__ = "server_states"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    state: Mapped[str] = mapped_column(String(64), primary_key=True)
+    set_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class ServerConfig(Base):
+    """Per-server numbers an admin can retune: planks_required, bottles_per_day.
+
+    Values are strings so one table serves every type; callers coerce. Also holds
+    CONFIG_INITIALIZED_ON, the date restock day numbers count from.
+    """
+
+    __tablename__ = "server_config"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(String(255), nullable=False)
+
+
+class ThingUse(Base):
+    """One row per (player, thing): when they last used it, and how many times.
+
+    Three jobs in one table. `last_used_at` answers the 48-hour lumber cooldown;
+    counting distinct rows for a thing answers "{n} of {total} repairs done", which
+    the staircase needs by distinct player; and `use_count` answers "do this N
+    times" achievements, of which ten frozen burritos is the first.
+    """
+
+    __tablename__ = "thing_uses"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    thing_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    last_used_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    use_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class ServerDrop(Base):
+    """A drop that has arrived on this server, recorded so it cannot un-arrive.
+
+    Only `event` and `manual` drops need rows. A `date` drop is answered by the
+    calendar every time it is asked, so storing it would be a second source of
+    truth. The reason arrival is recorded at all is that a condition can stop
+    being true - a counter falls back, a thing is taken - and content must not
+    vanish from a house it has already changed.
+    """
+
+    __tablename__ = "server_drops"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    drop_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    arrived_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class ServerRestock(Base):
+    """Where a server has got to in one restock schedule.
+
+    Written by the 2c scheduler, created empty here. `last_applied_at` is what
+    makes a window missed during an outage get applied at the next opportunity
+    rather than skipped; `next_at` holds the random time already drawn, so a
+    restart does not redraw it and double-place.
+    """
+
+    __tablename__ = "server_restocks"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    restock_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    last_applied_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    next_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 def _normalise_url(raw: str) -> str:
     """Convert a stock PostgreSQL URL into the async (asyncpg) form SQLAlchemy needs.
 
@@ -387,6 +695,12 @@ _LATER_COLUMNS: list[tuple[str, str, str]] = [
     ("things", "cohort", "VARCHAR(1)"),
     ("things", "can_take", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ("things", "removed_on_take", "BOOLEAN NOT NULL DEFAULT TRUE"),
+    # Rows written before this column existed read 0 rather than their true score,
+    # which cannot be recovered. Acceptable only because every such row is test
+    # data; reset_db.py is the way past it.
+    ("pet_events", "relationship_at_pet", "INTEGER NOT NULL DEFAULT 0"),
+    ("room_contents", "container_id", "VARCHAR(64) NOT NULL DEFAULT ''"),
+    ("thing_uses", "use_count", "INTEGER NOT NULL DEFAULT 0"),
 ]
 
 
@@ -518,7 +832,7 @@ async def increment_pet_count(user_id: int, guild_id: int) -> PetResult:
             index_elements=[User.id, User.guild_id],
             set_={"pet_count": User.pet_count + 1, "updated_at": func.now()},
         )
-        .returning(User.pet_count)
+        .returning(User.pet_count, User.relationship)
     )
 
     try:
@@ -532,9 +846,19 @@ async def increment_pet_count(user_id: int, guild_id: int) -> PetResult:
                     PetEvent.created_at >= cutoff,
                 )
             )
-            result = await session.execute(stmt)
-            total = result.scalar_one()
-            session.add(PetEvent(user_id=user_id, guild_id=guild_id, created_at=now))
+            total, relationship_before = (await session.execute(stmt)).one()
+            # The upsert touches pet_count, never relationship, so what comes back
+            # is the score as it stood before this pet - which is exactly what the
+            # achievements need, and what nothing could reconstruct afterwards. A
+            # brand-new player reads RELATIONSHIP_START, their score at that moment.
+            session.add(
+                PetEvent(
+                    user_id=user_id,
+                    guild_id=guild_id,
+                    created_at=now,
+                    relationship_at_pet=relationship_before,
+                )
+            )
             await session.commit()
 
             log.info(
