@@ -1680,3 +1680,58 @@ async def distinct_users_of(guild_id: int, thing_id: str) -> int:
                 )
             )
         ) or 0
+
+
+# --------------------------------------------------------------------------
+# Listings: what `/look` shows in a room or inside a container
+# --------------------------------------------------------------------------
+
+
+async def loose_here(
+    guild_id: int, room_id: str, container_id: str = LOOSE_IN_ROOM
+) -> list[tuple[str, int]]:
+    """(name, count) for the takeable things lying out in a room or container.
+
+    Takeable and finite only. A source is never listed anywhere - it is
+    inexhaustible, and the prose that reveals it is what a player reads instead,
+    which the loader checks. Fixtures and exits are not listed either: they are
+    the room, not things in it.
+
+    Passing a container_id lists what is inside that container rather than what
+    is loose in the room, which is the same rule applied one level down.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(ThingType.name, RoomContents.count)
+            .join(ThingType, ThingType.thing_id == RoomContents.thing_id)
+            .where(
+                RoomContents.guild_id == guild_id,
+                RoomContents.room_id == room_id,
+                RoomContents.container_id == container_id,
+                RoomContents.count > 0,
+                ThingType.takeable.is_(True),
+            )
+            .order_by(ThingType.sort_order, ThingType.name)
+        )
+        return [(row[0], row[1]) for row in rows]
+
+
+async def states_of(guild_id: int, user_id: int) -> set[str]:
+    """Every state in force for this player: their own, plus the server's.
+
+    Nothing sets either in 2c - the staircase and the drawer are 2c.5 - so this
+    is empty today and every lookup falls through to `default`. It is wired now
+    so the text resolution is already correct when states start being set.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        mine = await session.execute(
+            select(PlayerState.state).where(
+                PlayerState.guild_id == guild_id, PlayerState.user_id == user_id
+            )
+        )
+        shared = await session.execute(
+            select(ServerState.state).where(ServerState.guild_id == guild_id)
+        )
+        return {row[0] for row in mine} | {row[0] for row in shared}

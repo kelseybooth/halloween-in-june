@@ -808,51 +808,114 @@ INVENTORY_ERROR_MESSAGE = "Couldn't retrieve your inventory. Try again."
 @app_commands.guild_only()
 @app_commands.describe(thing="What to look at. Leave empty to look around the room.")
 async def look(interaction: discord.Interaction, thing: str | None = None) -> None:
-    """Describe the player's current room, or one thing in it or in their bag.
+    """Three shapes: the room, a thing, or a container and what is inside it.
 
-    Replies are ephemeral: /look can be typed in any channel of the server, and a
-    public reply would leak room and thing descriptions to people who are not
-    playing. It also keeps a busy room thread from filling with everyone's looks.
+    Always private. `/look` can be typed anywhere in the server and a public
+    reply would leak descriptions to people who are not playing; it also keeps
+    a busy room thread from filling with everyone looking around. And it is
+    what lets one player see the unjammed drawer while another does not.
     """
     await interaction.response.defer(ephemeral=True, thinking=True)
-    user = interaction.user
+    user, guild_id = interaction.user, interaction.guild_id
 
     try:
-        state = await database.get_game_state(user.id, interaction.guild_id)
-    except SQLAlchemyError:
-        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
-        return
-
-    if state is None:
-        await interaction.followup.send(NOT_IN_ROOM_MESSAGE, ephemeral=True)
-        return
-
-    if thing is None or not thing.strip():
-        try:
-            description = await resolve.room_look(interaction.guild_id, state.current_room)
-        except SQLAlchemyError:
-            await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+        state = await database.get_game_state(user.id, guild_id)
+        if state is None:
+            await interaction.followup.send(NOT_IN_ROOM_MESSAGE, ephemeral=True)
             return
-        await interaction.followup.send(description or GENERIC_ROOM_DESCRIPTION, ephemeral=True)
-        return
 
-    try:
-        found = await database.look_at_thing_here(
-            user.id, interaction.guild_id, state.current_room, thing
+        if thing is None or not thing.strip():
+            await interaction.followup.send(
+                await _look_around(guild_id, user.id, state.current_room), ephemeral=True
+            )
+            return
+
+        found = await reach.find(
+            guild_id, user.id, state.current_room, thing, reach.Scope.REACH
+        )
+
+        if isinstance(found, reach.Ambiguous):
+            await interaction.followup.send(
+                await phrasing.default_say(
+                    "ambiguous.match", options=", ".join(found.options)
+                ),
+                ephemeral=True,
+            )
+            return
+
+        if isinstance(found, reach.NotFound):
+            key = "take_fail.absent" if found.exists_elsewhere else "unknown.noun"
+            await interaction.followup.send(
+                await phrasing.default_say(key, name=thing.strip()), ephemeral=True
+            )
+            return
+
+        await interaction.followup.send(
+            await _look_at(guild_id, user.id, state.current_room, found), ephemeral=True
         )
     except SQLAlchemyError:
+        log.exception("Failed to look at %r in guild %s", thing, guild_id)
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
-        return
 
-    if found is None:
-        await interaction.followup.send(CANT_LOOK_MESSAGE, ephemeral=True)
-        return
 
-    # A thing with no description yet still exists; say so rather than send nothing.
-    text = found.description or f"You see {thing.strip()}."
-    if found.count > 1:
-        text += f" There are {found.count}."
-    await interaction.followup.send(text, ephemeral=True)
+async def _current_state(guild_id: int, user_id: int) -> str:
+    """Which state's text this player sees.
+
+    Nothing sets a state in 2c, so this is always `default` today - the
+    staircase and the drawer are 2c.5. The plumbing is here so that when states
+    start being set, the text follows without another pass over /look.
+
+    A player holding two states that both have text for the same entity is
+    unspecified in the Functional Spec. Sorting makes the choice deterministic
+    rather than dependent on row order, which is the least surprising thing to
+    do until somebody rules on it.
+    """
+    held = await database.states_of(guild_id, user_id)
+    return sorted(held)[0] if held else resolve.DEFAULT_STATE
+
+
+async def _look_around(guild_id: int, user_id: int, room_id: str) -> str:
+    """The room's description, then what is lying about in it."""
+    state = await _current_state(guild_id, user_id)
+    description = await resolve.room_look(guild_id, room_id, state) or GENERIC_ROOM_DESCRIPTION
+
+    loose = await database.loose_here(guild_id, room_id)
+    line = await phrasing.listing(
+        loose,
+        prefix_key="also_here.prefix",
+        budget=phrasing.MESSAGE_LIMIT - len(description) - 2,
+    )
+    return f"{description}\n\n{line}" if line else description
+
+
+async def _look_at(guild_id: int, user_id: int, room_id: str, found) -> str:
+    """One thing, plus its contents if anything is inside it.
+
+    A carried thing uses `look_carried` where it has one: six things describe
+    where they were sitting, which stops being true the moment they are picked
+    up. Falling back to `look` is right for everything else.
+    """
+    state = await _current_state(guild_id, user_id)
+
+    description = ""
+    if found.where is reach.Where.CARRIED:
+        description = await phrasing.say(
+            guild_id, found.thing_id, "look_carried", state=state, name=found.name
+        )
+    if not description:
+        description = await phrasing.say(
+            guild_id, found.thing_id, "look", state=state, name=found.name
+        )
+    if not description:
+        description = f"You see {found.name}."
+
+    inside = await database.loose_here(guild_id, room_id, container_id=found.thing_id)
+    line = await phrasing.listing(
+        inside,
+        prefix_key="contents.prefix",
+        budget=phrasing.MESSAGE_LIMIT - len(description) - 2,
+    )
+    return f"{description}\n\n{line}" if line else description
 
 
 @bot.tree.command(name="inventory", description="See what you're carrying.")
@@ -868,13 +931,17 @@ async def inventory(interaction: discord.Interaction) -> None:
         return
 
     if not items:
-        await interaction.followup.send("Your inventory is empty.", ephemeral=True)
+        await interaction.followup.send(
+            await phrasing.default_say("inventory.empty"), ephemeral=True
+        )
         return
 
-    lines = ["Your inventory:"]
-    lines.extend(f"- {name} ({count})" for name, count in items)
-    lines.append(f"\nTotal items: {sum(count for _, count in items)}")
-    await interaction.followup.send("\n".join(lines), ephemeral=True)
+    # The same rendering as a room listing, so a bag of ten herbs reads the way
+    # ten herbs on the floor read. Truncation applies here too: nothing caps how
+    # much a player can carry.
+    await interaction.followup.send(
+        await phrasing.listing(items, prefix_key="inventory.prefix"), ephemeral=True
+    )
 
 
 # --------------------------------------------------------------------------

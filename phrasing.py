@@ -94,3 +94,59 @@ async def say(
 async def default_say(key: str, **tokens) -> str:
     """A house string by key, filled in."""
     return fill(await resolve.default_text(key), **tokens)
+
+
+# --------------------------------------------------------------------------
+# Listings
+# --------------------------------------------------------------------------
+
+# Discord refuses a message over 2,000 characters. Ten scattered objects a day
+# and nothing removing them until somebody takes one means a busy room reaches
+# that inside a fortnight, so the listing is cut rather than the send failing.
+MESSAGE_LIMIT = 2000
+
+
+async def listing(
+    entries: list[tuple[str, int]], *, prefix_key: str, budget: int = MESSAGE_LIMIT
+) -> str:
+    """Render "Also here: nacho chips, herbs x10" from (name, count) pairs.
+
+    Empty in, empty out: a room with nothing loose gets no line at all rather
+    than a line saying so. Four of the nine rooms are in that state at launch,
+    which is correct - everything portable there is tucked inside something.
+
+    Over budget, the listing is cut and the count of what was dropped is
+    appended. Truncating is not a precaution for later: it ships with the
+    scheduler that causes it.
+    """
+    if not entries:
+        return ""
+
+    prefix = await resolve.default_text(prefix_key) or ""
+    separator = await resolve.default_text("also_here.separator") or ", "
+    multiple = await resolve.default_text("also_here.entry_multiple") or "{name} x{n}"
+
+    rendered = [
+        fill(multiple, name=name, n=count) if count > 1 else name
+        for name, count in entries
+    ]
+
+    kept: list[str] = []
+    length = len(prefix)
+    for index, entry in enumerate(rendered):
+        addition = len(entry) + (len(separator) if kept else 0)
+        # Leave room for the truncation clause, which is only needed if
+        # something is actually left out.
+        remaining = len(rendered) - index
+        reserve = 0 if remaining == 1 else 60
+        if length + addition + reserve > budget:
+            break
+        kept.append(entry)
+        length += addition
+
+    if len(kept) == len(rendered):
+        return prefix + separator.join(kept)
+
+    dropped = len(rendered) - len(kept)
+    tail = await default_say("also_here.truncated", more=dropped)
+    return prefix + separator.join(kept) + separator + tail
