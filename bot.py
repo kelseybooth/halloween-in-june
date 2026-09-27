@@ -25,6 +25,7 @@ import house_utils
 import phrasing
 import reach
 import resolve
+import restocking
 
 load_dotenv()
 
@@ -65,6 +66,11 @@ PET_RESPONSES = FRIENDLY_RESPONSES + STANDOFFISH_RESPONSES
 # ten minutes and the window empties, restoring the cat's patience.
 BASE_FRIENDLY_CHANCE = 70
 DECAY_PER_RECENT_PET = 10
+
+# How often to look for restock occurrences that have come due. Occurrences
+# are scattered through the day, so a once-a-day job would deliver eight
+# bottles in a heap rather than eight times.
+RESTOCK_SWEEP_MINUTES = 10
 
 # How far one reaction moves the relationship meter.
 RELATIONSHIP_STEP = 5
@@ -188,6 +194,7 @@ class CatBot(commands.Bot):
             log.info("Startup decay settled %d relationship(s)", len(caught_up))
         nightly_decay.start()
         keep_threads_alive.start()
+        restock_sweep.start()
 
         # Global syncs can take up to an hour to propagate. Setting GUILD_ID copies
         # the commands into one server instead, where they appear immediately - much
@@ -316,6 +323,38 @@ async def _before_keep_alive() -> None:
     await bot.wait_until_ready()
 
 
+@tasks.loop(minutes=RESTOCK_SWEEP_MINUTES)
+async def restock_sweep() -> None:
+    """Place whatever the restock schedules say has come due.
+
+    Runs often rather than at a fixed hour, because occurrences are scattered
+    through the day - eight bottles arrive at eight different moments, and a
+    once-a-day job would deliver them in a heap at midnight.
+
+    Nothing is lost between sweeps or across a restart: each schedule records
+    the last occurrence it applied, and the next sweep asks what should have
+    happened since. A bot that was down for a day places that day's arrivals
+    when it comes back rather than skipping them.
+    """
+    guild_ids = [guild.id for guild in bot.guilds]
+    if not guild_ids:
+        return
+
+    try:
+        report = await restocking.run_all(guild_ids)
+    except SQLAlchemyError:
+        log.exception("Restock sweep failed")
+        return
+
+    if report.placed:
+        log.info("%s", report.summary())
+
+
+@restock_sweep.before_loop
+async def _before_restock() -> None:
+    await bot.wait_until_ready()
+
+
 @bot.tree.command(name="pet", description="Pet the cat.")
 @app_commands.guild_only()
 async def pet(interaction: discord.Interaction) -> None:
@@ -399,6 +438,13 @@ async def initialize_haunted_house(interaction: discord.Interaction) -> None:
             ephemeral=True,
         )
         return
+
+    try:
+        # Restock day numbers count from here, so a server that never records
+        # this never restocks.
+        await restocking.set_initialized_on(interaction.guild_id)
+    except SQLAlchemyError:
+        log.exception("Could not record the initialization date")
 
     try:
         result = await house_utils.initialize_threads(
