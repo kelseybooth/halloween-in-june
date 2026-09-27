@@ -12,6 +12,30 @@ and turn OFF any "convert text to numbers/dates" option so ids stay as written).
 |`defaults.tsv`|16|Fallback strings used wherever a cell is left blank.|
 |`drops.tsv`|1|The unlock calendar: which drop each row of content waits for.|
 |`restocks.tsv`|3|Scheduled top-ups: what gets added to which container, how often.|
+|`emoji_groups.tsv`|132|The craving lookup: every Food & Drink emoji, its Unicode subgroup, and whether it can be the answer.|
+
+## Where emoji_groups.tsv came from
+
+Generated from Unicode's `emoji-test.txt` (Unicode emoji 18.0, dated 30 April 2026),
+not written by hand — a mis-grouped emoji would show up as the bot saying "right
+subgroup" to a wrong guess, which nobody would trace back to a data file.
+
+One row per fully-qualified emoji in the **Food & Drink** group. `drawable` is `no`
+on the seven `dishware` rows and `yes` on the other 125, so a plate can never be the
+craving but is still a legal guess that resolves to a known subgroup.
+
+Two things worth knowing if you edit it:
+
+- **There is no seafood.** The Functional Spec lists `food-marine` as a subgroup, but
+  Unicode 18.0 has no such thing — crab, lobster, shrimp, squid and oyster are all in
+  Animals & Nature. The pool is the Food & Drink group, so they are out.
+- **Salt (🧂) is `food-prepared`, not dishware**, whatever the spec's parenthetical
+  says, so it arrived drawable and was switched off by hand. That leaves 124 in the
+  pool. It is the one row where `drawable` disagrees with the Unicode grouping, and
+  it is here rather than in code precisely so a writer can make that call.
+
+Replacing the Unicode subgroups with smaller hand-made groups is a content change:
+edit the `subgroup` column and nothing in the code needs to know.
 
 Writers edit `room_text.tsv`, `thing_text.tsv` and `defaults.tsv`.
 `rooms.tsv` and `things.tsv` carry game rules — changing those is a design decision.

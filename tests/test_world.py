@@ -42,7 +42,10 @@ def a_house(*things, rooms=(("EN", "Entryway"), ("KI", "Kitchen")), thing_text=N
         )
         for t in things
     ]
-    parsed.defaults = {"take.default": "You take the {name}."}
+    # The real house strings, not stand-ins: the work order asks that every
+    # default be reachable by a path a test can trigger, and asserting against
+    # invented text would prove the plumbing while missing the writer's words.
+    parsed.defaults = dict(content_module.load_files().defaults)
     parsed.drops = [
         Drop(drop_id=1, trigger="date", date="launch", event=None, name="Launch", notes=None)
     ]

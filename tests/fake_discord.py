@@ -116,3 +116,56 @@ class FakeChannel:
     def with_permissions(self, **flags):
         self._permissions = SimpleNamespace(**flags)
         return self
+
+
+class FakeResponse:
+    def __init__(self, interaction):
+        self._interaction = interaction
+
+    def is_done(self):
+        return self._interaction.deferred
+
+    async def defer(self, **kwargs):
+        self._interaction.deferred = True
+        self._interaction.defer_kwargs = kwargs
+
+    async def send_message(self, content=None, **kwargs):
+        self._interaction.sent.append((content, kwargs))
+
+
+class FakeFollowup:
+    def __init__(self, interaction):
+        self._interaction = interaction
+
+    async def send(self, content=None, **kwargs):
+        self._interaction.sent.append((content, kwargs))
+        return SimpleNamespace(id=1)
+
+
+class FakeInteraction:
+    """Just enough of discord.Interaction for a command handler to run.
+
+    Records what was sent and whether it was ephemeral, which between them are
+    most of what a command's behaviour actually is.
+    """
+
+    def __init__(self, user_id, guild_id, *, guild=None):
+        self.user = SimpleNamespace(id=user_id, mention=f"<@{user_id}>")
+        self.guild_id = guild_id
+        self.guild = guild
+        self.deferred = False
+        self.defer_kwargs = {}
+        self.sent: list[tuple[str | None, dict]] = []
+        self.response = FakeResponse(self)
+        self.followup = FakeFollowup(self)
+
+    @property
+    def reply(self) -> str:
+        """The text of the last thing sent."""
+        assert self.sent, "nothing was sent"
+        return self.sent[-1][0] or ""
+
+    @property
+    def was_private(self) -> bool:
+        assert self.sent, "nothing was sent"
+        return bool(self.sent[-1][1].get("ephemeral"))

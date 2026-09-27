@@ -14,6 +14,7 @@ whole set is known good - a half-loaded house is worse than a stale one.
 from __future__ import annotations
 
 import csv
+import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -28,6 +29,7 @@ FILES = {
     "defaults": "defaults.tsv",
     "drops": "drops.tsv",
     "restocks": "restocks.tsv",
+    "emoji_groups": "emoji_groups.tsv",
 }
 
 # How a drop arrives. `date` is answered by the calendar every time it is asked and
@@ -42,6 +44,12 @@ LAUNCH = "launch"
 # the second one needs no migration, and so a typo in the file is caught at load
 # rather than becoming a drop that never arrives.
 KNOWN_DROP_EVENTS: set[str] = set()
+
+# The Unicode subgroup holding plates, chopsticks and the like. It is inside the
+# Food & Drink group but is not food, so nothing in it can be the craving. Note
+# the name: it is `dishware`, not `food-dishware`, and guessing wrong makes every
+# plate drawable without failing anything.
+DISHWARE_SUBGROUP = "dishware"
 
 # Where a restock puts what it adds. `container` names one; `random` draws a slot
 # from every room and every container at equal probability.
@@ -169,6 +177,21 @@ class Restock:
 
 
 @dataclass(frozen=True)
+class EmojiGroup:
+    """One emoji, its Unicode subgroup, and whether it can be the craving.
+
+    Splitting the pool from the grouping is what makes the dishware rule fall
+    out rather than needing a special case: the craving is drawn only from
+    drawable rows, but a player who reacts with a plate still resolves to a
+    known subgroup and simply never matches.
+    """
+
+    emoji: str
+    subgroup: str
+    drawable: bool
+
+
+@dataclass(frozen=True)
 class TextRow:
     entity_id: str
     state: str
@@ -187,6 +210,7 @@ class Content:
     defaults: dict[str, str] = field(default_factory=dict)
     drops: list[Drop] = field(default_factory=list)
     restocks: list[Restock] = field(default_factory=list)
+    emoji_groups: list[EmojiGroup] = field(default_factory=list)
 
     @property
     def rooms_by_id(self) -> dict[str, Room]:
@@ -199,6 +223,11 @@ class Content:
     @property
     def restocked_thing_ids(self) -> set[str]:
         return {r.thing_id for r in self.restocks}
+
+    @property
+    def craving_pool(self) -> list[EmojiGroup]:
+        """The emoji a craving may be drawn from."""
+        return [e for e in self.emoji_groups if e.drawable]
 
     @property
     def things_by_id(self) -> dict[str, Thing]:
@@ -237,6 +266,17 @@ def _int(value: str | None, *, default: int | None = None) -> int | None:
     if raw is None:
         return default
     return int(raw)
+
+
+def normalise_emoji(value: str) -> str:
+    """Strip the variation selector so the file and a reaction compare equal.
+
+    Discord hands back some emoji with U+FE0F and some without, and the file
+    contains whichever form Unicode calls fully-qualified. Normalising once on
+    load - rather than at each comparison - is what stops the two disagreeing
+    invisibly for a single emoji nobody thinks to test.
+    """
+    return unicodedata.normalize("NFC", value.strip()).replace("\ufe0f", "")
 
 
 def _aliases(value: str | None) -> tuple[str, ...]:
@@ -374,6 +414,18 @@ def load_files(directory: Path | None = None) -> Content:
             )
         )
 
+    for row in _rows(base / FILES["emoji_groups"], ("emoji", "subgroup")):
+        emoji = normalise_emoji(row["emoji"])
+        if not emoji:
+            continue
+        content.emoji_groups.append(
+            EmojiGroup(
+                emoji=emoji,
+                subgroup=(_text(row.get("subgroup")) or "").lower(),
+                drawable=_bool(row.get("drawable"), default=True),
+            )
+        )
+
     return content
 
 
@@ -407,6 +459,7 @@ def validate(content: Content) -> list[str]:
     problems += _check_drop_references(content)
     problems += _check_restocks(content, things)
     problems += _check_sources_are_named_in_prose(content, rooms)
+    problems += _check_emoji_groups(content)
     return problems
 
 
@@ -824,6 +877,33 @@ def _check_sources_are_named_in_prose(content: Content, rooms: dict[str, Room]) 
                 f"source {thing.thing_id} is named nowhere in {where}; it is never listed, "
                 "so no player could learn it is there"
             )
+    return problems
+
+
+def _check_emoji_groups(content: Content) -> list[str]:
+    """The craving lookup has to be usable: unique, grouped, and non-empty.
+
+    Emoji are compared after normalisation, so uniqueness has to hold after it
+    too - two rows differing only by a variation selector would both answer for
+    the same reaction, and which one won would depend on row order.
+    """
+    problems = []
+
+    seen = set()
+    for row in content.emoji_groups:
+        if row.emoji in seen:
+            problems.append(
+                f"emoji {row.emoji!r} appears twice once variation selectors are "
+                "normalised; one row would silently shadow the other"
+            )
+        seen.add(row.emoji)
+        if not row.subgroup:
+            problems.append(f"emoji {row.emoji!r} has no subgroup")
+
+    if content.emoji_groups and not content.craving_pool:
+        problems.append(
+            "no emoji is drawable, so the daily craving could never be drawn"
+        )
     return problems
 
 

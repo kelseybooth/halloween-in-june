@@ -100,11 +100,7 @@ Resolution is scoped to the room, never the inventory (see Resolution). Resolve,
 
 **A finite object** decrements `room_contents` and increments `player_inventory`. When the count reaches zero it leaves the room — and the `Also here:` line — entirely. This is what lets one player take the only copy.
 
-**`max_per_player`** is checked before either. Three things set it, all to 1: the gourmet can, the skeleton key and the carving tools. Over the cap, the thing's own `take_fail` fires — all three have one written, and they read as refusals rather than errors ("You've already found yours").
-
-**The used baby bottle is deliberately uncapped.** Eight are scattered through the house every day, so *Catproof the House* is earnable by everyone without a cap doing that work — the restock schedule is what spreads them, not a limit. Capping it would only penalize a player who collected diligently. Do not add one.
-
-*(Reapplied 26 September after a spec edit reverted it. `things.tsv` sets `max_per_player` on three rows; the files are authoritative where this document disagrees with them.)*
+**`max_per_player`** is checked before either. Three things set it, all at 1: the gourmet can, the skeleton key and the carving tools. Over the cap, the thing's own `take_fail` fires — all three have one written, and they read as refusals rather than errors ("You've already found yours"). The used baby bottle deliberately has **no** cap: *Catproof the House* is earnable by everyone because eight bottles scatter into the house every day, not because a cap spreads a fixed supply around.
 
 Refusals, in order of checking:
 

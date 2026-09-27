@@ -9,7 +9,7 @@ import logging
 import os
 import random
 import sys
-from datetime import time as dt_time
+from datetime import time as dt_time, timedelta
 from typing import NamedTuple
 
 import discord
@@ -22,7 +22,10 @@ import content
 import content_loader
 import database
 import house_utils
+import phrasing
+import reach
 import resolve
+import restocking
 
 load_dotenv()
 
@@ -63,6 +66,11 @@ PET_RESPONSES = FRIENDLY_RESPONSES + STANDOFFISH_RESPONSES
 # ten minutes and the window empties, restoring the cat's patience.
 BASE_FRIENDLY_CHANCE = 70
 DECAY_PER_RECENT_PET = 10
+
+# How often to look for restock occurrences that have come due. Occurrences
+# are scattered through the day, so a once-a-day job would deliver eight
+# bottles in a heap rather than eight times.
+RESTOCK_SWEEP_MINUTES = 10
 
 # How far one reaction moves the relationship meter.
 RELATIONSHIP_STEP = 5
@@ -186,6 +194,7 @@ class CatBot(commands.Bot):
             log.info("Startup decay settled %d relationship(s)", len(caught_up))
         nightly_decay.start()
         keep_threads_alive.start()
+        restock_sweep.start()
 
         # Global syncs can take up to an hour to propagate. Setting GUILD_ID copies
         # the commands into one server instead, where they appear immediately - much
@@ -314,6 +323,38 @@ async def _before_keep_alive() -> None:
     await bot.wait_until_ready()
 
 
+@tasks.loop(minutes=RESTOCK_SWEEP_MINUTES)
+async def restock_sweep() -> None:
+    """Place whatever the restock schedules say has come due.
+
+    Runs often rather than at a fixed hour, because occurrences are scattered
+    through the day - eight bottles arrive at eight different moments, and a
+    once-a-day job would deliver them in a heap at midnight.
+
+    Nothing is lost between sweeps or across a restart: each schedule records
+    the last occurrence it applied, and the next sweep asks what should have
+    happened since. A bot that was down for a day places that day's arrivals
+    when it comes back rather than skipping them.
+    """
+    guild_ids = [guild.id for guild in bot.guilds]
+    if not guild_ids:
+        return
+
+    try:
+        report = await restocking.run_all(guild_ids)
+    except SQLAlchemyError:
+        log.exception("Restock sweep failed")
+        return
+
+    if report.placed:
+        log.info("%s", report.summary())
+
+
+@restock_sweep.before_loop
+async def _before_restock() -> None:
+    await bot.wait_until_ready()
+
+
 @bot.tree.command(name="pet", description="Pet the cat.")
 @app_commands.guild_only()
 async def pet(interaction: discord.Interaction) -> None:
@@ -397,6 +438,13 @@ async def initialize_haunted_house(interaction: discord.Interaction) -> None:
             ephemeral=True,
         )
         return
+
+    try:
+        # Restock day numbers count from here, so a server that never records
+        # this never restocks.
+        await restocking.set_initialized_on(interaction.guild_id)
+    except SQLAlchemyError:
+        log.exception("Could not record the initialization date")
 
     try:
         result = await house_utils.initialize_threads(
@@ -544,13 +592,16 @@ async def enter_entryway(interaction: discord.Interaction) -> None:
 @app_commands.guild_only()
 @app_commands.describe(thing="The object or exit to use.")
 async def use(interaction: discord.Interaction, thing: str) -> None:
-    """Move the player through an exit into the adjoining room.
+    """Use something: an exit, a transform, something on a cooldown, or anything else.
 
-    Ordering note: the spec's numbered steps post the exit message and remove the
-    player before adding them to the destination, but its error handling requires
-    that a failed add must not have already removed them. The latter wins - the
-    player is added to the destination first, so any failure leaves them exactly
-    where they were.
+    Four branches, taken in order. The reply is always private - a use is a
+    small private moment, and making every one public would bury the thread.
+    Movement is the exception in that it *also* posts in both rooms, because
+    the people standing there need to see someone leave.
+
+    What is deliberately absent is the two uses that change the world. Placing
+    a plank counts toward nothing yet and graphite unjams nothing; both are
+    Phase 2c.5, along with the public reply that placing a plank earns.
     """
     if interaction.guild is None:
         await interaction.response.send_message(
@@ -559,31 +610,162 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
         return
 
     await interaction.response.defer(ephemeral=True, thinking=True)
-    user = interaction.user
+    user, guild_id = interaction.user, interaction.guild_id
 
     try:
-        state = await database.get_game_state(user.id, interaction.guild_id)
-    except SQLAlchemyError:
-        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
-        return
+        state = await database.get_game_state(user.id, guild_id)
+        if state is None:
+            await interaction.followup.send(
+                "You're not in the haunted house yet. Use `/enter-entryway` first.",
+                ephemeral=True,
+            )
+            return
 
-    if state is None:
+        found = await reach.find(guild_id, user.id, state.current_room, thing, reach.Scope.REACH)
+
+        if isinstance(found, reach.Ambiguous):
+            await interaction.followup.send(
+                await phrasing.default_say(
+                    "ambiguous.match", options=", ".join(found.options)
+                ),
+                ephemeral=True,
+            )
+            return
+
+        if isinstance(found, reach.NotFound):
+            key = "use_fail.absent" if found.exists_elsewhere else "unknown.noun"
+            await interaction.followup.send(
+                await phrasing.default_say(key, name=thing.strip()), ephemeral=True
+            )
+            return
+
+        row = await phrasing.thing_row(found.thing_id)
+        if row is None:
+            await interaction.followup.send(
+                await phrasing.default_say("use_fail.absent", name=found.name),
+                ephemeral=True,
+            )
+            return
+
+        if row.type == "exit":
+            await _use_exit(interaction, state, found, row)
+            return
+
+        if row.transforms_to:
+            await _use_transform(interaction, state, found, row)
+            return
+
+        if row.use_cooldown_hours:
+            await _use_with_cooldown(interaction, found, row)
+            return
+
+        await database.record_use(user.id, guild_id, found.thing_id)
         await interaction.followup.send(
-            "You're not in the haunted house yet. Use `/enter-entryway` first.",
+            await phrasing.say(
+                guild_id, found.thing_id, "use", fallback="use.default", name=found.name
+            ),
+            ephemeral=True,
+        )
+    except SQLAlchemyError:
+        log.exception("Failed to use %r in guild %s", thing, guild_id)
+        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+
+
+async def _use_transform(interaction, state, found, row) -> None:
+    """One thing becomes another, in the room that allows it.
+
+    The only row using this is the used baby bottle, which needs a sink and hot
+    water. Outside the Kitchen its own use_fail explains why.
+    """
+    user, guild_id = interaction.user, interaction.guild_id
+
+    if row.transform_room and state.current_room != row.transform_room:
+        await interaction.followup.send(
+            await phrasing.say(
+                guild_id, found.thing_id, "use_fail",
+                fallback="use_fail.default", name=found.name,
+            ),
             ephemeral=True,
         )
         return
 
-    chosen_exit = await resolve.resolve_exit(
-        interaction.guild_id, state.current_room, thing
-    )
-    if chosen_exit is None:
-        await interaction.followup.send("You don't see that exit here.", ephemeral=True)
+    if not await database.transform_carried(
+        user.id, guild_id, found.thing_id, row.transforms_to
+    ):
+        # Resolution found it in the room rather than the bag: a transform acts
+        # on what you are holding, so there is nothing to consume.
+        await interaction.followup.send(
+            await phrasing.say(
+                guild_id, found.thing_id, "use_fail",
+                fallback="use_fail.default", name=found.name,
+            ),
+            ephemeral=True,
+        )
         return
 
-    destination = chosen_exit.destination
+    await database.record_use(user.id, guild_id, found.thing_id)
+    await interaction.followup.send(
+        await phrasing.say(
+            guild_id, found.thing_id, "use", fallback="use.default", name=found.name
+        ),
+        ephemeral=True,
+    )
+
+
+async def _use_with_cooldown(interaction, found, row) -> None:
+    """A thing that cannot be used again for a while.
+
+    Only lumber, at 48 hours. The refusal carries {time}, and a refused use is
+    not a use: nothing is recorded, so the window does not slide forward every
+    time somebody tries.
+    """
+    user, guild_id = interaction.user, interaction.guild_id
+    window = timedelta(hours=row.use_cooldown_hours)
+
+    previous = await database.last_used(user.id, guild_id, found.thing_id)
+    if previous is not None:
+        elapsed = database._utcnow() - previous
+        if elapsed < window:
+            await interaction.followup.send(
+                await phrasing.say(
+                    guild_id, found.thing_id, "use_fail",
+                    fallback="use_fail.cooldown",
+                    name=found.name,
+                    time=phrasing.approximate_duration(window - elapsed),
+                ),
+                ephemeral=True,
+            )
+            return
+
+    await database.record_use(user.id, guild_id, found.thing_id)
+    await interaction.followup.send(
+        await phrasing.say(
+            guild_id, found.thing_id, "use", fallback="use.default", name=found.name
+        ),
+        ephemeral=True,
+    )
+
+
+async def _use_exit(interaction, state, found, row) -> None:
+    """Move the player through an exit into the adjoining room.
+
+    Ordering note: the spec's numbered steps post the exit message and remove
+    the player before adding them to the destination, but its error handling
+    requires that a failed add must not have already removed them. The latter
+    wins - the player is added to the destination first, so any failure leaves
+    them exactly where they were.
+    """
+    user, guild_id = interaction.user, interaction.guild_id
+    destination = row.destination_room_id
+
     if destination not in state.rooms_unlocked:
-        await interaction.followup.send("You can't access that room yet.", ephemeral=True)
+        await interaction.followup.send(
+            await phrasing.say(
+                guild_id, found.thing_id, "use_fail",
+                fallback="use_fail.default", name=found.name,
+            ),
+            ephemeral=True,
+        )
         return
 
     channel = house_utils.find_channel(interaction.guild)
@@ -601,8 +783,6 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
         destination_thread = await house_utils.get_thread_for_room(channel, destination_name)
         origin_thread = await house_utils.get_thread_for_room(channel, origin_name)
     except (discord.HTTPException, SQLAlchemyError):
-        # Two room-name reads happen here now, so a database failure has to be
-        # caught alongside a Discord one or it escapes to the generic handler.
         log.exception("Could not look up room threads")
         await interaction.followup.send(MOVE_ERROR_MESSAGE, ephemeral=True)
         return
@@ -615,8 +795,8 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
         )
         return
 
-    # Add before removing: if this fails, the player has not been moved or removed
-    # from anywhere, so they are exactly where they started and can retry.
+    # Add before removing: if this fails the player has not been moved or
+    # removed from anywhere, so they are where they started and can retry.
     try:
         await house_utils.add_player_to_thread(destination_thread, user.id)
     except discord.HTTPException:
@@ -625,10 +805,9 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
         return
 
     try:
-        await database.update_current_room(user.id, interaction.guild_id, destination)
+        await database.update_current_room(user.id, guild_id, destination)
+        await database.record_use(user.id, guild_id, found.thing_id)
     except SQLAlchemyError:
-        # Undo the add so Discord and the database do not disagree about where
-        # this player is.
         try:
             await house_utils.remove_player_from_thread(destination_thread, user.id)
         except discord.HTTPException:
@@ -636,23 +815,29 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
         await interaction.followup.send(MOVE_ERROR_MESSAGE, ephemeral=True)
         return
 
-    # From here the move has happened. The remaining steps are presentational, so
-    # a failure is logged rather than surfaced - the player has already moved.
+    # The move has happened. What follows is presentational, so a failure is
+    # logged rather than surfaced - the player is already through the door.
+    depart = await phrasing.default_say(
+        "move.depart", player=user.mention, name=found.name, room=origin_name
+    )
+    arrive = await phrasing.default_say(
+        "move.arrive", player=user.mention, name=found.name, room=origin_name
+    )
+
     if origin_thread is not None:
         try:
-            await origin_thread.send(f"{user.mention} exits via {chosen_exit.name}.")
+            await origin_thread.send(depart)
         except discord.HTTPException:
-            log.warning("Could not post exit message in %s", state.current_room, exc_info=True)
-
+            log.warning("Could not post departure in %s", origin_name, exc_info=True)
         try:
             await house_utils.remove_player_from_thread(origin_thread, user.id)
         except discord.HTTPException:
-            log.warning("Could not remove %s from %s", user.id, state.current_room, exc_info=True)
+            log.warning("Could not remove %s from %s", user.id, origin_name, exc_info=True)
 
     try:
-        await destination_thread.send(f"{user.mention} enters {destination_name}")
+        await destination_thread.send(arrive)
     except discord.HTTPException:
-        log.warning("Could not post entry message in %s", destination, exc_info=True)
+        log.warning("Could not post arrival in %s", destination_name, exc_info=True)
 
     await interaction.followup.send(
         f"You head to {destination_thread.mention}.", ephemeral=True
@@ -669,51 +854,114 @@ INVENTORY_ERROR_MESSAGE = "Couldn't retrieve your inventory. Try again."
 @app_commands.guild_only()
 @app_commands.describe(thing="What to look at. Leave empty to look around the room.")
 async def look(interaction: discord.Interaction, thing: str | None = None) -> None:
-    """Describe the player's current room, or one thing in it or in their bag.
+    """Three shapes: the room, a thing, or a container and what is inside it.
 
-    Replies are ephemeral: /look can be typed in any channel of the server, and a
-    public reply would leak room and thing descriptions to people who are not
-    playing. It also keeps a busy room thread from filling with everyone's looks.
+    Always private. `/look` can be typed anywhere in the server and a public
+    reply would leak descriptions to people who are not playing; it also keeps
+    a busy room thread from filling with everyone looking around. And it is
+    what lets one player see the unjammed drawer while another does not.
     """
     await interaction.response.defer(ephemeral=True, thinking=True)
-    user = interaction.user
+    user, guild_id = interaction.user, interaction.guild_id
 
     try:
-        state = await database.get_game_state(user.id, interaction.guild_id)
-    except SQLAlchemyError:
-        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
-        return
-
-    if state is None:
-        await interaction.followup.send(NOT_IN_ROOM_MESSAGE, ephemeral=True)
-        return
-
-    if thing is None or not thing.strip():
-        try:
-            description = await resolve.room_look(interaction.guild_id, state.current_room)
-        except SQLAlchemyError:
-            await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+        state = await database.get_game_state(user.id, guild_id)
+        if state is None:
+            await interaction.followup.send(NOT_IN_ROOM_MESSAGE, ephemeral=True)
             return
-        await interaction.followup.send(description or GENERIC_ROOM_DESCRIPTION, ephemeral=True)
-        return
 
-    try:
-        found = await database.look_at_thing_here(
-            user.id, interaction.guild_id, state.current_room, thing
+        if thing is None or not thing.strip():
+            await interaction.followup.send(
+                await _look_around(guild_id, user.id, state.current_room), ephemeral=True
+            )
+            return
+
+        found = await reach.find(
+            guild_id, user.id, state.current_room, thing, reach.Scope.REACH
+        )
+
+        if isinstance(found, reach.Ambiguous):
+            await interaction.followup.send(
+                await phrasing.default_say(
+                    "ambiguous.match", options=", ".join(found.options)
+                ),
+                ephemeral=True,
+            )
+            return
+
+        if isinstance(found, reach.NotFound):
+            key = "take_fail.absent" if found.exists_elsewhere else "unknown.noun"
+            await interaction.followup.send(
+                await phrasing.default_say(key, name=thing.strip()), ephemeral=True
+            )
+            return
+
+        await interaction.followup.send(
+            await _look_at(guild_id, user.id, state.current_room, found), ephemeral=True
         )
     except SQLAlchemyError:
+        log.exception("Failed to look at %r in guild %s", thing, guild_id)
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
-        return
 
-    if found is None:
-        await interaction.followup.send(CANT_LOOK_MESSAGE, ephemeral=True)
-        return
 
-    # A thing with no description yet still exists; say so rather than send nothing.
-    text = found.description or f"You see {thing.strip()}."
-    if found.count > 1:
-        text += f" There are {found.count}."
-    await interaction.followup.send(text, ephemeral=True)
+async def _current_state(guild_id: int, user_id: int) -> str:
+    """Which state's text this player sees.
+
+    Nothing sets a state in 2c, so this is always `default` today - the
+    staircase and the drawer are 2c.5. The plumbing is here so that when states
+    start being set, the text follows without another pass over /look.
+
+    A player holding two states that both have text for the same entity is
+    unspecified in the Functional Spec. Sorting makes the choice deterministic
+    rather than dependent on row order, which is the least surprising thing to
+    do until somebody rules on it.
+    """
+    held = await database.states_of(guild_id, user_id)
+    return sorted(held)[0] if held else resolve.DEFAULT_STATE
+
+
+async def _look_around(guild_id: int, user_id: int, room_id: str) -> str:
+    """The room's description, then what is lying about in it."""
+    state = await _current_state(guild_id, user_id)
+    description = await resolve.room_look(guild_id, room_id, state) or GENERIC_ROOM_DESCRIPTION
+
+    loose = await database.loose_here(guild_id, room_id)
+    line = await phrasing.listing(
+        loose,
+        prefix_key="also_here.prefix",
+        budget=phrasing.MESSAGE_LIMIT - len(description) - 2,
+    )
+    return f"{description}\n\n{line}" if line else description
+
+
+async def _look_at(guild_id: int, user_id: int, room_id: str, found) -> str:
+    """One thing, plus its contents if anything is inside it.
+
+    A carried thing uses `look_carried` where it has one: six things describe
+    where they were sitting, which stops being true the moment they are picked
+    up. Falling back to `look` is right for everything else.
+    """
+    state = await _current_state(guild_id, user_id)
+
+    description = ""
+    if found.where is reach.Where.CARRIED:
+        description = await phrasing.say(
+            guild_id, found.thing_id, "look_carried", state=state, name=found.name
+        )
+    if not description:
+        description = await phrasing.say(
+            guild_id, found.thing_id, "look", state=state, name=found.name
+        )
+    if not description:
+        description = f"You see {found.name}."
+
+    inside = await database.loose_here(guild_id, room_id, container_id=found.thing_id)
+    line = await phrasing.listing(
+        inside,
+        prefix_key="contents.prefix",
+        budget=phrasing.MESSAGE_LIMIT - len(description) - 2,
+    )
+    return f"{description}\n\n{line}" if line else description
 
 
 @bot.tree.command(name="inventory", description="See what you're carrying.")
@@ -729,13 +977,212 @@ async def inventory(interaction: discord.Interaction) -> None:
         return
 
     if not items:
-        await interaction.followup.send("Your inventory is empty.", ephemeral=True)
+        await interaction.followup.send(
+            await phrasing.default_say("inventory.empty"), ephemeral=True
+        )
         return
 
-    lines = ["Your inventory:"]
-    lines.extend(f"- {name} ({count})" for name, count in items)
-    lines.append(f"\nTotal items: {sum(count for _, count in items)}")
-    await interaction.followup.send("\n".join(lines), ephemeral=True)
+    # The same rendering as a room listing, so a bag of ten herbs reads the way
+    # ten herbs on the floor read. Truncation applies here too: nothing caps how
+    # much a player can carry.
+    await interaction.followup.send(
+        await phrasing.listing(items, prefix_key="inventory.prefix"), ephemeral=True
+    )
+
+
+# --------------------------------------------------------------------------
+# /take and /drop
+#
+# Both are thin. Resolution decides which thing and which copy, the refusal
+# tables below decide whether the verb may act, and phrasing.py decides what
+# the reply says. Anything else living here would be logic the other verbs
+# then need their own copy of.
+# --------------------------------------------------------------------------
+
+
+async def _player_room(interaction: discord.Interaction) -> str | None:
+    state = await database.get_game_state(interaction.user.id, interaction.guild_id)
+    return state.current_room if state else None
+
+
+@bot.tree.command(name="take", description="Pick something up.")
+@app_commands.guild_only()
+@app_commands.describe(thing="What to pick up.")
+async def take(interaction: discord.Interaction, thing: str) -> None:
+    """Take one copy of something in the room.
+
+    Scoped to the room, never the bag. A player carrying chicken beside the
+    salmon cupboard who types `/take cat food` gets the salmon, and is not asked
+    a question they could not answer.
+    """
+    await interaction.response.defer(thinking=True)
+    user, guild_id = interaction.user, interaction.guild_id
+
+    try:
+        room_id = await _player_room(interaction)
+        if room_id is None:
+            await interaction.followup.send(NOT_IN_ROOM_MESSAGE, ephemeral=True)
+            return
+
+        found = await reach.find(guild_id, user.id, room_id, thing, reach.Scope.ROOM)
+
+        if isinstance(found, reach.Ambiguous):
+            await interaction.followup.send(
+                await phrasing.default_say(
+                    "ambiguous.match", options=", ".join(found.options)
+                ),
+                ephemeral=True,
+            )
+            return
+
+        if isinstance(found, reach.NotFound):
+            await interaction.followup.send(
+                await _take_refusal(guild_id, found, thing), ephemeral=True
+            )
+            return
+
+        row = await phrasing.thing_row(found.thing_id)
+        refusal = await _cannot_take(guild_id, user.id, found, row)
+        if refusal:
+            await interaction.followup.send(refusal, ephemeral=True)
+            return
+
+        # A source hands over what it yields and is not itself consumed; a
+        # finite object moves out of the room. Either way the player ends up
+        # holding `taken`, whose text the reply uses.
+        taken = found.yields or found.thing_id
+        if found.is_source:
+            await database.take_from_source(user.id, guild_id, taken)
+        elif not await database.take_from_room(
+            user.id, guild_id, room_id, found.container_id or database.LOOSE_IN_ROOM,
+            found.thing_id,
+        ):
+            # Somebody else took the last one between resolving and acting.
+            await interaction.followup.send(
+                await phrasing.default_say("take_fail.absent", name=found.name),
+                ephemeral=True,
+            )
+            return
+
+        taken_row = await phrasing.thing_row(taken)
+        name = taken_row.name if taken_row else found.name
+        await interaction.followup.send(
+            await phrasing.say(
+                guild_id, taken, "take", fallback="take.default", name=name
+            )
+            or f"You take the {name}.",
+        )
+    except SQLAlchemyError:
+        log.exception("Failed to take %r in guild %s", thing, guild_id)
+        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+
+
+async def _take_refusal(guild_id: int, found: reach.NotFound, typed: str) -> str:
+    """Why nothing was taken, when resolution found nothing to take.
+
+    The order matters: already-carrying is checked before absent, because
+    take_fail.absent would be a lie to someone holding the thing.
+    """
+    if found.carried:
+        return await phrasing.default_say("take_fail.already_carried", name=typed.strip())
+    if found.exists_elsewhere:
+        return await phrasing.default_say("take_fail.absent", name=typed.strip())
+    return await phrasing.default_say("unknown.noun", name=typed.strip())
+
+
+async def _cannot_take(
+    guild_id: int, user_id: int, found: reach.Found, row
+) -> str | None:
+    """The refusal table, in the spec's order. None means go ahead."""
+    if row is None:
+        return await phrasing.default_say("take_fail.absent", name=found.name)
+
+    if row.type == "exit":
+        return await phrasing.default_say("take_fail.exit", name=found.name)
+
+    # A source is never takeable itself; what matters is whether its yield is.
+    if not found.is_source and not row.takeable:
+        return await phrasing.say(
+            guild_id, found.thing_id, "take_fail",
+            fallback="take_fail.fixture", name=found.name,
+        )
+
+    # The cap applies to what the player ends up holding, which for a source is
+    # the thing it yields rather than the source itself.
+    taken = found.yields or found.thing_id
+    capped = await phrasing.thing_row(taken) if found.is_source else row
+    if capped is None or capped.max_per_player is None:
+        return None
+
+    held = await database.carried_of(user_id, guild_id, taken)
+    if held < capped.max_per_player:
+        return None
+    return await phrasing.say(
+        guild_id, taken, "take_fail", fallback="take_fail.fixture", name=capped.name
+    )
+
+
+@bot.tree.command(name="drop", description="Put something down.")
+@app_commands.guild_only()
+@app_commands.describe(thing="What to put down.")
+async def drop(interaction: discord.Interaction, thing: str) -> None:
+    """Drop one copy of something you are carrying, loose in the room."""
+    await interaction.response.defer(thinking=True)
+    user, guild_id = interaction.user, interaction.guild_id
+
+    try:
+        room_id = await _player_room(interaction)
+        if room_id is None:
+            await interaction.followup.send(NOT_IN_ROOM_MESSAGE, ephemeral=True)
+            return
+
+        found = await reach.find(guild_id, user.id, room_id, thing, reach.Scope.CARRIED)
+
+        if isinstance(found, reach.Ambiguous):
+            await interaction.followup.send(
+                await phrasing.default_say(
+                    "ambiguous.match", options=", ".join(found.options)
+                ),
+                ephemeral=True,
+            )
+            return
+
+        if isinstance(found, reach.NotFound):
+            await interaction.followup.send(
+                await phrasing.default_say("drop_fail.not_carried", name=thing.strip()),
+                ephemeral=True,
+            )
+            return
+
+        row = await phrasing.thing_row(found.thing_id)
+        if row is not None and not row.droppable:
+            # The flag refuses; the written line says why. Both things set this
+            # have their own drop_fail written.
+            await interaction.followup.send(
+                await phrasing.say(
+                    guild_id, found.thing_id, "drop_fail",
+                    fallback="drop_fail.undroppable", name=found.name,
+                ),
+                ephemeral=True,
+            )
+            return
+
+        if not await database.drop_into_room(user.id, guild_id, room_id, found.thing_id):
+            await interaction.followup.send(
+                await phrasing.default_say("drop_fail.not_carried", name=found.name),
+                ephemeral=True,
+            )
+            return
+
+        await interaction.followup.send(
+            await phrasing.say(
+                guild_id, found.thing_id, "drop", fallback="drop.default", name=found.name
+            )
+            or f"You set the {found.name} down.",
+        )
+    except SQLAlchemyError:
+        log.exception("Failed to drop %r in guild %s", thing, guild_id)
+        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
 
 
 RETIRED_TOOL_MESSAGE = (
