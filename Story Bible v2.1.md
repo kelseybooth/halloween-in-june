@@ -369,25 +369,25 @@ Suggested names for untitled achievements are marked *(suggested)*. Nine of the 
 | **Talking to an Empty Room** | Talk to Alexa and remind David to cancel his Costco order | Any room (there's an Alexa in every room) | Alexa is shared between dimensions. David's bulk deliveries keep arriving |
 | **Charcuterie Board** | Collect all five cat foods: chicken, salmon, gourmet wet, tuna and expired | Around the house | Chicken, salmon and tuna are everywhere. Expired is plentiful too, but only appears once *Follow Your Nose* is released. Gourmet wet is one can per player. See Cat food |
 | **Found the Specs** | Find David's reading glasses in the roll-top desk | Upstairs Hallway | He left them with a door-hardware manual when the baby monitor went off |
-| *Something's Cooking (suggested)* | Collect herbs, dark chocolate and a spice, then use the kitchen | Courtyard, Living Room, Entryway → Kitchen | Herbs from the garden; chocolate David hid from himself; spice from an Amazon box |
-| *Unsticking the Situation (suggested)* | Send the graphite powder to Dimension B | Nursery | David needs it for the jammed doors. Higher chance of crossing |
-| **Catproof the House** | Take all five baby bottles off the Secret Library shelf | Secret Library | The bottles came across from B. Left on the shelf, Eunoia will knock them off |
-| *Return to Sender (suggested)* | Send the baby bottles back to Dimension B | Secret Library / anywhere | Marcus needs them. Players who did this the day before release earn it automatically |
-| *Squeaky Clean (suggested)* — bonus | Turn all five used bottles into sanitized bottles in the Kitchen, then send them back | Kitchen | David would appreciate it |
-| *Gourd Job (suggested)* | Find the carving tools in the unpacked box, then carve a pumpkin. Each player gets their own set | Bedroom → Courtyard | The family meant to carve pumpkins together |
-| *Follow Your Nose* | Find the source of the weird smell: free the roll-top desk's jammed bottom drawer with `/use graphite` | Upstairs Hallway | Available from launch, earned per player rather than at a release. The smell is in the hallway from day one; the drawer is swollen shut. The clue trail runs through the to-do list, the door-hardware manual and the laptop, all of which point at graphite. Behind the drawer is a stash of expired cat food (the smell) and L's note, *"Use by 9/1/26 — L"*, the first clue about Lucille Marsh, the former resident |
-| *Baby Talk (suggested)* | Find the baby monitor that's making strange noises | Nursery | It's picking up Marcus in Dimension B |
-| *Dressed for the Occasion (suggested)* | Wear a costume found in the bedroom | Bedroom | From the unpacked Halloween box |
+| **Something's Cooking** | Collect herbs, dark chocolate and a spice, then use the kitchen | Courtyard, Living Room, Entryway → Kitchen | Herbs from the garden; chocolate David hid from himself; spice from an Amazon box |
+| **Unsticking the Situation** | Send the graphite powder to Dimension B | Nursery | David needs it for the jammed doors. Higher chance of crossing |
+| **Catproof the House** | Take five baby bottles, clean or dirty | anywhere | The bottles came across from B. Left loose, Eunoia will knock them over |
+| **Return to Sender** | Send the baby bottles back to Dimension B | Secret Library / anywhere | Marcus needs them. Players who did this the day before release earn it automatically |
+| **It Takes a Village** — bonus | Turn all five used bottles into sanitized bottles in the Kitchen, then send them back | Kitchen | David would appreciate it |
+| **Gourd Job** | Find the carving tools in the unpacked box, then carve a pumpkin. Each player gets their own set | Bedroom → Courtyard | The family meant to carve pumpkins together |
+| **Follow Your Nose** | Find the source of the weird smell: free the roll-top desk's jammed bottom drawer with `/use graphite` | Upstairs Hallway | Available from launch, earned per player rather than at a release. The smell is in the hallway from day one; the drawer is swollen shut. The clue trail runs through the to-do list, the door-hardware manual and the laptop, all of which point at graphite. Behind the drawer is a stash of expired cat food (the smell) and L's note, *"Use by 9/1/26 — L"*, the first clue about Lucille Marsh, the former resident |
+| *Baby Talk* | Find the baby monitor that's making strange noises | Nursery | It's picking up Marcus in Dimension B |
+| *Dressed for the Season* | Wear a costume found in the bedroom | Bedroom | From the unpacked Halloween box |
 | **Met the Craving** | Work out the cat's favourite food by guessing with food emoji | Anywhere | Each player gets a random daily preference. Input method TBD |
-| *Forwarding Address (suggested)* | Work out who L is from hints across the month, then `/use letter` and pick L's correct new address | Entryway (letter arrives) | A letter for L is delivered late in the game. See L, the former resident |
+| *Forwarding Address* | Work out who L is from hints across the month, then `/use letter` and pick L's correct new address | Entryway (letter arrives) | A letter for L is delivered late in the game. See L, the former resident |
 
 ### Group achievements
 
 | Achievement | How to earn | Notes |
 | --- | --- | --- |
-| *Strength in Numbers (suggested)* | Players together drop 25 identical things in one room | 25 cans of one common cat food flavor will do it |
-| *Overdue Returns (suggested)* | Players together fill the Secret Library with 200+ things | The cat can send things away, so players have to coordinate |
-| *The Feline Collection (suggested)* — bonus | 100+ of those 200 things are cat food | |
+| *Strength in Numbers* | Players together drop 25 identical things in one room | 25 cans of one common cat food flavor will do it |
+| *Overdue Returns* | Players together fill the Secret Library with 200+ things | The cat can send things away, so players have to coordinate |
+| *The Feline Collection* — bonus | 100+ of those 200 things are cat food | |
 
 ### Secret achievements
 
@@ -395,21 +395,21 @@ Suggested names for untitled achievements are marked *(suggested)*. Nine of the 
 | --- | --- | --- |
 | **A Little Bit Lost** | Go Entryway → Living Room → Entryway five times within five minutes | |
 | **Out on a Limb** | Find the Secret Library by climbing the oak tree in the Courtyard (first `/use tree`) | See Finding the Secret Library |
-| *Bulk Buyer (suggested)* | Carry 25 cans of cat food | A nod to David's Costco habit |
+| *Bulk Buyer* | Carry 25 cans of cat food | A nod to David's Costco habit |
 | **Making Friends** | Pet the cat 200 times with a positive relationship | |
 | **Trying to Make Friends** | Pet the cat 200 times with a negative relationship | |
 | **Cat's Best Friend** | Reach a perfect relationship with Eunoia | Perfect means a relationship score of 100, the top of the meter |
-| *Signed, Sealed, Delivered (suggested)* | `/use intercom` within three minutes of the doorbell ringing | The doorbell is a live event the bot announces. Delivery driver dialogue TBD |
-| *Brewing Trouble (suggested)* | Use the coffee maker on Oct 1 | International Coffee Day |
+| *Signed, Sealed, Delivered* | `/use intercom` within three minutes of the doorbell ringing | The doorbell is a live event the bot announces. Delivery driver dialogue TBD |
+| *Brewing Trouble* | Use the coffee maker on Oct 1 | International Coffee Day |
 | **Trash Panda** | Use the trash can on Oct 1 | International Raccoon Appreciation Day. The achievements doc gives Oct 1 in one place and Oct 2 in another; Oct 1 is the real date |
-| *Say Cheese (suggested)* | Use a mirror on Oct 2 | World Smile Day. Any mirror in the house counts: the ornate mirror (Entryway), the cracked mirrors (Secret Library) or the dresser mirror (Bedroom) |
-| *Green Thumb (suggested)* | Use the watering can on Oct 15 | International Day of Rural Women |
-| *Nacho Average Ghost (suggested)* | Use the nacho chips on Oct 21 | International Day of the Nacho |
+| *Say Cheese* | Use a mirror on Oct 2 | World Smile Day. Any mirror in the house counts: the ornate mirror (Entryway), the cracked mirrors (Secret Library) or the dresser mirror (Bedroom) |
+| *Green Thumb* | Use the watering can or take herbs or use (carve) pumpkin on Oct 15 | International Day of Rural Women |
+| *Nacho Average Ghost* | Use the nacho chips on Oct 21 | International Day of the Nacho |
 | **Using Your Noodle** | Use the pasta pot on Oct 25 | World Pasta Day |
 | **Getting into the Spirit** | As the day's ghost, haunt a room with `/use bedsheet` | One random player per day is the ghost. See The ghost of the day |
 | **Ghostbuster** — bonus | Correctly name the day's ghost with `/use spirit board` | Secret Library. One accusation per player per day |
 | **Breaking into the Halloween Candy** | `/use candy` to eat it | |
-| *Curbside Pickup (suggested)* | Take out the trash on a Tuesday | `/use trash can` on a Tuesday takes out the trash |
+| *Curbside Pickup* | Take out the trash on a Tuesday | `/use trash can` on a Tuesday takes out the trash |
 
 > **Command check:** the achievements document's `/haunt` and `/accuse` are now handled by `/use bedsheet` and `/use spirit board`, and its option to catch the ghost by replying with their name has been dropped. Talking to Alexa and guessing with emoji still need a decision. See Open Questions.
 
