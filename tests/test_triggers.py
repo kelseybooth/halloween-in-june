@@ -796,3 +796,71 @@ async def test_the_unlock_text_arrives_privately(playing, halloween):
 
     private = [text for text, kwargs in interaction.sent if kwargs.get("ephemeral")]
     assert any("reading glasses in the desk" in (text or "") for text in private)
+
+
+async def test_nacho_average_ghost(playing):
+    assert "nacho_average_ghost" in await earned(
+        a_context("on_use", thing_id="nacho_chips", now=pacific(2026, 10, 21))
+    )
+
+
+async def test_nacho_average_ghost_is_not_earnable_the_week_before(playing):
+    assert await earned(
+        a_context("on_use", thing_id="nacho_chips", now=pacific(2026, 10, 14))
+    ) == set()
+
+
+async def test_using_your_noodle(playing):
+    assert "using_your_noodle" in await earned(
+        a_context("on_use", thing_id="pasta_pot", now=pacific(2026, 10, 25))
+    )
+
+
+async def test_using_your_noodle_is_not_earnable_the_day_after_its_window(playing):
+    assert await earned(
+        a_context("on_use", thing_id="pasta_pot", now=pacific(2026, 10, 26, 12))
+    ) == set()
+
+
+async def test_catproof_cannot_be_farmed_by_dropping_and_re_taking(playing):
+    """The award is idempotent, so a player who empties their bag and fills
+    it again does not earn it twice."""
+    for _ in range(5):
+        await database.take_from_source(ALICE, GUILD_A, "used_baby_bottle")
+    assert "catproof_the_house" in await earned(a_context("on_take"))
+
+    for _ in range(5):
+        await database.drop_into_room(ALICE, GUILD_A, "EN", "used_baby_bottle")
+    for _ in range(5):
+        await database.take_from_source(ALICE, GUILD_A, "used_baby_bottle")
+
+    assert await earned(a_context("on_take")) == set()
+
+
+async def test_charcuterie_cannot_be_farmed_either(playing):
+    for flavour in triggers.CAT_FOOD:
+        await database.take_from_source(ALICE, GUILD_A, flavour)
+    assert "charcuterie_board" in await earned(a_context("on_take"))
+
+    await database.drop_into_room(ALICE, GUILD_A, "EN", "cat_food_tuna")
+    await database.take_from_source(ALICE, GUILD_A, "cat_food_tuna")
+
+    assert await earned(a_context("on_take")) == set()
+
+
+# --------------------------------------------------------------------------
+# The boot guard
+# --------------------------------------------------------------------------
+
+
+async def test_the_bot_refuses_to_start_on_an_unwired_row(playing):
+    """A row nobody registered can never be announced, and nothing raises at
+    runtime to say so - which is exactly why the boot stops."""
+    achievements.clear()
+
+    with pytest.raises(RuntimeError, match="registration problem"):
+        await bot._check_achievement_registry()
+
+
+async def test_the_boot_guard_passes_when_everything_is_wired(playing):
+    await bot._check_achievement_registry()

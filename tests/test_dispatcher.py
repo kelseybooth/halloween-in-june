@@ -616,3 +616,44 @@ async def test_pet_fires_on_pet_with_the_relationship(playing, halloween):
     assert len(seen) == 1
     assert "relationship" in seen[0].extra
     assert "total" in seen[0].extra
+
+
+async def test_a_raising_predicate_does_not_fail_the_command(playing, halloween):
+    """The rule stated in the work order, driven through a real `/take`: a
+    player who loses an achievement to an exception can earn it next time; a
+    player whose `/take` returns an error has lost the thing."""
+    achievements.register("bulk_buyer", "on_take", explodes)
+
+    interaction = FakeInteraction(ALICE, GUILD_A, guild=halloween)
+    await bot.take.callback(interaction, "herbs")
+
+    assert "handful of herbs" in interaction.sent[0][0]
+    assert await database.carried_of(ALICE, GUILD_A, "herbs") == 1
+
+
+async def test_an_announcement_failure_leaves_the_award_in_place(guild, halloween):
+    """Write the row, then announce. `/stats` still shows it."""
+    await a_world_with("gourd_job")
+    achievements.register("gourd_job", "on_use", always)
+    halloween.text_channels[0].send_fails = True
+
+    await bot._fire(a_context(hook="on_use"), guild=halloween)
+
+    assert set(await database.player_achievements_of(GUILD_A, ALICE)) == {"gourd_job"}
+
+
+async def test_a_reaction_earns_by_dm_through_the_real_handler(guild, halloween):
+    """No interaction token anywhere on this path, so the description has
+    nowhere to go but a DM."""
+    await a_world_with("met_the_craving")
+    achievements.register("met_the_craving", "on_reaction", always)
+
+    await bot._fire(
+        achievements.Context(
+            guild_id=GUILD_A, hook="on_reaction", user_id=ALICE, extra={"emoji": "x"}
+        ),
+        guild=halloween,
+    )
+
+    assert halloween.text_channels[0].posted == ["Met The Craving"]
+    assert halloween.get_member(ALICE).dms == ["You did met_the_craving."]
