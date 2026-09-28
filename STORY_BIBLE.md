@@ -4,7 +4,7 @@
 
 *Revised 26 September 2026 to match the content that has since been built and the decisions taken with the PM. See **What changed in this revision**.*
 
-This version rebuilds the Bible around the revised business requirements. The premise and the family survive. The player cohorts, room locking, the crystal ritual, the Halloween deadline and the win condition are gone. Players now explore the house freely, interact with things and earn achievements, while the house changes on a predefined release schedule.
+This version rebuilds the Bible around the revised business requirements. The premise and the family survive. The player cohorts, room locking, the crystal ritual, the Halloween deadline and the win condition are gone. Players now explore the house freely, interact with things and earn achievements, while the house changes on a predefined drop schedule.
 
 Anything marked **(suggested)** is a proposal from this rewrite, not a decision. Anything marked **TBD** needs a decision before it can be built. Both are collected under Open Questions at the end.
 
@@ -18,7 +18,7 @@ Anything marked **(suggested)** is a proposal from this rewrite, not a decision.
 | Cohorts | Two player groups, two versions of every room | None. One house, one version of every room, shared by all players |
 | Room access | Rooms gated; main staircase blocked until David repairs it | Every room open from the start except the Secret Library, which each player discovers for themselves. The main staircase starts crumbled and is repaired by the players together |
 | Player goal | Find three crystals, learn the ritual word, reverse the split before Oct 31 | Explore, engage with things, earn achievements. No overall goal, no deadline, no win |
-| Story delivery | Daily unlocks toward a finale | **Releases**: at predefined times, new achievements go live, new story is revealed and the house changes |
+| Story delivery | Daily unlocks toward a finale | **Drops**: at predefined times, new achievements go live, new story is revealed and the house changes |
 | Cause of change | Player progress | **Ripples**: something the family did in Dimension B spills over into Dimension A |
 | Commands | Not specified | `/pet`, `/look`, `/take`, `/use`, `/drop`, `/inventory`, `/stats` |
 | Removed entirely | — | Focusing crystals, ritual word, win sequence, synchronized ritual, epilogue vote, locked upstairs door, cohort-specific descriptions |
@@ -31,10 +31,10 @@ Release 1's content has been written and validated — 9 rooms, 135 things, 142 
 
 | Area | v2 as drafted | Now |
 | --- | --- | --- |
-| **Expired cat food** | Hidden behind a cubby door revealed when the oak wardrobe slides aside at the *Follow Your Nose* release | In the roll-top desk's jammed bottom drawer. The smell is in the Upstairs Hallway **from day one**; each player frees the drawer themselves with graphite powder |
-| **Follow Your Nose** | A dated release with a ripple and an announcement | A per-player discovery, earned whenever that player unjams the drawer. No fixed date |
+| **Expired cat food** | Hidden behind a cubby door revealed when the oak wardrobe slides aside at the *Follow Your Nose* drop | In the roll-top desk's jammed bottom drawer. The smell is in the Upstairs Hallway **from day one**; each player frees the drawer themselves with graphite powder |
+| **Follow Your Nose** | A dated drop with a ripple and an announcement | A per-player discovery, earned whenever that player unjams the drawer. No fixed date |
 | **Graphite powder** | One tin in the Nursery | A **source**: the tin never runs out, so every player can take some. It had two competing uses — unjamming the drawer and being sent to David — and a single tin could only serve one player |
-| **Cat food flavours** | Chicken, salmon, tuna, gourmet, expired, with vague "stashes in many rooms" | The same five, but each stash is a specific place with its own description, and each yields one flavour |
+| **Cat food flavors** | Chicken, salmon, tuna, gourmet, expired, with vague "stashes in many rooms" | The same five, but each stash is a specific place with its own description, and each yields one flavor |
 | **Gourmet wet's hiding place** | TBD | Under the bed in the Bedroom, behind the crate of chicken. The only one in the house |
 | **Staircase repair** | Ten players, one plank each, ever | A **per-server number** an admin can change, and one plank per player per **48 hours** rather than one ever. A server of four cannot reach ten |
 | **Alexa and the craving** | Possibly new commands, or `/use` with prompts | Neither. Alexa listens for messages beginning "alexa"; the craving is guessed with emoji reactions. Neither adds a command |
@@ -42,7 +42,7 @@ Release 1's content has been written and validated — 9 rooms, 135 things, 142 
 | **David's grocery list** | "grocery list" | A **to-do list** — it was never mostly groceries |
 | **Command list** | Seven | Ten, settled and registered once: `/pet`, `/look`, `/take`, `/drop`, `/use`, `/inventory`, `/stats`, `/enter-entryway`, `/initialize-haunted-house`, `/admin_config` |
 
-Two things this revision did **not** decide, and which are still open below: who the players are in-story, and how the release calendar is numbered.
+Two things this revision did **not** decide, and which are still open below: who the players are in-story, and what the drop calendar is.
 
 ---
 
@@ -94,7 +94,7 @@ These are the only channels between A and B. Every piece of cross-dimension stor
 
 | Channel | Direction | How it shows up in the game |
 | --- | --- | --- |
-| **Ripples** | B → A | At each release, something the family did in B changes the house in A: new objects appear, old ones move, room descriptions change |
+| **Ripples** | B → A | At each drop, something the family did in B changes the house in A: new objects appear, old ones move, room descriptions change |
 | **Eunoia** | A → B | When a player pets the cat in a room that has things in it, there's a chance one of those things vanishes to Dimension B (see Crossing Over) |
 | **Notes** | B → A | Elena's and David's written notes bleed through as readable pages in rooms and on the bulletin board |
 | **The baby monitor** | B → A | The monitor in the Nursery picks up Marcus in Dimension B: cooing, fussing, a lullaby |
@@ -109,8 +109,8 @@ These are the only channels between A and B. Every piece of cross-dimension stor
 ### Free exploration
 
 - Every room is open to every player at all times, except the Secret Library, which each player has to discover (see below). There are no other locks, gates or blocked exits.
-- Players move between rooms with `/use` on an exit (existing behaviour).
-- There is no win condition and no deadline. The game runs on a release schedule through Halloween (end date TBD).
+- Players move between rooms with `/use` on an exit (existing behavior).
+- There is no win condition and no deadline. The game runs on a drop schedule through Halloween (end date TBD).
 
 ### Commands and their story framing
 
@@ -122,7 +122,7 @@ These are the only channels between A and B. Every piece of cross-dimension stor
 | `/use [thing]` | Use a thing, or use an exit to move rooms | What happens can depend on the room you're in, what you're carrying and the date |
 | `/drop [thing]` | Leave a thing in your current room | Dropped things join the room's list of available things for every player |
 | `/inventory` | See what you're carrying | Private reply |
-| `/stats [member]` | See your number of cat pets, your relationship status with Eunoia, how many days you've named the cat's craving, and the achievements you've earned. Pick a server member to see their stats instead | Private reply. Format in the Release Timeline |
+| `/stats [member]` | See your number of cat pets, your relationship status with Eunoia, how many days you've matched the cat's craving, and the achievements you've earned, each with the line explaining how. Your own stats only in Release 1; looking up another member comes later | Private reply. Format in the Release Timeline |
 
 **Context-aware `/use`.** Several achievements need an object used in a specific place or with other objects in hand: sanitizing bottles in the Kitchen, carving a pumpkin in the Courtyard, cooking with three ingredients. With only single-object `/use`, the rule is: **what `/use` does depends on where you are and what you're carrying.** For example, `/use bottle` in the Kitchen sanitizes a used bottle; `/use stove` while carrying all three ingredients cooks the recipe.
 
@@ -153,6 +153,7 @@ The Secret Library is the one room players have to discover. Each player unlocks
 **Achievement.** The first `/use tree` earns the secret achievement *Out on a Limb*.
 
 - `/use tree` the first time:
+
   > You grab the lowest branch and haul yourself up into the old oak. Halfway up, you notice a small window tucked behind the ivy, open just a crack. You ease it wider. Stale, charged air drifts out. You hesitate for a moment… then swing a leg over the sill and climb through. You find yourself in a small, close room lined floor to ceiling with books. A library.
 
   The player is moved into the Secret Library. From then on, the window is a normal exit for that player in both directions (suggested):
@@ -170,6 +171,7 @@ The Secret Library is the one room players have to discover. Each player unlocks
 - `/look curiosity cabinet`: *A tall curiosity cabinet with glass doors, full of odd little objects: a stuffed owl, a jar of marbles, a brass compass that doesn't point north. There's an old-fashioned keyhole in the frame.*
 - `/use curiosity cabinet` without the key: *You tug at the glass doors. Locked. The keyhole is big and old-fashioned, the kind that takes a skeleton key.*
 - `/use curiosity cabinet` with the key, the first time:
+
   > You fit the skeleton key into the lock and turn it. Something clunks deep inside the wall. Instead of the glass doors opening, the whole cabinet swings outward on a hidden hinge. Behind it, a narrow doorway leads into a small room lined with books. It's a secret door into the library.
 
   The passage is now unlocked for that player for good, and they never need the key for it again.
@@ -184,15 +186,18 @@ The main staircase between the Entryway and the Upstairs Hallway starts out crum
 
 - **Lumber arrives in the Entryway every day** until the staircase is fixed. Story reason (suggested): David ordered lumber in bulk to fix the jammed door frames in Dimension B, and like his other orders, it's delivered to the same address in Dimension A.
 - **`/use lumber`** counts one repair for that player:
-  > You haul a plank over to the staircase and hammer it into place. The steps look a little less like a ruin. [N] of [total] repairs done.
+
+  > You haul a plank over to the staircase and hammer it into place. The steps look a little less like a ruin. \[N\] of \[total\] repairs done.
 - **The number of planks is set per server** and an admin can change it mid-game with `/admin_config planks_required`. Ten was the original figure and it is a trap for a small server: four players can never reach it, and the Upstairs Hallway would stay reachable only by the Kitchen back stairs for the whole game. Set it from the real population. Lowering it below the planks already placed finishes the staircase immediately rather than leaving it stuck.
-- **One plank per player per 48 hours**, rather than one ever. That is the lever that lets the same content suit a server of four and a server of forty: ten players can finish it in a day, three players can finish it over a week. Trying again inside the window (suggested): *You've set your plank. Your shoulders will want about [time] before the next one.*
+- **One plank per player per 48 hours**, rather than one ever. That is the lever that lets the same content suit a server of four and a server of forty: ten players can finish it in a day, three players can finish it over a week. Trying again inside the window (suggested): *You've set your plank. Your shoulders will want about \[time\] before the next one.*
 - **When the last plank goes in,** the staircase is fixed for everyone. Announcement in all rooms (suggested):
+
   > With a last bang of the hammer, the main staircase stands whole again: a grand old staircase, patched in places with fresh, pale wood.
 - **After that,** `/use staircase` moves a player between the Entryway and the Upstairs Hallway in either direction, and lumber stops arriving.
 - **Before that,** `/use staircase` (suggested): *The staircase is crumbled and unsafe. Whole steps are missing. It'll take more than one pair of hands to fix it.*
 
 Descriptions:
+
 - Entryway, before: *The grand staircase is a ruin: steps cracked or missing, the banister hanging loose. A stack of fresh lumber leans against the wall beside it.*
 - Entryway, after: *A grand staircase sweeps up to the floor above, patched here and there with fresh, pale wood.*
 - Upstairs Hallway, before: *At the top of the main staircase, the steps drop away into splintered gaps.*
@@ -203,17 +208,18 @@ Descriptions:
 Each day one player in the server is secretly chosen as the house's ghost. The ghost can haunt one room at a time with an anonymous message. Everyone else can try to work out who it is.
 
 **Becoming the ghost**
+
 - At the daily changeover (midnight Pacific), the bot picks one player at random from those who have entered the house. The pick is completely random, so the same player can be the ghost two days in a row.
 - A **bedsheet with eyeholes** appears in that player's inventory. Inventories are private, so nobody else can tell.
 - The next time the new ghost runs any command, they get a private notice (suggested): *"Something soft and faintly musty has appeared in your bag. It's a bedsheet with two eyeholes cut in it. You feel oddly… translucent."*
 
 **Haunting**
+
 - The ghost types `/use bedsheet` from any room.
 - The bot privately asks them to **pick a room**, then to **type their message** in a pop-up box.
 - The message is posted, unsigned, in that room for everyone there to see, in this frame:
 
-  > A sheet-draped shape drifts through the door and whispers "*[the ghost's message]*"
-
+  > A sheet-draped shape drifts through the door and whispers "*\[the ghost's message\]*"
 - The ghost can haunt **as many times as they like** while they hold the bedsheet. There's no length limit on the message and no moderation.
 - The first haunting earns the ghost **Getting into the Spirit**.
 
@@ -222,19 +228,21 @@ Each day one player in the server is secretly chosen as the house's ghost. The g
 | Step | Bot text (private to the ghost) |
 | --- | --- |
 | After `/use bedsheet` (room picker) | *You pull the bedsheet over your head. Which room will you haunt? Everyone in that room will see: A sheet-draped shape drifts through the door and whispers "…" (you'll write the whisper next).* |
-| Pop-up box title | *Haunt the [room name]* |
+| Pop-up box title | *Haunt the \[room name\]* |
 | Text box label | *What do you whisper?* |
 | Text box placeholder | *Players will see: A sheet-draped shape drifts through the door and whispers "…"* |
-| After posting | *You drift into the [room name] and whisper "[message]".* |
+| After posting | *You drift into the \[room name\] and whisper "\[message\]".* |
 
 Discord caps the pop-up title and label at 45 characters and the placeholder at 100, so the full explanation goes in the room-picker message. The placeholder repeats it in short form.
 
 **Bedsheet rules**
+
 - It can't be dropped. `/drop bedsheet` gets a refusal (suggested: *"The bedsheet clings to you. It isn't done with you yet."*).
 - Nobody can take it from the ghost, and petting the cat can't send it to Dimension B.
 - When the ghost role passes to someone else at the next changeover, the bedsheet vanishes from the old ghost's inventory and appears in the new ghost's.
 
 **Catching the ghost: the spirit board**
+
 - Elena's **spirit board** sits in the Secret Library. It can't be taken, so players have to go there to use it.
 - A player types `/use spirit board`, and the bot privately asks them to **pick a player** they suspect.
 - The answer is private:
@@ -257,9 +265,13 @@ There's one house, and every player in a server shares it. If one player takes t
 
 ---
 
-## Releases and Ripples
+## Drops and Ripples
 
-A **release** is a predefined moment when the game moves forward. Each release can contain any of the following:
+> **Two words that are not the same, settled 26 September.** A **release** is a deployment — code and content files shipped together, numbered for the repository's benefit. A **drop** is a moment when something becomes visible to players. One release can carry a month of drops.
+>
+> For anyone writing content this means **you are writing drops.** Write all of October in September and hand it over in one batch; each piece still arrives on the day its drop says. This section is about drops. "Release 1" still appears where it means the first batch of files that shipped, which is a different thing.
+
+A **drop is a predefined moment when the game moves forward. Each drop** can contain any of the following:
 
 | Part | What it is |
 | --- | --- |
@@ -267,7 +279,7 @@ A **release** is a predefined moment when the game moves forward. Each release c
 | **Story reveal** | New notes from Elena or David appear, explaining a little more of what happened |
 | **Ripple** | The in-story cause: what the family did in Dimension B that changed Dimension A |
 | **House changes** | Room descriptions rewritten; things added, removed or moved |
-| **Announcement** | A short message players see when the release happens. Some releases post a public message in every room (see Follow Your Nose, below) |
+| **Announcement** | A short message players see when the drop happens |
 
 ### Writing a ripple
 
@@ -277,52 +289,52 @@ Each ripple should follow one pattern: the family does something ordinary in B, 
 
 The ripple tells players *why* the house changed. The accompanying note from David or Elena usually shows the B side of the same event.
 
-### Release template
+### Drop template
 
-Use this for each release in the schedule.
+Use this for each drop in the schedule.
 
 ```
-Release #:        
+Drop #:
 Goes live:        (date and time, Pacific)
 Ripple:           (what the family did in B)
 Story reveal:     (notes that appear, and where)
-Achievements:     (released this time)
-Room changes:     (room → what changes in its description)
+Achievements:     (that go live now)
+Room changes:     (room to what changes in its description)
 Things added:     (thing, room, how many)
 Things removed:   (thing, room)
 Announcement:     (player-facing text)
 ```
 
-### Release schedule (skeleton)
+### Drop schedule (skeleton)
 
 Only the date-based achievements have fixed dates so far. The rest need to be placed.
 
-| Date | Release | Fixed content |
+| Date | Drop | Fixed content |
 | --- | --- | --- |
-| Launch (TBD) | Release 1: the house as players first find it | Starting achievements (TBD) |
+| Launch (TBD) | Drop 1: the house as players first find it | Starting achievements (TBD) |
 | Oct 1 | Coffee Day / Raccoon Day | Coffee maker and trash can achievements |
 | Oct 2 | World Smile Day | Mirror achievement |
 | Oct 15 | International Day of Rural Women | Watering can achievement |
 | Oct 21 | International Day of the Nacho | Nacho chips achievement |
 | Oct 25 | World Pasta Day | Pasta pot achievement |
-| — | *Follow Your Nose* | **No longer a release.** A per-player discovery, available from launch: free the roll-top desk's jammed drawer with graphite |
+| — | *Follow Your Nose* | **No longer a drop.** A per-player discovery, available from launch: free the roll-top desk's jammed drawer with graphite |
 | TBD, late October | *Forwarding Address* | A letter for L arrives; players forward it to the right address |
-| Oct 31 | Halloween | Finale release (see the Release Timeline) |
+| Oct 31 | Halloween | Finale drop (see the Release Timeline) |
 | Tuesdays | Trash day | Trash day achievement |
 
 All dates and times are Pacific, matching the bot's existing midnight job.
 
-### Example release
+### Example drop
 
-*Follow Your Nose was the worked example here, and it is no longer a release — it became a per-player discovery available from launch (see the Upstairs Hallway). A dated release still needs a worked example; the Oct 21 nacho achievement or the Forwarding Address letter would both serve. **TBD.***
+*Follow Your Nose was the worked example here, and it is no longer a drop — it became a per-player discovery available from launch (see the Upstairs Hallway). A dated drop still needs a worked example; the Oct 21 nacho achievement or the Forwarding Address letter would both serve.* **TBD.**
 
-What the change illustrates is worth keeping, because it will come up again: a release makes something happen to everyone on a date, and a discovery makes something happen to one player when they earn it. Reach for a release when the house itself should change — new things, new descriptions, an announcement. Reach for a discovery when the point is the moment of working it out, because a release spends that moment on whoever happens to be online.
+What the change illustrates is worth keeping, because it will come up again: a drop makes something happen to everyone at once, and a discovery makes something happen to one player when they earn it. Reach for a drop when the house itself should change — new things, new descriptions, an announcement. Reach for a discovery when the point is the moment of working it out, because a drop spends that moment on whoever happens to be online.
 
 ---
 
 ## Crossing Over: Things Moving Between Dimensions
 
-### A → B: the cat
+### A to B: the cat
 
 When a player uses `/pet` in a room that contains things, there's a chance (X%, TBD) that one random thing in that room vanishes to Dimension B. Some things are more likely to cross than others. Graphite powder, for example, has a higher chance.
 
@@ -334,13 +346,13 @@ Only things lying in a room can cross. Anything in a player's inventory is safe,
 
 **Design tension to keep:** players stockpiling items in a room for a group achievement risk losing some every time someone pets the cat there. That's a feature. It gives players a reason to talk to each other.
 
-### B → A: ripples
+### B to A: ripples
 
-Things only arrive from Dimension B at releases, as part of a ripple. The five baby bottles on the Secret Library shelf are the first example: they came across from B, which is why they look used.
+Things only arrive from Dimension B at drops, as part of a ripple. The five baby bottles on the Secret Library shelf are the first example: they came across from B, which is why they look used.
 
 ### Does the family react?
 
-Recommendation: the family's reactions are written into later releases. They happen whether or not any player actually sent the item, with an optional variant if someone did (for example, if graphite powder crossed over, David's next note thanks "whoever keeps leaving me exactly what I need"). Whether the bot tracks that is TBD.
+Recommendation: the family's reactions are written into later drops. They happen whether or not any player actually sent the item, with an optional variant if someone did (for example, if graphite powder crossed over, David's next note thanks "whoever keeps leaving me exactly what I need"). Whether the bot tracks that is TBD.
 
 ---
 
@@ -348,11 +360,11 @@ Recommendation: the family's reactions are written into later releases. They hap
 
 There are three kinds:
 
-- **Public**: listed where players can see them once released, so players know what to aim for.
+- **Public**: listed where players can see them once their drop arrives, so players know what to aim for.
 - **Secret**: hidden until earned. Players discover them by experimenting, and the fun is in not being told.
 - **Group**: earned by the server's players together rather than by any one person.
 
-A **bonus** achievement is not a fourth kind. It is any of the three earned by going beyond a base achievement's requirement.
+A **bonus** achievement is not a fourth kind. It is either of the two earned by going beyond a base achievement's requirement: the base achievement's condition, plus a constraint on top of it. A player cannot earn the bonus without also earning its base.
 
 **How achievements are shown** (*decided*):
 
@@ -360,58 +372,59 @@ A **bonus** achievement is not a fourth kind. It is any of the three earned by g
 - The player who earned it gets the description in a private unlock message.
 - `/stats` lists only achievements a player has earned. Any player can look up another server member's `/stats`.
 
-Suggested names for untitled achievements are marked *(suggested)*. Nine of the thirty-four still need names.
+**All thirty-five achievement names below are final and approved.** Every name is set in bold; nothing in these tables is a placeholder or a suggestion any more.
 
 ### Public achievements
 
 | Achievement | How to earn | Where | Story tie-in |
 | --- | --- | --- | --- |
-| **Talking to an Empty Room** | Talk to Alexa and remind David to cancel his Costco order | Any room (there's an Alexa in every room) | Alexa is shared between dimensions. David's bulk deliveries keep arriving |
-| **Charcuterie Board** | Collect all five cat foods: chicken, salmon, gourmet wet, tuna and expired | Around the house | Chicken, salmon and tuna are everywhere. Expired is plentiful too, but only appears once *Follow Your Nose* is released. Gourmet wet is one can per player. See Cat food |
+| **Passing a Message to David** | Talk to Alexa and remind David to cancel the auto-delivery | Any room (there's an Alexa in every room) | Alexa is shared between dimensions, so a message left with her reaches him. His standing auto-delivery keeps arriving |
+| **Charcuterie Board** | Collect all five cat foods: chicken, salmon, gourmet wet, tuna and expired | Around the house | Chicken, salmon and tuna are in stashes around the house. Expired is plentiful too, but only once that player has freed the jammed drawer. Gourmet wet is one can per player, under the bed. See Cat food |
 | **Found the Specs** | Find David's reading glasses in the roll-top desk | Upstairs Hallway | He left them with a door-hardware manual when the baby monitor went off |
-| **Something's Cooking** | Collect herbs, dark chocolate and a spice, then use the kitchen | Courtyard, Living Room, Entryway → Kitchen | Herbs from the garden; chocolate David hid from himself; spice from an Amazon box |
+| **Something's Cooking** | Collect herbs, dark chocolate and a spice, then use the kitchen | Courtyard, Living Room, Entryway to Kitchen | Herbs from the garden; chocolate David hid from himself; spice from an Amazon box |
 | **Unsticking the Situation** | Send the graphite powder to Dimension B | Nursery | David needs it for the jammed doors. Higher chance of crossing |
-| **Catproof the House** | Take five baby bottles, clean or dirty | anywhere | The bottles came across from B. Left loose, Eunoia will knock them over |
-| **Return to Sender** | Send the baby bottles back to Dimension B | Secret Library / anywhere | Marcus needs them. Players who did this the day before release earn it automatically |
+| **Catproof the House** | Hold five baby bottles (clean or dirty) in your inventory at once | anywhere | The bottles came across from B. Left loose, Eunoia will knock them over |
+| **Return to Sender** | Send the baby bottles back to Dimension B | Secret Library / anywhere | Marcus needs them. Players who did this the day before the drop earn it automatically |
 | **It Takes a Village** — bonus | Turn all five used bottles into sanitized bottles in the Kitchen, then send them back | Kitchen | David would appreciate it |
-| **Gourd Job** | Find the carving tools in the unpacked box, then carve a pumpkin. Each player gets their own set | Bedroom → Courtyard | The family meant to carve pumpkins together |
-| **Follow Your Nose** | Find the source of the weird smell: free the roll-top desk's jammed bottom drawer with `/use graphite` | Upstairs Hallway | Available from launch, earned per player rather than at a release. The smell is in the hallway from day one; the drawer is swollen shut. The clue trail runs through the to-do list, the door-hardware manual and the laptop, all of which point at graphite. Behind the drawer is a stash of expired cat food (the smell) and L's note, *"Use by 9/1/26 — L"*, the first clue about Lucille Marsh, the former resident |
-| *Baby Talk* | Find the baby monitor that's making strange noises | Nursery | It's picking up Marcus in Dimension B |
-| *Dressed for the Season* | Wear a costume found in the bedroom | Bedroom | From the unpacked Halloween box |
-| **Met the Craving** | Work out the cat's favourite food by guessing with food emoji | Anywhere | Each player gets a random daily preference. Input method TBD |
-| *Forwarding Address* | Work out who L is from hints across the month, then `/use letter` and pick L's correct new address | Entryway (letter arrives) | A letter for L is delivered late in the game. See L, the former resident |
+| **Gourd Job** | Find the carving tools in the unpacked box, then carve a pumpkin. Each player gets their own set | Bedroom to Courtyard | The family meant to carve pumpkins together |
+| **Follow Your Nose** | Find the source of the weird smell: free the roll-top desk's jammed bottom drawer with `/use graphite` | Upstairs Hallway | Available from launch, earned per player rather than at a drop. The smell is in the hallway from day one; the drawer is swollen shut. The clue trail runs through the to-do list, the door-hardware manual and the laptop, all of which point at graphite. Behind the drawer is a stash of expired cat food (the smell) and L's note, *"Use by 9/1/26 — L"*, the first clue about Lucille Marsh, the former resident |
+| **Baby Talk** | Find the baby monitor that's making strange noises | Nursery | It's picking up Marcus in Dimension B |
+| **Dressed for the Season** | Wear a costume found in the bedroom | Bedroom | From the unpacked Halloween box |
+| **Met the Craving** | Work out the cat's craving for the day by reacting with food emoji | Anywhere | One craving per day, **the same for every player on the server**, so guessing is collaborative. Drawn from the Unicode Food & Drink group minus dishware, around 120 emoji. The bot answers with reactions: 👀 right food subgroup, ❌ the 20th slot with no winner, 😻 found |
+| **Forwarding Address** | Work out who L is from hints across the month, then `/use letter` and pick L's correct new address | Entryway (letter arrives) | A letter for L is delivered late in the game. See L, the former resident |
 
 ### Group achievements
 
 | Achievement | How to earn | Notes |
 | --- | --- | --- |
-| *Strength in Numbers* | Players together drop 25 identical things in one room | 25 cans of one common cat food flavor will do it |
-| *Overdue Returns* | Players together fill the Secret Library with 200+ things | The cat can send things away, so players have to coordinate |
-| *The Feline Collection* — bonus | 100+ of those 200 things are cat food | |
+| **Strength in Numbers** | Players together drop 25 identical things in one room | 25 cans of one common cat food flavor will do it |
+| **Overdue Returns** | Players together pile 200+ things into any one room | Any room counts, not only the Secret Library. The cat can send things away, so players have to coordinate |
+| **The Feline Collection** — bonus | 100+ of that same room's things are cat food | One room has to hold both totals at the same time |
 
 ### Secret achievements
 
 | Achievement | How to earn | Notes |
 | --- | --- | --- |
-| **A Little Bit Lost** | Go Entryway → Living Room → Entryway five times within five minutes | |
+| **A Little Bit Lost** | Go Entryway to Living Room to Entryway five times within five minutes |  |
 | **Out on a Limb** | Find the Secret Library by climbing the oak tree in the Courtyard (first `/use tree`) | See Finding the Secret Library |
-| *Bulk Buyer* | Carry 25 cans of cat food | A nod to David's Costco habit |
-| **Making Friends** | Pet the cat 200 times with a positive relationship | |
-| **Trying to Make Friends** | Pet the cat 200 times with a negative relationship | |
-| **Cat's Best Friend** | Reach a perfect relationship with Eunoia | Perfect means a relationship score of 100, the top of the meter |
-| *Signed, Sealed, Delivered* | `/use intercom` within three minutes of the doorbell ringing | The doorbell is a live event the bot announces. Delivery driver dialogue TBD |
-| *Brewing Trouble* | Use the coffee maker on Oct 1 | International Coffee Day |
+| **Bulk Buyer** | Carry 25 cans of cat food | A nod to David's Costco habit |
+| **Making Friends** | Pet the cat 200 times with a positive relationship |  |
+| **Trying to Make Friends** | Pet the cat 200 times while your relationship is zero or below |  |
+| **Cat's Best Friend** | Reach a perfect relationship with Eunoia | Perfect means a relationship score of 100, the top of a meter that runs −100 to 100 |
+| **Signed, Sealed, Delivered** | `/use intercom` within three minutes of the doorbell ringing | The doorbell is a live event the bot announces. Delivery driver dialogue TBD |
+| **Brewing Trouble** | Use the Keurig on Oct 1 | International Coffee Day |
 | **Trash Panda** | Use the trash can on Oct 1 | International Raccoon Appreciation Day. The achievements doc gives Oct 1 in one place and Oct 2 in another; Oct 1 is the real date |
-| *Say Cheese* | Use a mirror on Oct 2 | World Smile Day. Any mirror in the house counts: the ornate mirror (Entryway), the cracked mirrors (Secret Library) or the dresser mirror (Bedroom) |
-| *Green Thumb* | Use the watering can or take herbs or use (carve) pumpkin on Oct 15 | International Day of Rural Women |
-| *Nacho Average Ghost* | Use the nacho chips on Oct 21 | International Day of the Nacho |
+| **Say Cheese** | Use a mirror on Oct 2 | World Smile Day. Any mirror in the house counts: the ornate mirror (Entryway), the cracked mirrors (Secret Library) or the dresser mirror (Bedroom) |
+| **Green Thumb** | Use the watering can or take herbs or use (carve) pumpkin on Oct 15 | International Day of Rural Women |
+| **Nacho Average Ghost** | Use the nacho chips on Oct 21 | International Day of the Nacho |
 | **Using Your Noodle** | Use the pasta pot on Oct 25 | World Pasta Day |
 | **Getting into the Spirit** | As the day's ghost, haunt a room with `/use bedsheet` | One random player per day is the ghost. See The ghost of the day |
-| **Ghostbuster** — bonus | Correctly name the day's ghost with `/use spirit board` | Secret Library. One accusation per player per day |
-| **Breaking into the Halloween Candy** | `/use candy` to eat it | |
-| *Curbside Pickup* | Take out the trash on a Tuesday | `/use trash can` on a Tuesday takes out the trash |
+| **Ghostbuster** | Correctly name the day's ghost with `/use spirit board` | Secret Library. One accusation per player per day |
+| **Breaking into the Halloween Candy** | `/use candy` to eat it |  |
+| **Curbside Pickup** | Take out the trash on a Tuesday | `/use trash can` on a Tuesday takes out the trash |
+| **Not-So-Picky Eater** | Eat ten frozen burritos from the Kitchen freezer | Aunt Sue's bulk order. Each one is still frozen in the middle, and reading that ten times is the joke |
 
-> **Command check:** the achievements document's `/haunt` and `/accuse` are now handled by `/use bedsheet` and `/use spirit board`, and its option to catch the ghost by replying with their name has been dropped. Talking to Alexa and guessing with emoji still need a decision. See Open Questions.
+> **Command check:** the achievements document's `/haunt` and `/accuse` are now handled by `/use bedsheet` and `/use spirit board`, and its option to catch the ghost by replying with their name has been dropped. Talking to Alexa and guessing the craving are settled: neither is a command. Alexa listens for messages beginning "alexa", "hey alexa" or "ok alexa"; the craving is guessed with emoji reactions.
 
 ---
 
@@ -447,14 +460,15 @@ For each thing: **Take** means it can go in an inventory. **Achievement** links 
 
 | Thing | Take | What it's for | Achievement |
 | --- | --- | --- | --- |
-| Alexa (smart speaker) | No | Talk to it; it has David's reminders and orders. **There's an Alexa in every room**, so `/use alexa` works anywhere | Talking to an Empty Room |
+| Alexa (smart speaker) | No | Talk to it; it has David's reminders and orders. **There's an Alexa in every room** | Passing a Message to David |
 | Lumber | No | `/use lumber` counts toward repairing the main staircase. Arrives daily until it's fixed | — |
 | Intercom | No | Answer the door when the doorbell rings | Signed, Sealed, Delivered |
-| Amazon box | No | Contains the spice | Something's Cooking |
-| Spice jar | Yes | Recipe ingredient | Something's Cooking |
+| Amazon box | No | Contains the spice jar. Its description does **not** name the jar, so it stays true once somebody takes it | Something's Cooking |
+| Spice jar | Yes | Recipe ingredient, inside the box | Something's Cooking |
 | Ornate mirror | No | Reflections occasionally show the other house | Say Cheese (Oct 2) |
-| Bulletin board | No | Archive of all released notes | — |
-| Stroller, shoes, booties | No | Flavour: a baby lives here | — |
+| Bulletin board | No | Archive of every note that has dropped | — |
+| Coat rack | No | A cardboard flat of **salmon** is tucked in behind it | Charcuterie Board / Bulk Buyer |
+| Stroller, shoes, booties | No | Flavor: a baby lives here | — |
 
 ### 2. Dining Room
 
@@ -466,10 +480,10 @@ For each thing: **Take** means it can go in an inventory. **Achievement** links 
 | --- | --- | --- | --- |
 | Bowl of Halloween candy | No | A **source**: the bowl stays on the sideboard and never empties | — |
 | Piece of candy | Yes | Eat it. Taken from the bowl | Breaking into the Halloween Candy |
-| David's to-do list | No | "Milk, diapers, WD-40, graphite powder?, check door hinges, CANCEL COSTCO AUTO-DELIVERY" — renamed from "grocery list", since it was never mostly groceries | Clue for Talking to an Empty Room **and** for the jammed drawer |
+| David's to-do list | No | "Milk, diapers, WD-40, graphite powder?, check door hinges, CANCEL AUTO-DELIVERY (I need a reminder!!!)" — renamed from "grocery list", since it was never mostly groceries | Clue for Passing a Message to David **and** for the jammed drawer |
 | David's journal page | No | His account of the night of the experiment | — |
-| Silver baby spoon | Yes | Flavour | — |
-| Candle stub | Yes | Flavour; left from the experiment | — |
+| Silver baby spoon | Yes | Flavor | — |
+| Candle stub | Yes | Flavor; left from the experiment | — |
 | Sideboard | No | Its cupboard holds a stash of **salmon** | Charcuterie Board / Bulk Buyer |
 
 ### 3. Kitchen
@@ -488,22 +502,22 @@ For each thing: **Take** means it can go in an inventory. **Achievement** links 
 | Nacho chips | Yes | Use on Oct 21. Not named in the room description, because one player takes them and the description would then be lying | Nacho Average Ghost |
 | Pantry | No | Holds the **tuna** stash, towers of cans squared off at the corners | Charcuterie Board / Bulk Buyer |
 | Gourmet wet cat food | — | **Not here.** The jar labelled "EUNOIA — PREMIUM" that used to sit on this counter has gone; the one tin is under the bed in the Bedroom | Charcuterie Board |
-| Freezer: Aunt Sue's breakfast burritos | No | Flavour: "From Aunt Sue — 2 dozen! To help you both adjust to parenthood!" | — |
+| Freezer: Aunt Sue's breakfast burritos | No | Flavor: "From Aunt Sue — 2 dozen! To help you both adjust to parenthood!" | — |
 
 ### 4. Courtyard
 
-> An overgrown walled garden. Ivy has swallowed half the stone wall, and an herb bed of lavender, sage and rosemary has run completely wild. In the center, a ring of flat stones marks where someone drew a diagram in chalk, now mostly rained away. A picnic blanket is spread over a bench, and a baby's sunhat lies in the grass. A row of uncarved pumpkins waits by the door. A dented watering can sits beside the herbs. An old, gnarled oak leans against the house, one thick branch reaching toward a small window half hidden in the ivy.
+> An overgrown walled garden. Ivy has swallowed half the stone wall, and an herb bed of lavender, sage and rosemary has run completely wild. In the center, a ring of flat stones marks where someone drew a diagram in chalk, now mostly rained away. A picnic blanket is spread over a bench, and a baby's sunhat lies in the grass with a wooden rattle beside it. A row of uncarved pumpkins waits by the door. A dented watering can sits beside the herbs. An old, gnarled oak leans against the house, one thick branch reaching toward a small window half hidden in the ivy.
 
 **Exits:** the back door to the Kitchen (always open) · the oak tree, up to the Secret Library window (only once the player has used the tree)
 
 | Thing | Take | What it's for | Achievement |
 | --- | --- | --- | --- |
-| Herbs | Yes | Recipe ingredient | Something's Cooking |
+| Herb garden | No | A **source**: the bed stays put and the cuttings are what you carry | Something's Cooking |
+| Herbs | Yes | Recipe ingredient, cut from the garden | Something's Cooking |
 | Pumpkins | No | Carve with the tools (context `/use`) | Gourd Job |
 | Watering can | No | Use on Oct 15 | Green Thumb |
-| Stone circle | No | Flavour; where Elena tested the diagram before moving indoors | — |
-| Sunhat, rattle, picnic blanket | No | Flavour | — |
-| Twisted copper wire | Yes | Flavour; leftover experiment parts | — |
+| Stone circle | No | Flavor; where Elena tested the diagram before moving indoors | — |
+| Sunhat, rattle, picnic blanket, bench, ivy, stone wall | No | Flavor | — |
 | Oak tree | No | `/use tree` climbs to the library window: the way into the Secret Library | — |
 
 ### 5. Living Room
@@ -514,29 +528,33 @@ For each thing: **Take** means it can go in an inventory. **Achievement** links 
 
 | Thing | Take | What it's for | Achievement |
 | --- | --- | --- | --- |
-| Dark chocolate | Yes | Recipe ingredient; hidden by David from himself (hiding place TBD, e.g. inside a hollowed-out book on dimensional theory) | Something's Cooking |
+| Bookshelves | No | One dimensional-theory book is hollow. The description says the block is hollow, not what is in it | Something's Cooking |
+| Dark chocolate | Yes | Recipe ingredient, inside the hollow book; David hid it from himself | Something's Cooking |
+| Sofa | No | A stash of **chicken** is pushed back underneath, against the skirting | Charcuterie Board / Bulk Buyer |
+| Fireplace | No | Cold ash, and Elena's research journal on the mantel above | — |
 | Elena's research journal | No | Her field notes; new pages appear over the game | — |
+| Armchairs | No | One turned to face a bare patch of wall, David's legal pad down the side of the cushion | — |
 | David's legal pad | No | His notes on Elena's theories | — |
-| Cat food stash (common flavors) | Yes | Under the sofa (placement suggested) | Charcuterie Board / Bulk Buyer |
 | Curiosity cabinet | No | Locked. With the skeleton key, it swings open on a hidden hinge: the secret door to the library | — |
 
 ### 6. Secret Library
 
-> A small, close room hidden behind the Living Room's curiosity cabinet. Every wall is shelves: occult references, folklore, a few paperback thrillers that must be David's. A circle of scorch marks is burned into the floorboards, surrounded by copper wire and cracked mirrors. The air feels charged, like the moment before a storm. On one shelf, five half-empty baby bottles stand in a neat row, looking very out of place. An empty cat bed sits in the corner.
+> A small, close room hidden behind the Living Room's curiosity cabinet. Every wall is shelves: occult references, folklore, a few paperback thrillers that must be David's. A circle of scorch marks is burned into the floorboards, surrounded by copper wire and cracked mirrors. A spirit board lies on the floorboards just outside the circle, its planchette resting on the S. The air feels charged, like the moment before a storm. An empty cat bed sits in the corner.
 
 **Exits:** the back of the curiosity cabinet to the Living Room (locked until the player has the key) · the window, down the oak to the Courtyard
 
 | Thing | Take | What it's for | Achievement |
 | --- | --- | --- | --- |
-| Used baby bottles (×5) | Yes | Take them off the shelf; sanitize them in the Kitchen, which turns each into a sanitized baby bottle; send back | Catproof the House / Return to Sender / Squeaky Clean |
+| Library shelves | No | Occult references, folklore and David's thrillers. The ritual diagram is pinned to a shelf edge | — |
 | Scorch circle | No | Where the experiment happened | — |
-| Ritual diagram | No | Elena's diagram; readable | — |
-| Cracked mirrors | No | Flavour; show glimpses of the other house | Say Cheese (Oct 2) |
+| Ritual diagram | No | Elena's diagram, pinned to the shelf edge; readable | — |
+| Copper wire coil | No | A **source**: Elena's salvaged wire, paid out and re-wound many times | — |
+| Cracked mirrors | No | Flavor; show glimpses of the other house | Say Cheese (Oct 2) |
 | Empty cat bed | No | Eunoia hasn't slept here since the split | — |
 | Spirit board | No | Elena's board. Accuse a player of being the day's ghost | Ghostbuster |
 | Skeleton key | Yes, one per player | Unlocks the curiosity cabinet passage to the Living Room. Can't be dropped, taken from another player or sent to Dimension B | — |
 
-This room is the target for the *Overdue Returns* group achievement, so its description should change as it fills up (e.g. at 50, 100 and 200 things).
+The Secret Library is not the only room that can earn *Overdue Returns* — any room holding 200+ things does it — but it is still the natural hoard, so its description should change as it fills up (e.g. at 50, 100 and 200 things).
 
 ### 7. Upstairs Hallway
 
@@ -550,8 +568,8 @@ This room is the target for the *Overdue Returns* group achievement, so its desc
 | David's reading glasses | Yes | Inside the desk, reachable from day one | Found the Specs |
 | Door-hardware manual | No | Readable; David's bookmarked page on freeing stuck locks and hinges: *"apply powdered graphite, never oil"* | Clue for the jammed drawer |
 | Bad smell | No | Present from day one. `/look smell` points at the desk without giving away the drawer | Follow Your Nose |
-| Small crowbar | No | Flavour: David's investigation. Deliberately **not** the answer to the drawer | — |
-| Oak wardrobe | No | Flavour | — |
+| Small crowbar | No | Flavor: David's investigation. Deliberately **not** the answer to the drawer | — |
+| Oak wardrobe | No | Flavor | — |
 | Faded portraits | No | They belonged to L. A good place for hints about who L is | Forwarding Address |
 | Expired cat food | Yes, once the drawer is free | A stash in the bottom drawer. Hidden until that player unjams it | Charcuterie Board / Bulk Buyer |
 | L's note | No | In the drawer. Reads: *"Use by 9/1/26 — L"* | First hint for Forwarding Address |
@@ -566,34 +584,37 @@ The clue trail is already in the house and uses things that otherwise do nothing
 - `/use smell`: *You take one deliberate breath, which is a mistake. It is coming from the desk, and from low down in it.*
 - `/use desk`, before: *You roll the lid all the way up. Papers, pens, a dried-out highlighter. The deep bottom drawer doesn't move at all — swollen shut in its runners — and whatever is behind it is the reason this hallway smells.*
 - `/use graphite` here, the first time (suggested):
+
   > You work the powder into the runners with a thumb and haul. The drawer gives all at once, and the smell comes up at you like something with weight to it.
 - `/use desk`, after: *The bottom drawer slides out easily now. It is packed with cans of cat food that went off a very long time ago, and the smell comes up at you like something with weight to it.*
 - `/take expired cat food` before the drawer is free: *You can smell it, but where is it coming from?*
 - `/take expired cat food` after (suggested): *You pry a tin loose from the stack and immediately regret breathing in. It goes in your bag anyway.*
 
-**Achievement.** *Follow Your Nose* is earned by the player who frees the drawer. It is no longer a dated release.
+**Achievement.** *Follow Your Nose* is earned by the player who frees the drawer. It is no longer a dated drop.
 
 ### 8. Bedroom
 
-> The main bedroom: an unmade bed, a dresser with its drawers half open, and a tall mirror over the dresser that catches the light at odd angles. A bottle warmer sits on the nightstand. A cat collar lies on the pillow. In the corner, an unpacked moving box labeled HALLOWEEN overflows with costumes, a "Trick-or-Treat" welcome mat and a tangle of fake spider web.
+> The main bedroom: an unmade bed, a dresser with its drawers half open, and a tall mirror over the dresser that catches the light at odd angles. A bottle warmer sits on the nightstand. In the corner, an unpacked moving box labeled HALLOWEEN overflows with costumes, a "Trick-or-Treat" welcome mat and a tangle of fake spider web.
 
 **Exits:** the door to the Upstairs Hallway
 
 | Thing | Take | What it's for | Achievement |
 | --- | --- | --- | --- |
-| Halloween box | No | Contains the carving tools and costume | Gourd Job / Dressed for the Occasion |
-| Carving tools | Yes, one set per player | Carve a pumpkin in the Courtyard. Every player can take one set from the box. A set can't be dropped, taken from another player or sent to Dimension B by the cat | Gourd Job |
-| Costume | Yes | Wear it | Dressed for the Occasion |
-| Pumpkin cookie cutters, spider web, welcome mat | Varies | Flavour | — |
-| Cat collar | Yes | Inscribed "Eunoia"; how players learn the cat's name | — |
+| Halloween box | No | Contains the carving tools, the costumes and the cookie cutters | Gourd Job / Dressed for the Occasion |
+| Carving tools | Yes, one set per player | Carve a pumpkin in the Courtyard. Every player can take one set. A set can't be dropped, taken from another player or sent to Dimension B by the cat | Gourd Job |
+| Costume | Yes | Wear it. Drawn from the costume pile in the box | Dressed for the Occasion |
+| Pumpkin cookie cutters, spider web, welcome mat | Varies | Flavor | — |
+| Cat collar | Yes | Inscribed "Eunoia"; how players learn the cat's name. **Not named in the room description** — one player takes it | — |
 | Unmade bed | No | A crate of **chicken** is shoved underneath, within arm's reach of the pillow | Charcuterie Board / Bulk Buyer |
 | Gourmet wet cat food | Yes, one per player ever | Pushed in behind the crate, further back than you would reach by accident. **The only one in the house** | Charcuterie Board |
+| Dresser | No | Drawers half out; the laptop and a printout on top | — |
 | Dresser mirror | No | One of the mirrors that counts for the Oct 2 achievement | Say Cheese (Oct 2) |
-| Laptop | No | Open search tabs: "all doors and windows stuck at once," "can a house settle overnight," "graphite vs WD-40" | — |
+| Bottle warmer | No | Plugged in, up to temperature, with no bottle in it | — |
+| Laptop | No | Open search tabs: "all doors and windows stuck at once," "can a house settle overnight," "graphite vs WD-40" | Clue for the jammed drawer |
 
 ### 9. Nursery
 
-> A small, warm room painted a soft sage green. The crib is made up neatly under a slowly turning mobile. A music box sits on the shelf beside a pacifier. On the changing table, a baby monitor crackles with faint, happy sounds, though the crib is empty. A tin of graphite powder has been left on the windowsill. David's handwriting is on a note pinned to the wall.
+> A small, warm room painted a soft sage green. The crib is made up neatly under a slowly turning mobile, and a painted shelf runs along the wall above it, at adult height and well out of reach of anybody small. On the changing table, a baby monitor crackles with faint, happy sounds, though the crib is empty. The sash window above the table looks down over the courtyard and the crown of the old oak, and a tin of graphite powder sits open on the sill. David's handwriting is on a note pinned to the wall.
 
 **Exits:** the door to the Upstairs Hallway
 
@@ -602,17 +623,17 @@ The clue trail is already in the house and uses things that otherwise do nothing
 | Baby monitor | No | Picks up Marcus in Dimension B | Baby Talk |
 | Tin of graphite powder | No | A **source** on the windowsill: it never runs out, so every player can take some | — |
 | Graphite powder | Yes | A twist of paper taken from the tin. Two uses: send it to David, **or** free the Upstairs Hallway drawer. It had to become a source because one tin could only ever serve one player, and those two uses destroyed each other | Unsticking the Situation / Follow Your Nose |
-| Music box | Yes | Plays the lullaby Marcus hears in both houses | — |
+| Music box | Yes | Plays the lullaby Marcus hears in both houses. **Not named in the room description** — one player takes it | — |
 | David's note | No | "Checked the nursery. Everything looks fine..." | — |
-| Mobile, pacifier, crib | No | Flavour | — |
+| Mobile, pacifier, crib, changing table, shelf, window | No | Flavor | — |
 
 ### Cat food: David's Costco problem
 
 David bought far too much cat food at Costco, and it's stashed all over the house: in the pantry, in unopened boxes, under furniture, on shelves where it has no business being. Cat food should feel **abundant**. Players who go looking will find it everywhere, in quantity. That's what makes *Bulk Buyer*, *Strength in Numbers* and *The Feline Collection* achievable.
 
-**Every stash is a specific place.** The earlier draft had one cat food source placed in six rooms, which forced its description to be vague enough to work everywhere. Each stash is now its own thing with its own prose, and each hands out **one flavour**, so a player who wants all five has to range around the house.
+**Every stash is a specific place.** The earlier draft had one cat food source placed in six rooms, which forced its description to be vague enough to work everywhere. Each stash is now its own thing with its own prose, and each hands out **one flavor**, so a player who wants all five has to range around the house.
 
-| Room | Flavour | Where exactly |
+| Room | Flavor | Where exactly |
 | --- | --- | --- |
 | Kitchen | Tuna | The pantry, stacked three deep and squared off at the corners |
 | Living Room | Chicken | Pushed back under the sofa against the skirting, out of the light |
@@ -623,13 +644,13 @@ David bought far too much cat food at Costco, and it's stashed all over the hous
 
 | Flavor | How common | Notes |
 | --- | --- | --- |
-| Chicken | Common — two stashes | |
-| Salmon | Common — two stashes | |
-| Tuna | Common — one stash | |
+| Chicken | Common — two stashes |  |
+| Salmon | Common — two stashes |  |
+| Tuna | Common — one stash |  |
 | Gourmet wet | **Rare: one can per player** | Under the bed, behind the chicken crate. The only one in the house. See The rare can, below |
 | Expired | Plentiful, once a player frees the drawer | Left by L, the former resident, who fed Eunoia before the family arrived. The smell has been in the hallway since launch; the stash is what it comes from. No per-player limit |
 
-There is **no duck flavour.** It was added briefly and removed: the *Charcuterie Board* achievement names five types, and duck made six.
+There is **no duck flavor.** It was added briefly and removed: the *Charcuterie Board* achievement names five types, and duck made six.
 
 **The rare can (gourmet wet)**
 
@@ -642,6 +663,7 @@ Gourmet wet is a treat, so David only ever bought a little of it. It's the one f
 - So every player has the opportunity to earn *Charcuterie Board*, but it isn't guaranteed.
 
 **Common cans**
+
 - **Stashes never run out.** A stash is a *source*: it cannot be carried, it is never depleted, and drawing from it produces a can. That is what keeps *Bulk Buyer*, *Strength in Numbers* and *The Feline Collection* reachable without anyone tracking stash sizes, and it is why no restock mechanic is needed.
 - **Every stash is named in its room, or inside something that is.** A stash the prose never mentions is invisible, because stashes deliberately do not appear in the room's "Also here:" list — that line is only for finite things a player might have already taken.
 - **Cans are finite once drawn.** A can in a bag or dropped on a floor is a real object that can be counted, sent to Dimension B, or picked up by somebody else.
@@ -682,7 +704,7 @@ Gourmet wet is a treat, so David only ever bought a little of it. It's the one f
 - In Dimension A with the players. The only one who seems able to move things between the two houses, and maybe the only one who understands that there *are* two houses.
 - Stares at mirrors. Sits outside the Nursery listening to the baby monitor. Knocks things off shelves.
 - Called "the cat" in bot text until players find the collar (whether this is per player is TBD).
-- **Behaviour:** gentle, well-spaced petting builds the relationship; pestering makes the cat standoffish. Low-relationship players get a cold shoulder; high-relationship players get purring.
+- **Behavior:** gentle, well-spaced petting builds the relationship; pestering makes the cat standoffish. Low-relationship players get a cold shoulder; high-relationship players get purring.
 
 ### L, the former resident
 
@@ -692,13 +714,14 @@ Gourmet wet is a treat, so David only ever bought a little of it. It's the one f
 - Where she went is proposed in the Release Timeline (12 Harbor Street, Gull Point), pending approval.
 
 **The hint trail (for *Forwarding Address*)**
-- Hints appear gradually across releases in flavor text: room descriptions, thing descriptions, notes, Alexa lines, deliveries. Each one narrows down who L is and where they went.
+
+- Hints appear gradually across drops in flavor text: room descriptions, thing descriptions, notes, Alexa lines, deliveries. Each one narrows down who L is and where they went.
 - Near the end of the game, a letter addressed to L arrives at the house (a misdelivery, like David's orders).
 - Each player can take one letter from the Entryway, like the rare gourmet wet can.
 - `/use letter` gives a private picker of possible forwarding addresses. Only the one that matches the hints earns *Forwarding Address*.
 - Suggested hint types: a postmark or return address on old mail; a moving-box label; a street or town named in a portrait inscription; an Alexa "previous user" reminder; a magazine subscription in L's name; the zip code on a pet-supply receipt.
 
-| Release | Hint | Where it appears |
+| Drop | Hint | Where it appears |
 | --- | --- | --- |
 | *Follow Your Nose* | "Use by 9/1/26 — L": someone called L lived here and fed the cat | L's note, in the roll-top desk's bottom drawer |
 | TBD | TBD | TBD |
@@ -714,9 +737,9 @@ Gourmet wet is a treat, so David only ever bought a little of it. It's the one f
 - **Flavor-only places:** the garage and its extra freezer can be mentioned in notes and descriptions, but the garage isn't a room players can visit.
 - **Second person, present tense** for room and thing descriptions ("You see...", "A tin sits on the windowsill").
 - **Length:** Discord messages cap at 2,000 characters. Keep room descriptions under about 800 characters so exits and things fit alongside them.
-- **Show change clearly.** When a release changes a room, the new description should make the difference noticeable to a returning player.
-- **Every release gets a reason.** Tie each change to a ripple from Dimension B.
-- **Keep dates straight.** The experiment was September 22, 2026. Notes are dated on or after it and follow the release calendar.
+- **Show change clearly.** When a drop changes a room, the new description should make the difference noticeable to a returning player.
+- **Every drop gets a reason.** Tie each change to a ripple from Dimension B.
+- **Keep dates straight.** The experiment was September 22, 2026. Notes are dated on or after it and follow the drop calendar.
 
 ---
 
@@ -740,10 +763,10 @@ Gourmet wet is a treat, so David only ever bought a little of it. It's the one f
 ### Story (writer decisions)
 
 - [ ] Who are the players, in-story? Why are they in the house? (Options: they found the door open; they're house-sitters; they're answering Elena's call for help.)
-- [ ] What happens at the end of the game? Is there a final release on Halloween night, and does it resolve anything?
+- [ ] What happens at the end of the game? Is there a final drop on Halloween night, and does it resolve anything?
 - [x] ~~How many expired cans are in the cubby? Is the stash restocked?~~ Resolved: there is no cubby. The stash is a *source* in the desk drawer — inexhaustible, never restocked, because it cannot run out.
 - [ ] Where did L go? (Proposed in the Release Timeline: 12 Harbor Street, Gull Point.)
-- [ ] The hint trail for *Forwarding Address*: which hints, in which releases, and in which rooms?
+- [ ] The hint trail for *Forwarding Address*: which hints, at which drops, and in which rooms?
 - [ ] The candidate addresses for `/use letter`: how many, and what are the decoys?
 - [ ] What day does the letter arrive?
 - [ ] Who fed Eunoia before the family arrived? Is this ever explained, or left as a small mystery?
@@ -760,11 +783,11 @@ Gourmet wet is a treat, so David only ever bought a little of it. It's the one f
 - [ ] **A staircase achievement?** For example, a group achievement when the staircase is fixed, or one for the player who hammers the last plank.
 - [x] ~~**Alexa and emoji guessing.** Are these new commands, or folded into `/use`?~~ Resolved: **neither.** Alexa listens for messages beginning "alexa", "hey alexa" or "ok alexa". The craving is guessed with emoji reactions on anything the bot posted. No new commands, so no re-registration.
 - [ ] **Chance of crossing (X%)** when petting, and which things get a higher chance.
-- [ ] **Launch date and full release schedule.**
-- [ ] **How releases are announced.** *Follow Your Nose* was the example and is no longer a release. Is an all-rooms post the standard, or only for the big ones?
-- [ ] **How the release calendar is numbered, and who advances it.** Everything built so far is release 1, so nothing depends on this yet — but the moment a second release exists, the bot has to know which one a server is on. An admin-set number, or a date table? The daily-unlock shape of this Bible implies a date table. Needed before Release 2 content is written, not before the next build.
+- [ ] **Launch date and the full drop schedule.**
+- [ ] **How drops are announced.** *Follow Your Nose* was the example and is no longer a drop. Is an all-rooms post the standard, or only for the big ones?
+- [ ] **What the drop calendar is, and who owns it.** Half settled: releases and drops are now separate things, and the bot reads a drop calendar in drops.tsv rather than a release number somebody has to advance. A drop arrives on its date, or when a named event first happens on that server. What is still open is the calendar itself — which drops, on which dates, and who keeps the list. Needed before the second drop's content is written, not before the next build.
 - [ ] **Letter attempts.** Can a player try `/use letter` more than once? With a handful of addresses, unlimited tries would let players guess. Suggested: one attempt, after which the letter is gone.
-- [ ] Does *Return to Sender*'s "earned automatically if done the previous day" mean the bot must log sends before the achievement is released?
+- [ ] Does *Return to Sender*'s "earned automatically if done the previous day" mean the bot must log sends before the achievement drops?
 - [ ] Do family reactions depend on what players actually sent?
 - [ ] Is the cat's name reveal tracked per player?
 - [ ] How often does the doorbell ring, and how is it announced?
@@ -777,39 +800,42 @@ Gourmet wet is a treat, so David only ever bought a little of it. It's the one f
 What this version implies for the bot, compared with the Code Audit:
 
 **Remove or simplify**
+
 - Cohorts: `room_version_assignment`, cohort balancing, the per-cohort `cohort` column on things, and the second set of room threads (18 threads per server becomes 9).
 - Room locking: remove the old room gating, but see Secret Library discovery below; the existing `rooms_unlocked` plumbing could be reused for it.
 
 **Keep**
+
 - The cat: relationship meter, mood weighting, `pet_events` and nightly decay.
 - Multi-server isolation, thread lifecycle and keep-alive, the rooms/things/inventory schema, private replies.
 - The map (unchanged), though it should still move into the content file — now scheduled as Phase 2b.
 
 **Build**
+
 - `/take` and `/drop`, including a room's list of dropped things.
-- Achievements: definitions, per-player and per-server progress, public/secret/bonus/group types, shown in `/stats` (yours or another member's). Public name-only announcement in the Halloween channel whenever one is earned; description sent privately.
-- The release scheduler: predefined times that switch on achievements, add/remove/move things and swap room descriptions.
-- Versioned room descriptions (a description per release, plus threshold-based changes like the Secret Library filling up).
+- Achievements: definitions, per-player and per-server progress, public/secret/bonus/group types, shown in `/stats` (your own only in Release 1). Public name-only announcement in the Halloween channel whenever one is earned; description sent privately.
+- The drop scheduler: dated moments read from \`drops.tsv\` that switch on achievements, add/remove/move things and swap room descriptions.
+- Versioned room descriptions (a description per drop, plus threshold-based changes like the Secret Library filling up).
 - Cross-dimension transport on `/pet`, with a per-thing chance.
 - Context-aware `/use` (location + inventory + date). When the same thing is both carried and in the room, `/use` acts on the carried one first, falls back to the room's copy, and says which one it used. Players never need to take a thing before using it.
 - Things that transform on use: `/use bottle` in the Kitchen deletes a used baby bottle and creates a sanitized baby bottle in the same place (inventory or room).
 - Secret Library discovery, per player: the Library is hidden from a player's exits until they `/use tree` (which moves them in and opens the window exit `CS` both ways); the curiosity cabinet exit `LS` stays locked until they use it while carrying the skeleton key, then stays open for them permanently. The skeleton key is one per player and can't be dropped, taken or sent to Dimension B.
 - Staircase repair, per server: lumber in the Entryway; `/use lumber` counts a player once per 48 hours; at `planks_required` distinct players the Entryway–Upstairs Hallway exit opens for everyone and the two room descriptions change. `planks_required` is per-server config, changeable mid-game.
 - Alexa as a thing in every room, plus an `on_message` handler scoped to game threads that answers anything beginning "alexa", "hey alexa" or "ok alexa". Needs the Message Content intent, which is already on.
-- The daily craving: one Unicode food emoji per day, the same for every player on a server, guessed by reacting to any bot message. The bot answers with reactions on that message — 👀 right food group, ❌ when 19 slots are used with no winner, 😻 found. Use `on_raw_reaction_add`, not `on_reaction_add`. There is no private confirmation available: a reaction carries no interaction token and ephemeral replies need one.
+- The daily craving: one Unicode food emoji per day, drawn from the Food & Drink group minus dishware, the same for every player on a server, guessed by reacting to any bot message. The bot answers with reactions on that message — 👀 right food subgroup, ❌ when 19 slots are used with no winner, 😻 found. Use `on_raw_reaction_add`, not `on_reaction_add`. There is no private confirmation available: a reaction carries no interaction token and ephemeral replies need one. Every player who reacts with the correct emoji scores that day, first or not, once each — the tally counts taking part, not winning a race.
 - Per-player state that gates visibility: expired cat food is inside the roll-top desk's jammed drawer and invisible until that player has run `/use graphite` in the Upstairs Hallway. Same shape as the Secret Library, and the rule that sets the flag lives in the Functional Spec, not in a content column.
 - Per-player take limits: gourmet wet cat food (one per player ever, with the "There's only one" message), L's letter (one per player) and carving tools (one set per player, which can't be dropped, taken or sent to Dimension B). Dropped rare cans are ordinary things anyone can pick up.
-- A **source** kind of thing: never carried, never depleted, hands over an object. Nine of them in Release 1 — six cat food stashes, the copper wire coil, the carving tool bundle and the costume pile — plus the herb garden, the candy bowl and the graphite tin, which are fixtures that hand something over the same way.
+- A **source** kind of thing: never carried, never depleted, hands over an object. Twelve of them in Release 1: six cat food stashes, the copper wire coil, the carving tool bundle, the costume pile, the graphite tin, the herb garden and the candy bowl. Between them they hand out ten different objects.
 - Per-server config (`server_config`) and `/admin_config`, starting with `planks_required`.
 - Date-based achievements (Pacific time).
 - Timed events: the doorbell and its three-minute window.
 - The ghost of the day: fully random daily pick per server (repeats allowed); the bedsheet moving between inventories at changeover and blocked from `/drop`, taking and cat transport; `/use bedsheet` with a room picker and message pop-up, posting anonymously to that room's thread in the fixed frame, with no limit on hauntings; `/use spirit board` with a player picker, limited to one accusation per player per day.
 - Follow-up prompts on `/use` (private player picker, room picker, pop-up text box), so special things don't need their own commands.
 - Per-player daily random state: the cat's food preference.
-- Release announcements posted publicly in every room thread.
+- Drop announcements posted publicly in every room thread.
 - The letter: one per player from the Entryway; `/use letter` with a private address picker; correct address earns *Forwarding Address* (number of attempts TBD).
 - Admin commands from the achievements doc: `/admin_msg`, `/admin_take`, `/admin_place` (these replace `/add-thing`).
-- The content file, which now also carries releases, achievements and description versions.
+- The content file, which now also carries drops, achievements and description versions.
 
 ---
 
@@ -817,7 +843,7 @@ What this version implies for the bot, compared with the Code Audit:
 
 This revision was written against the Release 1 content as built: `rooms.tsv`, `room_text.tsv`, `things.tsv`, `thing_text.tsv` and `defaults.tsv`, plus the **Content Schema** and **Functional Spec** in the project doc.
 
-The division of labour between those documents, so nobody has to guess which is authoritative:
+The division of labor between those documents, so nobody has to guess which is authoritative:
 
 | Document | Answers |
 | --- | --- |
