@@ -27,6 +27,7 @@ from datetime import date
 
 from sqlalchemy import select
 
+import content
 import database
 import resolve
 import states
@@ -161,7 +162,14 @@ async def _gather(
                     database.ThingType.contained_in,
                     database.ThingType.present_when,
                     database.ThingType.quantity,
-                ).where(database.ThingType.room_id == room_id)
+                ).where(
+                    # `ALL` is a room nobody stands in: it marks a thing that
+                    # is present everywhere. Alexa is the only one, and until
+                    # this clause existed no query ever matched her, so the
+                    # smart speaker declared to be in every room was reachable
+                    # in none of them.
+                    database.ThingType.room_id.in_([room_id, content.EVERYWHERE])
+                )
             )
         ).all()
 
