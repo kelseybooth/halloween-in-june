@@ -126,14 +126,32 @@ async def test_an_unreadable_stored_value_falls_back_to_the_default(server):
 # --------------------------------------------------------------------------
 
 
-async def test_lowering_the_plank_target_below_what_is_placed_says_so(server):
-    """The staircase opens in 2c.5. An admin lowering the number and seeing
-    nothing happen would file that as a bug, so the reply says it first."""
+async def test_lowering_the_plank_target_finishes_a_stalled_staircase(server):
+    """A server that set ten planks and then drew four players needs the number
+    lowered, not the release abandoned - and lowering it has to finish the job
+    rather than leave it stuck one short of a number nobody can reach."""
+    import states
+    import world
+
     await database.record_use(ALICE, GUILD_A, "lumber")
+    assert not await states.has(GUILD_A, ALICE, world.STAIRS_REPAIRED)
+
     interaction = await configure("planks_required", 1)
 
-    assert "already placed a plank" in interaction.reply
-    assert "does not open yet" in interaction.reply
+    assert "the staircase is finished" in interaction.reply.lower()
+    assert await states.has(GUILD_A, ALICE, world.STAIRS_REPAIRED)
+
+
+async def test_raising_the_target_does_not_unrepair_it(server):
+    """A state is permanent. The staircase does not come apart."""
+    import states
+    import world
+
+    await database.record_use(ALICE, GUILD_A, "lumber")
+    await configure("planks_required", 1)
+    await configure("planks_required", 50)
+
+    assert await states.has(GUILD_A, ALICE, world.STAIRS_REPAIRED)
 
 
 async def test_no_such_note_when_the_target_is_not_met(server):

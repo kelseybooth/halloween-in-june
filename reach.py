@@ -29,6 +29,7 @@ from sqlalchemy import select
 
 import database
 import resolve
+import states
 
 
 class Scope(enum.Enum):
@@ -136,6 +137,9 @@ async def _gather(
     what stops the "chicken or chicken?" prompt.
     """
     visible = await resolve.visible_thing_ids(guild_id, today=today)
+    # Gates are per player, so two people standing in the same room can be
+    # looking at different things - one has unjammed the drawer and one has not.
+    held = await states.in_force(guild_id, user_id)
     session_factory = database._require_session()
 
     async with session_factory() as session:
@@ -148,6 +152,8 @@ async def _gather(
                     database.ThingType.type,
                     database.ThingType.yields,
                     database.ThingType.contained_in,
+                    database.ThingType.present_when,
+                    database.ThingType.quantity,
                 ).where(database.ThingType.room_id == room_id)
             )
         ).all()
@@ -190,18 +196,20 @@ async def _gather(
             | {row[0] for row in in_room}
             | {row[4] for row in in_room if row[3] == "source" and row[4]}
         )
-        details = {
-            row[0]: row
-            for row in await session.execute(
+        rows = (
+            await session.execute(
                 select(
                     database.ThingType.thing_id,
                     database.ThingType.name,
                     database.ThingType.aliases,
                     database.ThingType.type,
                     database.ThingType.yields,
+                    database.ThingType.present_when,
                 ).where(database.ThingType.thing_id.in_(wanted or {""}))
             )
-        }
+        ).all()
+        details = {row[0]: row[:5] for row in rows}
+        gates = {row[0]: row[5] for row in rows}
 
     candidates: dict[str, _Candidate] = {}
 
@@ -232,14 +240,16 @@ async def _gather(
         for thing_id, (count, container) in stock.items():
             if thing_id not in visible or thing_id not in details:
                 continue
+            if not states.passes(gates.get(thing_id), held):
+                continue
             _, name, aliases, _kind, _y = details[thing_id]
             entry(thing_id, name, _names_of(name, aliases)).copies[Where.ROOM] = (
                 count,
                 container or None,
             )
 
-        for thing_id, name, aliases, kind, yields, contained_in in in_room:
-            if thing_id not in visible:
+        for thing_id, name, aliases, kind, yields, contained_in, gate, quantity in in_room:
+            if thing_id not in visible or not states.passes(gate, held):
                 continue
             if kind == "source" and yields:
                 # Filed under what it hands over, so the stash and its cans are
@@ -252,6 +262,14 @@ async def _gather(
                 candidate = entry(yields, display, names, yields=yields)
                 candidate.copies.setdefault(Where.SOURCE, (1, contained_in or None))
             elif kind in ("fixture", "exit"):
+                entry(thing_id, name, _names_of(name, aliases)).copies.setdefault(
+                    Where.ROOM, (1, contained_in or None)
+                )
+            elif kind == "object" and quantity is None:
+                # `quantity = many` is a shared pool rather than stock - lumber
+                # is the only one. It is never placed in room_contents, so
+                # without this it would be unreachable and /use lumber could
+                # never fire at all.
                 entry(thing_id, name, _names_of(name, aliases)).copies.setdefault(
                     Where.ROOM, (1, contained_in or None)
                 )

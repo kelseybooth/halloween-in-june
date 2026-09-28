@@ -631,9 +631,8 @@ async def test_the_cooldown_is_per_player(house):
     assert (await use(BOB, thing="lumber")).reply == "You hammer a plank into place."
 
 
-async def test_placing_a_plank_does_nothing_to_the_world_yet(house):
-    """2c counts the use; the staircase opening is 2c.5. A tester who reaches
-    the target and sees nothing happen is seeing the split, not a bug."""
+async def test_planks_below_the_target_leave_the_staircase_alone(house):
+    """Two planks against a default target of ten is progress, not completion."""
     from sqlalchemy import select
 
     await content_loader.load_content(lumber())
@@ -642,5 +641,5 @@ async def test_placing_a_plank_does_nothing_to_the_world_yet(house):
 
     assert await database.distinct_users_of(GUILD_A, "lumber") == 2
     async with database._require_session()() as session:
-        states = (await session.execute(select(database.ServerState))).all()
-    assert states == []
+        rows = (await session.execute(select(database.ServerState))).all()
+    assert rows == []
