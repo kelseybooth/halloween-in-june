@@ -881,7 +881,7 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
             return
 
         if isinstance(found, reach.NotFound):
-            key = "use_fail.absent" if found.exists_elsewhere else "unknown.noun"
+            key = "use_fail.absent" if found.exists_elsewhere else "use_fail.unknown"
             await interaction.followup.send(
                 await phrasing.default_say(key, name=thing.strip()), ephemeral=True
             )
@@ -1300,10 +1300,10 @@ async def look(interaction: discord.Interaction, thing: str | None = None) -> No
             return
 
         if isinstance(found, reach.NotFound):
-            # `look_fail.unknown` rather than the `unknown.noun` that /take and
-            # /use share: looking at a word the house does not know earns a
-            # shrug, where trying to take it should still say the house has no
-            # such thing.
+            # One refusal per verb for a word the house does not know:
+            # `look_fail.unknown` here, `take_fail.unknown` in /take,
+            # `use_fail.unknown` in /use. They used to share one line, which
+            # meant any rewrite of it had to read sensibly after all three.
             key = "take_fail.absent" if found.exists_elsewhere else "look_fail.unknown"
             await interaction.followup.send(
                 await phrasing.default_say(key, name=thing.strip()), ephemeral=True
@@ -1521,7 +1521,7 @@ async def _take_refusal(guild_id: int, found: reach.NotFound, typed: str) -> str
         return await phrasing.default_say("take_fail.already_carried", name=typed.strip())
     if found.exists_elsewhere:
         return await phrasing.default_say("take_fail.absent", name=typed.strip())
-    return await phrasing.default_say("unknown.noun", name=typed.strip())
+    return await phrasing.default_say("take_fail.unknown", name=typed.strip())
 
 
 async def _cannot_take(

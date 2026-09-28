@@ -192,15 +192,14 @@ async def test_looking_at_something_absent(house):
 
 
 async def test_looking_at_a_word_the_game_does_not_know(house):
-    """`/look` has its own line for this, and does not share `unknown.noun`
-    with `/take` and `/use`: looking at nonsense earns a shrug, where trying
-    to take it should still say the house has no such thing."""
+    """One refusal per verb. They shared a single line until 28 September,
+    which meant any rewrite of it had to read sensibly after all three."""
     await content_loader.load_content(a_house(a_thing("spoon")))
     defaults = content_module.load_files().defaults
 
     reply = (await look(thing="helicopter")).reply
     assert reply == defaults["look_fail.unknown"]
-    assert reply != defaults["unknown.noun"]
+    assert reply != defaults["take_fail.unknown"]
 
 
 async def test_an_ambiguous_look_asks(house):
