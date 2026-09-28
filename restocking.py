@@ -39,8 +39,10 @@ log = logging.getLogger(__name__)
 # A long outage should cost bounded work, not a month of placements at once.
 MAX_CATCHUP_DAYS = 14
 
-# Defaults for the config keys a restock row may point at.
-CONFIG_DEFAULTS = {"bottles_per_day": 8}
+# Defaults live in database.CONFIG_KEYS, which is also what /admin_config
+# validates against - one list, so a key cannot be settable but unread, or
+# read with a different default than the command reports.
+CONFIG_DEFAULTS = {key: default for key, (default, _) in database.CONFIG_KEYS.items()}
 
 
 @dataclass
@@ -184,27 +186,15 @@ async def _times_per_day(guild_id: int, restock) -> int:
     """
     if not restock.config_key:
         return restock.times_per_day
-
-    session_factory = database._require_session()
-    async with session_factory() as session:
-        value = await session.scalar(
-            select(database.ServerConfig.value).where(
-                database.ServerConfig.guild_id == guild_id,
-                database.ServerConfig.key == restock.config_key,
-            )
-        )
-    if value is None:
-        return CONFIG_DEFAULTS.get(restock.config_key, restock.times_per_day)
-    try:
-        return max(0, int(value))
-    except ValueError:
+    if restock.config_key not in database.CONFIG_KEYS:
         log.warning(
-            "server_config %s is %r, which is not a number; using %s",
+            "Restock %s points at unknown config key %r; using its own %s",
+            restock.restock_id,
             restock.config_key,
-            value,
             restock.times_per_day,
         )
         return restock.times_per_day
+    return max(0, await database.get_setting(guild_id, restock.config_key))
 
 
 async def initialized_on(guild_id: int) -> date | None:

@@ -29,6 +29,13 @@ Discord, no network. CI runs the same command on Python 3.13.
 | `test_drops.py` | Drop arrival — dated, event and manual — and the text each one resolves to |
 | `test_world.py` | The house from the content tables: rooms, exits, `/look`, `/inventory` |
 | `test_threads.py` | Thread build, rebuild, the keep-alive sweep and permission reporting, against `fake_discord.py` |
+| `test_reach.py` | Resolution: which thing a player meant, and which copy — scope per verb, sources and their yields |
+| `test_moving.py` | Taking, dropping, transforming and recording uses, including two players racing for the last copy |
+| `test_verbs.py` | `/take`, `/drop` and the four `/use` branches, driven through the handlers |
+| `test_look.py` | `/look` in three shapes, the `Also here:` listing rules, truncation, `/inventory` |
+| `test_restocking.py` | The restock scheduler: derived times, both placements, catch-up, admin overrides |
+| `test_craving.py` | Alexa's two replies, and the daily craving — drawing, judging, and the tally |
+| `test_admin_config.py` | `/admin_config`, and the shape of the ten-command list |
 
 ## Foreign keys
 

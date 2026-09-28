@@ -393,6 +393,13 @@ async def test_an_unset_config_key_uses_its_default(server):
 
 
 async def test_a_nonsense_config_value_falls_back_rather_than_crashing(server):
+    """Falls back to the registry default, not the row's own number.
+
+    Once a row names a config_key, that setting governs and the registry is
+    the one place its default lives - so /admin_config cannot report one
+    default while the scheduler quietly uses another. In the shipped content
+    the two agree anyway.
+    """
     await content_loader.load_content(
         a_world(a_restock(times_per_day=3, config_key="bottles_per_day"))
     )
@@ -403,7 +410,8 @@ async def test_a_nonsense_config_value_falls_back_rather_than_crashing(server):
         )
         await session.commit()
 
-    assert len((await restocking.run_for_guild(GUILD_A, now=end_of_day())).placed) == 3
+    placed = (await restocking.run_for_guild(GUILD_A, now=end_of_day())).placed
+    assert len(placed) == database.CONFIG_KEYS["bottles_per_day"][0]
 
 
 async def test_setting_it_to_zero_stops_them(server):

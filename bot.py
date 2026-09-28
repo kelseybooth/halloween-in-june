@@ -1340,42 +1340,78 @@ async def drop(interaction: discord.Interaction, thing: str) -> None:
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
 
 
-RETIRED_TOOL_MESSAGE = (
-    "That tool is retired. Rooms and things come from the content files in "
-    "`creative content/` now, not from the database, so this would have written "
-    "somewhere nothing reads.\n\n"
-    "Edit the TSV, check it with `python load_content.py --check`, and the bot "
-    "picks it up on its next restart."
-)
-
-
 @bot.tree.command(
-    name="add-thing",
-    description="(Retired) Things come from the content files now.",
+    name="admin_config",
+    description="(Admin) Change a per-server setting.",
 )
 @app_commands.guild_only()
 @app_commands.default_permissions(administrator=True)
 @app_commands.checks.has_permissions(administrator=True)
-async def add_thing(interaction: discord.Interaction) -> None:
-    """Kept registered, and honest about doing nothing.
+@app_commands.describe(
+    key="Which setting to change.",
+    value="Its new value. Whole numbers only.",
+)
+async def admin_config(interaction: discord.Interaction, key: str, value: int) -> None:
+    """Retune a server's numbers without a deploy.
 
-    Removing it is a command-list change, and those are batched into 2c to pay
-    the hour of propagation once. Until then it has to say so rather than
-    silently write a row that /look will never read - a testing tool that
-    reports success and changes nothing is worse than one that is gone.
+    Usable mid-game by design: a server that set the staircase at ten planks
+    and then drew four players needs the number lowered, not the release
+    abandoned.
+
+    The key is free text validated against a registry rather than a dropdown.
+    A Literal would give a nicer picker, but changing a slash command's
+    signature costs an hour of propagation, and adding the next setting should
+    not cost that.
     """
-    await interaction.response.send_message(RETIRED_TOOL_MESSAGE, ephemeral=True)
+    await interaction.response.defer(ephemeral=True, thinking=True)
 
+    name = key.strip().lower()
+    if name not in database.CONFIG_KEYS:
+        known = "\n".join(
+            f"- `{k}` — {description} (default {default})"
+            for k, (default, description) in sorted(database.CONFIG_KEYS.items())
+        )
+        await interaction.followup.send(
+            f"There's no setting called `{key.strip()}`. The ones there are:\n{known}",
+            ephemeral=True,
+        )
+        return
 
-@bot.tree.command(
-    name="add-room-desc",
-    description="(Retired) Room descriptions come from the content files now.",
-)
-@app_commands.guild_only()
-@app_commands.default_permissions(administrator=True)
-@app_commands.checks.has_permissions(administrator=True)
-async def add_room_desc(interaction: discord.Interaction) -> None:
-    await interaction.response.send_message(RETIRED_TOOL_MESSAGE, ephemeral=True)
+    if value < 1:
+        await interaction.followup.send(
+            f"`{name}` has to be at least 1. Setting it to {value} would stop "
+            "the thing it controls from ever happening, which is probably not "
+            "what you meant.",
+            ephemeral=True,
+        )
+        return
+
+    try:
+        previous = await database.get_setting(interaction.guild_id, name)
+        await database.set_setting(interaction.guild_id, name, value)
+    except SQLAlchemyError:
+        log.exception("Could not set %s in guild %s", name, interaction.guild_id)
+        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    note = ""
+    if name == "planks_required":
+        try:
+            placed = await database.distinct_users_of(interaction.guild_id, "lumber")
+        except SQLAlchemyError:
+            placed = None
+        if placed is not None and placed >= value:
+            # The staircase itself opens in phase 2c.5. Saying so is better than
+            # an admin lowering the number, seeing nothing happen, and filing it.
+            note = (
+                f"\n\n{placed} player(s) have already placed a plank, which meets "
+                "the new target. The staircase does not open yet — that lands with "
+                "the rest of the world-changing uses."
+            )
+
+    await interaction.followup.send(
+        f"`{name}` is now **{value}** (was {previous}).{note}", ephemeral=True
+    )
 
 
 @bot.tree.command(name="stats", description="See how many times you've petted the cat.")
