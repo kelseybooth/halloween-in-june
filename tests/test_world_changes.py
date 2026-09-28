@@ -295,12 +295,15 @@ async def test_each_capped_thing_has_its_own_refusal_written(house):
 
 
 # --------------------------------------------------------------------------
-# `requires`: a reply that depends on what you are holding
+# `requires`: a gate on `/use`, not a state
 #
-# The fifth kind of state, and the only computed one. The four above are things
-# that have happened and cannot un-happen; this one is true for exactly as long
-# as the player holds everything the thing names, and stops the moment they put
-# one down.
+# It is checked after resolution and before any branch, because it answers
+# whether this player can do the thing at all rather than what the thing does.
+# An unmet requirement refuses the whole use and replies with `use_fail`, and
+# a refused use is not a use - the same rule the cooldown already follows.
+#
+# Nothing here is stored. Put an ingredient down and the gate closes again,
+# which is what makes it different from the four states above.
 # --------------------------------------------------------------------------
 
 
@@ -317,32 +320,73 @@ async def test_the_stove_requires_all_three(house):
     assert set(states.required_things(stove.requires)) == set(INGREDIENTS)
 
 
-async def test_without_the_ingredients_it_says_so(house):
+async def carry_the_ingredients(user_id=ALICE, how_many=3):
+    for thing in INGREDIENTS[:how_many]:
+        await database.take_from_source(user_id, GUILD_A, thing)
+
+
+async def test_without_the_ingredients_it_refuses(house):
     assert "don't have all of it yet" in await use_stove()
 
 
 @pytest.mark.parametrize("held", [1, 2])
 async def test_some_of_the_ingredients_is_not_enough(house, held):
-    for thing in INGREDIENTS[:held]:
-        await database.take_from_source(ALICE, GUILD_A, thing)
+    await carry_the_ingredients(how_many=held)
 
     assert "don't have all of it yet" in await use_stove()
 
 
-async def test_all_three_changes_the_reply(house):
-    for thing in INGREDIENTS:
-        await database.take_from_source(ALICE, GUILD_A, thing)
+async def test_all_three_opens_the_gate(house):
+    await carry_the_ingredients()
 
     reply = await use_stove()
     assert "far more delicious" in reply
     assert "don't have all of it yet" not in reply
 
 
-async def test_putting_one_down_takes_it_away_again(house):
-    """Computed, not recorded - which is what makes it different from every
-    other state in the game."""
-    for thing in INGREDIENTS:
-        await database.take_from_source(ALICE, GUILD_A, thing)
+async def test_a_refused_use_is_not_a_use(house):
+    """The rule the cooldown already follows, and the reason `Something's
+    Cooking` can be `a successful on_use of the stove` and nothing more: if a
+    refusal recorded a use, the achievement would fire for empty hands."""
+    await use_stove()
+    assert await database.last_used(ALICE, GUILD_A, "stove") is None
+
+    await carry_the_ingredients()
+    await use_stove()
+    assert await database.last_used(ALICE, GUILD_A, "stove") is not None
+
+
+async def test_the_refusal_consumes_nothing(house):
+    """Not a transform and not a cost - the player still holds what they had
+    and can try again once they have the rest."""
+    await carry_the_ingredients(how_many=2)
+    await use_stove()
+
+    for thing in INGREDIENTS[:2]:
+        assert await database.carried_of(ALICE, GUILD_A, thing) == 1
+
+
+async def test_a_thing_with_no_use_fail_falls_back_to_the_default(house):
+    """`use_fail.default` catches it, so a writer who adds a `requires` and
+    forgets the refusal line gets a dull message rather than an empty one."""
+    from dataclasses import replace
+
+    parsed = content_module.load_files()
+    parsed.thing_text = [
+        replace(row, text={k: v for k, v in row.text.items() if k != "use_fail"})
+        if row.entity_id == "stove"
+        else row
+        for row in parsed.thing_text
+    ]
+    await content_loader.load_content(parsed)
+
+    assert "Nothing happens" in await use_stove()
+
+
+async def test_putting_one_down_closes_it_again(house):
+    """Checked at the moment of use, never recorded - which is what makes it
+    different from every other gate in this file."""
+    await carry_the_ingredients()
     assert "far more delicious" in await use_stove()
 
     await database.drop_into_room(ALICE, GUILD_A, "KI", "herbs")
@@ -350,8 +394,7 @@ async def test_putting_one_down_takes_it_away_again(house):
 
 
 async def test_it_is_per_player(house):
-    for thing in INGREDIENTS:
-        await database.take_from_source(ALICE, GUILD_A, thing)
+    await carry_the_ingredients()
 
     assert "far more delicious" in await use_stove(ALICE)
     assert "don't have all of it yet" in await use_stove(BOB)
@@ -368,8 +411,8 @@ async def test_carries_all_needs_every_one(house):
 
 
 async def test_nothing_required_is_never_satisfied(house):
-    """An empty requirement must not read as met, or every thing without one
-    would resolve to a requirements_met row it does not have."""
+    """An empty requirement must not read as met, or the gate would close on
+    the hundred-odd things that carry no `requires` at all."""
     assert await database.carries_all(ALICE, GUILD_A, []) is False
 
 
