@@ -469,19 +469,25 @@ async def test_the_shipped_content_loads(two_servers):
     report = await content_loader.load_content(parsed)
 
     assert report.content_rows["room_types"] == 9
-    assert report.content_rows["thing_types"] == 140
+    assert report.content_rows["thing_types"] == 142
     assert report.content_rows["drops"] == 1
     assert report.content_rows["restocks"] == 3
 
 
-async def test_the_shipped_content_places_six_things_per_server(two_servers):
-    """The work order's count: six physical copies across six things."""
+async def test_the_shipped_content_places_five_things_per_server(two_servers):
+    """Five physical copies across five things.
+
+    The work order said six. The gourmet can became a source on 27 September so
+    that every player could earn the five-flavour achievement rather than only
+    whoever reached the Kitchen first, which took it out of the placed set - a
+    source is never stock.
+    """
     parsed = content_module.load_files()
     await content_loader.load_content(parsed)
 
     placed = await contents(two_servers, GUILD_A)
-    assert len(placed) == 6
-    assert sum(row[3] for row in placed) == 6
+    assert len(placed) == 5
+    assert sum(row[3] for row in placed) == 5
 
 
 async def test_the_shipped_content_respects_containment(two_servers):
@@ -489,8 +495,10 @@ async def test_the_shipped_content_respects_containment(two_servers):
     await content_loader.load_content(parsed)
 
     by_thing = {row[2]: row for row in await contents(two_servers, GUILD_A)}
-    assert by_thing["cat_food_gourmet"][1] == "bed"
     assert by_thing["reading_glasses"][1] == "rolltop_desk"
+    # The gourmet can is drawn from a source in the cake box rather than placed,
+    # so it is deliberately absent from room_contents at load.
+    assert "cat_food_gourmet" not in by_thing
 
 
 # --------------------------------------------------------------------------

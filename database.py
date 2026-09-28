@@ -1796,3 +1796,78 @@ async def states_of(guild_id: int, user_id: int) -> set[str]:
             select(ServerState.state).where(ServerState.guild_id == guild_id)
         )
         return {row[0] for row in mine} | {row[0] for row in shared}
+
+
+# --------------------------------------------------------------------------
+# Per-server settings an admin can retune
+#
+# A registry rather than a Literal on the command, deliberately. Slash command
+# signatures cost an hour of propagation to change, so a new key should be a
+# code change and not a re-registration. The trade is that a typo comes back as
+# a refusal listing the real keys rather than as a dropdown that never offered
+# the wrong one.
+# --------------------------------------------------------------------------
+
+CONFIG_KEYS: dict[str, tuple[int, str]] = {
+    "planks_required": (
+        10,
+        "How many different players must place a plank before the staircase is "
+        "repaired.",
+    ),
+    "bottles_per_day": (
+        8,
+        "How many used baby bottles are scattered through the house each day.",
+    ),
+}
+
+
+async def get_setting(guild_id: int, key: str) -> int:
+    """A server's value for a numeric setting, or its default.
+
+    A value that will not parse falls back to the default and says so, rather
+    than taking a command down over a row somebody hand-edited.
+    """
+    default, _ = CONFIG_KEYS.get(key, (0, ""))
+    session_factory = _require_session()
+    async with session_factory() as session:
+        raw = await session.scalar(
+            select(ServerConfig.value).where(
+                ServerConfig.guild_id == guild_id, ServerConfig.key == key
+            )
+        )
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        log.warning(
+            "server_config %s is %r in guild %s, which is not a number; using %s",
+            key,
+            raw,
+            guild_id,
+            default,
+        )
+        return default
+
+
+async def set_setting(guild_id: int, key: str, value: int) -> int:
+    """Store a setting and return it. Takes effect from the next read."""
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    async with session_factory() as session:
+        await session.execute(
+            insert(ServerConfig)
+            .values(guild_id=guild_id, key=key, value=str(value))
+            .on_conflict_do_update(
+                index_elements=[ServerConfig.guild_id, ServerConfig.key],
+                set_={"value": str(value)},
+            )
+        )
+        await session.commit()
+    log.info("Guild %s set %s to %s", guild_id, key, value)
+    return value
+
+
+async def all_settings(guild_id: int) -> dict[str, int]:
+    """Every known setting for a server, defaults filled in."""
+    return {key: await get_setting(guild_id, key) for key in CONFIG_KEYS}

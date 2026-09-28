@@ -387,7 +387,7 @@ async def test_taking_the_nachos_from_the_kitchen(house):
 
 async def test_the_gourmet_tin_is_capped_at_one(house):
     await content_loader.load_content(content_module.load_files())
-    await database.update_current_room(ALICE, GUILD_A, "BE")
+    await database.update_current_room(ALICE, GUILD_A, "KI")
 
     await take(thing="gourmet")
     await take(thing="gourmet")
