@@ -643,3 +643,122 @@ async def test_planks_below_the_target_leave_the_staircase_alone(house):
     async with database._require_session()() as session:
         rows = (await session.execute(select(database.ServerState))).all()
     assert rows == []
+
+
+# --------------------------------------------------------------------------
+# The exit branch, through the real house
+#
+# The fourth `/use` branch, and the one nothing here used to drive: every
+# other test in this file stops before a player actually moves. The bug that
+# gap hid was reported as "the wide doorway out of the Living Room does
+# nothing" and was really "no exit works for anyone who entered before 2b".
+# --------------------------------------------------------------------------
+
+
+from fake_discord import FakeChannel, FakeGuild, FakeMember  # noqa: E402
+
+
+@pytest.fixture
+async def real_house(db):
+    """The shipped nine rooms, with a thread for each."""
+    await content_loader.load_content(content_module.load_files())
+    channel = FakeChannel(name="halloween")
+    channel.add_active(*[name for _, name in await resolve.all_rooms()])
+    return db, FakeGuild(GUILD_A, channels=[channel], members=[FakeMember(ALICE)])
+
+
+async def enter_properly(db, room="EN"):
+    """Entering the way `/enter-entryway` does, with ids in both columns."""
+    await db.ensure_user_exists(ALICE, GUILD_A)
+    await db.start_game(ALICE, GUILD_A, room, await resolve.rooms_open_at_launch())
+
+
+async def where_is_alice(db):
+    return (await db.get_game_state(ALICE, GUILD_A)).current_room
+
+
+async def test_the_wide_doorway_leads_out_of_the_living_room(real_house):
+    """The reported bug, as a player hit it."""
+    db, guild = real_house
+    await enter_properly(db, room="LI")
+
+    reply = (await use(thing="wide doorway", guild=guild)).reply
+
+    assert await where_is_alice(db) == "EN"
+    assert "You head to" in reply
+
+
+async def test_the_wide_doorway_leads_back_in_again(real_house):
+    """Two exits share the name, one in each room. Resolution is scoped to
+    the room the player is standing in, so each takes them the other way."""
+    db, guild = real_house
+    await enter_properly(db, room="EN")
+
+    await use(thing="wide doorway", guild=guild)
+    assert await where_is_alice(db) == "LI"
+
+    await use(thing="wide doorway", guild=guild)
+    assert await where_is_alice(db) == "EN"
+
+
+@pytest.mark.parametrize("typed", ["wide doorway", "doorway", "entryway", "hall"])
+async def test_every_alias_of_the_doorway_works(real_house, typed):
+    db, guild = real_house
+    await enter_properly(db, room="LI")
+
+    await use(thing=typed, guild=guild)
+
+    assert await where_is_alice(db) == "EN"
+
+
+async def test_a_pre_2b_player_can_still_use_the_doorway(real_house):
+    """The actual cause. Their `rooms_unlocked` held room *names*, `/use`
+    compared it against a room *id*, and every exit refused with the house's
+    generic use_fail - while `/look` at the same exit worked, because looking
+    does not consult the list."""
+    db, guild = real_house
+    await db.ensure_user_exists(ALICE, GUILD_A)
+    rooms = await resolve.all_rooms()
+    await db.start_game(ALICE, GUILD_A, "Living Room", [name for _, name in rooms])
+    await db.migrate_room_names_to_ids()
+
+    await use(thing="wide doorway", guild=guild)
+
+    assert await where_is_alice(db) == "EN"
+
+
+async def test_a_pre_2b_player_is_not_let_into_the_secret_library(real_house):
+    """Their old list named every room. The Secret Library is shut until 2e,
+    and the repair must not be the thing that opens it."""
+    db, guild = real_house
+    await db.ensure_user_exists(ALICE, GUILD_A)
+    rooms = await resolve.all_rooms()
+    await db.start_game(ALICE, GUILD_A, "Living Room", [name for _, name in rooms])
+    await db.migrate_room_names_to_ids()
+
+    await use(thing="curiosity cabinet", guild=guild)
+
+    assert await where_is_alice(db) == "LI"
+
+
+async def test_a_locked_room_refuses_rather_than_moving_anybody(real_house):
+    """The same check, doing its real job. The tree into the Secret Library
+    is the only one in Release 1."""
+    db, guild = real_house
+    await enter_properly(db, room="CO")
+
+    reply = (await use(thing="tree", guild=guild)).reply
+
+    assert await where_is_alice(db) == "CO"
+    assert "You head to" not in reply
+
+
+async def test_moving_posts_a_departure_and_an_arrival(real_house):
+    db, guild = real_house
+    await enter_properly(db, room="LI")
+    threads = {t.name: t for t in guild.text_channels[0].threads}
+
+    await use(thing="wide doorway", guild=guild)
+
+    assert any("exits via" in (line or "") for line in threads["Living Room"].posted)
+    assert threads["Entryway"].posted

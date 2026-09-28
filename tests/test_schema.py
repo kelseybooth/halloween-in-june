@@ -271,3 +271,114 @@ async def test_running_the_migration_twice_is_a_no_op(db):
 async def test_the_guard_against_pre_multi_server_databases_still_stands(db):
     """2a's refusal to guess is not weakened by any of this."""
     assert issubclass(db.SchemaOutdatedError, db.StartupError)
+
+
+# --------------------------------------------------------------------------
+# Pre-2b rooms: both places a room name hides
+#
+# Before 2b a player's position and their unlocked-room list were both room
+# *names*. Everything joins on ids now. The position was translated from the
+# start; the list was not, and that gap is what broke `/use` on every exit for
+# anyone who had entered the house before 2b.
+# --------------------------------------------------------------------------
+
+
+import content as content_module  # noqa: E402
+import content_loader  # noqa: E402
+
+
+@pytest.fixture
+async def house(db):
+    await content_loader.load_content(content_module.load_files())
+    return db
+
+
+async def an_old_player(db, user_id=ALICE, guild_id=GUILD_A, room="Living Room"):
+    """A row exactly as the pre-2b code wrote it: names in both columns."""
+    await db.ensure_user_exists(user_id, guild_id)
+    rooms = await __import__("resolve").all_rooms()
+    await db.start_game(user_id, guild_id, room, [name for _, name in rooms])
+
+
+async def test_a_pre_2b_position_is_translated(house):
+    await an_old_player(house)
+
+    await house.migrate_room_names_to_ids()
+
+    assert (await house.get_game_state(ALICE, GUILD_A)).current_room == "LI"
+
+
+async def test_a_pre_2b_unlocked_list_is_repaired(house):
+    """The half that used to be missed. `/use` on an exit compares
+    `destination_room_id` - an id - against this list, so a list of names
+    matched nothing and every exit refused."""
+    await an_old_player(house)
+
+    await house.migrate_room_names_to_ids()
+
+    unlocked = (await house.get_game_state(ALICE, GUILD_A)).rooms_unlocked
+    assert "EN" in unlocked
+    assert "Entryway" not in unlocked
+
+
+async def test_the_repair_does_not_hand_out_the_secret_library(house):
+    """A verbatim translation would. Nothing has ever unlocked a room after
+    entry, so there is no progress in the list to preserve - and the Secret
+    Library is deliberately shut until 2e."""
+    await an_old_player(house)
+
+    await house.migrate_room_names_to_ids()
+
+    assert "SE" not in (await house.get_game_state(ALICE, GUILD_A)).rooms_unlocked
+
+
+async def test_a_current_row_is_left_alone(house):
+    """Matched on names throughout, so a row already holding ids is untouched
+    - which is what makes this safe to run on every boot."""
+    await house.ensure_user_exists(BOB, GUILD_A)
+    await house.start_game(BOB, GUILD_A, "KI", ["KI", "CO"])
+
+    result = await house.migrate_room_names_to_ids()
+
+    state = await house.get_game_state(BOB, GUILD_A)
+    assert (state.current_room, state.rooms_unlocked) == ("KI", ["KI", "CO"])
+    assert result == (0, 0)
+
+
+async def test_the_repair_reports_what_it_touched(house):
+    await an_old_player(house)
+
+    assert await house.migrate_room_names_to_ids() == (1, 1)
+
+
+async def test_running_the_repair_twice_changes_nothing(house):
+    """Startup runs it every boot."""
+    await an_old_player(house)
+    await house.migrate_room_names_to_ids()
+    after_once = (await house.get_game_state(ALICE, GUILD_A)).rooms_unlocked
+
+    assert await house.migrate_room_names_to_ids() == (0, 0)
+    assert (await house.get_game_state(ALICE, GUILD_A)).rooms_unlocked == after_once
+
+
+async def test_it_repairs_every_player_not_just_the_first(house):
+    await an_old_player(house, ALICE, GUILD_A)
+    await an_old_player(house, BOB, GUILD_A, room="Kitchen")
+
+    assert await house.migrate_room_names_to_ids() == (2, 2)
+    for who in (ALICE, BOB):
+        assert "EN" in (await house.get_game_state(who, GUILD_A)).rooms_unlocked
+
+
+async def test_it_crosses_servers(house):
+    await an_old_player(house, ALICE, GUILD_A)
+    await an_old_player(house, ALICE, GUILD_B)
+
+    await house.migrate_room_names_to_ids()
+
+    assert "EN" in (await house.get_game_state(ALICE, GUILD_B)).rooms_unlocked
+
+
+async def test_it_does_nothing_before_content_is_loaded(db):
+    """It needs room_types to translate against, so it runs after the load."""
+    assert await db.migrate_room_names_to_ids() == (0, 0)

@@ -128,6 +128,25 @@ characters. All thirty-five rendered comes to about 2,600 — so a plain
 message would have broken at the end of October for exactly the players who
 played the most.
 
+## Rooms a player unlocked before phase 2b
+
+Two columns held room *names* before 2b: `current_room` and `rooms_unlocked`.
+Only the first was ever migrated. `/use` on an exit compares
+`destination_room_id` — an id — against the second, so for anyone who entered
+the house before 2b it matched nothing and **every exit refused** with the
+house's generic `use_fail`. `/look` at the same exit worked, because looking
+does not consult the list, which is what made it read as one broken doorway
+rather than a broken player.
+
+A stale list is reset to the rooms open at launch rather than translated entry
+by entry: nothing has ever unlocked a room after entry, so there is no
+progress to preserve, and a verbatim translation would hand those players the
+Secret Library.
+
+`test_schema.py` covers the repair; `test_verbs.py` drives a pre-2b player
+through the doorway that was reported broken, and checks the same player is
+still kept out of the Secret Library.
+
 ## Cohorts
 
 Gone as of phase 2a step 4. Two columns survive the removal —

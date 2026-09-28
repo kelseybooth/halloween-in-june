@@ -873,39 +873,93 @@ def _enforce_sqlite_foreign_keys(engine: AsyncEngine) -> None:
         cursor.close()
 
 
-async def migrate_room_names_to_ids() -> int:
-    """Translate current_room from a room name to a room id, once.
+class Migrated(NamedTuple):
+    """What the pre-2b repair had to touch."""
+
+    positions: int
+    unlocked_lists: int
+
+
+async def migrate_room_names_to_ids() -> Migrated:
+    """Translate pre-2b room names to room ids, once, in both places they hide.
 
     Before phase 2b a player's position was a name - "Entryway". The content
     files key on ids - "EN" - and everything now joins on those, so a row still
     holding a name matches no room and its owner is nowhere: no description, no
     exits, no thread.
 
-    Matched on the name, so it can only ever affect rows written by the old code;
-    a row already holding an id matches no room name and is left alone, which is
-    what makes this safe to run on every boot. Runs after content loads, since it
-    needs room_types to translate against.
+    **`rooms_unlocked` holds names too, and used to be missed.** `/use` on an
+    exit checks `destination_room_id` - an id - against that list, so for a
+    player who entered before 2b it never matched and *every* exit refused
+    with the house's generic `use_fail`. `/look` at the same exit worked,
+    because looking does not consult the list, which is what made it read as
+    one broken doorway rather than a broken player.
+
+    A stale list is reset to the rooms open at launch rather than translated
+    entry by entry. Nothing in the game has ever unlocked a room after entry,
+    so there is no progress in that list to preserve - and a verbatim
+    translation would hand those players the Secret Library, which is
+    deliberately shut until 2e.
+
+    Matched on names throughout, so it can only affect rows written by the old
+    code; a row already holding ids is left alone, which is what makes this
+    safe to run on every boot. Runs after content loads, since it needs
+    room_types to translate against.
     """
     session_factory = _require_session()
     async with session_factory() as session:
         rooms = (
-            await session.execute(select(RoomType.room_id, RoomType.name))
+            await session.execute(
+                select(RoomType.room_id, RoomType.name, RoomType.open_at_launch)
+            )
         ).all()
         if not rooms:
-            return 0
+            return Migrated(0, 0)
+
+        names = {name for _, name, _ in rooms}
+        at_launch = [room_id for room_id, _, open_at_launch in rooms if open_at_launch]
 
         moved = 0
-        for room_id, name in rooms:
+        for room_id, name, _ in rooms:
             result = await session.execute(
                 update(PlayerGameState)
                 .where(PlayerGameState.current_room == name)
                 .values(current_room=room_id)
             )
             moved += result.rowcount or 0
-        if moved:
+
+        stale = [
+            (guild_id, user_id)
+            for guild_id, user_id, unlocked in (
+                await session.execute(
+                    select(
+                        PlayerGameState.guild_id,
+                        PlayerGameState.user_id,
+                        PlayerGameState.rooms_unlocked,
+                    )
+                )
+            ).all()
+            if any(entry in names for entry in (unlocked or []))
+        ]
+        for guild_id, user_id in stale:
+            await session.execute(
+                update(PlayerGameState)
+                .where(
+                    PlayerGameState.guild_id == guild_id,
+                    PlayerGameState.user_id == user_id,
+                )
+                .values(rooms_unlocked=at_launch)
+            )
+
+        if moved or stale:
             await session.commit()
-            log.info("Migrated %d player position(s) from room names to room ids", moved)
-        return moved
+            log.info(
+                "Migrated %d player position(s) and repaired %d unlocked-room "
+                "list(s) from room names to room ids",
+                moved,
+                len(stale),
+            )
+        return Migrated(moved, len(stale))
 
 
 async def init_db() -> None:
