@@ -16,6 +16,7 @@ also_here.prefix	Also here:
 also_here.entry_multiple	{name} x{n}
 also_here.separator	, 
 also_here.truncated	…and {more} more. The room is getting crowded.
+look_fail.unknown	There's not much to look at.
 unknown.noun	Whatever that is, this house doesn't have one.
 contents.prefix	Here you find: 
 move.depart	{player} exits via the {name}.

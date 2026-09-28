@@ -192,8 +192,15 @@ async def test_looking_at_something_absent(house):
 
 
 async def test_looking_at_a_word_the_game_does_not_know(house):
+    """`/look` has its own line for this, and does not share `unknown.noun`
+    with `/take` and `/use`: looking at nonsense earns a shrug, where trying
+    to take it should still say the house has no such thing."""
     await content_loader.load_content(a_house(a_thing("spoon")))
-    assert "doesn" in (await look(thing="helicopter")).reply
+    defaults = content_module.load_files().defaults
+
+    reply = (await look(thing="helicopter")).reply
+    assert reply == defaults["look_fail.unknown"]
+    assert reply != defaults["unknown.noun"]
 
 
 async def test_an_ambiguous_look_asks(house):

@@ -1300,7 +1300,11 @@ async def look(interaction: discord.Interaction, thing: str | None = None) -> No
             return
 
         if isinstance(found, reach.NotFound):
-            key = "take_fail.absent" if found.exists_elsewhere else "unknown.noun"
+            # `look_fail.unknown` rather than the `unknown.noun` that /take and
+            # /use share: looking at a word the house does not know earns a
+            # shrug, where trying to take it should still say the house has no
+            # such thing.
+            key = "take_fail.absent" if found.exists_elsewhere else "look_fail.unknown"
             await interaction.followup.send(
                 await phrasing.default_say(key, name=thing.strip()), ephemeral=True
             )
