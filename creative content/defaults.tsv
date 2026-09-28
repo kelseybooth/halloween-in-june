@@ -6,17 +6,19 @@ take_fail.fixture	The {name} isn't yours to carry off.
 take_fail.absent	You don't see a {name} here.
 take_fail.already_carried	You're already carrying the {name}.
 take_fail.exit	You can't put a doorway in your bag.
+take_fail.unknown	That can't be taken.
 drop_fail.not_carried	You aren't carrying the {name}.
 drop_fail.undroppable	You go to put the {name} down, and find that you'd rather not.
 use_fail.default	Nothing happens. Maybe somewhere else in the house.
 use_fail.cooldown	You've done that recently. Try the {name} again in {time}.
 use_fail.absent	You don't see a {name} here.
+use_fail.unknown	That can't be used.
 ambiguous.match	Which one do you mean: {options}?
 also_here.prefix	Also here: 
 also_here.entry_multiple	{name} x{n}
 also_here.separator	, 
 also_here.truncated	…and {more} more. The room is getting crowded.
-unknown.noun	Whatever that is, this house doesn't have one.
+look_fail.unknown	There's not much to look at.
 contents.prefix	Here you find: 
 move.depart	{player} exits via the {name}.
 move.arrive	{player} arrives from the {room}.

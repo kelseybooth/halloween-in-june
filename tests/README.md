@@ -147,6 +147,21 @@ Secret Library.
 through the doorway that was reported broken, and checks the same player is
 still kept out of the Secret Library.
 
+## `ALL`, the room nobody stands in
+
+`content.EVERYWHERE` marks a thing present in every room. The validator had
+always exempted it from the "is this a real room?" check and nothing else
+implemented it, so Alexa — the one thing declared to be everywhere — was
+reachable nowhere: `/look alexa`, `/take alexa` and `/use alexa` all answered
+"You don't see a alexa here", and her description had never been read by
+anybody. She worked only as a message responder, because `on_message` reads
+her text directly instead of resolving her as a thing.
+
+`reach` admits `ALL` **as well as** the current room, never instead of it, so
+a thing with an ordinary `room_id` is still in one room — `test_reach.py`
+asserts that in both directions. She stays out of `Also here:` for free: the
+listing holds loose takeable objects, and she is neither.
+
 ## Cohorts
 
 Gone as of phase 2a step 4. Two columns survive the removal —

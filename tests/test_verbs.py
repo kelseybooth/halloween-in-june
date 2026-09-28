@@ -230,10 +230,15 @@ async def test_taking_something_absent_says_so(house):
 
 
 async def test_taking_a_word_the_game_does_not_know(house):
+    """Its own line. The three verbs used to share one, which meant any
+    rewrite had to read sensibly after all of "take", "use" and "look"."""
     await content_loader.load_content(a_house(a_thing("spoon")))
+    defaults = content_module.load_files().defaults
+
     interaction = await take(thing="helicopter")
 
-    assert "doesn't have one" in interaction.reply
+    assert interaction.reply == defaults["take_fail.unknown"]
+    assert interaction.reply != defaults["look_fail.unknown"]
 
 
 async def test_taking_what_you_already_carry_is_not_called_absent(house):
@@ -474,7 +479,12 @@ async def test_using_something_out_of_reach(house):
 
 async def test_using_a_word_the_game_does_not_know(house):
     await content_loader.load_content(a_house(a_thing("spoon")))
-    assert "doesn" in (await use(thing="helicopter")).reply
+    defaults = content_module.load_files().defaults
+
+    reply = (await use(thing="helicopter")).reply
+
+    assert reply == defaults["use_fail.unknown"]
+    assert reply != defaults["take_fail.unknown"]
 
 
 async def test_an_ambiguous_use_asks(house):

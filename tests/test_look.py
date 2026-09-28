@@ -192,8 +192,14 @@ async def test_looking_at_something_absent(house):
 
 
 async def test_looking_at_a_word_the_game_does_not_know(house):
+    """One refusal per verb. They shared a single line until 28 September,
+    which meant any rewrite of it had to read sensibly after all three."""
     await content_loader.load_content(a_house(a_thing("spoon")))
-    assert "doesn" in (await look(thing="helicopter")).reply
+    defaults = content_module.load_files().defaults
+
+    reply = (await look(thing="helicopter")).reply
+    assert reply == defaults["look_fail.unknown"]
+    assert reply != defaults["take_fail.unknown"]
 
 
 async def test_an_ambiguous_look_asks(house):
@@ -418,3 +424,30 @@ async def test_a_bag_reads_the_way_a_room_does(house):
 
     assert "herbs x10" in room
     assert "herbs x10" in (await inventory()).reply
+
+
+# --------------------------------------------------------------------------
+# The one thing that is everywhere
+# --------------------------------------------------------------------------
+
+
+async def test_looking_at_alexa_works_anywhere_in_the_house(house):
+    """`room_id = ALL`. Her description was unreachable until `reach` learned
+    the sentinel the content files had always used."""
+    await content_loader.load_content(content_module.load_files())
+
+    for room in ("EN", "KI", "BE", "NU"):
+        await database.update_current_room(ALICE, GUILD_A, room)
+        reply = (await look(thing="alexa")).reply
+        assert "smart speaker the size of a tuna can" in reply, room
+
+
+async def test_alexa_is_not_in_the_also_here_line(house):
+    """She is a fixture, and the listing holds loose takeable objects only -
+    so being everywhere does not put her name in nine rooms' prose."""
+    await content_loader.load_content(content_module.load_files())
+    await database.update_current_room(ALICE, GUILD_A, "KI")
+
+    reply = (await look()).reply
+
+    assert "Alexa" not in reply.split("Also here")[-1]

@@ -436,3 +436,79 @@ async def test_the_source_id_is_the_stash_not_the_can(house):
     result = await reach.find(GUILD_A, ALICE, "KI", "tuna", Scope.ROOM)
     assert result.yields == "cat_food_tuna"
     assert result.source_id == "cat_food_stash_pantry"
+
+
+# --------------------------------------------------------------------------
+# `ALL`: a room nobody stands in
+#
+# `content.EVERYWHERE` marks a thing present in every room. The validator has
+# always exempted it from the "is this a real room?" check, and nothing else
+# implemented it - so Alexa, the one thing declared to be everywhere, was
+# reachable nowhere. Her look text and her take_fail were both dead.
+# --------------------------------------------------------------------------
+
+
+ALEXA_ROOMS = ["EN", "DI", "KI", "CO", "LI", "SE", "UH", "BE", "NU"]
+
+
+@pytest.mark.parametrize("room", ALEXA_ROOMS)
+async def test_alexa_is_reachable_in_every_room(house, room):
+    await content_loader.load_content(content_module.load_files())
+
+    result = await reach.find(GUILD_A, ALICE, room, "alexa", Scope.ROOM)
+    assert isinstance(result, Found)
+    assert result.thing_id == "alexa"
+
+
+@pytest.mark.parametrize("typed", ["alexa", "speaker", "smart speaker", "echo"])
+async def test_every_name_for_her_resolves(house, typed):
+    await content_loader.load_content(content_module.load_files())
+
+    result = await reach.find(GUILD_A, ALICE, "KI", typed, Scope.ROOM)
+    assert getattr(result, "thing_id", None) == "alexa"
+
+
+async def test_she_is_reachable_by_a_verb_that_reaches_the_bag_too(house):
+    """REACH is /use's scope, and she has a use text."""
+    await content_loader.load_content(content_module.load_files())
+
+    result = await reach.find(GUILD_A, ALICE, "BE", "alexa", Scope.REACH)
+    assert getattr(result, "thing_id", None) == "alexa"
+
+
+async def test_she_is_not_in_the_bag(house):
+    """Everywhere in the house is not the same as carried - CARRIED scope is
+    the inventory, and a fixture never enters it."""
+    await content_loader.load_content(content_module.load_files())
+
+    result = await reach.find(GUILD_A, ALICE, "KI", "alexa", Scope.CARRIED)
+    assert isinstance(result, NotFound)
+
+
+async def test_an_ordinary_room_id_still_means_one_room(house):
+    """The clause admits `ALL` as well as the current room, not instead of
+    it, and must not make everything global."""
+    await content_loader.load_content(content_module.load_files())
+
+    here = await reach.find(GUILD_A, ALICE, "KI", "stove", Scope.ROOM)
+    elsewhere = await reach.find(GUILD_A, ALICE, "BE", "stove", Scope.ROOM)
+    assert isinstance(here, Found)
+    assert isinstance(elsewhere, NotFound)
+
+
+async def test_she_is_the_only_thing_declared_everywhere(house):
+    """If a second one ever appears, the listing rules below are worth
+    re-reading: this one is safe because a fixture is never listed."""
+    parsed = content_module.load_files()
+    everywhere = [
+        t.thing_id for t in parsed.things if t.room_id == content_module.EVERYWHERE
+    ]
+    assert everywhere == ["alexa"]
+
+
+async def test_a_thing_that_is_everywhere_is_still_a_fixture(house):
+    """Which is what keeps her out of `Also here:` - the listing holds loose
+    takeable objects, and she is neither."""
+    parsed = content_module.load_files()
+    assert parsed.things_by_id["alexa"].type == "fixture"
+    assert parsed.things_by_id["alexa"].takeable is False

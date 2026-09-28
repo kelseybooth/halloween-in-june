@@ -94,7 +94,7 @@ stone_wall	stone wall	stone wall|wall|garden wall	fixture	CO	1	no	yes	0									
 bench	stone bench	bench|stone bench|seat	fixture	CO	1	no	yes	0										1	88
 sofa	sofa	sofa|couch|settee	fixture	LI	1	no	yes	0										1	89
 armchairs	armchairs	armchairs|armchair|chairs	fixture	LI	1	no	yes	0										1	90
-fireplace	fireplace	fireplace|hearth|fire|ash|chimney	fixture	LI	1	no	yes	0										1	91
+fireplace	fireplace	fireplace|hearth|fire|chimney	fixture	LI	1	no	yes	0										1	91
 bookshelves	bookshelves	bookshelves|bookshelf|books|shelves	fixture	LI	1	no	yes	0										1	92
 bare_wall	bare patch of wall	bare wall|bare patch|patch of wall|blank wall	fixture	LI	1	no	yes	0										1	93
 baby_blanket	baby blanket	baby blanket|blanket	fixture	LI	1	no	yes	0										1	94
