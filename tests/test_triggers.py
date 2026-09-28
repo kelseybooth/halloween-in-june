@@ -853,14 +853,46 @@ async def test_charcuterie_cannot_be_farmed_either(playing):
 # --------------------------------------------------------------------------
 
 
-async def test_the_bot_refuses_to_start_on_an_unwired_row(playing):
+async def test_an_unwired_row_is_reported_at_error_level(playing, caplog):
     """A row nobody registered can never be announced, and nothing raises at
-    runtime to say so - which is exactly why the boot stops."""
+    runtime to say so - so it is logged where Railway will show it."""
     achievements.clear()
 
-    with pytest.raises(RuntimeError, match="registration problem"):
-        await bot._check_achievement_registry()
-
-
-async def test_the_boot_guard_passes_when_everything_is_wired(playing):
     await bot._check_achievement_registry()
+
+    assert "no registered trigger" in caplog.text
+    assert "registration problem" in caplog.text
+
+
+async def test_an_unwired_row_does_not_stop_the_bot(playing):
+    """Writers edit the TSVs through GitHub's web editor, which cannot insert
+    a tab. A mangled file or an unwired thirty-sixth row must not crash-loop
+    the deploy and take the whole game down - the rest of the startup path
+    degrades rather than dying, and this has to match it."""
+    achievements.clear()
+
+    await bot._check_achievement_registry()  # returns rather than raising
+
+
+async def test_content_files_that_do_not_parse_do_not_stop_the_bot(playing, caplog, tmp_path):
+    """The same rule one layer up: if the files are unreadable there is
+    nothing to compare the registry against, and the database still holds the
+    last good content."""
+    broken = tmp_path / "creative content"
+    broken.mkdir()
+    (broken / "rooms.tsv").write_text("not a content file", encoding="utf-8")
+
+    original = content_module.CONTENT_DIR
+    try:
+        content_module.CONTENT_DIR = broken
+        await bot._check_achievement_registry()
+    finally:
+        content_module.CONTENT_DIR = original
+
+    assert "did not parse" in caplog.text
+
+
+async def test_the_boot_guard_is_quiet_when_everything_is_wired(playing, caplog):
+    await bot._check_achievement_registry()
+
+    assert "registration problem" not in caplog.text

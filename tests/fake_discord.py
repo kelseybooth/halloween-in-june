@@ -26,6 +26,14 @@ class FakeThread:
         self.added_users: list[int] = []
         self.removed_users: list[int] = []
         self.deleted = False
+        self.posted: list[str] = []
+        self.mention = f"<#{self.id}>"
+
+    async def send(self, content=None, **kwargs):
+        """A room thread accepting a message: the arrival and departure lines,
+        and the one public `/use`."""
+        self.posted.append(content)
+        return SimpleNamespace(id=len(self.posted))
 
     async def delete(self):
         if self.name in getattr(self._channel, "delete_fails", ()):
