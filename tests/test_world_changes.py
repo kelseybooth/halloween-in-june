@@ -292,3 +292,95 @@ async def test_each_capped_thing_has_its_own_refusal_written(house):
     }
     for thing_id in ("cat_food_gourmet", "skeleton_key", "carving_tools"):
         assert text[thing_id].get("take_fail"), thing_id
+
+
+# --------------------------------------------------------------------------
+# `requires`: a reply that depends on what you are holding
+#
+# The fifth kind of state, and the only computed one. The four above are things
+# that have happened and cannot un-happen; this one is true for exactly as long
+# as the player holds everything the thing names, and stops the moment they put
+# one down.
+# --------------------------------------------------------------------------
+
+
+INGREDIENTS = ("herbs", "dark_chocolate", "spice_jar")
+
+
+async def use_stove(user_id=ALICE):
+    await database.update_current_room(user_id, GUILD_A, "KI")
+    return (await use(user_id, thing="stove")).reply
+
+
+async def test_the_stove_requires_all_three(house):
+    stove = content_module.load_files().things_by_id["stove"]
+    assert set(states.required_things(stove.requires)) == set(INGREDIENTS)
+
+
+async def test_without_the_ingredients_it_says_so(house):
+    assert "don't have all of it yet" in await use_stove()
+
+
+@pytest.mark.parametrize("held", [1, 2])
+async def test_some_of_the_ingredients_is_not_enough(house, held):
+    for thing in INGREDIENTS[:held]:
+        await database.take_from_source(ALICE, GUILD_A, thing)
+
+    assert "don't have all of it yet" in await use_stove()
+
+
+async def test_all_three_changes_the_reply(house):
+    for thing in INGREDIENTS:
+        await database.take_from_source(ALICE, GUILD_A, thing)
+
+    reply = await use_stove()
+    assert "far more delicious" in reply
+    assert "don't have all of it yet" not in reply
+
+
+async def test_putting_one_down_takes_it_away_again(house):
+    """Computed, not recorded - which is what makes it different from every
+    other state in the game."""
+    for thing in INGREDIENTS:
+        await database.take_from_source(ALICE, GUILD_A, thing)
+    assert "far more delicious" in await use_stove()
+
+    await database.drop_into_room(ALICE, GUILD_A, "KI", "herbs")
+    assert "don't have all of it yet" in await use_stove()
+
+
+async def test_it_is_per_player(house):
+    for thing in INGREDIENTS:
+        await database.take_from_source(ALICE, GUILD_A, thing)
+
+    assert "far more delicious" in await use_stove(ALICE)
+    assert "don't have all of it yet" in await use_stove(BOB)
+
+
+async def test_carries_all_needs_every_one(house):
+    assert await database.carries_all(ALICE, GUILD_A, list(INGREDIENTS)) is False
+    for thing in INGREDIENTS[:2]:
+        await database.take_from_source(ALICE, GUILD_A, thing)
+    assert await database.carries_all(ALICE, GUILD_A, list(INGREDIENTS)) is False
+
+    await database.take_from_source(ALICE, GUILD_A, INGREDIENTS[2])
+    assert await database.carries_all(ALICE, GUILD_A, list(INGREDIENTS)) is True
+
+
+async def test_nothing_required_is_never_satisfied(house):
+    """An empty requirement must not read as met, or every thing without one
+    would resolve to a requirements_met row it does not have."""
+    assert await database.carries_all(ALICE, GUILD_A, []) is False
+
+
+async def test_a_requirement_naming_a_thing_that_does_not_exist_is_caught(house):
+    from dataclasses import replace
+
+    import content as content_mod
+
+    broken = content_mod.load_files()
+    broken.things = [
+        replace(t, requires="herbs|nonexistent") if t.thing_id == "stove" else t
+        for t in broken.things
+    ]
+    assert any("is not a thing" in p for p in content_mod.validate(broken))

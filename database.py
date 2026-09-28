@@ -1498,6 +1498,30 @@ async def carried_count(user_id: int, guild_id: int) -> int:
 # --------------------------------------------------------------------------
 
 
+async def carries_all(user_id: int, guild_id: int, thing_ids: list[str]) -> bool:
+    """Whether this player is holding at least one of each of these.
+
+    Used for `requires`, which is checked at the moment of use rather than
+    recorded - so a player who puts an ingredient down stops satisfying it.
+    """
+    if not thing_ids:
+        return False
+    session_factory = _require_session()
+    async with session_factory() as session:
+        held = {
+            row[0]
+            for row in await session.execute(
+                select(PlayerInventory.thing_id).where(
+                    PlayerInventory.user_id == user_id,
+                    PlayerInventory.guild_id == guild_id,
+                    PlayerInventory.thing_id.in_(thing_ids),
+                    PlayerInventory.count > 0,
+                )
+            )
+        }
+    return held.issuperset(thing_ids)
+
+
 async def carried_of(user_id: int, guild_id: int, thing_id: str) -> int:
     """How many of one thing this player is carrying."""
     session_factory = _require_session()
