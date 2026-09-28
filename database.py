@@ -1749,7 +1749,11 @@ async def distinct_users_of(guild_id: int, thing_id: str) -> int:
 
 
 async def loose_here(
-    guild_id: int, room_id: str, container_id: str = LOOSE_IN_ROOM
+    guild_id: int,
+    room_id: str,
+    container_id: str = LOOSE_IN_ROOM,
+    *,
+    held_states: set[str] | None = None,
 ) -> list[tuple[str, int]]:
     """(name, count) for the takeable things lying out in a room or container.
 
@@ -1764,7 +1768,7 @@ async def loose_here(
     session_factory = _require_session()
     async with session_factory() as session:
         rows = await session.execute(
-            select(ThingType.name, RoomContents.count)
+            select(ThingType.name, RoomContents.count, ThingType.present_when)
             .join(ThingType, ThingType.thing_id == RoomContents.thing_id)
             .where(
                 RoomContents.guild_id == guild_id,
@@ -1775,7 +1779,14 @@ async def loose_here(
             )
             .order_by(ThingType.sort_order, ThingType.name)
         )
-        return [(row[0], row[1]) for row in rows]
+        # Filtered here rather than in SQL: a gate is a small expression over
+        # states already in hand, and the row counts are tiny.
+        import states as _states
+
+        held = held_states or set()
+        return [
+            (row[0], row[1]) for row in rows if _states.passes(row[2], held)
+        ]
 
 
 async def states_of(guild_id: int, user_id: int) -> set[str]:

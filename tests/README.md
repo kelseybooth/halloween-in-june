@@ -36,6 +36,7 @@ Discord, no network. CI runs the same command on Python 3.13.
 | `test_restocking.py` | The restock scheduler: derived times, both placements, catch-up, admin overrides |
 | `test_craving.py` | Alexa's two replies, and the daily craving — drawing, judging, and the tally |
 | `test_admin_config.py` | `/admin_config`, and the shape of the ten-command list |
+| `test_world_changes.py` | The staircase and the jammed drawer, `present_when` gates, and which scope each state has |
 
 ## Foreign keys
 
@@ -56,6 +57,17 @@ state is per guild and is the only thing a player can change.
 `test_schema.py` asserts it per table in both directions, because a content
 table that grew a `guild_id` or a world-state table that lost one would fail
 quietly and in opposite ways.
+
+## States, and their two scopes
+
+`stairs_repaired` is server-wide because collective labour earns a collective
+reward. `drawer_unjammed` is per player because the discovery *is* the content —
+server-wide would mean only the first person ever found it.
+
+Getting either scope backwards would crash nothing and quietly make the game
+worse, so `test_world_changes.py` checks the scope as well as the effect: two
+players standing in the same Upstairs Hallway, one of whom can see the expired
+cat food and one of whom cannot.
 
 ## Cohorts
 

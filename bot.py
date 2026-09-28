@@ -28,6 +28,8 @@ import phrasing
 import reach
 import resolve
 import restocking
+import states
+import world
 
 load_dotenv()
 
@@ -811,19 +813,61 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
             return
 
         if row.use_cooldown_hours:
-            await _use_with_cooldown(interaction, found, row)
+            await _use_with_cooldown(interaction, state, found, row)
             return
 
-        await database.record_use(user.id, guild_id, found.thing_id)
-        await interaction.followup.send(
-            await phrasing.say(
-                guild_id, found.thing_id, "use", fallback="use.default", name=found.name
-            ),
-            ephemeral=True,
-        )
+        await _finish_use(interaction, state, found)
     except SQLAlchemyError:
         log.exception("Failed to use %r in guild %s", thing, guild_id)
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+
+
+async def _finish_use(interaction, state, found) -> None:
+    """Record the use, apply anything it changes, and say what happened.
+
+    Every successful use comes through here, so the world effects cannot be
+    wired into one branch and forgotten in another - and so the single public
+    `/use` is decided in one place rather than by each branch remembering.
+    """
+    user, guild_id = interaction.user, interaction.guild_id
+    await database.record_use(user.id, guild_id, found.thing_id)
+
+    effect = await world.after_use(guild_id, user.id, found.thing_id, state.current_room)
+    tokens = dict(effect.tokens) if effect else {}
+
+    # The text is resolved *after* the effect, so a use that changes a state
+    # can be described by the state it produced rather than the one it left.
+    held = await states.in_force(guild_id, user.id)
+    current = sorted(held)[0] if held else resolve.DEFAULT_STATE
+
+    reply = await phrasing.say(
+        guild_id, found.thing_id, "use", state=current,
+        fallback="use.default", name=found.name, **tokens,
+    )
+    if effect and effect.announce:
+        reply = f"{reply}\n\n{effect.announce}" if reply else effect.announce
+
+    await interaction.followup.send(reply, ephemeral=True)
+
+    if effect and effect.public:
+        await _post_in_room(interaction, state.current_room, reply)
+
+
+async def _post_in_room(interaction, room_id: str, message: str) -> None:
+    """Echo a use into the room thread. Only the staircase does this."""
+    if interaction.guild is None:
+        return
+    channel = house_utils.find_channel(interaction.guild)
+    if channel is None:
+        return
+    try:
+        name = await resolve.room_name(room_id)
+        thread = await house_utils.get_thread_for_room(channel, name)
+        if thread is not None:
+            await thread.send(f"{interaction.user.mention} {message}")
+    except (discord.HTTPException, SQLAlchemyError):
+        # The use has already happened; failing to announce it is cosmetic.
+        log.warning("Could not post a public use in %s", room_id, exc_info=True)
 
 
 async def _use_transform(interaction, state, found, row) -> None:
@@ -858,16 +902,10 @@ async def _use_transform(interaction, state, found, row) -> None:
         )
         return
 
-    await database.record_use(user.id, guild_id, found.thing_id)
-    await interaction.followup.send(
-        await phrasing.say(
-            guild_id, found.thing_id, "use", fallback="use.default", name=found.name
-        ),
-        ephemeral=True,
-    )
+    await _finish_use(interaction, state, found)
 
 
-async def _use_with_cooldown(interaction, found, row) -> None:
+async def _use_with_cooldown(interaction, state, found, row) -> None:
     """A thing that cannot be used again for a while.
 
     Only lumber, at 48 hours. The refusal carries {time}, and a refused use is
@@ -892,13 +930,7 @@ async def _use_with_cooldown(interaction, found, row) -> None:
             )
             return
 
-    await database.record_use(user.id, guild_id, found.thing_id)
-    await interaction.followup.send(
-        await phrasing.say(
-            guild_id, found.thing_id, "use", fallback="use.default", name=found.name
-        ),
-        ephemeral=True,
-    )
+    await _finish_use(interaction, state, found)
 
 
 async def _use_exit(interaction, state, found, row) -> None:
@@ -1080,7 +1112,8 @@ async def _look_around(guild_id: int, user_id: int, room_id: str) -> str:
     state = await _current_state(guild_id, user_id)
     description = await resolve.room_look(guild_id, room_id, state) or GENERIC_ROOM_DESCRIPTION
 
-    loose = await database.loose_here(guild_id, room_id)
+    held = await states.in_force(guild_id, user_id)
+    loose = await database.loose_here(guild_id, room_id, held_states=held)
     line = await phrasing.listing(
         loose,
         prefix_key="also_here.prefix",
@@ -1110,7 +1143,10 @@ async def _look_at(guild_id: int, user_id: int, room_id: str, found) -> str:
     if not description:
         description = f"You see {found.name}."
 
-    inside = await database.loose_here(guild_id, room_id, container_id=found.thing_id)
+    inside = await database.loose_here(
+        guild_id, room_id, container_id=found.thing_id,
+        held_states=await states.in_force(guild_id, user_id),
+    )
     line = await phrasing.listing(
         inside,
         prefix_key="contents.prefix",
@@ -1395,18 +1431,19 @@ async def admin_config(interaction: discord.Interaction, key: str, value: int) -
         return
 
     note = ""
-    if name == "planks_required":
+    if name == world.PLANKS_SETTING:
+        # Lowering the target below the planks already placed finishes the
+        # staircase now, rather than leaving it stuck one short of a number
+        # nobody can reach.
         try:
-            placed = await database.distinct_users_of(interaction.guild_id, "lumber")
+            opened = await world.check_staircase(interaction.guild_id)
+            placed, _ = await world.planks(interaction.guild_id)
         except SQLAlchemyError:
-            placed = None
-        if placed is not None and placed >= value:
-            # The staircase itself opens in phase 2c.5. Saying so is better than
-            # an admin lowering the number, seeing nothing happen, and filing it.
+            opened, placed = False, None
+        if opened:
             note = (
-                f"\n\n{placed} player(s) have already placed a plank, which meets "
-                "the new target. The staircase does not open yet — that lands with "
-                "the rest of the world-changing uses."
+                f"\n\n{placed} player(s) had already placed a plank, which meets "
+                "the new target — the staircase is finished."
             )
 
     await interaction.followup.send(
