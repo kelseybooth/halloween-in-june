@@ -68,6 +68,11 @@ class Found:
     # Set when the copy is a source: the object it hands over, which is what the
     # player ends up holding and whose `take` text the reply uses.
     yields: str | None = None
+    # And which source it was. `thing_id` cannot answer that: a source and its
+    # yield are filed as one thing, so taking herbs from the herb garden and
+    # picking up herbs somebody dropped both report `thing_id = "herbs"`. Only
+    # the first is gardening, which is the distinction *Green Thumb* turns on.
+    source_id: str | None = None
 
     @property
     def is_source(self) -> bool:
@@ -125,6 +130,8 @@ class _Candidate:
     names: set[str]
     copies: dict[Where, tuple[int, str | None]]  # where -> (count, container)
     yields: str | None = None
+    # The source that put the SOURCE copy here, set with it and never apart.
+    source_id: str | None = None
 
 
 async def _gather(
@@ -260,7 +267,13 @@ async def _gather(
                 if target:
                     names |= _names_of(target[1], target[2])
                 candidate = entry(yields, display, names, yields=yields)
-                candidate.copies.setdefault(Where.SOURCE, (1, contained_in or None))
+                if Where.SOURCE not in candidate.copies:
+                    # Set together, so the id always names the source this copy
+                    # actually came from. Two sources of one yield in one room
+                    # would collapse here, and the first would win - no content
+                    # does that today, and the reply would be identical anyway.
+                    candidate.copies[Where.SOURCE] = (1, contained_in or None)
+                    candidate.source_id = thing_id
             elif kind in ("fixture", "exit"):
                 entry(thing_id, name, _names_of(name, aliases)).copies.setdefault(
                     Where.ROOM, (1, contained_in or None)
@@ -351,6 +364,7 @@ async def find(
             count=count,
             container_id=container,
             yields=candidate.yields if where is Where.SOURCE else None,
+            source_id=candidate.source_id if where is Where.SOURCE else None,
         )
 
     return NotFound(typed=typed, exists_elsewhere=await _exists_anywhere(typed))

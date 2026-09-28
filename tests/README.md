@@ -38,6 +38,7 @@ Discord, no network. CI runs the same command on Python 3.13.
 | `test_admin_config.py` | `/admin_config`, and the shape of the ten-command list |
 | `test_world_changes.py` | The staircase and the jammed drawer, `present_when` gates, and which scope each state has |
 | `test_achievements.py` | The ninth content file: parsing, validation, drop resolution, and idempotent awards |
+| `test_dispatcher.py` | The dispatcher and the nine hooks, and how an award gets announced |
 
 ## Foreign keys
 
@@ -80,6 +81,21 @@ firing at once both conclude they were first.
 
 `test_achievements.py` asserts it from both ends: the second award returns
 `False`, and `earned_at` does not move.
+
+## Which source a take came from
+
+A source and its yield are filed as one thing during resolution, which is the
+only reason `/take herbs` does not raise a spurious ambiguity prompt. The cost
+is that `thing_id` cannot say where the herbs came from: taking them from the
+herb garden and picking up a copy somebody dropped both report `herbs`.
+
+`reach.Found.source_id` names the source, or `None` for a loose copy, and the
+`on_take` hook carries it. *Green Thumb* is the only thing in Release 1 that
+needs it — gardening counts, scavenging does not — but it is a field on the
+hook rather than a special case in one predicate.
+
+`test_reach.py` asserts both halves, and `test_dispatcher.py` drives it
+through the real `/take`.
 
 ## Cohorts
 

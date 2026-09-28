@@ -18,6 +18,7 @@ from discord.ext import commands, tasks
 from dotenv import load_dotenv
 from sqlalchemy.exc import SQLAlchemyError
 
+import achievements
 import alexa
 import content
 import content_loader
@@ -280,6 +281,14 @@ async def nightly_decay() -> None:
         # tomorrow rather than dying permanently on one bad night.
         log.error("Nightly decay run failed; will retry at the next midnight")
 
+    for guild in bot.guilds:
+        # No player and no interaction: whatever listens here is looking at the
+        # server rather than at somebody's action.
+        await _fire(
+            achievements.Context(guild_id=guild.id, hook="on_midnight"),
+            guild=guild,
+        )
+
 
 @nightly_decay.before_loop
 async def _before_nightly_decay() -> None:
@@ -441,6 +450,16 @@ async def on_message(message: discord.Message) -> None:
         except discord.HTTPException:
             log.warning("Could not answer as Alexa", exc_info=True)
 
+    await _fire(
+        achievements.Context(
+            guild_id=message.guild.id,
+            hook="on_message",
+            user_id=message.author.id,
+            extra={"content": message.content},
+        ),
+        guild=message.guild,
+    )
+
 
 @bot.event
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent) -> None:
@@ -476,6 +495,18 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent) -> None:
         return
 
     await _answer_guess(message, guess)
+
+    # No interaction token here, so an earned description arrives by DM. It is
+    # the same reason the craving's own confirmation is a public reaction.
+    await _fire(
+        achievements.Context(
+            guild_id=payload.guild_id,
+            hook="on_reaction",
+            user_id=payload.user_id,
+            extra={"emoji": str(payload.emoji), "guess": guess},
+        ),
+        guild=getattr(channel, "guild", None),
+    )
 
 
 async def _answer_guess(message: discord.Message, guess) -> None:
@@ -530,6 +561,16 @@ async def pet(interaction: discord.Interaction) -> None:
     if SHOW_DEBUG_INFO:
         message += _debug_lines(reaction, result.recent, relationship)
     await interaction.followup.send(message)
+
+    await _fire(
+        achievements.Context(
+            guild_id=interaction.guild_id,
+            hook="on_pet",
+            user_id=interaction.user.id,
+            extra={"total": result.total, "relationship": relationship},
+        ),
+        interaction=interaction,
+    )
 
 
 @bot.tree.command(
@@ -600,6 +641,9 @@ async def initialize_haunted_house(interaction: discord.Interaction) -> None:
         # Restock day numbers count from here, so a server that never records
         # this never restocks.
         await restocking.set_initialized_on(interaction.guild_id)
+        # And this is where achievement names get posted, recorded now so the
+        # announcement path never has to guess at a channel name.
+        await database.set_announcement_channel(interaction.guild_id, channel.id)
     except SQLAlchemyError:
         log.exception("Could not record the initialization date")
 
@@ -867,6 +911,112 @@ async def _finish_use(interaction, state, found) -> None:
     if effect and effect.public:
         await _post_in_room(interaction, state.current_room, reply)
 
+    await _fire(
+        achievements.Context(
+            guild_id=guild_id,
+            hook="on_use",
+            user_id=user.id,
+            thing_id=found.thing_id,
+            room_id=state.current_room,
+        ),
+        interaction=interaction,
+    )
+
+
+async def _fire(context, *, interaction=None, guild=None) -> None:
+    """Run a hook, award what passed, and announce what this call created.
+
+    One function for all nine hooks, so an achievement cannot be awarded in
+    one call site and left unannounced in another - the same reason every
+    world-changing use routes through `_finish_use`.
+
+    Everything here is decoration on an action that has already committed, so
+    nothing raises: a player who loses an achievement to a Discord hiccup can
+    earn it next time, and a player whose `/take` returns an error has lost
+    the thing.
+    """
+    try:
+        earned = await achievements.fire(context)
+    except Exception:
+        log.exception("Achievement hook %s failed", context.hook)
+        return
+
+    for award in earned:
+        await _announce(award, interaction=interaction, guild=guild)
+
+
+async def _announce(award, *, interaction=None, guild=None) -> None:
+    """The name in public, the description to the earner and nobody else.
+
+    The award is already written. An announcement failure leaves it in place -
+    `/stats` still shows it - which is why every branch here logs rather than
+    raising.
+    """
+    if guild is None and interaction is not None:
+        guild = interaction.guild
+    if guild is None:
+        log.warning("Earned %s with no guild to announce it in", award.achievement_id)
+        return
+
+    channel = await _announcement_channel(guild)
+    if channel is not None:
+        try:
+            # The name only, including for a secret achievement - the name
+            # appearing is itself the hint that something is there to find.
+            await channel.send(award.name)
+        except discord.HTTPException:
+            log.warning("Could not announce %s", award.achievement_id, exc_info=True)
+
+    if award.user_id is None:
+        # A group achievement has no earner, so the description goes nowhere.
+        # It still shows in every current member's /stats.
+        return
+
+    if interaction is not None:
+        try:
+            await interaction.followup.send(award.unlock, ephemeral=True)
+        except discord.HTTPException:
+            log.warning("Could not send %s privately", award.achievement_id, exc_info=True)
+        return
+
+    # No interaction token - a reaction or a message carries none - so the
+    # description goes by DM. People close their DMs, and that is not an
+    # error: /stats holds the description permanently. Never fall back to
+    # posting it publicly, which would spoil a secret achievement for everyone.
+    member = guild.get_member(award.user_id)
+    if member is None:
+        log.info("Player %s is not cached; no DM for %s", award.user_id, award.achievement_id)
+        return
+    try:
+        await member.send(award.unlock)
+    except discord.HTTPException:
+        log.info(
+            "Could not DM %s about %s; /stats still has it",
+            award.user_id,
+            award.achievement_id,
+        )
+
+
+async def _announcement_channel(guild):
+    """Where this server's achievement names go.
+
+    The channel the house was initialized in, by id rather than by name, so a
+    rename does not silently stop the announcements. A server initialized
+    before the id was recorded falls back to the name lookup.
+    """
+    try:
+        channel_id = await database.announcement_channel(guild.id)
+    except SQLAlchemyError:
+        log.exception("Could not read the announcement channel for %s", guild.id)
+        return None
+
+    if channel_id is not None:
+        channel = guild.get_channel(channel_id)
+        if channel is not None:
+            return channel
+        log.warning("Announcement channel %s is gone in %s", channel_id, guild.id)
+    return house_utils.find_channel(guild)
+
 
 async def _post_in_room(interaction, room_id: str, message: str) -> None:
     """Echo a use into the room thread. Only the staircase does this."""
@@ -1043,6 +1193,17 @@ async def _use_exit(interaction, state, found, row) -> None:
 
     await interaction.followup.send(
         f"You head to {destination_thread.mention}.", ephemeral=True
+    )
+
+    await _fire(
+        achievements.Context(
+            guild_id=guild_id,
+            hook="on_move",
+            user_id=user.id,
+            thing_id=found.thing_id,
+            room_id=destination,
+        ),
+        interaction=interaction,
     )
 
 
@@ -1278,6 +1439,22 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
             )
             or f"You take the {name}.",
         )
+
+        # `source_id` is what separates gardening from scavenging: taking herbs
+        # from the herb garden earns Green Thumb, picking up a herbs somebody
+        # dropped in the Entryway does not, and both hand over an identical
+        # thing id.
+        await _fire(
+            achievements.Context(
+                guild_id=guild_id,
+                hook="on_take",
+                user_id=user.id,
+                thing_id=taken,
+                source_id=found.source_id,
+                room_id=room_id,
+            ),
+            interaction=interaction,
+        )
     except SQLAlchemyError:
         log.exception("Failed to take %r in guild %s", thing, guild_id)
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
@@ -1385,6 +1562,17 @@ async def drop(interaction: discord.Interaction, thing: str) -> None:
                 guild_id, found.thing_id, "drop", fallback="drop.default", name=found.name
             )
             or f"You set the {found.name} down.",
+        )
+
+        await _fire(
+            achievements.Context(
+                guild_id=guild_id,
+                hook="on_drop",
+                user_id=user.id,
+                thing_id=found.thing_id,
+                room_id=room_id,
+            ),
+            interaction=interaction,
         )
     except SQLAlchemyError:
         log.exception("Failed to drop %r in guild %s", thing, guild_id)

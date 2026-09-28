@@ -371,6 +371,12 @@ LOOSE_IN_ROOM = ""
 # Restock day numbers count from it, so it is per-server rather than global.
 CONFIG_INITIALIZED_ON = "initialized_on"
 
+# The channel the house was initialized in, where achievement names are posted.
+# Stored as an id rather than looked up by name at announce time, so a rename
+# does not silently stop the announcements - and so there is no second setting
+# to keep in sync with where the room threads actually live.
+CONFIG_ANNOUNCE_CHANNEL = "announce_channel_id"
+
 
 class RoomType(Base):
     """One row per room in the house, from rooms.tsv."""
@@ -2043,6 +2049,51 @@ async def get_setting(guild_id: int, key: str) -> int:
             default,
         )
         return default
+
+
+async def set_announcement_channel(guild_id: int, channel_id: int) -> None:
+    """Record where this server's achievements are announced.
+
+    Written every time the house is initialized rather than only the first
+    time, so moving the house to another channel moves the announcements with
+    it. If the bot can post the rooms there it can post the names there.
+    """
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    async with session_factory() as session:
+        await session.execute(
+            insert(ServerConfig)
+            .values(
+                guild_id=guild_id,
+                key=CONFIG_ANNOUNCE_CHANNEL,
+                value=str(channel_id),
+            )
+            .on_conflict_do_update(
+                index_elements=[ServerConfig.guild_id, ServerConfig.key],
+                set_={"value": str(channel_id)},
+            )
+        )
+        await session.commit()
+    log.info("Guild %s announces achievements in channel %s", guild_id, channel_id)
+
+
+async def announcement_channel(guild_id: int) -> int | None:
+    """Where to post an achievement name, or None if never initialized."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        raw = await session.scalar(
+            select(ServerConfig.value).where(
+                ServerConfig.guild_id == guild_id,
+                ServerConfig.key == CONFIG_ANNOUNCE_CHANNEL,
+            )
+        )
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        log.warning("Guild %s has a non-numeric announce channel %r", guild_id, raw)
+        return None
 
 
 async def set_setting(guild_id: int, key: str, value: int) -> int:
