@@ -14,43 +14,60 @@ from conftest import ALICE, BOB, GUILD_A, GUILD_B
 # --------------------------------------------------------------------------
 
 
+# How many recent pets it takes to exhaust the cat's patience. Derived rather
+# than written down, because both halves of it are balance numbers a writer is
+# expected to retune - and a test that hardcodes this month's value fails on
+# the tuning change rather than on the behaviour it is meant to protect.
+PATIENCE = bot.BASE_FRIENDLY_CHANCE // bot.DECAY_PER_RECENT_PET
+
+
 def test_friendly_chance_starts_at_base():
     assert bot.friendly_chance(0) == bot.BASE_FRIENDLY_CHANCE
 
 
-@pytest.mark.parametrize(
-    "recent, expected",
-    [(0, 70), (1, 60), (2, 50), (3, 40), (4, 30), (5, 20), (6, 10), (7, 0)],
-)
-def test_friendly_chance_decays_ten_points_per_recent_pet(recent, expected):
+@pytest.mark.parametrize("recent", range(PATIENCE + 1))
+def test_friendly_chance_decays_one_step_per_recent_pet(recent):
+    expected = bot.BASE_FRIENDLY_CHANCE - bot.DECAY_PER_RECENT_PET * recent
     assert bot.friendly_chance(recent) == expected
+
+
+def test_the_chance_reaches_exactly_zero_rather_than_stepping_over_it():
+    """True only while the base divides evenly by the step. If a retune breaks
+    that, the cat never quite runs out of patience and this says so."""
+    assert bot.friendly_chance(PATIENCE) == 0
+    assert bot.friendly_chance(PATIENCE - 1) == bot.DECAY_PER_RECENT_PET
 
 
 def test_friendly_chance_floors_at_zero_and_never_goes_negative():
     """A negative probability is treated as zero, not as a negative weight."""
-    for recent in range(7, 40):
+    for recent in range(PATIENCE, PATIENCE + 33):
         assert bot.friendly_chance(recent) == 0
 
 
 def test_choose_response_friendly_when_roll_is_under_the_chance(fixed_rng):
-    # 69 < 70, so a player with no recent pets gets the friendly pool.
-    reaction = bot.choose_response(0, rng=fixed_rng.queue(0.69))
+    """One point under the base, so a player with no recent pets gets the
+    friendly pool."""
+    roll = (bot.BASE_FRIENDLY_CHANCE - 1) / 100
+    reaction = bot.choose_response(0, rng=fixed_rng.queue(roll))
     assert reaction.friendly is True
     assert reaction.text in bot.FRIENDLY_RESPONSES
-    assert reaction.chance == 70
+    assert reaction.chance == bot.BASE_FRIENDLY_CHANCE
 
 
 def test_choose_response_standoffish_when_roll_is_on_the_boundary(fixed_rng):
-    """The comparison is `roll * 100 < chance`, so exactly 70 is standoffish."""
-    reaction = bot.choose_response(0, rng=fixed_rng.queue(0.70))
+    """The comparison is `roll * 100 < chance`, so landing exactly on the
+    base is standoffish."""
+    roll = bot.BASE_FRIENDLY_CHANCE / 100
+    reaction = bot.choose_response(0, rng=fixed_rng.queue(roll))
     assert reaction.friendly is False
     assert reaction.text in bot.STANDOFFISH_RESPONSES
 
 
 def test_choose_response_is_always_standoffish_once_chance_hits_zero(fixed_rng):
-    """No roll can be below 0, so the 7th recent pet onward is reliably hostile."""
+    """No roll can be below 0, so past the cat's patience it is reliably
+    hostile."""
     for roll in (0.0, 0.001, 0.5, 0.999):
-        reaction = bot.choose_response(7, rng=fixed_rng.queue(roll))
+        reaction = bot.choose_response(PATIENCE, rng=fixed_rng.queue(roll))
         assert reaction.friendly is False
         assert reaction.chance == 0
 
@@ -64,7 +81,8 @@ def test_response_pools_are_three_and_three_and_do_not_overlap():
 
 def test_reaction_reports_the_chance_that_produced_it(fixed_rng):
     """The chance travels with the reaction, so the caller never recomputes it."""
-    assert bot.choose_response(3, rng=fixed_rng.queue(0.1)).chance == 40
+    expected = bot.BASE_FRIENDLY_CHANCE - 3 * bot.DECAY_PER_RECENT_PET
+    assert bot.choose_response(3, rng=fixed_rng.queue(0.1)).chance == expected
 
 
 # --------------------------------------------------------------------------

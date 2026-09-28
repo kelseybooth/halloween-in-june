@@ -101,8 +101,9 @@ class Reaction(NamedTuple):
 def friendly_chance(recent_pets: int) -> int:
     """Percentage chance of a friendly response, floored at zero.
 
-    From the 7th recent pet onward this is 0 and the cat is reliably standoffish
-    until the window clears.
+    Once `BASE_FRIENDLY_CHANCE / DECAY_PER_RECENT_PET` recent pets have piled
+    up this is 0 and the cat is reliably standoffish until the window clears -
+    eight pets at the numbers above.
     """
     return max(0, BASE_FRIENDLY_CHANCE - DECAY_PER_RECENT_PET * recent_pets)
 
