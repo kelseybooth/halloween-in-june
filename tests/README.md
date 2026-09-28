@@ -39,6 +39,7 @@ Discord, no network. CI runs the same command on Python 3.13.
 | `test_world_changes.py` | The staircase and the jammed drawer, `present_when` gates, and which scope each state has |
 | `test_achievements.py` | The ninth content file: parsing, validation, drop resolution, and idempotent awards |
 | `test_dispatcher.py` | The dispatcher and the nine hooks, and how an award gets announced |
+| `test_triggers.py` | All thirty-five conditions, the 43-hour date window, and the three group queries |
 
 ## Foreign keys
 
@@ -96,6 +97,20 @@ hook rather than a special case in one predicate.
 
 `test_reach.py` asserts both halves, and `test_dispatcher.py` drives it
 through the real `/take`.
+
+## The 43-hour day
+
+Seven achievements fire on a date, and the date is not a calendar day. The
+players run from Japan to Hawaii, nineteen hours apart, so "on 1 October"
+means 30 September 08:00 Pacific through 2 October 03:00 Pacific — exactly the
+union of "1 October in local time" across UTC+9 to UTC−10.
+
+The failure mode is silent: a window an hour out means somebody at one end of
+the world quietly cannot earn theirs, and nothing reports it. So
+`test_triggers.py` tests **both edges to the minute**, plus a player in Japan
+and one in Hawaii earning it on their own local date, and asserts consecutive
+windows overlap by exactly nineteen hours — which is one more reason the
+dispatcher must not stop at the first match.
 
 ## Cohorts
 

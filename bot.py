@@ -30,6 +30,7 @@ import reach
 import resolve
 import restocking
 import states
+import triggers
 import world
 
 load_dotenv()
@@ -129,6 +130,25 @@ def _debug_lines(reaction: Reaction, recent: int, relationship: int) -> str:
     )
 
 
+async def _check_achievement_registry() -> None:
+    """Refuse to serve commands if the file and the registry disagree.
+
+    Loud beats silent. The alternative is an achievement nobody can earn, or
+    an award with no name to announce, and either one surfaces weeks later as
+    a player asking why nothing happened.
+    """
+    parsed = content.load_files()
+    problems = achievements.registration_problems(parsed.achievement_ids)
+    if not problems:
+        log.info("All %d achievements are wired up", len(parsed.achievements))
+        return
+    for problem in problems:
+        log.error("%s", problem)
+    raise RuntimeError(
+        f"{len(problems)} achievement registration problem(s); see the log above"
+    )
+
+
 async def load_content_at_startup() -> None:
     """Load the content files, and keep serving the old content if they are bad.
 
@@ -197,6 +217,13 @@ class CatBot(commands.Bot):
         # The layout is content now, so a broken one is caught by the loader's
         # validation rather than by a separate graph check here.
         await load_content_at_startup()
+
+        # Wire the thirty-five conditions, then check both directions against
+        # the file. A row nobody registered can never be announced, and a
+        # trigger with no row would award something with no name - neither
+        # raises at runtime, so a mismatch stops the boot instead.
+        triggers.register_all()
+        await _check_achievement_registry()
 
         # Settle any nights the bot was offline for before serving commands.
         caught_up = await database.run_pending_decay()

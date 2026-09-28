@@ -197,7 +197,10 @@ async def test_a_container_row_always_lands_in_its_container(server):
     )
     await started()
 
-    report = await restocking.run_for_guild(GUILD_A)
+    # Pinned to the end of the day like every other placement test: the
+    # occurrence time is derived, so a bare `now` makes this pass or fail
+    # depending on the hour it is run at.
+    report = await restocking.run_for_guild(GUILD_A, now=end_of_day())
     assert report.placed
     assert all(row[2] == "box" for row in report.placed)
 
@@ -213,7 +216,7 @@ async def test_the_container_row_adds_its_full_amount(server):
         )
     )
     await started()
-    await restocking.run_for_guild(GUILD_A)
+    await restocking.run_for_guild(GUILD_A, now=end_of_day())
 
     rows = [r for r in await contents(server, GUILD_A) if r[2] == "jar"]
     assert sum(r[3] for r in rows) == 4

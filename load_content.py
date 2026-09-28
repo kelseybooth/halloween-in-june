@@ -20,7 +20,9 @@ import sys
 
 from dotenv import load_dotenv
 
+import achievements
 import content
+import triggers
 import content_loader
 import database
 
@@ -36,14 +38,20 @@ def _check_only() -> int:
         print(exc, file=sys.stderr)
         return 1
 
+    triggers.register_all()
     problems = content.validate(parsed)
+    # Both directions: a row nobody wired up can never be announced, and a
+    # trigger with no row would award something with no name. Neither errors
+    # at runtime, which is exactly why they are caught here.
+    problems += achievements.registration_problems(parsed.achievement_ids)
     print(
         f"parsed {len(parsed.rooms)} rooms, {len(parsed.things)} things, "
         f"{len(parsed.room_text) + len(parsed.thing_text)} text rows, "
         f"{len(parsed.defaults)} defaults, {len(parsed.drops)} drops, "
         f"{len(parsed.restocks)} restocks, "
         f"{len(parsed.emoji_groups)} emoji ({len(parsed.craving_pool)} drawable), "
-        f"{len(parsed.achievements)} achievements"
+        f"{len(parsed.achievements)} achievements "
+        f"({len(achievements.registered_ids())} wired up)"
     )
     if problems:
         print(f"\n{len(problems)} problem(s):", file=sys.stderr)

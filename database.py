@@ -1830,6 +1830,120 @@ async def last_used(user_id: int, guild_id: int, thing_id: str) -> datetime | No
 # --------------------------------------------------------------------------
 
 
+class RoomTotals(NamedTuple):
+    """What one room holds, for the three group achievements.
+
+    All three are the same `GROUP BY room_id` with a different `HAVING`, so
+    they are answered together rather than three times per drop. `cat_food` is
+    read from the same group as `total`, because *The Feline Collection* needs
+    both numbers from the **same** room - 120 cans spread over two rooms that
+    each hold 200 things earns nothing.
+    """
+
+    room_id: str
+    total: int
+    most_of_one: int
+    cat_food: int
+
+
+async def room_totals(guild_id: int, cat_food_ids: set[str]) -> list[RoomTotals]:
+    """Per-room totals across every room in this server that holds anything.
+
+    Counts `room_contents`, not history. A server that reaches 200 and then
+    takes things out keeps the achievement, and a server that reaches 199
+    twice earns nothing - both correct.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = (
+            await session.execute(
+                select(
+                    RoomContents.room_id,
+                    RoomContents.thing_id,
+                    func.sum(RoomContents.count),
+                )
+                .where(RoomContents.guild_id == guild_id)
+                .group_by(RoomContents.room_id, RoomContents.thing_id)
+            )
+        ).all()
+
+    per_room: dict[str, list[int]] = {}
+    for room_id, thing_id, count in rows:
+        count = int(count or 0)
+        totals = per_room.setdefault(room_id, [0, 0, 0])
+        totals[0] += count
+        totals[1] = max(totals[1], count)
+        if thing_id in cat_food_ids:
+            totals[2] += count
+    return [RoomTotals(room, *numbers) for room, numbers in per_room.items()]
+
+
+async def carried_total_of(user_id: int, guild_id: int, thing_ids: set[str]) -> int:
+    """How many the player holds across a set of things, counting duplicates.
+
+    *Bulk Buyer* sums cat food across flavours; *Catproof the House* counts
+    used and sanitized bottles together, so a player who cleans what they
+    collect does not lose progress.
+    """
+    if not thing_ids:
+        return 0
+    session_factory = _require_session()
+    async with session_factory() as session:
+        total = await session.scalar(
+            select(func.sum(PlayerInventory.count)).where(
+                PlayerInventory.user_id == user_id,
+                PlayerInventory.guild_id == guild_id,
+                PlayerInventory.thing_id.in_(thing_ids),
+                PlayerInventory.count > 0,
+            )
+        )
+    return int(total or 0)
+
+
+async def use_count_of(user_id: int, guild_id: int, thing_id: str) -> int:
+    """How many times this player has used a thing. Zero if never."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        count = await session.scalar(
+            select(ThingUse.use_count).where(
+                ThingUse.guild_id == guild_id,
+                ThingUse.user_id == user_id,
+                ThingUse.thing_id == thing_id,
+            )
+        )
+    return int(count or 0)
+
+
+async def pets_while_relationship(
+    user_id: int, guild_id: int, *, positive: bool
+) -> int:
+    """Pets by this player with the relationship above zero, or at or below.
+
+    The split is `> 0` against `<= 0`, so a pet at exactly zero counts toward
+    *Trying to Make Friends*. The Story Bible was revised from "negative" to
+    "zero or below" for exactly this boundary, and a relationship starting at
+    zero means the first pet of the game lands on it.
+
+    Reads `relationship_at_pet`, which is the score as it stood *before* the
+    pet applied - the running total cannot answer this after the fact.
+    """
+    session_factory = _require_session()
+    condition = (
+        PetEvent.relationship_at_pet > 0 if positive else PetEvent.relationship_at_pet <= 0
+    )
+    async with session_factory() as session:
+        count = await session.scalar(
+            select(func.count())
+            .select_from(PetEvent)
+            .where(
+                PetEvent.guild_id == guild_id,
+                PetEvent.user_id == user_id,
+                condition,
+            )
+        )
+    return int(count or 0)
+
+
 async def award_player_achievement(
     guild_id: int, user_id: int, achievement_id: str
 ) -> bool:
