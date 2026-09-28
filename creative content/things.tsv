@@ -15,7 +15,7 @@ to_do_list	to-do list	to-do list|todo list|to do list|list	fixture	DI	1	no	yes	0
 david_journal_page	journal page	journal page|david's journal|page	fixture	DI	1	no	yes	0								dining_table		1	14
 silver_spoon	silver baby spoon	spoon|silver spoon|baby spoon	object	DI	1	yes	yes	1										1	15
 candle_stub	candle stub	candle|candle stub|stub	object	DI	1	yes	yes	1										1	16
-stove	cast-iron stove	stove|range|oven|burner	fixture	KI	1	no	yes	0										1	17
+stove	cast-iron stove	stove|range|oven|burner	fixture	KI	1	no	yes	0		herbs|dark_chocolate|spice_jar								1	17
 sink	kitchen sink	sink|basin|tap|faucet	fixture	KI	1	no	yes	0										1	18
 coffee_maker	Keurig	keurig|coffee maker|coffee machine|coffee|pods|pod|k-cup|k-cups|mug	fixture	KI	1	no	yes	0										1	19
 trash_can	trash can	trash can|bin|rubbish bin|garbage	fixture	KI	1	no	yes	0										1	20

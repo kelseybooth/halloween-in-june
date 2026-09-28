@@ -515,6 +515,14 @@ def _check_references(
                 problems.append(
                     f"thing {thing.thing_id}: {column} {target!r} is not a thing"
                 )
+        # `requires` is pipe separated, like aliases, and every part has to be
+        # a real thing or the requirement can never be satisfied.
+        for part in (thing.requires or "").split("|"):
+            wanted = part.strip()
+            if wanted and wanted not in things:
+                problems.append(
+                    f"thing {thing.thing_id}: requires {wanted!r}, which is not a thing"
+                )
     return problems
 
 
