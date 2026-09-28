@@ -132,21 +132,40 @@ def _debug_lines(reaction: Reaction, recent: int, relationship: int) -> str:
 
 
 async def _check_achievement_registry() -> None:
-    """Refuse to serve commands if the file and the registry disagree.
+    """Report any achievement the file and the registry disagree about.
 
-    Loud beats silent. The alternative is an achievement nobody can earn, or
-    an award with no name to announce, and either one surfaces weeks later as
-    a player asking why nothing happened.
+    Loud, but never fatal. The alternative is an achievement nobody can earn,
+    or an award with no name to announce, and either one surfaces weeks later
+    as a player asking why nothing happened - so it is logged at error level
+    where Railway will show it.
+
+    **It does not stop the bot, and that is deliberate.** Writers edit the
+    TSVs through GitHub's web editor, which cannot insert a tab; a mangled
+    file or an unwired thirty-sixth row would otherwise crash-loop the deploy
+    and take the whole game down, where the rest of the startup path
+    deliberately degrades instead - "a writer's typo costs the new text rather
+    than the whole game". Enforcement belongs where it can be acted on:
+    `python load_content.py --check` exits non-zero, and CI runs it.
     """
-    parsed = content.load_files()
+    try:
+        parsed = content.load_files()
+    except content.ContentError:
+        # Already reported in full by load_content_at_startup, which ran just
+        # before this and kept the content the database already had. Nothing
+        # useful to compare the registry against.
+        log.error("Could not check the achievement registry: the content files did not parse")
+        return
+
     problems = achievements.registration_problems(parsed.achievement_ids)
     if not problems:
         log.info("All %d achievements are wired up", len(parsed.achievements))
         return
     for problem in problems:
         log.error("%s", problem)
-    raise RuntimeError(
-        f"{len(problems)} achievement registration problem(s); see the log above"
+    log.error(
+        "%d achievement registration problem(s). The other achievements still "
+        "work; run `python load_content.py --check` for the full report.",
+        len(problems),
     )
 
 
