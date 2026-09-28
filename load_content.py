@@ -42,7 +42,8 @@ def _check_only() -> int:
         f"{len(parsed.room_text) + len(parsed.thing_text)} text rows, "
         f"{len(parsed.defaults)} defaults, {len(parsed.drops)} drops, "
         f"{len(parsed.restocks)} restocks, "
-        f"{len(parsed.emoji_groups)} emoji ({len(parsed.craving_pool)} drawable)"
+        f"{len(parsed.emoji_groups)} emoji ({len(parsed.craving_pool)} drawable), "
+        f"{len(parsed.achievements)} achievements"
     )
     if problems:
         print(f"\n{len(problems)} problem(s):", file=sys.stderr)

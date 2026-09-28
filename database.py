@@ -708,6 +708,70 @@ class CravingTally(Base):
     last_credited_day: Mapped[date | None] = mapped_column(Date, nullable=True)
 
 
+class Achievement(Base):
+    """The ninth content file: what an achievement is called and what it says.
+
+    Content, so global and reloadable - a name can change at a later drop
+    without a deploy, which is the whole reason this is not a dict in code.
+    Keyed with `since_drop` for the same reason every text table is: a later
+    drop supersedes an earlier row rather than replacing it.
+
+    There is deliberately no `trigger` column. The conditions involve counts,
+    time windows, sets and cross-table joins; a half-expressive mini-language
+    in a spreadsheet cell would be worse than a function per achievement. The
+    file carries what a writer owns, and the condition lives next to the hook
+    it listens on.
+    """
+
+    __tablename__ = "achievements"
+
+    achievement_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    since_drop: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    # Public, posted the moment anyone earns it.
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    # Private, sent to the earner and shown again in /stats.
+    unlock: Mapped[str] = mapped_column(Text, nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class PlayerAchievement(Base):
+    """One player has earned one achievement on one server.
+
+    The unique key is the whole primary key, which is what makes an award
+    idempotent: a standing condition like *Cat's Best Friend* stays true
+    forever once true, and without this it would re-announce on every `/pet`
+    for the rest of October.
+    """
+
+    __tablename__ = "player_achievements"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    achievement_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    earned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class ServerAchievement(Base):
+    """A whole server has earned one achievement.
+
+    No user column, and that is the point: a group achievement has no earner.
+    Nobody is credited, nobody gets the description, and it shows in the
+    `/stats` of every current member.
+    """
+
+    __tablename__ = "server_achievements"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    achievement_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    earned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 def _normalise_url(raw: str) -> str:
     """Convert a stock PostgreSQL URL into the async (asyncpg) form SQLAlchemy needs.
 
@@ -1748,6 +1812,102 @@ async def last_used(user_id: int, guild_id: int, thing_id: str) -> datetime | No
                 ThingUse.thing_id == thing_id,
             )
         )
+
+
+# --------------------------------------------------------------------------
+# Achievements
+#
+# Awarding is idempotent and says whether it was the first time, because the
+# announcement hangs on that answer. A standing condition - *Cat's Best
+# Friend* is true forever once true - would otherwise re-announce on every
+# `/pet` for the rest of October.
+# --------------------------------------------------------------------------
+
+
+async def award_player_achievement(
+    guild_id: int, user_id: int, achievement_id: str
+) -> bool:
+    """Award it to one player. True only if this call created the row.
+
+    One statement rather than a read and a write, so two hooks firing for the
+    same player at once cannot both conclude they were first and announce
+    twice. `ON CONFLICT DO NOTHING` returns no row on the second, which is
+    exactly the answer needed.
+    """
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    async with session_factory() as session:
+        created = await session.scalar(
+            insert(PlayerAchievement)
+            .values(guild_id=guild_id, user_id=user_id, achievement_id=achievement_id)
+            .on_conflict_do_nothing(
+                index_elements=[
+                    PlayerAchievement.guild_id,
+                    PlayerAchievement.user_id,
+                    PlayerAchievement.achievement_id,
+                ]
+            )
+            .returning(PlayerAchievement.achievement_id)
+        )
+        await session.commit()
+
+    if created is not None:
+        log.info("Guild %s, player %s earned %s", guild_id, user_id, achievement_id)
+    return created is not None
+
+
+async def award_server_achievement(guild_id: int, achievement_id: str) -> bool:
+    """Award it to a whole server. True only if this call created the row."""
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    async with session_factory() as session:
+        created = await session.scalar(
+            insert(ServerAchievement)
+            .values(guild_id=guild_id, achievement_id=achievement_id)
+            .on_conflict_do_nothing(
+                index_elements=[
+                    ServerAchievement.guild_id,
+                    ServerAchievement.achievement_id,
+                ]
+            )
+            .returning(ServerAchievement.achievement_id)
+        )
+        await session.commit()
+
+    if created is not None:
+        log.info("Guild %s earned %s", guild_id, achievement_id)
+    return created is not None
+
+
+async def player_achievements_of(guild_id: int, user_id: int) -> dict[str, datetime]:
+    """What this player has earned here, and when."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(
+                PlayerAchievement.achievement_id, PlayerAchievement.earned_at
+            ).where(
+                PlayerAchievement.guild_id == guild_id,
+                PlayerAchievement.user_id == user_id,
+            )
+        )
+    return {row[0]: row[1] for row in rows}
+
+
+async def server_achievements_of(guild_id: int) -> dict[str, datetime]:
+    """What this whole server has earned, and when.
+
+    Shown in every current member's `/stats`, which is why it is read by
+    guild alone and never joined to a user.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(
+                ServerAchievement.achievement_id, ServerAchievement.earned_at
+            ).where(ServerAchievement.guild_id == guild_id)
+        )
+    return {row[0]: row[1] for row in rows}
 
 
 async def distinct_users_of(guild_id: int, thing_id: str) -> int:

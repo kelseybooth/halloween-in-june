@@ -23,7 +23,7 @@ Discord, no network. CI runs the same command on Python 3.13.
 | `test_cat.py` | Pet counting, the recent-pet window, mood weighting, the relationship meter, `relationship_at_pet` |
 | `test_decay.py` | The nightly drift toward neutral, catch-up after an outage, and Pacific day boundaries across DST |
 | `test_isolation.py` | Cross-server scoping, and where phase 2b moved that line |
-| `test_content.py` | Parsing and validating the seven content files; every validator, fed the break it exists to catch |
+| `test_content.py` | Parsing and validating the content files; every validator, fed the break it exists to catch |
 | `test_schema.py` | The content/world-state split, table by table, and migrating a database that predates 2b |
 | `test_loader.py` | Loading content, first placement, reload semantics, the orphan abort, `--fresh`, load-on-boot |
 | `test_drops.py` | Drop arrival — dated, event and manual — and the text each one resolves to |
@@ -37,6 +37,7 @@ Discord, no network. CI runs the same command on Python 3.13.
 | `test_craving.py` | Alexa's two replies, and the daily craving — drawing, judging, and the tally |
 | `test_admin_config.py` | `/admin_config`, and the shape of the ten-command list |
 | `test_world_changes.py` | The staircase and the jammed drawer, `present_when` gates, and which scope each state has |
+| `test_achievements.py` | The ninth content file: parsing, validation, drop resolution, and idempotent awards |
 
 ## Foreign keys
 
@@ -68,6 +69,17 @@ Getting either scope backwards would crash nothing and quietly make the game
 worse, so `test_world_changes.py` checks the scope as well as the effect: two
 players standing in the same Upstairs Hallway, one of whom can see the expired
 cat food and one of whom cannot.
+
+## Awarding an achievement exactly once
+
+`Cat's Best Friend` is true forever once true, so a condition checked on every
+`/pet` would re-announce for the rest of October. `award_player_achievement`
+is one `INSERT ... ON CONFLICT DO NOTHING ... RETURNING` and answers whether
+*this call* created the row - a read followed by a write would let two hooks
+firing at once both conclude they were first.
+
+`test_achievements.py` asserts it from both ends: the second award returns
+`False`, and `earned_at` does not move.
 
 ## Cohorts
 
