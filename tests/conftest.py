@@ -37,7 +37,7 @@ BOB = 100000000000000002
 def schema_template(tmp_path_factory):
     """Build the schema once, and hand back a file to copy.
 
-    Creating 21 tables costs about half a second, which was most of the suite's
+    Creating 27 tables costs about half a second, which was most of the suite's
     runtime once it was paid per test. It is built by running init_db itself, so
     the template cannot drift from what a real startup produces.
     """

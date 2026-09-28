@@ -224,6 +224,59 @@ async def visible_thing_ids(guild_id: int, *, today: date | None = None) -> set[
     return {thing_id for thing_id, since_drop in rows if since_drop in arrived}
 
 
+class AchievementRow(NamedTuple):
+    """An achievement as one server currently sees it."""
+
+    achievement_id: str
+    kind: str
+    name: str
+    unlock: str
+    sort_order: int
+
+
+async def achievements(
+    guild_id: int, *, today: date | None = None
+) -> dict[str, AchievementRow]:
+    """Every achievement that exists on this server, by id.
+
+    Same resolution as every other content row: within an id, the highest
+    *arrived* drop wins, so a name can be rewritten at a later drop without a
+    deploy. An achievement from a drop that has not arrived is absent here -
+    it cannot be earned, announced or listed.
+
+    Read in one query and cached nowhere. The alternative is a per-hook read
+    of one row, which is the same work spread thinner and goes stale the
+    moment content reloads.
+    """
+    arrived = await arrived_drop_ids(guild_id, today=today)
+    session_factory = database._require_session()
+    async with session_factory() as session:
+        rows = (
+            await session.execute(
+                select(
+                    database.Achievement.achievement_id,
+                    database.Achievement.since_drop,
+                    database.Achievement.kind,
+                    database.Achievement.name,
+                    database.Achievement.unlock,
+                    database.Achievement.sort_order,
+                )
+            )
+        ).all()
+
+    best: dict[str, tuple[int, AchievementRow]] = {}
+    for achievement_id, since_drop, kind, name, unlock, sort_order in rows:
+        if since_drop not in arrived:
+            continue
+        if achievement_id in best and best[achievement_id][0] >= since_drop:
+            continue
+        best[achievement_id] = (
+            since_drop,
+            AchievementRow(achievement_id, kind, name, unlock, sort_order),
+        )
+    return {key: row for key, (_, row) in best.items()}
+
+
 # --------------------------------------------------------------------------
 # The house itself
 #

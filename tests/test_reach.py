@@ -396,3 +396,43 @@ async def test_the_gourmet_tin_is_reachable_inside_the_cake_box(house):
     result = await reach.find(GUILD_A, ALICE, "KI", "gourmet", Scope.ROOM)
     assert isinstance(result, Found)
     assert result.container_id == "cake_box"
+
+
+# --------------------------------------------------------------------------
+# Which source, not just that it was one
+#
+# A source and its yield are filed as one thing, which is the only reason
+# `/take herbs` does not raise a spurious ambiguity prompt. The cost is that
+# `thing_id` alone cannot say where the herbs came from, and one achievement
+# turns on exactly that difference.
+# --------------------------------------------------------------------------
+
+
+async def test_a_source_reports_which_source_it_was(house):
+    await content_loader.load_content(content_module.load_files())
+
+    result = await reach.find(GUILD_A, ALICE, "CO", "herbs", Scope.ROOM)
+    assert result.thing_id == "herbs"
+    assert result.source_id == "herb_garden"
+
+
+async def test_a_loose_copy_reports_no_source(house):
+    """Gardening versus scavenging. Both hand over an identical `herbs`, and
+    without this the two are indistinguishable to anything downstream."""
+    await content_loader.load_content(content_module.load_files())
+    await database.take_from_source(ALICE, GUILD_A, "herbs")
+    await database.drop_into_room(ALICE, GUILD_A, "EN", "herbs")
+
+    result = await reach.find(GUILD_A, ALICE, "EN", "herbs", Scope.ROOM)
+    assert result.thing_id == "herbs"
+    assert result.source_id is None
+
+
+async def test_the_source_id_is_the_stash_not_the_can(house):
+    """The cat food stashes are the case with the most rows: six of them hand
+    out five flavors, and two of the five come from two stashes each."""
+    await content_loader.load_content(content_module.load_files())
+
+    result = await reach.find(GUILD_A, ALICE, "KI", "tuna", Scope.ROOM)
+    assert result.yields == "cat_food_tuna"
+    assert result.source_id == "cat_food_stash_pantry"

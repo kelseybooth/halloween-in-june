@@ -30,7 +30,12 @@ FILES = {
     "drops": "drops.tsv",
     "restocks": "restocks.tsv",
     "emoji_groups": "emoji_groups.tsv",
+    "achievements": "achievements.tsv",
 }
+
+# What an achievement's award is scoped to. `group` is the odd one: it lands in
+# server_achievements, has no earner and sends its description to nobody.
+ACHIEVEMENT_KINDS = {"public", "secret", "group"}
 
 # How a drop arrives. `date` is answered by the calendar every time it is asked and
 # stores nothing; `event` and `manual` are recorded per guild the first time they
@@ -192,6 +197,25 @@ class EmojiGroup:
 
 
 @dataclass(frozen=True)
+class Achievement:
+    """A name, a description, and which drop they arrive at.
+
+    No trigger. The conditions involve counts, time windows, sets and
+    cross-table joins, so each lives as a function beside the hook it listens
+    on; this row carries only what a writer owns and can edit without opening
+    the repository.
+    """
+
+    achievement_id: str
+    kind: str
+    name: str
+    unlock: str
+    since_drop: int
+    sort_order: int
+    notes: str | None
+
+
+@dataclass(frozen=True)
 class TextRow:
     entity_id: str
     state: str
@@ -211,6 +235,7 @@ class Content:
     drops: list[Drop] = field(default_factory=list)
     restocks: list[Restock] = field(default_factory=list)
     emoji_groups: list[EmojiGroup] = field(default_factory=list)
+    achievements: list[Achievement] = field(default_factory=list)
 
     @property
     def rooms_by_id(self) -> dict[str, Room]:
@@ -228,6 +253,11 @@ class Content:
     def craving_pool(self) -> list[EmojiGroup]:
         """The emoji a craving may be drawn from."""
         return [e for e in self.emoji_groups if e.drawable]
+
+    @property
+    def achievement_ids(self) -> set[str]:
+        """Every achievement the files name, across all drops."""
+        return {a.achievement_id for a in self.achievements}
 
     @property
     def things_by_id(self) -> dict[str, Thing]:
@@ -426,6 +456,24 @@ def load_files(directory: Path | None = None) -> Content:
             )
         )
 
+    for row in _rows(
+        base / FILES["achievements"], ("achievement_id", "kind", "name", "unlock")
+    ):
+        achievement_id = _text(row.get("achievement_id"))
+        if not achievement_id:
+            continue
+        content.achievements.append(
+            Achievement(
+                achievement_id=achievement_id,
+                kind=(_text(row.get("kind")) or "").lower(),
+                name=_text(row.get("name")) or "",
+                unlock=_text(row.get("unlock")) or "",
+                since_drop=_int(row.get("since_drop"), default=1) or 1,
+                sort_order=_int(row.get("sort_order"), default=0) or 0,
+                notes=_text(row.get("notes")),
+            )
+        )
+
     return content
 
 
@@ -460,6 +508,7 @@ def validate(content: Content) -> list[str]:
     problems += _check_restocks(content, things)
     problems += _check_sources_are_named_in_prose(content, rooms)
     problems += _check_emoji_groups(content)
+    problems += _check_achievements(content)
     return problems
 
 
@@ -912,6 +961,45 @@ def _check_emoji_groups(content: Content) -> list[str]:
         problems.append(
             "no emoji is drawable, so the daily craving could never be drawn"
         )
+    return problems
+
+
+def _check_achievements(content: Content) -> list[str]:
+    """The ninth file, checked for the four ways a writer can break it.
+
+    Not checked here: that every achievement has a registered trigger and
+    every trigger an achievement. That is the check worth having - it catches
+    a thirty-sixth achievement nobody wired up, and an id renamed while half
+    the awards quietly stop landing - but it needs the trigger registry, which
+    is not content. It lives with the dispatcher and runs on the same load.
+
+    A blank `name` or `unlock` is an error rather than a defaulted blank. Every
+    other text column in the project falls back to `defaults.tsv`; these two
+    have nowhere to fall back to, and an achievement that announces an empty
+    string is worse than a load that refuses to start.
+    """
+    problems = []
+
+    seen = set()
+    for row in content.achievements:
+        key = (row.achievement_id, row.since_drop)
+        if key in seen:
+            problems.append(
+                f"achievement {row.achievement_id} appears twice at drop "
+                f"{row.since_drop}; which name won would depend on row order"
+            )
+        seen.add(key)
+
+        if row.kind not in ACHIEVEMENT_KINDS:
+            problems.append(
+                f"achievement {row.achievement_id}: kind {row.kind!r} is not one of "
+                + ", ".join(sorted(ACHIEVEMENT_KINDS))
+            )
+        if not row.name:
+            problems.append(f"achievement {row.achievement_id} has no name")
+        if not row.unlock:
+            problems.append(f"achievement {row.achievement_id} has no unlock text")
+
     return problems
 
 

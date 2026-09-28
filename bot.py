@@ -18,6 +18,7 @@ from discord.ext import commands, tasks
 from dotenv import load_dotenv
 from sqlalchemy.exc import SQLAlchemyError
 
+import achievements
 import alexa
 import content
 import content_loader
@@ -29,6 +30,7 @@ import reach
 import resolve
 import restocking
 import states
+import triggers
 import world
 
 load_dotenv()
@@ -128,6 +130,25 @@ def _debug_lines(reaction: Reaction, recent: int, relationship: int) -> str:
     )
 
 
+async def _check_achievement_registry() -> None:
+    """Refuse to serve commands if the file and the registry disagree.
+
+    Loud beats silent. The alternative is an achievement nobody can earn, or
+    an award with no name to announce, and either one surfaces weeks later as
+    a player asking why nothing happened.
+    """
+    parsed = content.load_files()
+    problems = achievements.registration_problems(parsed.achievement_ids)
+    if not problems:
+        log.info("All %d achievements are wired up", len(parsed.achievements))
+        return
+    for problem in problems:
+        log.error("%s", problem)
+    raise RuntimeError(
+        f"{len(problems)} achievement registration problem(s); see the log above"
+    )
+
+
 async def load_content_at_startup() -> None:
     """Load the content files, and keep serving the old content if they are bad.
 
@@ -196,6 +217,13 @@ class CatBot(commands.Bot):
         # The layout is content now, so a broken one is caught by the loader's
         # validation rather than by a separate graph check here.
         await load_content_at_startup()
+
+        # Wire the thirty-five conditions, then check both directions against
+        # the file. A row nobody registered can never be announced, and a
+        # trigger with no row would award something with no name - neither
+        # raises at runtime, so a mismatch stops the boot instead.
+        triggers.register_all()
+        await _check_achievement_registry()
 
         # Settle any nights the bot was offline for before serving commands.
         caught_up = await database.run_pending_decay()
@@ -279,6 +307,14 @@ async def nightly_decay() -> None:
         # Already logged with a traceback; swallow so the loop survives to retry
         # tomorrow rather than dying permanently on one bad night.
         log.error("Nightly decay run failed; will retry at the next midnight")
+
+    for guild in bot.guilds:
+        # No player and no interaction: whatever listens here is looking at the
+        # server rather than at somebody's action.
+        await _fire(
+            achievements.Context(guild_id=guild.id, hook="on_midnight"),
+            guild=guild,
+        )
 
 
 @nightly_decay.before_loop
@@ -441,6 +477,16 @@ async def on_message(message: discord.Message) -> None:
         except discord.HTTPException:
             log.warning("Could not answer as Alexa", exc_info=True)
 
+    await _fire(
+        achievements.Context(
+            guild_id=message.guild.id,
+            hook="on_message",
+            user_id=message.author.id,
+            extra={"content": message.content},
+        ),
+        guild=message.guild,
+    )
+
 
 @bot.event
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent) -> None:
@@ -476,6 +522,18 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent) -> None:
         return
 
     await _answer_guess(message, guess)
+
+    # No interaction token here, so an earned description arrives by DM. It is
+    # the same reason the craving's own confirmation is a public reaction.
+    await _fire(
+        achievements.Context(
+            guild_id=payload.guild_id,
+            hook="on_reaction",
+            user_id=payload.user_id,
+            extra={"emoji": str(payload.emoji), "guess": guess},
+        ),
+        guild=getattr(channel, "guild", None),
+    )
 
 
 async def _answer_guess(message: discord.Message, guess) -> None:
@@ -530,6 +588,16 @@ async def pet(interaction: discord.Interaction) -> None:
     if SHOW_DEBUG_INFO:
         message += _debug_lines(reaction, result.recent, relationship)
     await interaction.followup.send(message)
+
+    await _fire(
+        achievements.Context(
+            guild_id=interaction.guild_id,
+            hook="on_pet",
+            user_id=interaction.user.id,
+            extra={"total": result.total, "relationship": relationship},
+        ),
+        interaction=interaction,
+    )
 
 
 @bot.tree.command(
@@ -600,6 +668,9 @@ async def initialize_haunted_house(interaction: discord.Interaction) -> None:
         # Restock day numbers count from here, so a server that never records
         # this never restocks.
         await restocking.set_initialized_on(interaction.guild_id)
+        # And this is where achievement names get posted, recorded now so the
+        # announcement path never has to guess at a channel name.
+        await database.set_announcement_channel(interaction.guild_id, channel.id)
     except SQLAlchemyError:
         log.exception("Could not record the initialization date")
 
@@ -867,6 +938,112 @@ async def _finish_use(interaction, state, found) -> None:
     if effect and effect.public:
         await _post_in_room(interaction, state.current_room, reply)
 
+    await _fire(
+        achievements.Context(
+            guild_id=guild_id,
+            hook="on_use",
+            user_id=user.id,
+            thing_id=found.thing_id,
+            room_id=state.current_room,
+        ),
+        interaction=interaction,
+    )
+
+
+async def _fire(context, *, interaction=None, guild=None) -> None:
+    """Run a hook, award what passed, and announce what this call created.
+
+    One function for all nine hooks, so an achievement cannot be awarded in
+    one call site and left unannounced in another - the same reason every
+    world-changing use routes through `_finish_use`.
+
+    Everything here is decoration on an action that has already committed, so
+    nothing raises: a player who loses an achievement to a Discord hiccup can
+    earn it next time, and a player whose `/take` returns an error has lost
+    the thing.
+    """
+    try:
+        earned = await achievements.fire(context)
+    except Exception:
+        log.exception("Achievement hook %s failed", context.hook)
+        return
+
+    for award in earned:
+        await _announce(award, interaction=interaction, guild=guild)
+
+
+async def _announce(award, *, interaction=None, guild=None) -> None:
+    """The name in public, the description to the earner and nobody else.
+
+    The award is already written. An announcement failure leaves it in place -
+    `/stats` still shows it - which is why every branch here logs rather than
+    raising.
+    """
+    if guild is None and interaction is not None:
+        guild = interaction.guild
+    if guild is None:
+        log.warning("Earned %s with no guild to announce it in", award.achievement_id)
+        return
+
+    channel = await _announcement_channel(guild)
+    if channel is not None:
+        try:
+            # The name only, including for a secret achievement - the name
+            # appearing is itself the hint that something is there to find.
+            await channel.send(award.name)
+        except discord.HTTPException:
+            log.warning("Could not announce %s", award.achievement_id, exc_info=True)
+
+    if award.user_id is None:
+        # A group achievement has no earner, so the description goes nowhere.
+        # It still shows in every current member's /stats.
+        return
+
+    if interaction is not None:
+        try:
+            await interaction.followup.send(award.unlock, ephemeral=True)
+        except discord.HTTPException:
+            log.warning("Could not send %s privately", award.achievement_id, exc_info=True)
+        return
+
+    # No interaction token - a reaction or a message carries none - so the
+    # description goes by DM. People close their DMs, and that is not an
+    # error: /stats holds the description permanently. Never fall back to
+    # posting it publicly, which would spoil a secret achievement for everyone.
+    member = guild.get_member(award.user_id)
+    if member is None:
+        log.info("Player %s is not cached; no DM for %s", award.user_id, award.achievement_id)
+        return
+    try:
+        await member.send(award.unlock)
+    except discord.HTTPException:
+        log.info(
+            "Could not DM %s about %s; /stats still has it",
+            award.user_id,
+            award.achievement_id,
+        )
+
+
+async def _announcement_channel(guild):
+    """Where this server's achievement names go.
+
+    The channel the house was initialized in, by id rather than by name, so a
+    rename does not silently stop the announcements. A server initialized
+    before the id was recorded falls back to the name lookup.
+    """
+    try:
+        channel_id = await database.announcement_channel(guild.id)
+    except SQLAlchemyError:
+        log.exception("Could not read the announcement channel for %s", guild.id)
+        return None
+
+    if channel_id is not None:
+        channel = guild.get_channel(channel_id)
+        if channel is not None:
+            return channel
+        log.warning("Announcement channel %s is gone in %s", channel_id, guild.id)
+    return house_utils.find_channel(guild)
+
 
 async def _post_in_room(interaction, room_id: str, message: str) -> None:
     """Echo a use into the room thread. Only the staircase does this."""
@@ -1043,6 +1220,17 @@ async def _use_exit(interaction, state, found, row) -> None:
 
     await interaction.followup.send(
         f"You head to {destination_thread.mention}.", ephemeral=True
+    )
+
+    await _fire(
+        achievements.Context(
+            guild_id=guild_id,
+            hook="on_move",
+            user_id=user.id,
+            thing_id=found.thing_id,
+            room_id=destination,
+        ),
+        interaction=interaction,
     )
 
 
@@ -1278,6 +1466,22 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
             )
             or f"You take the {name}.",
         )
+
+        # `source_id` is what separates gardening from scavenging: taking herbs
+        # from the herb garden earns Green Thumb, picking up a herbs somebody
+        # dropped in the Entryway does not, and both hand over an identical
+        # thing id.
+        await _fire(
+            achievements.Context(
+                guild_id=guild_id,
+                hook="on_take",
+                user_id=user.id,
+                thing_id=taken,
+                source_id=found.source_id,
+                room_id=room_id,
+            ),
+            interaction=interaction,
+        )
     except SQLAlchemyError:
         log.exception("Failed to take %r in guild %s", thing, guild_id)
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
@@ -1386,6 +1590,17 @@ async def drop(interaction: discord.Interaction, thing: str) -> None:
             )
             or f"You set the {found.name} down.",
         )
+
+        await _fire(
+            achievements.Context(
+                guild_id=guild_id,
+                hook="on_drop",
+                user_id=user.id,
+                thing_id=found.thing_id,
+                room_id=room_id,
+            ),
+            interaction=interaction,
+        )
     except SQLAlchemyError:
         log.exception("Failed to drop %r in guild %s", thing, guild_id)
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
@@ -1466,26 +1681,114 @@ async def admin_config(interaction: discord.Interaction, key: str, value: int) -
     )
 
 
-@bot.tree.command(name="stats", description="See how many times you've petted the cat.")
+# An embed's description allows 4,096 characters where a message allows 2,000.
+# Thirty-five names plus thirty-five unlock lines passes 2,000 for a
+# completionist, and the failure mode would be the command breaking at the end
+# of October for exactly the players who played the most.
+EMBED_LIMIT = 4096
+
+# What each kind is called in /stats. `group` says "server" because that is
+# the fact a reader needs: nobody earned it, everybody has it.
+KIND_HEADINGS = {
+    "public": "Achievements",
+    "secret": "Secret achievements",
+    "group": "Server achievements",
+}
+KIND_ORDER = ("public", "secret", "group")
+
+NOTHING_YET = (
+    "Nothing here yet. Pet the cat, open a few doors, and come back - "
+    "the house notices more than it lets on."
+)
+
+
+@bot.tree.command(name="stats", description="See what you've earned, and how the cat feels.")
 @app_commands.guild_only()
 async def stats(interaction: discord.Interaction) -> None:
-    await interaction.response.defer()
+    """Everything this player has earned, privately.
+
+    **Ephemeral, always.** It carries unlock descriptions, which are the
+    spoilers the public announcement deliberately withholds - posting them in
+    the channel would defeat keeping that announcement to a name.
+
+    Release 1 shows your own stats only. Looking up another member is a later
+    release and changes what the command has to protect.
+    """
+    await interaction.response.defer(ephemeral=True)
+    user, guild_id = interaction.user, interaction.guild_id
+
     try:
-        count = await database.get_pet_count(interaction.user.id, interaction.guild_id)
-        relationship = await database.get_relationship(interaction.user.id, interaction.guild_id)
+        count = await database.get_pet_count(user.id, guild_id)
+        relationship = await database.get_relationship(user.id, guild_id)
+        tally = await craving.tally(guild_id, user.id)
+        earned = await _earned_lines(guild_id, user.id)
     except SQLAlchemyError:
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
         return
 
-    if count == 0:
-        await interaction.followup.send(
-            "You haven't petted the cat yet. Try `/pet` - it's waiting for you."
-        )
-        return
-
-    await interaction.followup.send(
-        f"Your cat petting stats:\nTotal pets: {count}\nRelationship: {relationship}"
+    embed = discord.Embed(
+        title=f"{user.display_name}'s stats",
+        description=_fit(earned) if earned else NOTHING_YET,
     )
+    # Always shown, including on day one, so the empty state reads as an
+    # invitation rather than an error.
+    embed.add_field(name="Pets", value=str(count))
+    embed.add_field(name="Relationship", value=str(relationship))
+    # Here rather than with the achievement that rewards it, so the daily game
+    # outlives being rewarded once.
+    embed.add_field(name="Cravings found", value=str(tally))
+
+    await interaction.followup.send(embed=embed, ephemeral=True)
+
+
+async def _earned_lines(guild_id: int, user_id: int) -> list[str]:
+    """Every achievement this player has, as rendered lines, grouped by kind.
+
+    Nothing about achievements **not** yet earned: no count out of
+    thirty-five, no locked rows, no progress bars. A secret achievement's
+    existence is revealed by somebody earning it, not by this command.
+
+    A group achievement appears for every current member with nobody named as
+    the earner, because there is no earner - crediting whoever dropped the two
+    hundredth thing rewards arriving last at something everyone built.
+    """
+    available = await resolve.achievements(guild_id)
+    mine = await database.player_achievements_of(guild_id, user_id)
+    ours = await database.server_achievements_of(guild_id)
+    held = set(mine) | set(ours)
+
+    lines = []
+    for kind in KIND_ORDER:
+        rows = sorted(
+            (row for key, row in available.items() if key in held and row.kind == kind),
+            key=lambda row: (row.sort_order, row.name),
+        )
+        if not rows:
+            continue
+        lines.append(f"**{KIND_HEADINGS[kind]}**")
+        lines.extend(f"**{row.name}** - {row.unlock}" for row in rows)
+        lines.append("")
+    return lines[:-1] if lines else []
+
+
+def _fit(lines: list[str]) -> str:
+    """Join what fits, and say how much did not.
+
+    Same shape `Also here:` already uses, for the same reason: a player who
+    has earned enough to overflow should be told, not silently shown less.
+    """
+    kept: list[str] = []
+    used = 0
+    for index, line in enumerate(lines):
+        # +1 for the newline that joins it to what came before.
+        cost = len(line) + (1 if kept else 0)
+        remaining = len(lines) - index
+        tail = f"\n…and {remaining} more." if remaining else ""
+        if used + cost + len(tail) > EMBED_LIMIT:
+            return "\n".join(kept) + f"\n…and {remaining} more."
+        kept.append(line)
+        used += cost
+    return "\n".join(kept)
 
 
 @bot.tree.error

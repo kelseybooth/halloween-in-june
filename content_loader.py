@@ -44,6 +44,10 @@ _WORLD_TABLES = (
     "server_drops",
     "server_restocks",
     "server_config",
+    # Earned achievements are world state, so `--fresh` clears them with
+    # everything else. An ordinary reload never touches them.
+    "player_achievements",
+    "server_achievements",
 )
 
 
@@ -178,6 +182,18 @@ def _rows_for(parsed: Content) -> dict[str, list[dict]]:
             {"emoji": e.emoji, "subgroup": e.subgroup, "drawable": e.drawable}
             for e in parsed.emoji_groups
         ],
+        "achievements": [
+            {
+                "achievement_id": a.achievement_id,
+                "since_drop": a.since_drop,
+                "kind": a.kind,
+                "name": a.name,
+                "unlock": a.unlock,
+                "sort_order": a.sort_order,
+                "notes": a.notes,
+            }
+            for a in parsed.achievements
+        ],
         "restocks": [
             {
                 "restock_id": r.restock_id,
@@ -306,6 +322,7 @@ async def _replace_content(session, rows: dict[str, list[dict]]) -> dict[str, in
         "drops",
         "defaults",
         "emoji_groups",
+        "achievements",
     )
     for table in order:
         await session.execute(database.Base.metadata.tables[table].delete())

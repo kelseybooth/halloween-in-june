@@ -371,6 +371,12 @@ LOOSE_IN_ROOM = ""
 # Restock day numbers count from it, so it is per-server rather than global.
 CONFIG_INITIALIZED_ON = "initialized_on"
 
+# The channel the house was initialized in, where achievement names are posted.
+# Stored as an id rather than looked up by name at announce time, so a rename
+# does not silently stop the announcements - and so there is no second setting
+# to keep in sync with where the room threads actually live.
+CONFIG_ANNOUNCE_CHANNEL = "announce_channel_id"
+
 
 class RoomType(Base):
     """One row per room in the house, from rooms.tsv."""
@@ -706,6 +712,70 @@ class CravingTally(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
     days: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_credited_day: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+
+class Achievement(Base):
+    """The ninth content file: what an achievement is called and what it says.
+
+    Content, so global and reloadable - a name can change at a later drop
+    without a deploy, which is the whole reason this is not a dict in code.
+    Keyed with `since_drop` for the same reason every text table is: a later
+    drop supersedes an earlier row rather than replacing it.
+
+    There is deliberately no `trigger` column. The conditions involve counts,
+    time windows, sets and cross-table joins; a half-expressive mini-language
+    in a spreadsheet cell would be worse than a function per achievement. The
+    file carries what a writer owns, and the condition lives next to the hook
+    it listens on.
+    """
+
+    __tablename__ = "achievements"
+
+    achievement_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    since_drop: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    # Public, posted the moment anyone earns it.
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    # Private, sent to the earner and shown again in /stats.
+    unlock: Mapped[str] = mapped_column(Text, nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class PlayerAchievement(Base):
+    """One player has earned one achievement on one server.
+
+    The unique key is the whole primary key, which is what makes an award
+    idempotent: a standing condition like *Cat's Best Friend* stays true
+    forever once true, and without this it would re-announce on every `/pet`
+    for the rest of October.
+    """
+
+    __tablename__ = "player_achievements"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    achievement_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    earned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class ServerAchievement(Base):
+    """A whole server has earned one achievement.
+
+    No user column, and that is the point: a group achievement has no earner.
+    Nobody is credited, nobody gets the description, and it shows in the
+    `/stats` of every current member.
+    """
+
+    __tablename__ = "server_achievements"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    achievement_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    earned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 def _normalise_url(raw: str) -> str:
@@ -1750,6 +1820,216 @@ async def last_used(user_id: int, guild_id: int, thing_id: str) -> datetime | No
         )
 
 
+# --------------------------------------------------------------------------
+# Achievements
+#
+# Awarding is idempotent and says whether it was the first time, because the
+# announcement hangs on that answer. A standing condition - *Cat's Best
+# Friend* is true forever once true - would otherwise re-announce on every
+# `/pet` for the rest of October.
+# --------------------------------------------------------------------------
+
+
+class RoomTotals(NamedTuple):
+    """What one room holds, for the three group achievements.
+
+    All three are the same `GROUP BY room_id` with a different `HAVING`, so
+    they are answered together rather than three times per drop. `cat_food` is
+    read from the same group as `total`, because *The Feline Collection* needs
+    both numbers from the **same** room - 120 cans spread over two rooms that
+    each hold 200 things earns nothing.
+    """
+
+    room_id: str
+    total: int
+    most_of_one: int
+    cat_food: int
+
+
+async def room_totals(guild_id: int, cat_food_ids: set[str]) -> list[RoomTotals]:
+    """Per-room totals across every room in this server that holds anything.
+
+    Counts `room_contents`, not history. A server that reaches 200 and then
+    takes things out keeps the achievement, and a server that reaches 199
+    twice earns nothing - both correct.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = (
+            await session.execute(
+                select(
+                    RoomContents.room_id,
+                    RoomContents.thing_id,
+                    func.sum(RoomContents.count),
+                )
+                .where(RoomContents.guild_id == guild_id)
+                .group_by(RoomContents.room_id, RoomContents.thing_id)
+            )
+        ).all()
+
+    per_room: dict[str, list[int]] = {}
+    for room_id, thing_id, count in rows:
+        count = int(count or 0)
+        totals = per_room.setdefault(room_id, [0, 0, 0])
+        totals[0] += count
+        totals[1] = max(totals[1], count)
+        if thing_id in cat_food_ids:
+            totals[2] += count
+    return [RoomTotals(room, *numbers) for room, numbers in per_room.items()]
+
+
+async def carried_total_of(user_id: int, guild_id: int, thing_ids: set[str]) -> int:
+    """How many the player holds across a set of things, counting duplicates.
+
+    *Bulk Buyer* sums cat food across flavours; *Catproof the House* counts
+    used and sanitized bottles together, so a player who cleans what they
+    collect does not lose progress.
+    """
+    if not thing_ids:
+        return 0
+    session_factory = _require_session()
+    async with session_factory() as session:
+        total = await session.scalar(
+            select(func.sum(PlayerInventory.count)).where(
+                PlayerInventory.user_id == user_id,
+                PlayerInventory.guild_id == guild_id,
+                PlayerInventory.thing_id.in_(thing_ids),
+                PlayerInventory.count > 0,
+            )
+        )
+    return int(total or 0)
+
+
+async def use_count_of(user_id: int, guild_id: int, thing_id: str) -> int:
+    """How many times this player has used a thing. Zero if never."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        count = await session.scalar(
+            select(ThingUse.use_count).where(
+                ThingUse.guild_id == guild_id,
+                ThingUse.user_id == user_id,
+                ThingUse.thing_id == thing_id,
+            )
+        )
+    return int(count or 0)
+
+
+async def pets_while_relationship(
+    user_id: int, guild_id: int, *, positive: bool
+) -> int:
+    """Pets by this player with the relationship above zero, or at or below.
+
+    The split is `> 0` against `<= 0`, so a pet at exactly zero counts toward
+    *Trying to Make Friends*. The Story Bible was revised from "negative" to
+    "zero or below" for exactly this boundary, and a relationship starting at
+    zero means the first pet of the game lands on it.
+
+    Reads `relationship_at_pet`, which is the score as it stood *before* the
+    pet applied - the running total cannot answer this after the fact.
+    """
+    session_factory = _require_session()
+    condition = (
+        PetEvent.relationship_at_pet > 0 if positive else PetEvent.relationship_at_pet <= 0
+    )
+    async with session_factory() as session:
+        count = await session.scalar(
+            select(func.count())
+            .select_from(PetEvent)
+            .where(
+                PetEvent.guild_id == guild_id,
+                PetEvent.user_id == user_id,
+                condition,
+            )
+        )
+    return int(count or 0)
+
+
+async def award_player_achievement(
+    guild_id: int, user_id: int, achievement_id: str
+) -> bool:
+    """Award it to one player. True only if this call created the row.
+
+    One statement rather than a read and a write, so two hooks firing for the
+    same player at once cannot both conclude they were first and announce
+    twice. `ON CONFLICT DO NOTHING` returns no row on the second, which is
+    exactly the answer needed.
+    """
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    async with session_factory() as session:
+        created = await session.scalar(
+            insert(PlayerAchievement)
+            .values(guild_id=guild_id, user_id=user_id, achievement_id=achievement_id)
+            .on_conflict_do_nothing(
+                index_elements=[
+                    PlayerAchievement.guild_id,
+                    PlayerAchievement.user_id,
+                    PlayerAchievement.achievement_id,
+                ]
+            )
+            .returning(PlayerAchievement.achievement_id)
+        )
+        await session.commit()
+
+    if created is not None:
+        log.info("Guild %s, player %s earned %s", guild_id, user_id, achievement_id)
+    return created is not None
+
+
+async def award_server_achievement(guild_id: int, achievement_id: str) -> bool:
+    """Award it to a whole server. True only if this call created the row."""
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    async with session_factory() as session:
+        created = await session.scalar(
+            insert(ServerAchievement)
+            .values(guild_id=guild_id, achievement_id=achievement_id)
+            .on_conflict_do_nothing(
+                index_elements=[
+                    ServerAchievement.guild_id,
+                    ServerAchievement.achievement_id,
+                ]
+            )
+            .returning(ServerAchievement.achievement_id)
+        )
+        await session.commit()
+
+    if created is not None:
+        log.info("Guild %s earned %s", guild_id, achievement_id)
+    return created is not None
+
+
+async def player_achievements_of(guild_id: int, user_id: int) -> dict[str, datetime]:
+    """What this player has earned here, and when."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(
+                PlayerAchievement.achievement_id, PlayerAchievement.earned_at
+            ).where(
+                PlayerAchievement.guild_id == guild_id,
+                PlayerAchievement.user_id == user_id,
+            )
+        )
+    return {row[0]: row[1] for row in rows}
+
+
+async def server_achievements_of(guild_id: int) -> dict[str, datetime]:
+    """What this whole server has earned, and when.
+
+    Shown in every current member's `/stats`, which is why it is read by
+    guild alone and never joined to a user.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(
+                ServerAchievement.achievement_id, ServerAchievement.earned_at
+            ).where(ServerAchievement.guild_id == guild_id)
+        )
+    return {row[0]: row[1] for row in rows}
+
+
 async def distinct_users_of(guild_id: int, thing_id: str) -> int:
     """How many different players have used a thing in this server.
 
@@ -1883,6 +2163,51 @@ async def get_setting(guild_id: int, key: str) -> int:
             default,
         )
         return default
+
+
+async def set_announcement_channel(guild_id: int, channel_id: int) -> None:
+    """Record where this server's achievements are announced.
+
+    Written every time the house is initialized rather than only the first
+    time, so moving the house to another channel moves the announcements with
+    it. If the bot can post the rooms there it can post the names there.
+    """
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    async with session_factory() as session:
+        await session.execute(
+            insert(ServerConfig)
+            .values(
+                guild_id=guild_id,
+                key=CONFIG_ANNOUNCE_CHANNEL,
+                value=str(channel_id),
+            )
+            .on_conflict_do_update(
+                index_elements=[ServerConfig.guild_id, ServerConfig.key],
+                set_={"value": str(channel_id)},
+            )
+        )
+        await session.commit()
+    log.info("Guild %s announces achievements in channel %s", guild_id, channel_id)
+
+
+async def announcement_channel(guild_id: int) -> int | None:
+    """Where to post an achievement name, or None if never initialized."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        raw = await session.scalar(
+            select(ServerConfig.value).where(
+                ServerConfig.guild_id == guild_id,
+                ServerConfig.key == CONFIG_ANNOUNCE_CHANNEL,
+            )
+        )
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        log.warning("Guild %s has a non-numeric announce channel %r", guild_id, raw)
+        return None
 
 
 async def set_setting(guild_id: int, key: str, value: int) -> int:

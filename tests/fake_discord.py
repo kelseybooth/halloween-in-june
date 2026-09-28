@@ -69,12 +69,24 @@ class FakeChannel:
         for thread in self.archived_list:
             thread._channel = self
 
+        self.id = abs(hash(("channel", name))) % (10**9)
+        # Everything posted here, in order. The achievement announcements are
+        # read straight off this.
+        self.posted: list[str] = []
+        self.send_fails = False
+
         self.created: list[str] = []
         self.create_fails: set[str] = set()
         self.delete_fails: set[str] = set()
         self.edit_fails: set[str] = set()
         self.add_user_fails: set[str] = set()
         self.archived_forbidden = False
+
+    async def send(self, content=None, **kwargs):
+        if self.send_fails:
+            raise http_error(message="channel send failed")
+        self.posted.append(content)
+        return SimpleNamespace(id=len(self.posted))
 
     def add_active(self, *names):
         for name in names:
@@ -118,6 +130,49 @@ class FakeChannel:
         return self
 
 
+class FakeMember:
+    """Somebody to DM an unlock description to.
+
+    `dms_open` is the case worth modelling rather than the happy one: people
+    close their DMs, and an achievement that raises because of it would cost
+    the player the award it was announcing.
+    """
+
+    def __init__(self, user_id, *, dms_open=True):
+        self.id = user_id
+        self.mention = f"<@{user_id}>"
+        self.dms_open = dms_open
+        self.dms: list[str] = []
+
+    async def send(self, content=None, **kwargs):
+        if not self.dms_open:
+            raise http_error(discord.Forbidden, 403, "Cannot send messages to this user")
+        self.dms.append(content)
+
+
+class FakeGuild:
+    """A guild that can find its own channels and members by id."""
+
+    def __init__(self, guild_id, *, name="Test Server", channels=(), members=()):
+        self.id = guild_id
+        self.name = name
+        self.text_channels = list(channels)
+        self.me = SimpleNamespace()
+        self._members = {m.id: m for m in members}
+        for channel in self.text_channels:
+            channel.guild = self
+
+    def get_channel(self, channel_id):
+        return next((c for c in self.text_channels if c.id == channel_id), None)
+
+    def get_member(self, user_id):
+        return self._members.get(user_id)
+
+    def add_member(self, member):
+        self._members[member.id] = member
+        return member
+
+
 class FakeResponse:
     def __init__(self, interaction):
         self._interaction = interaction
@@ -150,7 +205,9 @@ class FakeInteraction:
     """
 
     def __init__(self, user_id, guild_id, *, guild=None):
-        self.user = SimpleNamespace(id=user_id, mention=f"<@{user_id}>")
+        self.user = SimpleNamespace(
+            id=user_id, mention=f"<@{user_id}>", display_name=f"Player {user_id}"
+        )
         self.guild_id = guild_id
         self.guild = guild
         self.deferred = False
@@ -164,6 +221,12 @@ class FakeInteraction:
         """The text of the last thing sent."""
         assert self.sent, "nothing was sent"
         return self.sent[-1][0] or ""
+
+    @property
+    def embed(self):
+        """The embed of the last thing sent, or None if it was plain text."""
+        assert self.sent, "nothing was sent"
+        return self.sent[-1][1].get("embed")
 
     @property
     def was_private(self) -> bool:
