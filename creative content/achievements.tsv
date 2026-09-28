@@ -1,0 +1,36 @@
+achievement_id	kind	name	unlock	since_drop	sort_order	notes
+strength_in_numbers	group	Strength in Numbers	Who knows why you all collected 25 of something, but here's a prize	1	10	
+making_a_mess	group	Making a Mess	Amassed 200 things into a single room	1	20	
+the_feline_collection	group	The Feline Collection	There was a LOT of cat food in that mess	1	30	
+passing_a_message_to_david	public	Passing a Message to David	Used Alexa to remind David about his auto-delivery	1	10	
+charcuterie_board	public	Charcuterie Board	Collected all five flavors of cat food	1	20	
+found_the_specs	public	Found the Specs	Found David's reading glasses in the desk	1	30	
+somethings_cooking	public	Something's Cooking	Cooked something chocolatey and delicious	1	40	
+unsticking_the_situation	public	Unsticking the Situation	Finally got David that graphite powder he wanted	1	50	Blocked: cat crossing is post-launch
+catproof_the_house	public	Catproof the House	Rescued five baby bottles from cat chaos	1	60	
+return_to_sender	public	Return to Sender	Sent five baby bottles back to Marcus	1	70	Blocked: cat crossing is post-launch
+it_takes_a_village	public	It Takes a Village	Sent five bottles back sanitized	1	80	Blocked: cat crossing is post-launch
+gourd_job	public	Gourd Job	Carved a pumpkin in the courtyard	1	90	
+follow_your_nose	public	Follow Your Nose	Used graphite powder to unstick the desk drawer	1	100	
+baby_talk	public	Baby Talk	Used the baby monitor	1	110	
+dressed_for_the_season	public	Dressed for the Season	Put on a Halloween costume	1	120	
+met_the_craving	public	Met the Craving	Worked out Eunoia's daily craving	1	130	
+forwarding_address	public	Forwarding Address	Sent the letter on to the right address	1	140	Blocked: the letter is a post-MVP deployment
+a_little_bit_lost	secret	A Little Bit Lost	Entered the same room five times in five minutes	1	10	
+out_on_a_limb	secret	Out on a Limb	Climbed the tree in the courtyard	1	20	
+bulk_buyer	secret	Bulk Buyer	Carried 25 cans of cat food at once. Costco has a lot to answer for	1	30	
+making_friends	secret	Making Friends	Built a good relationship by petting Eunoia 200 times	1	40	
+trying_to_make_friends	secret	Trying to Make Friends	Had a negative relationship despite petting Eunoia 200 times. Don't feel bad. Cats are hard to please	1	50	
+cats_best_friend	secret	Cat's Best Friend	Reached a perfect relationship with Eunoia	1	60	
+signed_sealed_delivered	secret	Signed, Sealed, Delivered	Answered the intercom within three minutes of the doorbell	1	70	Blocked: the doorbell is not built
+brewing_trouble	secret	Brewing Trouble	Drank coffee on International Coffee Day	1	80	
+trash_panda	secret	Trash Panda	Celebrated International Raccoon Appreciation Day by going through the trash	1	90	
+say_cheese	secret	Say Cheese	Checked a mirror on World Smile Day	1	100	
+green_thumb	secret	Green Thumb	Got your hands dirty on the International Day of Rural Women	1	110	
+nacho_average_ghost	secret	Nacho Average Ghost	Enjoyed the right snack on International Day of the Nacho	1	120	
+using_your_noodle	secret	Using Your Noodle	Put a pot on for World Pasta Day	1	130	
+getting_into_the_spirit	secret	Getting into the Spirit	Put on a ghost costume and haunted your friends	1	140	Blocked: the ghost system is not built
+ghostbuster	secret	Ghostbuster	Guessed the day's ghost correctly	1	150	Blocked: the ghost system is not built
+breaking_into_the_halloween_candy	secret	Breaking into the Halloween Candy	Got into the Halloween candy early. It was always going to happen	1	160	
+curbside_pickup	secret	Curbside Pickup	Took the trash out on a Tuesday, like a responsible adult	1	170	
+not_so_picky_eater	secret	Not-So-Picky Eater	Ate ten of Aunt Sue's frozen burritos, brave soul	1	180	

@@ -31,15 +31,13 @@ log = logging.getLogger(__name__)
 SERVER_STATES = {"stairs_repaired"}
 PLAYER_STATES = {"has_key", "passage_open", "library_found", "drawer_unjammed"}
 
-# A state that is computed rather than stored: true for exactly as long as the
-# player is holding everything a thing `requires`. Put down one ingredient and
-# it stops being true, which is the difference between this and the four above
-# - those are things that have happened and cannot un-happen.
-REQUIREMENTS_MET = "requirements_met"
-
-
 def required_things(requires: str | None) -> list[str]:
-    """The thing ids a `requires` cell names, pipe separated as aliases are."""
+    """The thing ids a `requires` cell names, pipe separated as aliases are.
+
+    `requires` is not a state and does not produce one. It gates `/use` in
+    `bot`: an unmet requirement refuses the whole use and replies with the
+    thing's `use_fail`, so there is no text keyed on it and nothing recorded.
+    """
     if not requires:
         return []
     return [part.strip() for part in requires.split("|") if part.strip()]

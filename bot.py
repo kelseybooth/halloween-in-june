@@ -804,6 +804,21 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
             )
             return
 
+        wanted = states.required_things(row.requires)
+        if wanted and not await database.carries_all(user.id, guild_id, wanted):
+            # A gate, not a branch: it answers whether this player can do the
+            # thing at all, so it is checked before working out what the thing
+            # does. A refused use is not a use - nothing is recorded, nothing
+            # is consumed, and no world effect fires.
+            await interaction.followup.send(
+                await phrasing.say(
+                    guild_id, found.thing_id, "use_fail",
+                    fallback="use_fail.default", name=found.name,
+                ),
+                ephemeral=True,
+            )
+            return
+
         if row.type == "exit":
             await _use_exit(interaction, state, found, row)
             return
@@ -837,7 +852,8 @@ async def _finish_use(interaction, state, found) -> None:
 
     # The text is resolved *after* the effect, so a use that changes a state
     # can be described by the state it produced rather than the one it left.
-    current = await _state_for(guild_id, user.id, found.thing_id)
+    held = await states.in_force(guild_id, user.id)
+    current = sorted(held)[0] if held else resolve.DEFAULT_STATE
 
     reply = await phrasing.say(
         guild_id, found.thing_id, "use", state=current,
@@ -850,24 +866,6 @@ async def _finish_use(interaction, state, found) -> None:
 
     if effect and effect.public:
         await _post_in_room(interaction, state.current_room, reply)
-
-
-async def _state_for(guild_id: int, user_id: int, thing_id: str) -> str:
-    """Which state's text this player should see for this thing.
-
-    A `requires` cell is checked first and beats a stored state, because it is
-    the more specific thing to say: the stove has a line for somebody holding
-    all three ingredients, and that is what they want to read whatever else is
-    true of them. It is computed at the moment of use rather than recorded, so
-    putting an ingredient down takes it away again.
-    """
-    row = await phrasing.thing_row(thing_id)
-    wanted = states.required_things(row.requires if row else None)
-    if wanted and await database.carries_all(user_id, guild_id, wanted):
-        return states.REQUIREMENTS_MET
-
-    held = await states.in_force(guild_id, user_id)
-    return sorted(held)[0] if held else resolve.DEFAULT_STATE
 
 
 async def _post_in_room(interaction, room_id: str, message: str) -> None:
