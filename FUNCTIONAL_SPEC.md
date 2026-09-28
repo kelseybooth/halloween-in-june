@@ -12,7 +12,7 @@ The column reference, the object model and the state model live in the **Content
 
 Out of scope: achievement triggers (their own spec, 34 conditions, owned by QA as much as by engineering), anything in Release 2 or later, and the balance pass.
 
-**Two columns exist in `things.tsv` but are unused in Release 1.** `requires` is populated on nothing, and `cross_weight` carries 0, 1 or 5 but nothing reads it — it is for the cat carrying things between dimensions, which is a later release. Build neither. A developer who finds them and infers behavior will invent a mechanic nobody asked for.
+**One column exists in `things.tsv` but is unused in Release 1.** `cross_weight` carries 0, 1 or 5 but nothing reads it — it is for the cat carrying things between dimensions, which is a later release. Do not build it. A developer who finds it and infers behavior will invent a mechanic nobody asked for. `requires` sat beside it on this list until 28 September and is now live on the stove; see `/use`.
 
 ## The command list
 
@@ -82,7 +82,7 @@ Private reply. Three shapes.
 
 **`/look` with no argument** prints the room's `look` for the player's current state, then the `Also here:` line.
 
-The listing holds **loose objects in the room only**: takeable things with a finite quantity, sitting in `room_contents`, not inside a container. Sources never appear — they are inexhaustible and must be named in room prose or in the text of the thing that holds them, which the content files guarantee. Things inside a container do not appear either; they show when the container is looked at.
+The listing holds **loose objects in the room only**: takeable things with a finite quantity, sitting in `room_contents`, not inside a container. Sources never appear — they are inexhaustible, and instead must be named in the room's `look` text or, when they are `contained_in` a thing, in that container's `look` **or** `use` text. Either one satisfies the loader, which is what lets a container keep its secret until it is opened. The content files guarantee it. Things inside a container do not appear either; they show when the container is looked at.
 
 Entries use `also_here.prefix`, `also_here.separator`, and `also_here.entry_multiple` for a count above one — `herbs x10`. Omit the line entirely when nothing is loose. Four of the nine rooms are in that state at launch, which is correct: everything portable there is tucked inside something.
 
@@ -96,7 +96,7 @@ Entries use `also_here.prefix`, `also_here.separator`, and `also_here.entry_mult
 
 Resolution is scoped to the room, never the inventory (see Resolution). Resolve, then branch on what was resolved.
 
-**A source** hands over the object named in its `yields`, and is not itself consumed. The reply uses **the yielded object's** `take` text, not the source's — the source has none. `yields` sits on 15 rows, and all 15 are `type = source`: the six cat food stashes, the copper wire coil, the carving tool sets, the pile of costumes, the graphite tin, the herb garden, the candy bowl, and — added 26 September — the row of baby bottles, the hollowed-out book and the ring of iron keys. Between them they hand out twelve distinct objects. The herb garden and the candy bowl were fixtures with a `yields` cell until 26 September; they behaved as sources in every respect, so the column was corrected rather than the behavior. Key the implementation on `yields`, not on `type` — in particular the rule that **a source and its yield count as one thing** during resolution, which is the only reason `/take candy` and `/take herbs` do not raise a spurious ambiguity prompt.
+**A source** hands over the object named in its `yields`, and is not itself consumed. The reply uses **the yielded object's** `take` text, not the source's — the source has none. `yields` sits on 17 rows, and all 17 are `type = source`: the seven cat food stashes, the copper wire coil, the carving tool sets, the pile of costumes, the graphite tin, the herb garden, the candy bowl, the box of tortilla chips, the freezer of burritos, the hollowed-out book and the ring of iron keys. Between them they hand out fifteen distinct objects. The herb garden and the candy bowl were fixtures with a `yields` cell until 26 September; they behaved as sources in every respect, so the column was corrected rather than the behavior. Key the implementation on `yields`, not on `type` — in particular the rule that **a source and its yield count as one thing** during resolution, which is the only reason `/take candy` and `/take herbs` do not raise a spurious ambiguity prompt.
 
 **A finite object** decrements `room_contents` and increments `player_inventory`. When the count reaches zero it leaves the room — and the `Also here:` line — entirely. This is what lets one player take the only copy.
 
@@ -133,7 +133,23 @@ One consequence worth stating: a source-fed object dropped in a room where no st
 
 ## `/use`
 
-The widest verb. Resolve first, then take the first branch that applies.
+The widest verb. Resolve first, then check `requires`, then take the first branch that applies.
+
+**`requires` is a gate, not a branch.** It holds a pipe-separated list of `thing_id`s the player must be **carrying** — `player_inventory`, at least one of each, not merely in the same room. It is checked once, after resolution and before any branch below, because it answers whether this player can do the thing at all rather than what the thing does. Release 1 populates it on one row:
+
+| Thing | `requires` |
+| --- | --- |
+| `stove` (Kitchen fixture) | `dark_chocolate\|herbs\|spice_jar` |
+
+**An unmet `requires` refuses the whole use.** Reply with the thing's own `use_fail`, falling through to `use_fail.default` if it is blank. Nothing is consumed, no state changes, and **no `on_use` hook fires** — a refused use is not a use.
+
+**The refusal does not name what is missing, deliberately.** The stove's `use_fail` says *"Whatever you were planning to cook, you don't have all of it yet"* and that is the whole message. Listing the three ingredients would turn a thing the player is meant to work out into a shopping list, and the writers can hint as broadly as they like without the code overriding them.
+
+**A met `requires` consumes nothing.** The player still carries the chocolate, the herbs and the spice afterwards and can cook again. Consumption is what `transforms_to` is for; if cooking should ever eat its ingredients, that is a second column, not a change to this one.
+
+This is what makes *Something's Cooking* cheap: because the gate has already proved the player is carrying all three, the achievement predicate is just "a successful `on_use` of `stove`". It does not re-read the inventory, and it cannot disagree with the command about whether the conditions were met.
+
+Validate `requires` with the other content checks — every id in the list must exist in `things.tsv`, and the loader refuses to start if one does not.
 
 **An exit.** Move the player: add them to the destination thread, post "exits via …" in the room they left, remove them from it. `destination_room_id` is the graph; it is populated on all 20 exits. Some exits are gated by state — the curiosity cabinet reads differently with `has_key` and again with `passage_open` — so the resolved text depends on the player's states, and a `use_fail` on the default state is what refuses a locked exit.
 

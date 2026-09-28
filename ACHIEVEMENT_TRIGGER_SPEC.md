@@ -14,6 +14,8 @@ It does not restate what a command does — that is the **Functional Spec** — 
 
 **An achievement registers against one hook, or several where the fiction needs it.** Do not re-evaluate 35 conditions after every action; dispatch only the achievements listening on the hook that just fired. Most listen on exactly one. *Green Thumb* listens on two — `on_use` for the watering can and the pumpkin, `on_take` for the herbs — because there are three ways to notice that date and all of them should count. Build the dispatcher so that registering one achievement against several hooks is ordinary rather than a special case, and so that one action can fire more than one achievement. The hooks are:
 
+**Refined 28 September: Green Thumb's `on_take` is scoped to the source, not the object.** It fires on taking herbs **from `herb_garden`**, not on picking up a `herbs` object that somebody dropped in the Entryway — that is scavenging, not gardening. This has a consequence for the hook's signature: `on_take` must carry **the source the take resolved against**, not only the `thing_id`, because the Functional Spec has a source and its yield count as one thing during resolution and both paths hand the player an identical `herbs`. Pass the resolved source id (null when the take came from the floor) and let the predicate require `herb_garden`. Nothing else in Release 1 needs it, but it is a field on the hook rather than a special case in one achievement.
+
 | Hook | Fires |
 | --- | --- |
 | `on_take` | after a successful `/take` |
@@ -43,7 +45,7 @@ All scope **player** unless noted. "State needed" names anything the check canno
 | **Passing a Message to David** | Message matches the Alexa wake prefix, and contains one of *remind / reminder / remember* and one of *delivery / subscription / subscribe / order* | `on_message` | none |
 | **Charcuterie Board** | Player's inventory contains all five of `cat_food_chicken`, `cat_food_salmon`, `cat_food_tuna`, `cat_food_gourmet`, `cat_food_expired` at the same time | `on_take` | none — but see the note below |
 | **Found the Specs** | Player `/use`s `reading_glasses` | `on_use` | none |
-| **Something's Cooking** | Player `/use`s the stove in the Kitchen while carrying `herbs`, `dark_chocolate` and `spice_jar` | `on_use` | none — **fixed 26 Sept** |
+| **Something's Cooking** | Player `/use`s the stove in the Kitchen while carrying `herbs`, `dark_chocolate` and `spice_jar` | `on_use` | none — **fixed 26 Sept.** From 28 Sept the `requires` gate on `/use` proves the ingredients, so the predicate is just a successful `on_use` of the stove |
 | **Unsticking the Situation** | `graphite_powder` crosses to B from this player's drop | `on_cross` | a record of who dropped the thing that crossed. **Blocked — post-launch** |
 | **Catproof the House** | Player's inventory holds five baby bottles at once — `used_baby_bottle` and `sanitized_baby_bottle` counted together | `on_take` | none — a direct read of `player_inventory`. **Redefined 27 Sept — see below** |
 | **Return to Sender** | Five bottles sent to B by this player | `on_cross` | a `sends` log. **Blocked — post-launch** |
@@ -55,7 +57,7 @@ All scope **player** unless noted. "State needed" names anything the check canno
 | **Met the Craving** | Player's reaction matches the day's craving emoji | `on_reaction` | the craving tally already specified in the Functional Spec |
 | **Forwarding Address** | Player picks the correct address from the `/use letter` picker | `on_use` | the letter, the address list and the picker. **Blocked — not built** |
 
-**On Charcuterie Board.** "Holds all five at once" needs no new state and is the cheap reading, but it is fragile: a player who drops a can to make room, or gives one away, loses the set. This is intentional, because a player can always take an additional can from any of the cat food sources.
+**On Charcuterie Board — settled 27 September: hold all five at once.** The trigger is a direct read of `player_inventory` on `on_take`, needing no new state. It is fragile in a known way — a player who drops a can to make room, or gives one away, loses the set — and that is accepted, because every flavor comes from a source that cannot run out, so the set can always be rebuilt. The alternative, "has ever held each of the five", would have cost a `player_thing_seen` table written on every `/take`. **Nothing needs that table now, and it is not being built.**
 
 **Catproof the House was redefined twice, and the second version is the simpler one.** The bottles are no longer five objects on the Secret Library shelf — they scatter eight a day across the whole house, with no per-player cap. On 27 September the trigger became **"this player's inventory holds five baby bottles at once"**, counting `used_baby_bottle` and `sanitized_baby_bottle` together, so a player who cleans what they collect does not lose progress. It is checked `on_take`, since taking is the only way an inventory grows.
 
@@ -70,7 +72,7 @@ All scope **server**. They live in `server_achievements`, keyed `(guild_id, achi
 | Achievement | Trigger | Hook |
 | --- | --- | --- |
 | **Strength in Numbers** | Any single room holds 25 or more of one `thing_id` | `on_drop` |
-| **Overdue Returns** | Any single room holds 200 or more things in total | `on_drop` |
+| **Making a Mess** | Any single room holds 200 or more things in total | `on_drop` |
 | **The Feline Collection** — bonus | **The same room** holds 200 or more things **and** 100 or more of them are cat food of any flavor | `on_drop` |
 
 **All three are the same query, and none of them names a room.** Each is a `GROUP BY room_id` over `room_contents` with a different `HAVING` clause — 25 of one `thing_id`, 200 of anything, or 100 cat food inside a room that already holds 200. Write one helper that returns the per-room totals on each drop and pass it three predicates. *The Feline Collection* is the only one that reads two numbers from the same group, and both must come from the **same room**: 120 cans spread over two rooms that each hold 200 things earns nothing.
@@ -79,7 +81,7 @@ All scope **server**. They live in `server_achievements`, keyed `(guild_id, achi
 
 **They count `room_contents`, not history.** A server that reaches 200 and then takes things out keeps the achievement, which is correct, and a server that reaches 199 twice earns nothing, which is also correct.
 
-**Nobody gets individual credit, which needs a product decision.** The Story Bible says the bot posts the achievement's name publicly whenever one is earned, and sends the description privately to the player who earned it. A group achievement has no such player. My proposal: post the public name as usual, send the description to nobody, and show the achievement in the `/stats` of every current server member, marked as a server achievement. The alternative — crediting whoever dropped the 200th thing — rewards arriving last at something everyone built.
+**Nobody gets individual credit, and that was settled on 27 September.** The Story Bible says the bot posts the achievement's name publicly whenever one is earned, and sends the description privately to the player who earned it. A group achievement has no such player. The decision: post the public name as usual, send the description to nobody, and show the achievement in the `/stats` of every current server member, marked as a server achievement. The alternative — crediting whoever dropped the 200th thing — rewards arriving last at something everyone built.
 
 **These three are the achievements most at risk from the cat.** Once crossing ships, every `/pet` in a room where things are piled up can remove one. That tension is deliberate per the Story Bible, but it means a server can sit at 199 for a week. Worth watching in playtest before deciding the thresholds are right.
 
@@ -89,7 +91,7 @@ All scope **player**.
 
 | Achievement | Trigger | Hook | State needed |
 | --- | --- | --- | --- |
-| **A Little Bit Lost** | Five EN→LI→EN round trips within five minutes | `on_move` | a short rolling per-player movement buffer |
+| **A Little Bit Lost** | Any one room entered five or more times within five minutes | `on_move` | a short rolling per-player movement buffer |
 | **Out on a Limb** | Player's first `/use tree` in the Courtyard | `on_use` | none — `library_found` already records it |
 | **Bulk Buyer** | Player carries 25 or more cans of cat food, summed across flavors | `on_take` | none |
 | **Making Friends** | 200 pets by this player while the relationship was positive | `on_pet` | **the relationship at pet time** — see below |
@@ -99,7 +101,7 @@ All scope **player**.
 | **Brewing Trouble** | `/use` the Keurig on Oct 1 | `on_use` | none |
 | **Trash Panda** | `/use` the trash can on Oct 1 | `on_use` | none |
 | **Say Cheese** | `/use` any of the three mirrors on Oct 2 | `on_use` | none |
-| **Green Thumb** | `/use` the watering can, `/take` the herbs, or `/use` (carve) the pumpkin on Oct 15 | `on_use` (watering can, pumpkin) or `on_take` (herbs) | none |
+| **Green Thumb** | `/use` the watering can, `/take` herbs from the herb garden, or `/use` (carve) the pumpkin on Oct 15 | `on_use` (watering can, pumpkin) or `on_take` (from the herb garden only) | none |
 | **Nacho Average Ghost** | `/use` the nacho chips on Oct 21 | `on_use` | none. **Scarce — see below** |
 | **Using Your Noodle** | `/use` the pasta pot on Oct 25 | `on_use` | none |
 | **Getting into the Spirit** | The day's ghost uses the bedsheet | `on_use` | the ghost system and a `bedsheet` thing. **Blocked — not built** |
@@ -108,7 +110,17 @@ All scope **player**.
 | **Curbside Pickup** | `/use` the trash can on a Tuesday | `on_use` | none |
 | **Not-So-Picky Eater** | Ten `/use` on `frozen_burrito`, cumulative, no time limit | `on_use` | a per-player use count — see below |
 
-**The date-gated ones are nearly one function.** Six fixed dates and one weekday, all of the shape "this thing, this day, Pacific". Write it once, parameterised by a date predicate, and register it for each. *Green Thumb* is the exception that shapes the signature: it takes three things across two hooks, so the parameter is a **set of (hook, thing) pairs** rather than a single `thing_id`. Two collision notes. *Trash Panda* and *Curbside Pickup* both watch the trash can, and Oct 1 2026 is a Thursday, so they cannot collide — but both must be evaluated on the same `on_use`, not chained with an `elif`. And *Gourd Job* and *Green Thumb* **can** both fire from one action: carving a pumpkin on Oct 15 earns both, which is intended, so the dispatcher must not stop at the first match.
+**A Little Bit Lost was generalized on 28 September.** It was five Entryway→Living Room→Entryway round trips; it is now **any single room entered five or more times inside five minutes**, by whatever route. Count arrivals per room, not round trips and not total moves: Bedroom→Kitchen→Courtyard→Kitchen→Living Room→Kitchen→Bedroom→Kitchen→Courtyard→Kitchen is five Kitchen arrivals and earns it. The player's starting room is not an arrival, and since a player cannot enter a room they are already in, five arrivals costs at least nine moves. Keep a rolling per-player list of `(room_id, arrived_at)` trimmed to the last five minutes, and on each `on_move` count the entries per `room_id`; any count reaching five fires it.
+
+**The date-gated ones are nearly one function.** Six fixed dates and one weekday, all of the shape "this thing, this day, Pacific". Write it once, parameterised by a date predicate, and register it for each. *Green Thumb* is the exception that shapes the signature: it takes three things across two hooks, so the parameter is a **set of (hook, target) pairs, where a target is a thing or a source** rather than a single `thing_id`. Two collision notes. *Trash Panda* and *Curbside Pickup* both watch the trash can, and Oct 1 2026 is a Thursday, so they cannot collide — but both must be evaluated on the same `on_use`, not chained with an `elif`. And *Gourd Job* and *Green Thumb* **can** both fire from one action: carving a pumpkin on Oct 15 earns both, which is intended, so the dispatcher must not stop at the first match.
+
+**Widened 28 September: a date achievement's day is a 43-hour window, not a calendar day.** The players run from Japan to Hawaii, nineteen hours apart, so any single Pacific calendar day shuts somebody out at one end or the other. "On 1 October" now means **30 September 08:00 Pacific through 2 October 03:00 Pacific**, and every other date takes the same shape.
+
+The window is not a guess — it is exactly the union of "1 October in local time" across UTC+9 to UTC−10. Midnight on 1 October in Japan is 30 September 08:00 Pacific; the last minute of 1 October in Hawaii is 2 October 03:00 Pacific. A player at either extreme earns it during their own 1 October and nobody has to reason about time zones.
+
+It stays one function. Instead of comparing `date(now, Pacific)` with the target, test `target − 1 day at 08:00 Pacific ≤ now < target + 1 day at 03:00 Pacific`. No Release 1 window crosses a daylight-saving boundary — US DST ends on 1 November 2026, so every October window is wholly PDT.
+
+Two consequences to build against. **Consecutive windows overlap by nineteen hours**, so through 1 October both the 1 October and the 2 October achievements are live at the same time. That is harmless only because they watch different things, and it is one more reason the dispatcher must not stop at the first match. And **the Tuesday rule should widen the same way** — Monday 08:00 Pacific through Wednesday 03:00 — otherwise a player in Japan can only earn *Curbside Pickup* between 17:00 Tuesday and 17:00 Wednesday their time. Widening it introduces no collision with *Trash Panda*: the Tuesday windows nearest 1 October close on 30 September at 03:00 and reopen on 5 October at 08:00, both clear of the 1 October window.
 
 **Not-So-Picky Eater is new, and settled: ten frozen burritos.** The burritos are a source in the Kitchen freezer, so supply is not the constraint — the player has to `/use` a `frozen_burrito` ten times, cumulatively, with no time limit. Each `/use` consumes one burrito and prints its `use` text, which is where the joke lives: *"The outside is a burrito. The middle is a popsicle."* Reading that ten times is the achievement.
 
@@ -126,19 +138,18 @@ Add one column: **`relationship_at_pet`, an integer, not null, written on every 
 
 ## What has to be stored
 
-Four tables, two of them new, plus one column change.
+Three tables, one of them new, plus one column change.
 
 | Table | Scope | Holds |
 | --- | --- | --- |
 | `achievements` | global | id, name, kind (public / secret / group), `since_drop`. Loaded from content like everything else |
 | `player_achievements` | per guild | `(guild_id, user_id, achievement_id, earned_at)`, unique on the first three |
 | `server_achievements` | per guild | `(guild_id, achievement_id, earned_at)` — **new** |
-| `player_thing_seen` | per guild | `(guild_id, user_id, thing_id, first_seen_at)` — **new**, written on every successful `/take`. Serves *Charcuterie Board* alone, now that *Catproof the House* reads the inventory directly, and will serve any future "collect the set" |
 | `pet_events` | per guild | add a relationship snapshot column — **change**, and it must land before players start petting |
 
 **Bonus is a label, not a column.** The Story Bible calls *It Takes a Village* and *The Feline Collection* bonus achievements because each sits on top of another achievement's condition and cannot be earned without it. The code does not distinguish them: there is no bonus field, no separate announcement, and no different treatment in `/stats`. They are stored, awarded and announced exactly like any other achievement, and the pairing is a fact about the fiction rather than something to persist.
 
-**Blocked: six achievements cannot be earned at all.** Three wait on cat crossing, which the Delivery Plan cuts to after launch: *Unsticking the Situation*, *Return to Sender* and *It Takes a Village*. Two wait on the ghost system, which the plan cuts last: *Getting into the Spirit* and *Ghostbuster*. One waits on the doorbell: *Signed, Sealed, Delivered*. *Forwarding Address* makes seven if the letter does not ship. This is a scheduling fact rather than a defect — but it means **2d delivers at most 28 of 35**, and the drop calendar should not advertise the others.
+**Blocked: seven achievements cannot be earned at all.** Three wait on cat crossing, which the Delivery Plan cuts to after launch: *Unsticking the Situation*, *Return to Sender* and *It Takes a Village*. Two wait on the ghost system, which the plan cuts last: *Getting into the Spirit* and *Ghostbuster*. One waits on the doorbell: *Signed, Sealed, Delivered*. *Forwarding Address* is the seventh — settled 28 September, the letter is a post-MVP deployment. This is a scheduling fact rather than a defect — but it means **2d delivers 28 of 35**, and the drop calendar should not advertise the others.
 
 **One of those blocks is sharper than it looks.** *Return to Sender* is "granted automatically to players who did it the day before the drop", which requires a `sends` log to have been running before the achievement existed. Since crossing itself is post-launch, there is nothing to log at launch and the retroactive grant is moot — but the moment crossing ships, the log has to ship with it, not with the achievement.
 
@@ -157,11 +168,11 @@ The fixes are not all the same shape, and the difference is the point. The bottl
 
 Settled in the Story Bible, restated here because it decides what the writers owe:
 
-- When anyone earns an achievement of any kind, the bot posts its **name only** in the Halloween channel. A secret achievement's name going up is itself the hint that something is there to find.
+- When anyone earns an achievement of any kind, the bot posts its **name only** in the Halloween channel — the channel the house was initialized in. A secret achievement's name going up is itself the hint that something is there to find.
 - The player who earned it gets the **description** privately.
 - `/stats` lists only what that player has earned, and in Release 1 shows **your own stats only** — looking up another member is a later release. Each earned achievement appears as its name and the line explaining how it was earned.
 
-So each achievement needs two pieces of writing: a **name** (public, spoiler-free, goes up the moment anyone earns it) and an **unlock description** (private, can say what they did). The description does double duty — it is sent when the achievement fires and shown again in `/stats` — so write it to read as well on the tenth viewing as the first, and in a form that still makes sense weeks later out of context. **All thirty-five names are final.** What is still owed is thirty-five unlock descriptions, none of which is written, and that is now the whole of the remaining writing job.
+So each achievement needs two pieces of writing: a **name** (public, spoiler-free, goes up the moment anyone earns it) and an **unlock description** (private, can say what they did). The description does double duty — it is sent when the achievement fires and shown again in `/stats` — so write it to read as well on the tenth viewing as the first, and in a form that still makes sense weeks later out of context. **All thirty-five names are final.** What is still owed is thirty-five unlock descriptions, all of which were drafted on 28 September and now sit in achievements.tsv, the ninth content file.
 
 Both live in the content files, not in code — same `since_drop` resolution as everything else, so an achievement's name can change at a later drop without a deploy.
 
@@ -169,19 +180,23 @@ One caution for the namer: a secret achievement's name is public from the first 
 
 ## Open questions
 
-Six things this spec cannot decide.
-
-**Does a group achievement appear in anybody's `/stats`?** I have proposed: yes, in every current member's, marked as a server achievement. Needs a yes or no before 2d.
-
-**Charcuterie Board — hold all five at once, or have held each?** I have argued for "has held each", which costs the `player_thing_seen` table. The cheap reading ships without it.
+Four questions this spec could not decide. All four were settled on 28 September; each answer sits under its question.
 
 **What does *Something's Cooking* use?** "Use the kitchen" is not a thing. The stove is the obvious target and is already a Kitchen fixture, but the achievement text should name it so the writers can write the response.
 
+**Settled 28 September: it requires the stove.** *Something's Cooking* fires when a player `/use`s the Kitchen stove while carrying `herbs`, `dark_chocolate` and `spice_jar`. The stove already exists as a Kitchen fixture. Its present `use` text is written as a failure — *"you don't have all of it yet"* — so it moves to `use_fail`, and a success line is owed. That is item 4 on the **Writer Revisit: Source Prose** tab, with drafts.
+
 **What does *Dressed for the Season* look like?** There is no `/wear`. `/use costume` is the only mechanism, and its current `use` text has to read as putting it on rather than examining it.
+
+**Settled 28 September: `/use costume` puts it on.** No `/wear` is coming, so the `use` text carries the whole moment. The present line ends on a mirror over a dresser, which is only true in one room — the costume is takeable and can be used anywhere. A room-independent rewrite is item 5 on the **Writer Revisit: Source Prose** tab, with drafts.
 
 **Do the four scarcity fixes above get made?** Each is one cell, but they change content the writers are holding, so they should go in the same pass as the source-prose revisit rather than separately.
 
+**Confirmed 28 September: all four are made.** Verified against the content files as they now stand. `bottle_row` is gone and used baby bottles arrive by restock, eight a day, admin-configurable through `bottles_per_day`. `chocolate_book` in the Living Room bookshelves yields `dark_chocolate`, and the Amazon box is restocked with four spice jars on day 2 and every third day after. `chip_box` in the Kitchen pantry yields `nacho_chips`. `key_nail` on the library shelves yields `skeleton_key`. All four yielded objects now sit at `quantity = 0`, so the source is the only route and no player can exhaust one.
+
 **Which drop does each achievement arrive at?** Every achievement carries a `since_drop` like any other content row. Seven have real dates already; the rest default to launch. This folds into the drop calendar and does not block 2d.
+
+**Settled 28 September: all thirty-five are drop 1.** Every achievement row carries `since_drop = 1`, so the whole set exists from launch. The `since_drop` column stays on `achievements.tsv` because later drops are expected to add achievements — it is the mechanism for that, not something Release 1 exercises. Note again that this is separate from the date gates: the seven date-bound achievements exist from drop 1 and simply cannot fire until their day.
 
 ---
 
