@@ -40,6 +40,7 @@ Discord, no network. CI runs the same command on Python 3.13.
 | `test_achievements.py` | The ninth content file: parsing, validation, drop resolution, and idempotent awards |
 | `test_dispatcher.py` | The dispatcher and the nine hooks, and how an award gets announced |
 | `test_triggers.py` | All thirty-five conditions, the 43-hour date window, and the three group queries |
+| `test_stats.py` | `/stats`: what it shows, what it withholds, and the overflow case |
 
 ## Foreign keys
 
@@ -111,6 +112,21 @@ the world quietly cannot earn theirs, and nothing reports it. So
 and one in Hawaii earning it on their own local date, and asserts consecutive
 windows overlap by exactly nineteen hours — which is one more reason the
 dispatcher must not stop at the first match.
+
+## What `/stats` withholds
+
+Two rules, and both are about what the command does **not** say.
+
+It is **ephemeral, always**, because it carries the unlock descriptions — the
+spoilers the public announcement is kept to a name to avoid. And it says
+nothing about unearned achievements: no count out of thirty-five, no locked
+rows, no progress bars. A secret achievement's existence is revealed by
+somebody earning it.
+
+It is an embed rather than a message because a message caps at 2,000
+characters. All thirty-five rendered comes to about 2,600 — so a plain
+message would have broken at the end of October for exactly the players who
+played the most.
 
 ## Cohorts
 

@@ -205,7 +205,9 @@ class FakeInteraction:
     """
 
     def __init__(self, user_id, guild_id, *, guild=None):
-        self.user = SimpleNamespace(id=user_id, mention=f"<@{user_id}>")
+        self.user = SimpleNamespace(
+            id=user_id, mention=f"<@{user_id}>", display_name=f"Player {user_id}"
+        )
         self.guild_id = guild_id
         self.guild = guild
         self.deferred = False
@@ -219,6 +221,12 @@ class FakeInteraction:
         """The text of the last thing sent."""
         assert self.sent, "nothing was sent"
         return self.sent[-1][0] or ""
+
+    @property
+    def embed(self):
+        """The embed of the last thing sent, or None if it was plain text."""
+        assert self.sent, "nothing was sent"
+        return self.sent[-1][1].get("embed")
 
     @property
     def was_private(self) -> bool:

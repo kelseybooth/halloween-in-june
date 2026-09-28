@@ -1681,26 +1681,114 @@ async def admin_config(interaction: discord.Interaction, key: str, value: int) -
     )
 
 
-@bot.tree.command(name="stats", description="See how many times you've petted the cat.")
+# An embed's description allows 4,096 characters where a message allows 2,000.
+# Thirty-five names plus thirty-five unlock lines passes 2,000 for a
+# completionist, and the failure mode would be the command breaking at the end
+# of October for exactly the players who played the most.
+EMBED_LIMIT = 4096
+
+# What each kind is called in /stats. `group` says "server" because that is
+# the fact a reader needs: nobody earned it, everybody has it.
+KIND_HEADINGS = {
+    "public": "Achievements",
+    "secret": "Secret achievements",
+    "group": "Server achievements",
+}
+KIND_ORDER = ("public", "secret", "group")
+
+NOTHING_YET = (
+    "Nothing here yet. Pet the cat, open a few doors, and come back - "
+    "the house notices more than it lets on."
+)
+
+
+@bot.tree.command(name="stats", description="See what you've earned, and how the cat feels.")
 @app_commands.guild_only()
 async def stats(interaction: discord.Interaction) -> None:
-    await interaction.response.defer()
+    """Everything this player has earned, privately.
+
+    **Ephemeral, always.** It carries unlock descriptions, which are the
+    spoilers the public announcement deliberately withholds - posting them in
+    the channel would defeat keeping that announcement to a name.
+
+    Release 1 shows your own stats only. Looking up another member is a later
+    release and changes what the command has to protect.
+    """
+    await interaction.response.defer(ephemeral=True)
+    user, guild_id = interaction.user, interaction.guild_id
+
     try:
-        count = await database.get_pet_count(interaction.user.id, interaction.guild_id)
-        relationship = await database.get_relationship(interaction.user.id, interaction.guild_id)
+        count = await database.get_pet_count(user.id, guild_id)
+        relationship = await database.get_relationship(user.id, guild_id)
+        tally = await craving.tally(guild_id, user.id)
+        earned = await _earned_lines(guild_id, user.id)
     except SQLAlchemyError:
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
         return
 
-    if count == 0:
-        await interaction.followup.send(
-            "You haven't petted the cat yet. Try `/pet` - it's waiting for you."
-        )
-        return
-
-    await interaction.followup.send(
-        f"Your cat petting stats:\nTotal pets: {count}\nRelationship: {relationship}"
+    embed = discord.Embed(
+        title=f"{user.display_name}'s stats",
+        description=_fit(earned) if earned else NOTHING_YET,
     )
+    # Always shown, including on day one, so the empty state reads as an
+    # invitation rather than an error.
+    embed.add_field(name="Pets", value=str(count))
+    embed.add_field(name="Relationship", value=str(relationship))
+    # Here rather than with the achievement that rewards it, so the daily game
+    # outlives being rewarded once.
+    embed.add_field(name="Cravings found", value=str(tally))
+
+    await interaction.followup.send(embed=embed, ephemeral=True)
+
+
+async def _earned_lines(guild_id: int, user_id: int) -> list[str]:
+    """Every achievement this player has, as rendered lines, grouped by kind.
+
+    Nothing about achievements **not** yet earned: no count out of
+    thirty-five, no locked rows, no progress bars. A secret achievement's
+    existence is revealed by somebody earning it, not by this command.
+
+    A group achievement appears for every current member with nobody named as
+    the earner, because there is no earner - crediting whoever dropped the two
+    hundredth thing rewards arriving last at something everyone built.
+    """
+    available = await resolve.achievements(guild_id)
+    mine = await database.player_achievements_of(guild_id, user_id)
+    ours = await database.server_achievements_of(guild_id)
+    held = set(mine) | set(ours)
+
+    lines = []
+    for kind in KIND_ORDER:
+        rows = sorted(
+            (row for key, row in available.items() if key in held and row.kind == kind),
+            key=lambda row: (row.sort_order, row.name),
+        )
+        if not rows:
+            continue
+        lines.append(f"**{KIND_HEADINGS[kind]}**")
+        lines.extend(f"**{row.name}** - {row.unlock}" for row in rows)
+        lines.append("")
+    return lines[:-1] if lines else []
+
+
+def _fit(lines: list[str]) -> str:
+    """Join what fits, and say how much did not.
+
+    Same shape `Also here:` already uses, for the same reason: a player who
+    has earned enough to overflow should be told, not silently shown less.
+    """
+    kept: list[str] = []
+    used = 0
+    for index, line in enumerate(lines):
+        # +1 for the newline that joins it to what came before.
+        cost = len(line) + (1 if kept else 0)
+        remaining = len(lines) - index
+        tail = f"\n…and {remaining} more." if remaining else ""
+        if used + cost + len(tail) > EMBED_LIMIT:
+            return "\n".join(kept) + f"\n…and {remaining} more."
+        kept.append(line)
+        used += cost
+    return "\n".join(kept)
 
 
 @bot.tree.error
