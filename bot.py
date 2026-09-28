@@ -51,15 +51,15 @@ SHOW_DEBUG_INFO = False
 
 # Placeholder copy - writers will replace these in Phase 2.
 FRIENDLY_RESPONSES = [
-    "The cat purrs contentedly as you pet it, tail curling like smoke.",
-    "The cat meows and rubs against your leg, eyes glinting in the dark.",
-    "The cat stretches, blinks slowly at you, and vanishes for just a second.",
+    "The cat purrs contentedly as you pet it, tail curling like smoke. Is this bonding?",
+    "The cat meows and rubs against your leg, eyes glinting in the dark. Maybe you'll be friends.",
+    "The cat stretches, blinks slowly at you, and meows fondly.",
 ]
 
 STANDOFFISH_RESPONSES = [
-    "The cat meows incessantly until you pet it again.",
-    "The cat startles, hissing at you.",
-    "The cat gives you a warning bat with its paw.",
+    "The cat meows admonishingly and turns its back on you. Oh no! You wanted to be friends.",
+    "The cat startles, hissing at you. You worry the cat doesn't like you.",
+    "The cat glares at you and gives you a warning bat with its paw. You hope this doesn't hurt your relationship.",
 ]
 
 PET_RESPONSES = FRIENDLY_RESPONSES + STANDOFFISH_RESPONSES
@@ -68,7 +68,7 @@ PET_RESPONSES = FRIENDLY_RESPONSES + STANDOFFISH_RESPONSES
 # pets gets BASE_FRIENDLY_CHANCE; every pet already inside
 # database.RECENT_PET_WINDOW subtracts DECAY_PER_RECENT_PET points. Go quiet for
 # ten minutes and the window empties, restoring the cat's patience.
-BASE_FRIENDLY_CHANCE = 70
+BASE_FRIENDLY_CHANCE = 80
 DECAY_PER_RECENT_PET = 10
 
 # How often to look for restock occurrences that have come due. Occurrences
@@ -80,7 +80,7 @@ RESTOCK_SWEEP_MINUTES = 10
 RELATIONSHIP_STEP = 5
 
 DB_ERROR_MESSAGE = (
-    "The cat slipped into the shadows and I lost track of it. "
+    "The cat slips into the shadows and you lose track of it. "
     "Something went wrong reaching the database - please try again in a moment."
 )
 
