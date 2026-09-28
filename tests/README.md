@@ -162,6 +162,29 @@ a thing with an ordinary `room_id` is still in one room — `test_reach.py`
 asserts that in both directions. She stays out of `Also here:` for free: the
 listing holds loose takeable objects, and she is neither.
 
+## The thread is the room
+
+`/look`, `/take`, `/drop` and `/use` refuse outside the house. Reported from
+testing: `/look` in an unrelated channel answered with the player's room,
+which makes the house a status readout rather than a place.
+
+Being in *a* room thread is enough, and that is not weaker than checking for
+*the* room. The rooms are private threads created with `invitable=False`, and
+the bot is the only thing that adds or removes anybody — on entry and on every
+move — so a player is a member of exactly one room thread and cannot type in
+another. Checking the specific room would add no protection and one failure
+mode: a membership bug would strand somebody with no room they are allowed to
+act in.
+
+`/pet`, `/inventory` and `/stats` are about the player rather than the room
+and answer anywhere; the admin commands have to work before any thread exists.
+
+Almost every command test is about what a verb does rather than where it was
+typed, so `FakeInteraction` defaults to a thread inside the house —
+`AnyRoomName` in `fake_discord.py` answers to whichever room it is compared
+against. A test that cares passes `a_room_thread("Kitchen")` or
+`somewhere_else()`.
+
 ## Cohorts
 
 Gone as of phase 2a step 4. Two columns survive the removal —
