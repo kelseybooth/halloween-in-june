@@ -186,9 +186,12 @@ class FakeMember:
     the player the award it was announcing.
     """
 
-    def __init__(self, user_id, *, dms_open=True):
+    def __init__(self, user_id, *, dms_open=True, display_name=None):
         self.id = user_id
         self.mention = f"<@{user_id}>"
+        # What a public line prints. Never the mention: a display name has to
+        # be able to contain something mention-shaped without pinging.
+        self.display_name = display_name or f"Player {user_id}"
         self.dms_open = dms_open
         self.dms: list[str] = []
 

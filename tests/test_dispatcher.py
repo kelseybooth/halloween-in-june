@@ -26,7 +26,7 @@ import bot
 import content as content_module
 import content_loader
 import database
-from content import Achievement
+from content import Achievement, Content
 
 from test_achievements import an_achievement
 from test_drops import a_calendar, a_drop
@@ -69,6 +69,11 @@ async def guild(db):
     for who in (ALICE, BOB):
         await db.ensure_user_exists(who, GUILD_A)
     await db.ensure_user_exists(ALICE, GUILD_B)
+    # The announcement lines render from `defaults.tsv`, so a test that
+    # announces anything needs the house strings even when it needs no world.
+    strings = Content()
+    strings.defaults = dict(content_module.load_files().defaults)
+    await content_loader.load_content(strings)
     return db
 
 
@@ -334,8 +339,10 @@ async def test_a_predicate_reads_the_context_it_was_given(guild):
 # --------------------------------------------------------------------------
 # Announcing
 #
-# The name in public, the description to the earner and nobody else. A group
-# achievement announces its name and tells nobody, because there is no earner.
+# Two messages: the earner gets the detail, the server gets the event. The
+# public line carries the name and **never** the description, which is what
+# lets a secret achievement announce like any other - the name appearing is
+# the hint, and it points without explaining.
 # --------------------------------------------------------------------------
 
 
@@ -358,70 +365,120 @@ def an_award(**overrides):
     return achievements.Earned(**{**defaults, **overrides})
 
 
-async def test_the_name_goes_up_in_the_halloween_channel(guild, halloween):
-    await bot._announce(an_award(), guild=halloween)
-
-    assert halloween.text_channels[0].posted == ["Gourd Job"]
+def posted(halloween):
+    return halloween.text_channels[0].posted
 
 
-async def test_the_description_never_goes_up_publicly(guild, halloween):
-    """The public post is the name only, including for a secret achievement -
-    the name appearing is itself the hint that something is there to find."""
-    await bot._announce(an_award(kind="secret"), guild=halloween)
-
-    assert "Carved a pumpkin" not in " ".join(halloween.text_channels[0].posted)
-
-
-async def test_the_description_arrives_ephemerally_from_a_command(guild, halloween):
+async def test_the_public_line_names_the_player_and_the_achievement(guild, halloween):
     interaction = FakeInteraction(ALICE, GUILD_A, guild=halloween)
 
     await bot._announce(an_award(), interaction=interaction)
 
-    assert interaction.reply == "Carved a pumpkin in the courtyard."
+    assert posted(halloween) == [f"Player {ALICE} earned **Gourd Job**"]
+
+
+async def test_the_public_line_never_carries_the_description(guild, halloween):
+    """Including for a secret achievement. It points without explaining."""
+    await bot._announce(an_award(kind="secret"), guild=halloween)
+
+    assert "Carved a pumpkin" not in " ".join(posted(halloween))
+
+
+async def test_the_public_line_pings_nobody(guild, halloween):
+    """A display name is plain text, so one containing something
+    mention-shaped cannot turn into a ping."""
+    await bot._announce(an_award(), guild=halloween)
+
+    assert f"<@{ALICE}>" not in " ".join(posted(halloween))
+
+
+async def test_the_earner_gets_the_name_and_the_description(guild, halloween):
+    interaction = FakeInteraction(ALICE, GUILD_A, guild=halloween)
+
+    await bot._announce(an_award(), interaction=interaction)
+
+    assert interaction.reply == (
+        "You earned **Gourd Job**: Carved a pumpkin in the courtyard."
+    )
     assert interaction.was_private
 
 
-async def test_the_description_arrives_by_dm_without_a_command(guild, halloween):
-    """A reaction carries no interaction token, which is already why the
-    craving's confirmation is a public reaction with no private fallback."""
+async def test_nothing_private_is_sent_without_an_interaction(guild, halloween):
+    """Three achievements fire without one - *Met the Craving* on a
+    reaction, *Passing a Message to David* on a message, and anything on the
+    midnight job. Settled: no DM. They get the public line only."""
     await bot._announce(an_award(), guild=halloween)
 
-    assert halloween.get_member(ALICE).dms == ["Carved a pumpkin in the courtyard."]
-
-
-async def test_a_closed_dm_is_not_an_error(guild, halloween):
-    """People close their DMs. `/stats` holds the description permanently, so
-    this is logged and dropped rather than retried or posted publicly."""
-    halloween.add_member(FakeMember(ALICE, dms_open=False))
-
-    await bot._announce(an_award(), guild=halloween)
-
-    assert halloween.text_channels[0].posted == ["Gourd Job"]
-
-
-async def test_a_closed_dm_does_not_fall_back_to_posting_it_publicly(guild, halloween):
-    """That would spoil a secret achievement for everyone in the server."""
-    halloween.add_member(FakeMember(ALICE, dms_open=False))
-
-    await bot._announce(an_award(kind="secret"), guild=halloween)
-
-    assert halloween.text_channels[0].posted == ["Gourd Job"]
-
-
-async def test_a_group_achievement_tells_nobody(guild, halloween):
-    await bot._announce(an_award(kind="group", user_id=None), guild=halloween)
-
-    assert halloween.text_channels[0].posted == ["Gourd Job"]
+    assert posted(halloween)
     assert halloween.get_member(ALICE).dms == []
 
 
-async def test_a_failed_announcement_does_not_raise(guild, halloween):
-    """The award is already written. `/stats` still shows it."""
+async def test_a_group_achievement_names_the_server(guild, halloween):
+    """"Somebody earned" is the wrong sentence when nobody did."""
+    await bot._announce(
+        an_award(
+            achievement_id="making_a_mess",
+            kind="group",
+            name="Making a Mess",
+            unlock="Amassed 200 things into a single room",
+            user_id=None,
+        ),
+        guild=halloween,
+    )
+
+    assert posted(halloween) == [
+        "Test Server earned **Making a Mess**: Amassed 200 things into a single room"
+    ]
+
+
+async def test_a_group_achievement_is_the_one_place_the_description_is_public(
+    guild, halloween
+):
+    """There is no private message to put it in, and nobody to send one to."""
+    await bot._announce(
+        an_award(kind="group", user_id=None), guild=halloween
+    )
+
+    assert "Carved a pumpkin" in posted(halloween)[0]
+    assert halloween.get_member(ALICE).dms == []
+
+
+async def test_a_group_achievement_sends_nobody_a_private_line(guild, halloween):
+    interaction = FakeInteraction(ALICE, GUILD_A, guild=halloween)
+
+    await bot._announce(an_award(kind="group", user_id=None), interaction=interaction)
+
+    assert interaction.sent == []
+
+
+async def test_a_failed_public_line_still_sends_the_private_one(guild, halloween):
+    """The award is already written either way."""
     halloween.text_channels[0].send_fails = True
+    interaction = FakeInteraction(ALICE, GUILD_A, guild=halloween)
 
-    await bot._announce(an_award(), guild=halloween)
+    await bot._announce(an_award(), interaction=interaction)
 
-    assert halloween.get_member(ALICE).dms == ["Carved a pumpkin in the courtyard."]
+    assert "You earned" in interaction.reply
+
+
+async def test_no_channel_at_all_still_sends_the_private_line(guild):
+    empty = FakeGuild(GUILD_A, channels=[], members=[FakeMember(ALICE)])
+    interaction = FakeInteraction(ALICE, GUILD_A, guild=empty)
+
+    await bot._announce(an_award(), interaction=interaction)
+
+    assert "You earned" in interaction.reply
+
+
+async def test_an_uncached_member_still_gets_the_public_line(guild, halloween):
+    """Off a reaction there is no interaction and the member cache can miss.
+    The event matters more than the name, so the line posts either way."""
+    nobody = FakeGuild(GUILD_A, channels=[FakeChannel(name="halloween")], members=[])
+
+    await bot._announce(an_award(), guild=nobody)
+
+    assert posted(nobody)
+    assert "earned **Gourd Job**" in posted(nobody)[0]
 
 
 async def test_the_recorded_channel_wins_over_the_name(guild, halloween):
@@ -435,7 +492,7 @@ async def test_the_recorded_channel_wins_over_the_name(guild, halloween):
 
     await bot._announce(an_award(), guild=guild_with_two)
 
-    assert other.posted == ["Gourd Job"]
+    assert other.posted
     assert guild_with_two.text_channels[0].posted == []
 
 
@@ -443,7 +500,7 @@ async def test_a_server_with_no_recorded_channel_falls_back_to_the_name(guild, h
     """Servers initialized before the id was recorded keep working."""
     await bot._announce(an_award(), guild=halloween)
 
-    assert halloween.text_channels[0].posted == ["Gourd Job"]
+    assert posted(halloween)
 
 
 async def test_a_recorded_channel_that_is_gone_falls_back_too(guild, halloween):
@@ -451,16 +508,22 @@ async def test_a_recorded_channel_that_is_gone_falls_back_too(guild, halloween):
 
     await bot._announce(an_award(), guild=halloween)
 
-    assert halloween.text_channels[0].posted == ["Gourd Job"]
+    assert posted(halloween)
 
 
-async def test_no_channel_at_all_still_sends_the_description(guild):
-    """An announcement failure must never cost the player the description."""
-    empty = FakeGuild(GUILD_A, channels=[], members=[FakeMember(ALICE)])
+async def test_all_three_strings_come_from_defaults(guild):
+    defaults = content_module.load_files().defaults
 
-    await bot._announce(an_award(), guild=empty)
+    for key in ("achievement.private", "achievement.public", "achievement.public.group"):
+        assert defaults.get(key), key
 
-    assert empty.get_member(ALICE).dms == ["Carved a pumpkin in the courtyard."]
+
+async def test_the_group_line_uses_the_server_token(guild):
+    defaults = content_module.load_files().defaults
+
+    assert "{server}" in defaults["achievement.public.group"]
+    assert "{description}" in defaults["achievement.public.group"]
+    assert "{description}" not in defaults["achievement.public"]
 
 
 # --------------------------------------------------------------------------
@@ -475,7 +538,9 @@ async def test_fire_awards_and_announces_in_one_go(guild, halloween):
 
     await bot._fire(a_context(hook="on_use"), interaction=interaction)
 
-    assert halloween.text_channels[0].posted == ["Gourd Job"]
+    assert halloween.text_channels[0].posted == [
+        f"Player {ALICE} earned **Gourd Job**"
+    ]
     assert interaction.was_private
 
 
@@ -642,9 +707,10 @@ async def test_an_announcement_failure_leaves_the_award_in_place(guild, hallowee
     assert set(await database.player_achievements_of(GUILD_A, ALICE)) == {"gourd_job"}
 
 
-async def test_a_reaction_earns_by_dm_through_the_real_handler(guild, halloween):
-    """No interaction token anywhere on this path, so the description has
-    nowhere to go but a DM."""
+async def test_a_reaction_announces_publicly_and_privately_to_nobody(guild, halloween):
+    """No interaction token anywhere on this path. Settled: no DM - the
+    public line is the whole announcement, and the earner never reads the
+    description. Acceptable because they just deliberately did the thing."""
     await a_world_with("met_the_craving")
     achievements.register("met_the_craving", "on_reaction", always)
 
@@ -655,5 +721,5 @@ async def test_a_reaction_earns_by_dm_through_the_real_handler(guild, halloween)
         guild=halloween,
     )
 
-    assert halloween.text_channels[0].posted == ["Met The Craving"]
-    assert halloween.get_member(ALICE).dms == ["You did met_the_craving."]
+    assert "earned **Met The Craving**" in halloween.text_channels[0].posted[0]
+    assert halloween.get_member(ALICE).dms == []

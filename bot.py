@@ -1257,11 +1257,17 @@ async def _fire(context, *, interaction=None, guild=None) -> None:
 
 
 async def _announce(award, *, interaction=None, guild=None) -> None:
-    """The name in public, the description to the earner and nobody else.
+    """Two messages: the earner gets the detail, the server gets the event.
 
-    The award is already written. An announcement failure leaves it in place -
-    `/stats` still shows it - which is why every branch here logs rather than
-    raising.
+    **The public line carries the name and never the description.** That is
+    what lets a secret achievement announce like any other - *Out on a Limb*
+    appearing in the channel tells the server there is a tree worth climbing,
+    which is the feature. Eighteen quiet hints spread across October, each
+    arriving because somebody actually found something.
+
+    The award is already written, so every branch here logs rather than
+    raising: an announcement that fails leaves the achievement in place and
+    `/stats` still shows it.
     """
     if guild is None and interaction is not None:
         guild = interaction.guild
@@ -1270,42 +1276,74 @@ async def _announce(award, *, interaction=None, guild=None) -> None:
         return
 
     channel = await _announcement_channel(guild)
-    if channel is not None:
-        try:
-            # The name only, including for a secret achievement - the name
-            # appearing is itself the hint that something is there to find.
-            await channel.send(award.name)
-        except discord.HTTPException:
-            log.warning("Could not announce %s", award.achievement_id, exc_info=True)
+    earner = _earner_of(award, interaction, guild)
 
     if award.user_id is None:
-        # A group achievement has no earner, so the description goes nowhere.
-        # It still shows in every current member's /stats.
+        # A group achievement has no earner, so "somebody earned" is the
+        # wrong sentence and there is nobody to write to privately. The
+        # server is named instead, and this is the one place the description
+        # belongs in public.
+        line = await phrasing.default_say(
+            "achievement.public.group",
+            server=guild.name,
+            achievement=award.name,
+            description=award.unlock,
+        )
+    else:
+        line = await phrasing.default_say(
+            "achievement.public",
+            player=earner or "Somebody",
+            achievement=award.name,
+        )
+
+    if channel is not None and line:
+        # Plain text and no ping: a display name containing something
+        # mention-shaped must not turn into one.
+        await _post_quietly(channel, line)
+
+    if award.user_id is None:
         return
 
-    if interaction is not None:
-        try:
-            await interaction.followup.send(award.unlock, ephemeral=True)
-        except discord.HTTPException:
-            log.warning("Could not send %s privately", award.achievement_id, exc_info=True)
-        return
-
-    # No interaction token - a reaction or a message carries none - so the
-    # description goes by DM. People close their DMs, and that is not an
-    # error: /stats holds the description permanently. Never fall back to
-    # posting it publicly, which would spoil a secret achievement for everyone.
-    member = guild.get_member(award.user_id)
-    if member is None:
-        log.info("Player %s is not cached; no DM for %s", award.user_id, award.achievement_id)
-        return
-    try:
-        await member.send(award.unlock)
-    except discord.HTTPException:
+    # **No DM, deliberately.** Three achievements fire without an interaction
+    # to answer - *Met the Craving* on a reaction, *Passing a Message to
+    # David* on a message, and anything on the midnight job - and a bot DM
+    # would need a delivery path that can silently fail, a member setting
+    # nobody controls, and a second message format to maintain, all for two
+    # of them. They get the public line only. The cost is that their earner
+    # never reads the description, which is acceptable because both are
+    # things the player just deliberately did.
+    if interaction is None:
         log.info(
-            "Could not DM %s about %s; /stats still has it",
-            award.user_id,
+            "No interaction for %s; the public line is the whole announcement",
             award.achievement_id,
         )
+        return
+
+    private = await phrasing.default_say(
+        "achievement.private", achievement=award.name, description=award.unlock
+    )
+    if not private:
+        return
+    try:
+        await interaction.followup.send(private, ephemeral=True)
+    except discord.HTTPException:
+        log.warning("Could not send %s privately", award.achievement_id, exc_info=True)
+
+
+def _earner_of(award, interaction, guild) -> str | None:
+    """The display name to print, without pinging anybody.
+
+    The interaction knows it directly. Off a reaction or a message there is
+    no interaction, so the guild's member cache is asked instead - and when
+    that misses, the public line still posts with a placeholder rather than
+    being dropped, because the event matters more than the name.
+    """
+    if award.user_id is None:
+        return None
+    if interaction is not None:
+        return interaction.user.display_name
+    member = guild.get_member(award.user_id)
+    return member.display_name if member is not None else None
 
 
 async def _announcement_channel(guild):

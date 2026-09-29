@@ -750,8 +750,12 @@ async def test_using_the_reading_glasses_announces_it(playing, halloween):
 
     await bot.use.callback(interaction, "reading glasses")
 
-    assert halloween.text_channels[0].posted == ["Found the Specs"]
+    assert halloween.text_channels[0].posted == [
+        f"Player {ALICE} earned **Found the Specs**"
+    ]
+    # The description is the private half, and never the public one.
     assert "Found David's reading glasses" in interaction.reply
+    assert "Found David's reading glasses" not in halloween.text_channels[0].posted[0]
 
 
 async def test_cooking_on_the_stove_announces_it(playing, halloween):
@@ -762,7 +766,9 @@ async def test_cooking_on_the_stove_announces_it(playing, halloween):
 
     await bot.use.callback(interaction, "stove")
 
-    assert halloween.text_channels[0].posted == ["Something's Cooking"]
+    assert halloween.text_channels[0].posted == [
+        f"Player {ALICE} earned **Something's Cooking**"
+    ]
 
 
 async def test_an_empty_handed_stove_earns_nothing(playing, halloween):
@@ -785,7 +791,10 @@ async def test_taking_the_fifth_flavour_announces_it(playing, halloween):
 
     await bot.take.callback(interaction, "tuna")
 
-    assert "Charcuterie Board" in halloween.text_channels[0].posted
+    assert any(
+        "earned **Charcuterie Board**" in line
+        for line in halloween.text_channels[0].posted
+    )
 
 
 async def test_the_unlock_text_arrives_privately(playing, halloween):
