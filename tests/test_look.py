@@ -542,6 +542,11 @@ async def test_every_source_in_the_shipped_house_describes_itself(house):
     for thing in parsed.things:
         if not thing.is_source:
             continue
+        if thing.since_drop != 1:
+            # The can opener's rail waits on a drop nobody has fired, so it
+            # does not resolve yet. Its prose is checked by the loader's
+            # source-in-prose rule all the same.
+            continue
         room = thing.room_id
         if room not in things and thing.contained_in:
             room = things[thing.contained_in].room_id
@@ -552,7 +557,11 @@ async def test_every_source_in_the_shipped_house_describes_itself(house):
         assert opening in reply, thing.thing_id
         checked += 1
 
+    # Seventeen have arrived; the can opener's rail is the eighteenth and
+    # waits on a drop. The count is here so a nineteenth added without a
+    # description fails rather than quietly joining the buried pile.
     assert checked == 17
+    assert sum(1 for t in parsed.things if t.is_source) == 18
 
 
 async def test_a_source_with_no_look_text_falls_back_to_its_yield(house):

@@ -395,13 +395,26 @@ async def test_visible_thing_ids_gates_on_arrival(guild):
 # --------------------------------------------------------------------------
 
 
-async def test_the_shipped_calendar_has_arrived(guild):
-    """One row, `launch`, so every server sees everything from the first boot."""
+async def test_only_the_launch_drop_has_arrived(guild):
+    """Drop 1 is `launch`, so every server sees it from the first boot. Drop 2
+    is `manual` and holds the can opener: nobody has picked a date, so an
+    admin fires it when the content is ready and until then the cat food
+    cannot be opened."""
     parsed = content_module.load_files()
     await content_loader.load_content(parsed)
 
     assert await resolve.arrived_drop_ids(GUILD_A) == {1}
-    assert len(await resolve.visible_thing_ids(GUILD_A)) == len(parsed.things)
+
+
+async def test_the_unarrived_drop_hides_exactly_its_own_content(guild):
+    parsed = content_module.load_files()
+    await content_loader.load_content(parsed)
+
+    visible = await resolve.visible_thing_ids(GUILD_A)
+    waiting = {t.thing_id for t in parsed.things if t.since_drop != 1}
+
+    assert waiting == {"can_opener", "can_opener_hook"}
+    assert visible == {t.thing_id for t in parsed.things} - waiting
 
 
 async def test_the_shipped_content_resolves_a_room(guild):

@@ -412,6 +412,12 @@ class ThingType(Base):
     quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
     takeable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     droppable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Used up when used. The only thing in the game that destroys an object,
+    # which is why content.py refuses it on anything a player cannot get
+    # another of.
+    consumed_on_use: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("0")
+    )
     cross_weight: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     max_per_player: Mapped[int | None] = mapped_column(Integer, nullable=True)
     requires: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -859,6 +865,7 @@ _LATER_COLUMNS: list[tuple[str, str, str]] = [
     ("users", "relationship", f"INTEGER NOT NULL DEFAULT {RELATIONSHIP_START}"),
     ("users", "last_decay_date", "DATE"),
     ("things", "cohort", "VARCHAR(1)"),
+    ("thing_types", "consumed_on_use", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ("thing_text", "move_depart", "TEXT"),
     ("thing_text", "move_arrive", "TEXT"),
     ("things", "can_take", "BOOLEAN NOT NULL DEFAULT FALSE"),
@@ -1836,6 +1843,28 @@ async def drop_into_room(user_id: int, guild_id: int, room_id: str, thing_id: st
 
     log.info("User %s dropped %s in %s, guild %s", user_id, thing_id, room_id, guild_id)
     return True
+
+
+async def consume_carried(user_id: int, guild_id: int, thing_id: str) -> bool:
+    """Use one up. False if they were not carrying one.
+
+    Conditional on `count > 0` in the same statement, so two rapid uses of a
+    last burrito cannot both succeed and leave the count at minus one.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        result = await session.execute(
+            update(PlayerInventory)
+            .where(
+                PlayerInventory.user_id == user_id,
+                PlayerInventory.guild_id == guild_id,
+                PlayerInventory.thing_id == thing_id,
+                PlayerInventory.count > 0,
+            )
+            .values(count=PlayerInventory.count - 1)
+        )
+        await session.commit()
+    return bool(result.rowcount)
 
 
 async def transform_carried(user_id: int, guild_id: int, thing_id: str, into: str) -> bool:
