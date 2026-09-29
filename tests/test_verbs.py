@@ -910,3 +910,77 @@ async def test_a_room_with_one_doorway_does_not_ask(real_house):
     await use(thing="doorway", guild=guild)
 
     assert await where_is_alice(db) == "EN"
+
+
+# Every room a player can stand in, and what `door` and `doorway` do there.
+# One asks, one walks, and the Entryway's `door` is the front door because a
+# house's door is its front one.
+DOOR_WORDS = [
+    ("EN", "doorway", "asks"),
+    ("DI", "door", "asks"),
+    ("DI", "doorway", "asks"),
+    ("KI", "door", "asks"),
+    ("KI", "doorway", "asks"),
+    ("UH", "door", "asks"),
+    ("UH", "doorway", "asks"),
+    ("LI", "door", "EN"),
+    ("LI", "doorway", "EN"),
+    ("CO", "door", "KI"),
+    ("CO", "doorway", "KI"),
+    ("BE", "door", "UH"),
+    ("BE", "doorway", "UH"),
+    ("NU", "door", "UH"),
+    ("NU", "doorway", "UH"),
+]
+
+
+@pytest.mark.parametrize("room, word, expected", DOOR_WORDS)
+async def test_door_and_doorway_work_in_every_room(real_house, room, word, expected):
+    db, guild = real_house
+    await enter_properly(db, room=room)
+
+    reply = (await use(thing=word, guild=guild)).reply
+
+    if expected == "asks":
+        assert "Which one do you mean" in reply
+        assert await where_is_alice(db) == room
+    else:
+        assert await where_is_alice(db) == expected
+
+
+async def test_door_in_the_entryway_is_the_front_door(real_house):
+    """A house's door is its front one, and the fixture already owned the
+    word. The two interior doorways answer to `doorway` instead - which is
+    also how the room's own prose distinguishes them."""
+    db, guild = real_house
+    await enter_properly(db, room="EN")
+
+    reply = (await use(thing="door", guild=guild)).reply
+
+    assert await where_is_alice(db) == "EN"
+    assert "Which one do you mean" not in reply
+
+
+async def test_the_secret_routes_gained_nothing(real_house):
+    """A cabinet, the back of a cabinet, an oak and a window are not doors,
+    and two of them are secrets, so none of them was given the two words.
+
+    `SL` answers to `door` and always has - it is the one you are standing
+    at once you are already inside, where there is nothing left to hide.
+    Asserted rather than tidied away, so the exception stays deliberate."""
+    parsed = content_module.load_files()
+
+    for key in ("LS", "SL", "CS", "SC"):
+        names = {n.lower() for n in parsed.things_by_id[key].names}
+        assert "doorway" not in names, key
+    assert "door" in {n.lower() for n in parsed.things_by_id["SL"].names}
+    for key in ("LS", "CS", "SC"):
+        assert "door" not in {n.lower() for n in parsed.things_by_id[key].names}, key
+
+
+async def test_the_stairs_are_not_doors(real_house):
+    parsed = content_module.load_files()
+
+    for key in ("EH", "HE", "KH", "HK"):
+        names = {n.lower() for n in parsed.things_by_id[key].names}
+        assert "door" not in names and "doorway" not in names, key
