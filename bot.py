@@ -54,7 +54,7 @@ SHOW_DEBUG_INFO = False
 # Placeholder copy - writers will replace these in Phase 2.
 FRIENDLY_RESPONSES = [
     "The cat purrs contentedly as you pet it, tail curling like smoke. Is this bonding?",
-    "The cat meows and rubs against your leg, eyes glinting in the dark. Maybe you will be friends.",
+    "The cat meows and rubs against your leg, eyes glinting in the dark. Maybe you'll be friends.",
     "The cat stretches, blinks slowly at you, and meows fondly.",
 ]
 
