@@ -1,0 +1,11 @@
+art_id	file	alt	notes
+eunoia_icon	eunoia_icon.png	A round black cat face with wide gold eyes and two small fangs, looking straight out.	The bot's avatar, set by hand in the developer portal. Never sent as an embed image - an avatar and a thumbnail of the same face, six pixels apart, looks like a mistake.
+eunoia_alert	eunoia_alert.png	A black cat standing alert, eyes narrowed, tail curled up over her back, one gold sparkle beside her.	The welcome post, and a player's first pet.
+eunoia_content	eunoia_content.png	A black cat sitting with one paw raised mid-groom, eyes shut in contentment, small gold sparkles around her.	Making Friends, and Cat's Best Friend. Paired with eunoia_disdain - they are the two endings of the relationship arc and read against each other.
+eunoia_disdain	eunoia_disdain.png	A black cat with her head tipped back and eyes slitted, pointedly looking away.	Trying to Make Friends. The other half of the pair.
+eunoia_suspicious	eunoia_suspicious.png	A black cat glancing back over her shoulder, a gold arrow tracing the turn of her head.	The crowding nudge. The only non-achievement trigger, and it rides the private reply - the nudge is between that player and the cat.
+eunoia_happy_bowl	eunoia_happy_bowl.png	A black cat crouched happily at a green bowl, eyes closed in two upward arcs, a gold heart above her.	Met the Craving.
+eunoia_gorging	eunoia_gorging.png	A black cat face down in a heaped bowl of food, eyes swirling.	The cat-food achievements: Charcuterie Board, Bulk Buyer, The Feline Collection.
+eunoia_sniffing	eunoia_sniffing.png	A black cat crouched low over something pale on the ground, stink lines rising from it.	Follow Your Nose, and a player's first ever look at a dirty diaper. Once ever, not once per diaper - eight a day scatter through the house and the joke is only funny the first time.
+eunoia_bottle	eunoia_bottle.png	A black cat caught mid-glare with a baby bottle knocked over between her paws.	Catproof the House. Later, cat crossing.
+eunoia_startled	eunoia_startled.png	A black cat with her back arched and fur spiked, eyes huge and round, an exclamation mark above her.	Getting into the Spirit. Blocked on the ghost system, so it has no live trigger in Release 1 - shipped anyway so the image is there the day the ghosts land.
