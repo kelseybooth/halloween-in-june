@@ -31,7 +31,13 @@ FILES = {
     "restocks": "restocks.tsv",
     "emoji_groups": "emoji_groups.tsv",
     "achievements": "achievements.tsv",
+    "art": "art.tsv",
 }
+
+# Where the artwork lives on disk. Structure rather than content, which is why
+# the files sit outside `creative content` - a writer edits the alt text, not
+# the PNGs.
+ART_DIR = Path(__file__).resolve().parent / "artwork"
 
 # What an achievement's award is scoped to. `group` is the odd one: it lands in
 # server_achievements, has no earner and sends its description to nobody.
@@ -202,6 +208,21 @@ class EmojiGroup:
 
 
 @dataclass(frozen=True)
+class Art:
+    """One image, and the words a screen reader gets instead of it.
+
+    `alt` matters more than usual here: a black cat on a transparent
+    background is invisible to a screen reader and nearly invisible in some
+    Discord themes, so it is the one column in this file a writer owns.
+    """
+
+    art_id: str
+    file: str
+    alt: str
+    notes: str | None
+
+
+@dataclass(frozen=True)
 class Achievement:
     """A name, a description, and which drop they arrive at.
 
@@ -241,6 +262,7 @@ class Content:
     restocks: list[Restock] = field(default_factory=list)
     emoji_groups: list[EmojiGroup] = field(default_factory=list)
     achievements: list[Achievement] = field(default_factory=list)
+    art: list[Art] = field(default_factory=list)
 
     @property
     def rooms_by_id(self) -> dict[str, Room]:
@@ -258,6 +280,10 @@ class Content:
     def craving_pool(self) -> list[EmojiGroup]:
         """The emoji a craving may be drawn from."""
         return [e for e in self.emoji_groups if e.drawable]
+
+    @property
+    def art_by_id(self) -> dict[str, Art]:
+        return {a.art_id: a for a in self.art}
 
     @property
     def achievement_ids(self) -> set[str]:
@@ -483,6 +509,19 @@ def load_files(directory: Path | None = None) -> Content:
             )
         )
 
+    for row in _rows(base / FILES["art"], ("art_id", "file", "alt")):
+        art_id = _text(row.get("art_id"))
+        if not art_id:
+            continue
+        content.art.append(
+            Art(
+                art_id=art_id,
+                file=_text(row.get("file")) or "",
+                alt=_text(row.get("alt")) or "",
+                notes=_text(row.get("notes")),
+            )
+        )
+
     return content
 
 
@@ -518,6 +557,7 @@ def validate(content: Content) -> list[str]:
     problems += _check_sources_are_named_in_prose(content, rooms)
     problems += _check_emoji_groups(content)
     problems += _check_achievements(content)
+    problems += _check_art(content)
     return problems
 
 
@@ -1028,6 +1068,38 @@ def _check_achievements(content: Content) -> list[str]:
             problems.append(f"achievement {row.achievement_id} has no name")
         if not row.unlock:
             problems.append(f"achievement {row.achievement_id} has no unlock text")
+
+    return problems
+
+
+def _check_art(content: Content) -> list[str]:
+    """Every row names a file that is actually there, and says what it shows.
+
+    The file check is the one worth having. An image is uploaded once at
+    initialization and referenced by URL forever, so a row pointing at a
+    missing PNG fails in an admin command on somebody else's server, hours
+    after anyone could connect it to the row that caused it.
+
+    A blank `alt` is an error rather than a defaulted blank, for the same
+    reason a blank achievement name is: there is nothing to fall back to, and
+    an image with no alt text is invisible to the people who need it most.
+    """
+    problems = []
+
+    seen = set()
+    for row in content.art:
+        if row.art_id in seen:
+            problems.append(f"art {row.art_id} appears twice")
+        seen.add(row.art_id)
+
+        if not row.file:
+            problems.append(f"art {row.art_id} names no file")
+        elif not (ART_DIR / row.file).is_file():
+            problems.append(
+                f"art {row.art_id}: {row.file!r} is not in {ART_DIR.name}/"
+            )
+        if not row.alt:
+            problems.append(f"art {row.art_id} has no alt text")
 
     return problems
 

@@ -140,6 +140,39 @@ Once everything works locally:
 
 ---
 
+## Step 8: Give the bot its face
+
+**Set the avatar by hand, once, in the Discord developer portal.** Open your
+application, upload `artwork/eunoia_icon.png` as the app icon, and save.
+
+This is deliberately not done in code. Discord rate-limits avatar changes to
+roughly two an hour, so a re-run of `/initialize-haunted-house` could fail on
+it — and the avatar is account-wide, so setting it from one server would
+change the bot's face on every other server it is in.
+
+Every message a player receives comes from the cat, under her name and her
+face, so this is worth doing before anybody runs `/enter`.
+
+## Step 9: Open the house
+
+Three commands, in order, and they are deliberately separate so the house can
+be built days before the game starts:
+
+1. **`/initialize-haunted-house`** builds the nine room threads. Pass
+   `art_channel` and it also uploads the ten cat images once and remembers
+   their URLs — a mod-only channel is fine, players never need to see it.
+   Without it the game still works and every message is plain text.
+2. **`/post-welcome`** posts the pinned welcome. Pin it. This is what opens
+   the game to players, and the copy lives in `defaults.tsv` so a writer can
+   change it without a deploy.
+3. Players run **`/enter`** themselves.
+
+**The calendar starts on the first `/enter`, not on initialization.** Restock
+days and drops all count from the day somebody first walks in, so building
+the house early costs nothing — but it does mean whoever enters first sets
+the schedule. Worth not testing `/enter` on the live server before you mean
+to open.
+
 ## Debugging on Railway
 
 **View Logs:**

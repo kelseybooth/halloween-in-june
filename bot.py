@@ -761,7 +761,16 @@ async def pet(interaction: discord.Interaction) -> None:
             message = f"{message}\n\n{nudge}"
     if SHOW_DEBUG_INFO:
         message += _debug_lines(reaction, result.recent, relationship)
-    await interaction.followup.send(message, ephemeral=True)
+
+    # The over-the-shoulder look is exactly what "give the cat some space"
+    # means, and it is the one image tied to something other than an
+    # achievement. It rides the private reply, never the public line, for the
+    # same reason the words do. The first pet of all gets her instead - and
+    # every pet in between gets nothing, because an image seen twice a minute
+    # stops being a reward and becomes latency.
+    art = ART_CROWDING if crowded else (ART_FIRST_PET if result.total == 1 else None)
+    content_, embed = await _with_art(interaction.guild, message, art)
+    await interaction.followup.send(content_, embed=embed, ephemeral=True)
 
     await _announce_pet(interaction, relationship)
 
@@ -777,13 +786,68 @@ async def pet(interaction: discord.Interaction) -> None:
 
 
 @bot.tree.command(
+    name="post-welcome",
+    description="(Admin) Post the pinned welcome in the Halloween channel.",
+)
+@app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
+@app_commands.checks.has_permissions(administrator=True)
+async def post_welcome(interaction: discord.Interaction) -> None:
+    """Open the game.
+
+    Separate from building the house on purpose. Posting it automatically at
+    initialization would guarantee it exists and is correct, but it puts
+    writer copy inside an admin command where nobody would think to update
+    it - and, more usefully, keeping them apart lets the house be built days
+    before the game opens.
+
+    The copy lives in `defaults.tsv`, so a writer can change it without a
+    deploy and without anybody going near this function.
+    """
+    if interaction.guild is None:
+        await interaction.response.send_message(
+            "This command only works inside a server.", ephemeral=True
+        )
+        return
+
+    await interaction.response.defer(ephemeral=True, thinking=True)
+
+    channel = house_utils.find_channel(interaction.guild)
+    if channel is None:
+        await interaction.followup.send(
+            f"There's no #{house_utils.HALLOWEEN_CHANNEL_NAME} channel to post in.",
+            ephemeral=True,
+        )
+        return
+
+    text = await phrasing.default_say("welcome")
+    if not text:
+        await interaction.followup.send(
+            "The welcome copy is missing from defaults.tsv.", ephemeral=True
+        )
+        return
+
+    await _post_quietly(channel, text, ART_WELCOME)
+    await interaction.followup.send(
+        f"Posted in {channel.mention}. Pin it, and the house is open.", ephemeral=True
+    )
+
+
+@bot.tree.command(
     name="initialize-haunted-house",
     description="(Admin) Rebuild every haunted house thread from scratch.",
 )
 @app_commands.guild_only()
 @app_commands.default_permissions(administrator=True)
 @app_commands.checks.has_permissions(administrator=True)
-async def initialize_haunted_house(interaction: discord.Interaction) -> None:
+@app_commands.describe(
+    art_channel="Where to post the ten cat images once. A mod-only channel is fine - "
+    "players never need to see it."
+)
+async def initialize_haunted_house(
+    interaction: discord.Interaction,
+    art_channel: discord.TextChannel | None = None,
+) -> None:
     """Delete and recreate all 18 room threads, restoring players to their rooms.
 
     Rerunnable by design: players are re-added afterwards from the database, so a
@@ -871,11 +935,32 @@ async def initialize_haunted_house(interaction: discord.Interaction) -> None:
         )
         return
 
+    # The art, into a channel the admin picked. Only what is missing, so a
+    # re-run costs nothing; and the house is worth building without it,
+    # because every message that wants an image degrades to text.
+    art_note = None
+    if art_channel is not None:
+        uploaded, art_problems = await upload_art(interaction.guild, art_channel)
+        art_note = f"- uploaded {uploaded} image(s) to {art_channel.mention}"
+        result.errors.extend(art_problems)
+    else:
+        try:
+            have = len(await database.art_urls(interaction.guild_id))
+        except SQLAlchemyError:
+            have = 0
+        if have == 0:
+            art_note = (
+                "- no images uploaded. Re-run with `art_channel` set and the cat "
+                "will appear on achievements; until then every message is text."
+            )
+
     lines = [
         f"Haunted House initialized with {result.created} threads in **{interaction.guild.name}**.",
         f"- deleted {result.deleted} existing thread(s)",
         f"- restored {result.restored} player(s) to their current room",
     ]
+    if art_note:
+        lines.append(art_note)
     if result.errors:
         lines.append(f"\n**{len(result.errors)} problem(s):**")
         # Discord caps messages at 2000 characters; show a few and log the rest.
@@ -899,15 +984,81 @@ async def _initialize_error(
     raise error
 
 
-async def _post_quietly(channel, text: str) -> None:
+# Art fires on things that happen, never on a state that can flip. An
+# achievement has a before and an after and an image marks it once; a
+# relationship score or a craving guess is a value that can go back the other
+# way an hour later, and an image that blinks on and off with it stops being
+# a reward and becomes a status bar.
+#
+# The mapping lives here rather than in `art.tsv` for the same reason the
+# achievement conditions do: the file carries what a writer owns.
+ART_FOR_ACHIEVEMENT = {
+    "making_friends": "eunoia_content",
+    "cats_best_friend": "eunoia_content",
+    "trying_to_make_friends": "eunoia_disdain",
+    "met_the_craving": "eunoia_happy_bowl",
+    "charcuterie_board": "eunoia_gorging",
+    "bulk_buyer": "eunoia_gorging",
+    "the_feline_collection": "eunoia_gorging",
+    "follow_your_nose": "eunoia_sniffing",
+    "catproof_the_house": "eunoia_bottle",
+    # No live trigger in Release 1 - the ghost system is not built - and
+    # shipped anyway so the image is there the day the ghosts land.
+    "getting_into_the_spirit": "eunoia_startled",
+}
+
+ART_WELCOME = "eunoia_alert"
+ART_FIRST_PET = "eunoia_alert"
+ART_CROWDING = "eunoia_suspicious"
+ART_DIAPER = "eunoia_sniffing"
+# The bot's face on every message she sends. Set by hand in the developer
+# portal, and never sent as an embed image: an avatar and a thumbnail of the
+# same face six pixels apart looks like a mistake.
+ART_AVATAR = "eunoia_icon"
+
+DIAPER = "dirty_diaper"
+DIAPER_SEEN = "diaper_seen"
+
+
+async def _with_art(guild, text: str, art_id: str | None):
+    """A message, and the image that marks it if there is one.
+
+    Returns `(content, embed)` for a send. **A missing image degrades to
+    text**: if the art was never uploaded, or its URL has rotted, the message
+    still goes out. Nothing in the game is load-bearing on a picture.
+
+    One image per embed, because Discord allows a single `image` plus a
+    single `thumbnail` and this set never wants both.
+    """
+    if art_id is None or guild is None:
+        return text, None
+    try:
+        urls = await database.art_urls(guild.id)
+    except SQLAlchemyError:
+        log.warning("Could not read the art for %s", guild.id, exc_info=True)
+        return text, None
+
+    url = urls.get(art_id)
+    if not url:
+        return text, None
+
+    embed = discord.Embed(description=text)
+    embed.set_image(url=url)
+    return None, embed
+
+
+async def _post_quietly(channel, text: str, art_id: str | None = None) -> None:
     """Post without pinging anybody.
 
     A display name is printed as plain text, so one containing something
     mention-shaped cannot turn into a ping. Applied on every public line that
     names a player.
     """
+    content_, embed = await _with_art(getattr(channel, "guild", None), text, art_id)
     try:
-        await channel.send(text, allowed_mentions=discord.AllowedMentions.none())
+        await channel.send(
+            content_, embed=embed, allowed_mentions=discord.AllowedMentions.none()
+        )
     except discord.HTTPException:
         log.warning("Could not post in %s", getattr(channel, "name", "?"), exc_info=True)
 
@@ -1296,10 +1447,14 @@ async def _announce(award, *, interaction=None, guild=None) -> None:
             achievement=award.name,
         )
 
+    # The image rides whichever message carries the description, which is the
+    # private one for a player and the public one for a group - a group
+    # achievement has no earner and so no private message to put either in.
+    art = ART_FOR_ACHIEVEMENT.get(award.achievement_id)
     if channel is not None and line:
         # Plain text and no ping: a display name containing something
         # mention-shaped must not turn into one.
-        await _post_quietly(channel, line)
+        await _post_quietly(channel, line, art if award.user_id is None else None)
 
     if award.user_id is None:
         return
@@ -1324,8 +1479,9 @@ async def _announce(award, *, interaction=None, guild=None) -> None:
     )
     if not private:
         return
+    content_, embed = await _with_art(guild, private, art)
     try:
-        await interaction.followup.send(private, ephemeral=True)
+        await interaction.followup.send(content_, embed=embed, ephemeral=True)
     except discord.HTTPException:
         log.warning("Could not send %s privately", award.achievement_id, exc_info=True)
 
@@ -1344,6 +1500,47 @@ def _earner_of(award, interaction, guild) -> str | None:
         return interaction.user.display_name
     member = guild.get_member(award.user_id)
     return member.display_name if member is not None else None
+
+
+async def upload_art(guild, channel) -> tuple[int, list[str]]:
+    """Post each image once and keep the URL Discord hands back.
+
+    Only what is missing, so re-running initialization is free rather than
+    posting ten more pictures. Returns (uploaded, problems) and never raises:
+    the house is worth building even if the art fails, and every message
+    degrades to text without it.
+    """
+    try:
+        rows = content.load_files().art
+        have = await database.art_urls(guild.id)
+    except (content.ContentError, SQLAlchemyError) as exc:
+        return 0, [f"could not read the art: {exc}"]
+
+    uploaded, problems = 0, []
+    for row in rows:
+        if row.art_id in have:
+            continue
+        path = content.ART_DIR / row.file
+        if not path.is_file():
+            problems.append(f"{row.art_id}: {row.file} is missing")
+            continue
+        try:
+            posted = await channel.send(
+                file=discord.File(path, filename=row.file),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+            url = posted.attachments[0].url
+        except (discord.HTTPException, IndexError, AttributeError) as exc:
+            problems.append(f"{row.art_id}: {exc}")
+            continue
+        try:
+            await database.record_art(guild.id, row.art_id, url)
+        except SQLAlchemyError:
+            problems.append(f"{row.art_id}: uploaded but not recorded")
+            continue
+        uploaded += 1
+
+    return uploaded, problems
 
 
 async def _announcement_channel(guild):
@@ -1654,9 +1851,9 @@ async def look(interaction: discord.Interaction, thing: str | None = None) -> No
             )
             return
 
-        await interaction.followup.send(
-            await _look_at(guild_id, user.id, state.current_room, found), ephemeral=True
-        )
+        text, art = await _look_at(guild_id, user.id, state.current_room, found)
+        content_, embed = await _with_art(interaction.guild, text, art)
+        await interaction.followup.send(content_, embed=embed, ephemeral=True)
     except SQLAlchemyError:
         log.exception("Failed to look at %r in guild %s", thing, guild_id)
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
@@ -1693,7 +1890,9 @@ async def _look_around(guild_id: int, user_id: int, room_id: str) -> str:
     return f"{description}\n\n{line}" if line else description
 
 
-async def _look_at(guild_id: int, user_id: int, room_id: str, found) -> str:
+async def _look_at(
+    guild_id: int, user_id: int, room_id: str, found
+) -> tuple[str, str | None]:
     """One thing, plus its contents if anything is inside it.
 
     A carried thing uses `look_carried` where it has one: six things describe
@@ -1736,6 +1935,16 @@ async def _look_at(guild_id: int, user_id: int, room_id: str, found) -> str:
     if not description:
         description = f"You see {name}."
 
+    # Fires on the look whether the diaper is on the floor or already in the
+    # bag, and once ever rather than once per diaper: eight a day scatter
+    # through the house and the joke is only funny the first time. One named
+    # flag, the same shape as `tutorial_seen` - 2d dropped `player_thing_seen`
+    # deliberately and one boolean is not a reason to bring it back.
+    art = None
+    if found.thing_id == DIAPER and not await states.has(guild_id, user_id, DIAPER_SEEN):
+        await states.set_player_state(guild_id, user_id, DIAPER_SEEN)
+        art = ART_DIAPER
+
     inside = await database.loose_here(
         guild_id, room_id, container_id=looking_at,
         held_states=await states.in_force(guild_id, user_id),
@@ -1745,7 +1954,7 @@ async def _look_at(guild_id: int, user_id: int, room_id: str, found) -> str:
         prefix_key="contents.prefix",
         budget=phrasing.MESSAGE_LIMIT - len(description) - 2,
     )
-    return f"{description}\n\n{line}" if line else description
+    return (f"{description}\n\n{line}" if line else description), art
 
 
 @bot.tree.command(name="inventory", description="See what you're carrying.")

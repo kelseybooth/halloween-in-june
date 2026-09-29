@@ -48,6 +48,9 @@ _WORLD_TABLES = (
     # everything else. An ordinary reload never touches them.
     "player_achievements",
     "server_achievements",
+    # Uploaded images are world state: the URLs belong to one server's
+    # channel, and a `--fresh` rebuild wants them uploaded again.
+    "server_art",
 )
 
 
@@ -181,6 +184,10 @@ def _rows_for(parsed: Content) -> dict[str, list[dict]]:
         "emoji_groups": [
             {"emoji": e.emoji, "subgroup": e.subgroup, "drawable": e.drawable}
             for e in parsed.emoji_groups
+        ],
+        "art": [
+            {"art_id": a.art_id, "file": a.file, "alt": a.alt, "notes": a.notes}
+            for a in parsed.art
         ],
         "achievements": [
             {
@@ -323,6 +330,7 @@ async def _replace_content(session, rows: dict[str, list[dict]]) -> dict[str, in
         "defaults",
         "emoji_groups",
         "achievements",
+        "art",
     )
     for table in order:
         await session.execute(database.Base.metadata.tables[table].delete())

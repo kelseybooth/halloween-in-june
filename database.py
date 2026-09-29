@@ -719,6 +719,36 @@ class CravingTally(Base):
     last_credited_day: Mapped[date | None] = mapped_column(Date, nullable=True)
 
 
+class Art(Base):
+    """One image, as the content files describe it. Global, like all content."""
+
+    __tablename__ = "art"
+
+    art_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    file: Mapped[str] = mapped_column(String(255), nullable=False)
+    alt: Mapped[str] = mapped_column(Text, nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ServerArt(Base):
+    """Where one server's copy of an image lives, once uploaded.
+
+    Per guild because the upload is: the bot posts each file into a channel
+    the admin picks and keeps the URL Discord hands back. Every message after
+    that references the string, so nothing re-uploads and no send carries an
+    attachment.
+    """
+
+    __tablename__ = "server_art"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    art_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    uploaded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class Achievement(Base):
     """The ninth content file: what an achievement is called and what it says.
 
@@ -2025,6 +2055,32 @@ async def pets_while_relationship(
             )
         )
     return int(count or 0)
+
+
+async def art_urls(guild_id: int) -> dict[str, str]:
+    """Every image this server has uploaded, by art_id."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(ServerArt.art_id, ServerArt.url).where(ServerArt.guild_id == guild_id)
+        )
+    return {row[0]: row[1] for row in rows}
+
+
+async def record_art(guild_id: int, art_id: str, url: str) -> None:
+    """Remember where an uploaded image ended up."""
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    async with session_factory() as session:
+        await session.execute(
+            insert(ServerArt)
+            .values(guild_id=guild_id, art_id=art_id, url=url)
+            .on_conflict_do_update(
+                index_elements=[ServerArt.guild_id, ServerArt.art_id],
+                set_={"url": url},
+            )
+        )
+        await session.commit()
 
 
 async def award_player_achievement(
