@@ -132,6 +132,10 @@ class Thing:
     use_cooldown_hours: int | None
     since_drop: int
     sort_order: int
+    # Used up when used. Last in the list and defaulted, so the many
+    # places that build a Thing without one keep working - almost
+    # nothing in the house is consumable.
+    consumed_on_use: bool = False
 
     @property
     def is_exit(self) -> bool:
@@ -423,6 +427,7 @@ def load_files(directory: Path | None = None) -> Content:
                 quantity=None if quantity_raw == "many" else _int(quantity_raw, default=1),
                 takeable=_bool(row.get("takeable")),
                 droppable=_bool(row.get("droppable"), default=True),
+                consumed_on_use=_bool(row.get("consumed_on_use")),
                 cross_weight=_int(row.get("cross_weight"), default=0) or 0,
                 max_per_player=_int(row.get("max_per_player")),
                 requires=_text(row.get("requires")),
@@ -558,6 +563,7 @@ def validate(content: Content) -> list[str]:
     problems += _check_emoji_groups(content)
     problems += _check_achievements(content)
     problems += _check_art(content)
+    problems += _check_consumables(content)
     return problems
 
 
@@ -1069,6 +1075,40 @@ def _check_achievements(content: Content) -> list[str]:
         if not row.unlock:
             problems.append(f"achievement {row.achievement_id} has no unlock text")
 
+    return problems
+
+
+def _check_consumables(content: Content) -> list[str]:
+    """Nothing may be used up that a player cannot get again.
+
+    Consuming is the only thing in the game that destroys an object, so this
+    is the one place a content edit can take something away permanently. The
+    reading glasses are `quantity = 1` with no source: marking them consumed
+    would let the first player who tried them on delete them from that server
+    for the rest of October, and no other check would notice.
+
+    A thing is safe if a source yields it, something transforms into it, or a
+    restock puts it back.
+    """
+    produced = {t.yields for t in content.things if t.yields}
+    produced |= {t.transforms_to for t in content.things if t.transforms_to}
+    produced |= content.restocked_thing_ids
+
+    problems = []
+    for thing in content.things:
+        if not thing.consumed_on_use:
+            continue
+        if thing.type != "object":
+            problems.append(
+                f"thing {thing.thing_id} is consumed on use but is a "
+                f"{thing.type}, which is never in anybody's bag"
+            )
+        elif thing.thing_id not in produced:
+            problems.append(
+                f"thing {thing.thing_id} is consumed on use and nothing yields, "
+                "transforms into or restocks it, so using it would destroy it "
+                "for good"
+            )
     return problems
 
 

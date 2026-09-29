@@ -1,2 +1,3 @@
 drop_id	trigger	date	event	name	notes
 1	date	launch		Launch	Everything in Release 1. Arrives the moment a server initializes.
+2	manual			The can opener	Placeholder for a later drop. Manual rather than dated, because nobody has picked the date - an admin fires it when the content is ready. Until then the cat food cannot be opened.

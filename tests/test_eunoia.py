@@ -121,7 +121,14 @@ async def test_a_thing_with_a_refusal_and_no_success_refuses(house):
         and not text.get((t.thing_id, "default"), {}).get("use")
     }
 
-    assert shaped == {"eunoia", "EH", "HE", "LS", "SL"}
+    # The cat, the four gated exits, and the five cans - whose `use` text
+    # already read as a failed attempt ("looking for a pull-tab") and moved
+    # to `use_fail` when feeding the cat came to need a can opener.
+    assert shaped == {
+        "eunoia", "EH", "HE", "LS", "SL",
+        "cat_food_chicken", "cat_food_salmon", "cat_food_tuna",
+        "cat_food_expired", "cat_food_gourmet",
+    }
 
 
 async def test_no_text_of_hers_names_her(house):

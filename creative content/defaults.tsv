@@ -5,7 +5,7 @@ use.default	You turn the {name} over in your hands. Nothing obvious happens.
 take_fail.fixture	The {name} isn't yours to carry off.
 take_fail.absent	You don't see a {name} here.
 take_fail.already_carried	You're already carrying the {name}.
-take_fail.exit	You can't put a doorway in your bag.
+take_fail.exit	You can't put an exit in your bag.
 take_fail.unknown	That can't be taken.
 drop_fail.not_carried	You aren't carrying the {name}.
 drop_fail.undroppable	You go to put the {name} down, and find that you'd rather not.
@@ -13,6 +13,7 @@ use_fail.default	Nothing happens. Maybe somewhere else in the house.
 use_fail.cooldown	You've done that recently. Try the {name} again in {time}.
 use_fail.absent	You don't see a {name} here.
 use_fail.unknown	That can't be used.
+use_fail.not_carried	You'd need to be holding the {name} for that.
 ambiguous.match	Which one do you mean: {options}?
 also_here.prefix	Also here: 
 also_here.entry_multiple	{name} x{n}

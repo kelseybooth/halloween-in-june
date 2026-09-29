@@ -183,7 +183,9 @@ async def test_an_exit_cannot_be_put_in_a_bag(house):
         a_house(a_thing("door", name="blue door", type="exit",
                         destination_room_id="KI", takeable=False))
     )
-    assert "doorway in your bag" in (await take(thing="blue door")).reply
+    # "an exit", not "a doorway": the way out of the Secret Library is a
+    # window, and the way in is a tree.
+    assert "exit in your bag" in (await take(thing="blue door")).reply
 
 
 async def test_max_per_player_refuses_a_second_copy(house):
@@ -984,3 +986,165 @@ async def test_the_stairs_are_not_doors(real_house):
     for key in ("EH", "HE", "KH", "HK"):
         names = {n.lower() for n in parsed.things_by_id[key].names}
         assert "door" not in names and "doorway" not in names, key
+
+
+# --------------------------------------------------------------------------
+# Things a player uses up
+#
+# Consuming is the only thing in the game that destroys an object, which is
+# why `content.py` refuses the flag on anything nobody could get another of.
+# --------------------------------------------------------------------------
+
+
+async def test_a_burrito_is_eaten(real_house):
+    db, guild = real_house
+    await enter_properly(db, room="KI")
+    await use(thing="burrito", guild=guild)  # nothing held yet
+    await take(thing="burrito")
+
+    await use(thing="burrito", guild=guild)
+
+    assert await db.carried_of(ALICE, GUILD_A, "frozen_burrito") == 0
+
+
+async def test_and_another_is_always_a_take_away(real_house):
+    """Every consumable is source-fed, which is what makes eating one safe."""
+    db, guild = real_house
+    await enter_properly(db, room="KI")
+    await take(thing="burrito")
+    await use(thing="burrito", guild=guild)
+
+    await take(thing="burrito")
+
+    assert await db.carried_of(ALICE, GUILD_A, "frozen_burrito") == 1
+
+
+async def test_using_one_you_are_not_holding_says_so(real_house):
+    """`/use` reaches the whole room, so without this a player could eat a
+    burrito off the floor, or crush a leaf still on the bush."""
+    db, guild = real_house
+    await enter_properly(db, room="CO")
+
+    reply = (await use(thing="herbs", guild=guild)).reply
+
+    assert "holding" in reply
+    assert await db.carried_of(ALICE, GUILD_A, "herbs") == 0
+
+
+async def test_a_world_changing_use_still_fires_before_it_is_consumed(real_house):
+    """Graphite unjams the drawer *and* is used up. The order matters: the
+    effect is applied, then the powder is gone."""
+    import states
+
+    db, guild = real_house
+    await enter_properly(db, room="NU")
+    await take(thing="graphite")
+    await db.update_current_room(ALICE, GUILD_A, "UH")
+
+    await use(thing="graphite", guild=guild)
+
+    assert await states.has(GUILD_A, ALICE, "drawer_unjammed")
+    assert await db.carried_of(ALICE, GUILD_A, "graphite_powder") == 0
+
+
+async def test_nothing_unique_is_consumable(real_house):
+    """The reading glasses are `quantity = 1` with no source. Marking them
+    consumed would let the first player who tried them on delete them from
+    that server for the rest of October."""
+    from dataclasses import replace
+
+    parsed = content_module.load_files()
+    parsed.things = [
+        replace(t, consumed_on_use=True) if t.thing_id == "reading_glasses" else t
+        for t in parsed.things
+    ]
+
+    assert any("destroy it for good" in p for p in content_module.validate(parsed))
+
+
+async def test_a_fixture_cannot_be_consumable(real_house):
+    from dataclasses import replace
+
+    parsed = content_module.load_files()
+    parsed.things = [
+        replace(t, consumed_on_use=True) if t.thing_id == "stove" else t
+        for t in parsed.things
+    ]
+
+    assert any("never in anybody's bag" in p for p in content_module.validate(parsed))
+
+
+# --------------------------------------------------------------------------
+# Feeding the cat wants a can opener
+# --------------------------------------------------------------------------
+
+
+async def test_a_can_cannot_be_opened_yet(real_house):
+    db, guild = real_house
+    await enter_properly(db, room="KI")
+    await take(thing="tuna")
+
+    reply = (await use(thing="tuna", guild=guild)).reply
+
+    assert "pull-tab" in reply
+    assert await db.carried_of(ALICE, GUILD_A, "cat_food_tuna") == 1
+
+
+async def test_the_opener_is_not_in_the_game_yet(real_house):
+    """It waits on a drop nobody has fired, so the gate can never be met and
+    every can refuses."""
+    parsed = content_module.load_files()
+
+    assert parsed.things_by_id["can_opener"].since_drop == 2
+    assert parsed.drops_by_id[2].trigger == "manual"
+
+
+@pytest.mark.parametrize(
+    "can",
+    ["cat_food_chicken", "cat_food_salmon", "cat_food_tuna",
+     "cat_food_expired", "cat_food_gourmet"],
+)
+async def test_every_can_wants_the_opener(real_house, can):
+    parsed = content_module.load_files()
+
+    assert parsed.things_by_id[can].requires == "can_opener"
+
+
+# --------------------------------------------------------------------------
+# Looking at the room you are standing in
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "room, word",
+    [
+        ("EN", "entryway"), ("KI", "kitchen"), ("SE", "library"),
+        ("LI", "living room"), ("CO", "courtyard"), ("NU", "nursery"),
+        ("UH", "upstairs hallway"), ("UH", "hallway"), ("BE", "bedroom"),
+    ],
+)
+async def test_naming_your_own_room_describes_it(real_house, room, word):
+    """Players ask it this way, and it is the same question as a plain
+    `/look`."""
+    db, guild = real_house
+    await enter_properly(db, room=room)
+
+    here = await resolve.room_name(room)
+    named = (await command(bot.look, word, a_room_thread(here))).reply
+    plain = (await command(bot.look, None, a_room_thread(here))).reply
+
+    assert named == plain
+    # Not two identical refusals: it really is the room's description.
+    assert "only works inside the house" not in named
+    assert here.split()[-1].lower() in named.lower() or len(named) > 80
+
+
+async def test_a_thing_sharing_a_word_with_a_room_still_wins(real_house):
+    """Checked only after resolution fails, so in the Courtyard `/look
+    kitchen` is the back door - that is what is in front of you."""
+    db, guild = real_house
+    await enter_properly(db, room="CO")
+
+    reply = (await command(bot.look, "kitchen", a_room_thread("Courtyard"))).reply
+
+    assert "back door" in reply.lower()

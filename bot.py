@@ -1351,6 +1351,19 @@ async def _finish_use(interaction, state, found) -> None:
             await interaction.followup.send(refusal, ephemeral=True)
             return
 
+    # Some things are used up. It has to come off the bag rather than out of
+    # the room, so a burrito lying on the floor is eaten only by somebody who
+    # picked it up first - and a player who is looking at one rather than
+    # carrying it is told to take it, not quietly fed.
+    row = await phrasing.thing_row(found.thing_id)
+    if row is not None and getattr(row, "consumed_on_use", False):
+        if not await database.consume_carried(user.id, guild_id, found.thing_id):
+            await interaction.followup.send(
+                await phrasing.default_say("use_fail.not_carried", name=found.name),
+                ephemeral=True,
+            )
+            return
+
     await database.record_use(user.id, guild_id, found.thing_id)
 
     effect = await world.after_use(guild_id, user.id, found.thing_id, state.current_room)
@@ -1841,6 +1854,18 @@ async def look(interaction: discord.Interaction, thing: str | None = None) -> No
             return
 
         if isinstance(found, reach.NotFound):
+            # Naming the room you are standing in is the same question as
+            # `/look` with no argument, and players ask it that way. Checked
+            # only after resolution fails, so a thing sharing a word with the
+            # room still wins - in the Courtyard `/look kitchen` is the back
+            # door, because that is what is in front of you.
+            if await _is_this_room(state.current_room, thing):
+                await interaction.followup.send(
+                    await _look_around(guild_id, user.id, state.current_room),
+                    ephemeral=True,
+                )
+                return
+
             # One refusal per verb for a word the house does not know:
             # `look_fail.unknown` here, `take_fail.unknown` in /take,
             # `use_fail.unknown` in /use. They used to share one line, which
@@ -1873,6 +1898,26 @@ async def _current_state(guild_id: int, user_id: int) -> str:
     """
     held = await database.states_of(guild_id, user_id)
     return sorted(held)[0] if held else resolve.DEFAULT_STATE
+
+
+async def _is_this_room(room_id: str, typed: str) -> bool:
+    """Whether the player typed the name of the room they are standing in.
+
+    Matched on the id, the whole name, or any word of it, so `library` finds
+    the Secret Library and `room` finds the Living Room. Loose on purpose and
+    safe because it is: there is exactly one room it could mean, and it is
+    only asked after nothing in the room matched.
+
+    Rooms carry no alias column, which is why the words come out of the name.
+    """
+    name = await resolve.room_name(room_id)
+    if name is None:
+        return False
+    wanted = reach.normalise(typed)
+    if not wanted:
+        return False
+    words = {reach.normalise(w) for w in name.split()}
+    return wanted in {reach.normalise(name), reach.normalise(room_id), *words}
 
 
 async def _look_around(guild_id: int, user_id: int, room_id: str) -> str:

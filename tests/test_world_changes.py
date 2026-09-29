@@ -269,7 +269,11 @@ async def test_the_desk_reads_differently_once_it_is_open(house):
 # --------------------------------------------------------------------------
 
 
-async def test_the_three_capped_things_are_capped_at_one(house):
+async def test_everything_capped_is_capped_at_one(house):
+    """Four things nobody may hold two of. The can opener joined them with
+    the drop that has not arrived - one per player, like the key, because
+    the point is that everybody can open a can rather than that one person
+    can hoard the means."""
     capped = {
         t.thing_id: t.max_per_player
         for t in content_module.load_files().things
@@ -279,6 +283,7 @@ async def test_the_three_capped_things_are_capped_at_one(house):
         "cat_food_gourmet": 1,
         "skeleton_key": 1,
         "carving_tools": 1,
+        "can_opener": 1,
     }
 
 

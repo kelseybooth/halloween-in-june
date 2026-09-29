@@ -476,8 +476,8 @@ async def test_the_shipped_content_loads(two_servers):
     report = await content_loader.load_content(parsed)
 
     assert report.content_rows["room_types"] == 9
-    assert report.content_rows["thing_types"] == 143
-    assert report.content_rows["drops"] == 1
+    assert report.content_rows["thing_types"] == 145
+    assert report.content_rows["drops"] == 2
     assert report.content_rows["restocks"] == 3
 
 
