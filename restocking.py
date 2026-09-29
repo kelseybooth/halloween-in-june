@@ -218,8 +218,13 @@ async def initialized_on(guild_id: int) -> date | None:
 async def set_initialized_on(guild_id: int, on: date | None = None) -> date:
     """Record day one for a server, if it has not got one already.
 
-    Restock day numbers count from here, so a server that never gets this never
-    restocks. Set when the house is built, and defensively on the first sweep.
+    Restock day numbers and the drop calendar both count from here, so a
+    server that never gets this never restocks.
+
+    **Set by the first `/enter`, not by building the house.** An admin can
+    initialize days before the game opens, and the calendar should start when
+    somebody is actually inside to see it. Idempotent, so every later `/enter`
+    is a no-op and the first one wins.
     """
     existing = await initialized_on(guild_id)
     if existing:
@@ -264,7 +269,15 @@ async def run_for_guild(
         now.replace(tzinfo=database.timezone.utc).astimezone(database.PACIFIC).date()
     )
 
-    start_day = await set_initialized_on(guild_id)
+    # Read, never create. Day one is the day the first player walked in, and
+    # the sweep runs against every guild the bot is in - including ones where
+    # the house has been built and nobody has entered yet. Setting it here
+    # would start the calendar at boot and put spice jars in the Amazon box
+    # before anyone could find them.
+    start_day = await initialized_on(guild_id)
+    if start_day is None:
+        return report
+
     session_factory = database._require_session()
 
     async with session_factory() as session:

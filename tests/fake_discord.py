@@ -82,6 +82,7 @@ class FakeChannel:
             thread._channel = self
 
         self.id = abs(hash(("channel", name))) % (10**9)
+        self.mention = f"<#{self.id}>"
         # Everything posted here, in order. The achievement announcements are
         # read straight off this.
         self.posted: list[str] = []

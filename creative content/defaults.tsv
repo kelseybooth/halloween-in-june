@@ -24,3 +24,15 @@ move.depart	{player} exits via the {name}.
 move.arrive	{player} arrives from the {room}.
 inventory.prefix	You're carrying: 
 inventory.empty	Your bag is empty.
+enter.public	{player} has discovered a house...and disappears inside.
+enter.returning	You're already inside. You're in {room} - head to {thread}.
+enter.arrived	You've entered the haunted house. Head to {thread} to begin.
+tutorial	Three things worth knowing.\n\n**`/look coat rack`** - look closely at anything the room mentions.\n**`/take cat food`** - pick things up.\n**`/use wide doorway`** - how you walk. Use the door's own name, never the room beyond it.\n\nEverything happens in rooms like this one, not in the channel you came from.
+welcome	There is a house, and it has been empty a while, and it is not empty now.\n\nRun **`/enter`** here and you will find yourself in the Entryway. After that everything happens in the rooms themselves - each one is its own thread, and you are only ever in the one you are standing in.\n\nLook at things. Pick things up. Try doors. And if something small and black winds between your feet, she has been waiting for someone to turn up.
+pet.public.positive	{player} pets the cat. The cat seems to like it.
+pet.public.negative	{player} pets the cat. The cat does not seem pleased.
+pet.public.continues	{player} continues to pet the cat.
+pet.crowding	Maybe you should give the cat some space.
+achievement.private	You earned **{achievement}**: {description}
+achievement.public	{player} earned **{achievement}**
+achievement.public.group	{server} earned **{achievement}**: {description}

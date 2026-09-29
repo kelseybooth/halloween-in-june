@@ -416,7 +416,11 @@ def load_files(directory: Path | None = None) -> Content:
     content.thing_text = _text_rows(base / FILES["thing_text"], "thing_id", THING_TEXT_COLUMNS)
 
     for row in _rows(base / FILES["defaults"], ("key", "text")):
-        content.defaults[row["key"].strip()] = row["text"]
+        # A TSV cell cannot hold a newline, and the welcome copy wants
+        # paragraphs. One escape, expanded on read: a literal backslash-n in
+        # the file becomes a line break. Nothing else is interpreted, so a
+        # backslash anywhere else survives untouched.
+        content.defaults[row["key"].strip()] = row["text"].replace("\\n", "\n")
 
     for row in _rows(base / FILES["drops"], ("drop_id", "trigger")):
         content.drops.append(
