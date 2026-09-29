@@ -86,6 +86,7 @@ class FakeChannel:
         # Everything posted here, in order. The achievement announcements are
         # read straight off this.
         self.posted: list[str] = []
+        self.uploaded: list[str] = []
         self.send_fails = False
 
         self.created: list[str] = []
@@ -99,7 +100,15 @@ class FakeChannel:
         if self.send_fails:
             raise http_error(message="channel send failed")
         self.posted.append(content)
-        return SimpleNamespace(id=len(self.posted))
+        # An upload is a send with a file, and what the caller wants back is
+        # the CDN url Discord attaches to the posted message.
+        uploaded = kwargs.get("file")
+        attachments = []
+        if uploaded is not None:
+            name = getattr(uploaded, "filename", "file.png")
+            self.uploaded.append(name)
+            attachments = [SimpleNamespace(url=f"https://cdn.test/{self.id}/{name}")]
+        return SimpleNamespace(id=len(self.posted), attachments=attachments)
 
     def add_active(self, *names):
         for name in names:

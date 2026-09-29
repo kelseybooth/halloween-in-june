@@ -38,6 +38,9 @@ Discord, no network. CI runs the same command on Python 3.13.
 | `test_admin_config.py` | `/admin_config`, and the shape of the ten-command list |
 | `test_world_changes.py` | The staircase and the jammed drawer, `present_when` gates, and which scope each state has |
 | `test_secret_library.py` | Finding the library: the oak, the key, the cabinet, and what the rooms either side are told |
+| `test_art.py` | The ten images: the file, uploading once, and the many places art must not appear |
+| `test_enter.py` | Getting in, the tutorial, and the clock the first entry starts |
+| `test_eunoia.py` | The cat in every room, and a pet as two messages |
 | `test_achievements.py` | The ninth content file: parsing, validation, drop resolution, and idempotent awards |
 | `test_dispatcher.py` | The dispatcher and the nine hooks, and how an award gets announced |
 | `test_triggers.py` | All thirty-five conditions, the 43-hour date window, and the three group queries |
@@ -236,6 +239,25 @@ oak's own row rather than replaying the discovery.
 **`has_key` is derived, never stored.** The key is `droppable = no`,
 `cross_weight = 0` and `max_per_player = 1`, so once taken it can never leave
 a player and a stored flag could only ever drift.
+
+## Where art may appear
+
+Art fires on things that happen, never on a state that can flip. An
+achievement has a before and an after and an image marks it once; a
+relationship score is a value that can go back the other way an hour later,
+and an image that blinks with it stops being a reward and becomes a status
+bar.
+
+So `test_art.py` spends more of its length on where an image must **not**
+appear than on where it must — room looks, ordinary verbs, refusals,
+movement lines, and every pet but the first. An image seen twice a minute
+becomes latency.
+
+Two rules underneath it: the picture rides whichever message carries the
+description, which is the private one for a player achievement and the
+public one for a group (which has no private message); and **a missing image
+degrades to text**, tested with nothing uploaded and again with a URL
+deliberately broken. Nothing in the game is load-bearing on a picture.
 
 ## Cohorts
 

@@ -51,7 +51,8 @@ def _check_only() -> int:
         f"{len(parsed.restocks)} restocks, "
         f"{len(parsed.emoji_groups)} emoji ({len(parsed.craving_pool)} drawable), "
         f"{len(parsed.achievements)} achievements "
-        f"({len(achievements.registered_ids())} wired up)"
+        f"({len(achievements.registered_ids())} wired up), "
+        f"{len(parsed.art)} images"
     )
     if problems:
         print(f"\n{len(problems)} problem(s):", file=sys.stderr)
