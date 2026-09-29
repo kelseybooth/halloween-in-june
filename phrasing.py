@@ -19,6 +19,8 @@ from datetime import timedelta
 from sqlalchemy import select
 
 import database
+from typing import Sequence
+
 import resolve
 
 log = logging.getLogger(__name__)
@@ -76,7 +78,7 @@ async def say(
     column: str,
     *,
     fallback: str | None = None,
-    state: str = resolve.DEFAULT_STATE,
+    state: "str | Sequence[str]" = resolve.DEFAULT_STATE,
     **tokens,
 ) -> str:
     """The thing's own text for this verb, or the house default, filled in.

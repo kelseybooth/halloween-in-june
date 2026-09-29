@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date
-from typing import NamedTuple
+from typing import NamedTuple, Sequence
 
 from sqlalchemy import select
 
@@ -118,15 +118,24 @@ async def record_arrival(guild_id: int, drop_id: int) -> bool:
     return True
 
 
-def _best(rows, arrived: set[int], state: str, column: str) -> str | None:
+def _best(rows, arrived: set[int], state, column: str) -> str | None:
     """Pick the winning row: the player's state if it has one, else default.
+
+    `state` may be several, in priority order, which is what a player holding
+    more than one needs. The first that this entity actually has a row for
+    wins, so the order can be "most specific first" without having to know
+    which states each entity was written for: somebody who has opened the
+    passage reads the open cabinet, and the same list asked about the oak
+    falls past both to the oak's own row.
 
     Within a state the highest arrived `since_drop` wins. Drops are numbered in
     the order their content should supersede, and because an event drop can
     arrive while a lower-numbered one has not, "highest arrived" is not the same
     as "highest" - which is why arrival is filtered before the maximum is taken.
     """
-    for wanted in (state, DEFAULT_STATE) if state != DEFAULT_STATE else (DEFAULT_STATE,):
+    wanted = (state,) if isinstance(state, str) else tuple(state)
+    ordered = [*dict.fromkeys((*wanted, DEFAULT_STATE))]
+    for wanted in ordered:
         candidates = [
             row
             for row in rows
@@ -166,7 +175,7 @@ async def thing_text(
     guild_id: int,
     thing_id: str,
     column: str,
-    state: str = DEFAULT_STATE,
+    state: "str | Sequence[str]" = DEFAULT_STATE,
     *,
     today: date | None = None,
 ) -> str | None:

@@ -78,6 +78,11 @@ THING_TEXT_COLUMNS = (
     "use_fail",
     "take_fail",
     "drop_fail",
+    # Per-exit overrides for the lines a move posts in the rooms it leaves and
+    # enters. Blank on every row but the four secret exits, which fall back to
+    # `move.depart` and `move.arrive` in defaults.tsv like everything else.
+    "move_depart",
+    "move_arrive",
 )
 
 

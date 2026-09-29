@@ -37,6 +37,86 @@ DRAWER_ROOM = "UH"
 DRAWER_UNJAMMED = "drawer_unjammed"
 
 
+# The Secret Library. Two ways in, and the order they happen in is structural
+# rather than enforced: the keys hang inside, so a player cannot hold one until
+# they have already climbed the oak.
+OAK = "CS"                 # Courtyard -> Secret Library. Usable by anybody.
+CABINET = "LS"             # Living Room -> Secret Library. Needs a key.
+BACK_OF_CABINET = "SL"     # Secret Library -> Living Room. Needs the passage.
+SECRET_LIBRARY = "SE"
+SKELETON_KEY = "skeleton_key"
+
+LIBRARY_FOUND = "library_found"
+PASSAGE_OPEN = "passage_open"
+HAS_KEY = "has_key"
+
+
+# Most specific first. `_best` takes the first of these an entity actually has
+# a row for, so the same list works for every exit: a player who has opened
+# the passage reads the open cabinet, and asked about the oak the list falls
+# past both to the oak's own `library_found` row.
+EXIT_STATES = (PASSAGE_OPEN, HAS_KEY, LIBRARY_FOUND)
+
+
+def exit_state(held: set[str]) -> tuple[str, ...]:
+    """The states to resolve an exit's text against, in priority order."""
+    return tuple(state for state in EXIT_STATES if state in held)
+
+
+async def has_key(guild_id: int, user_id: int) -> bool:
+    """Whether this player is carrying a skeleton key.
+
+    **Derived, never stored.** The key is `droppable = no`, `cross_weight = 0`
+    and `max_per_player = 1`, so once taken it can never leave: it cannot be
+    put down, the cat cannot send it to Dimension B, and a second cannot be
+    acquired. A stored flag would be a second copy of a fact that cannot
+    change, and the two could only ever drift apart.
+    """
+    return await database.carried_of(user_id, guild_id, SKELETON_KEY) > 0
+
+
+async def states_for_exit(guild_id: int, user_id: int) -> set[str]:
+    """The states that decide what an exit says and whether it opens.
+
+    `has_key` is folded in here rather than written to `player_states`, so
+    text keyed on it resolves exactly as text keyed on a stored state does.
+    Nothing else has to know the difference.
+    """
+    held = set(await states.in_force(guild_id, user_id))
+    if await has_key(guild_id, user_id):
+        held.add(HAS_KEY)
+    return held
+
+
+def exit_refused_by(thing_id: str, held: set[str]) -> bool:
+    """Whether this exit is shut for a player holding these states.
+
+    Only the two secret doors are ever shut. The oak is deliberately not here:
+    an exit gated on the state its own use produces is a locked door with the
+    key inside, and nobody would ever find the library.
+    """
+    if thing_id == CABINET:
+        return HAS_KEY not in held
+    if thing_id == BACK_OF_CABINET:
+        return PASSAGE_OPEN not in held
+    return False
+
+
+async def after_move(guild_id: int, user_id: int, thing_id: str) -> str | None:
+    """Apply whatever using this exit discovers. The state set, or None.
+
+    The same split as `after_use`: content carries the text per state, code
+    decides when a state becomes true.
+    """
+    if thing_id == OAK:
+        if await states.set_player_state(guild_id, user_id, LIBRARY_FOUND):
+            return LIBRARY_FOUND
+    elif thing_id == CABINET:
+        if await states.set_player_state(guild_id, user_id, PASSAGE_OPEN):
+            return PASSAGE_OPEN
+    return None
+
+
 @dataclass
 class Effect:
     """What a world-changing use did, for the handler to phrase and route."""

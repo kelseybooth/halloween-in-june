@@ -752,14 +752,16 @@ async def test_a_pre_2b_player_is_not_let_into_the_secret_library(real_house):
 
 
 async def test_a_locked_room_refuses_rather_than_moving_anybody(real_house):
-    """The same check, doing its real job. The tree into the Secret Library
-    is the only one in Release 1."""
+    """The same check, doing its real job. The Secret Library is the only
+    room not open at launch, and the cabinet is the route that respects that
+    - the oak is the deliberate exception, because climbing it is what
+    unlocks the room in the first place."""
     db, guild = real_house
-    await enter_properly(db, room="CO")
+    await enter_properly(db, room="LI")
 
-    reply = (await use(thing="tree", guild=guild)).reply
+    reply = (await use(thing="cabinet", guild=guild)).reply
 
-    assert await where_is_alice(db) == "CO"
+    assert await where_is_alice(db) == "LI"
     assert "You head to" not in reply
 
 
