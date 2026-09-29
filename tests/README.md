@@ -84,6 +84,29 @@ firing at once both conclude they were first.
 `test_achievements.py` asserts it from both ends: the second award returns
 `False`, and `earned_at` does not move.
 
+## Looking at a source describes the source
+
+A source and its yield are filed as one thing during resolution — the only
+reason `/take candy` does not raise a spurious ambiguity prompt. That is right
+for taking and using, and was wrong for looking: every name for a source
+answered with the yield's text, so **all seventeen sources carried a
+description no player could read** — thirty-seven passages, about eight
+hundred words.
+
+The writers had described the bed of rosemary and the three cut sprigs as a
+pair. `/look` now takes the source's text when resolution lands on a source
+copy, and the existing ladder decides which is meant: a carried copy and a
+loose copy both beat the source, so a dropped sprig is still a sprig.
+
+`/take` and `/use` are deliberately unchanged. The thing id they resolve to
+drives real machinery — what is recorded, what is carried, which achievement
+fires — so their seventeen `use` passages and three `take_fail` passages are
+still unreachable, and separating "which thing this is" from "whose words to
+print" is a larger change than this one.
+
+`test_look.py` walks all seventeen and asserts each one's own first sentence
+comes back.
+
 ## Which source a take came from
 
 A source and its yield are filed as one thing during resolution, which is the

@@ -1406,6 +1406,15 @@ async def _look_at(guild_id: int, user_id: int, room_id: str, found) -> str:
     A carried thing uses `look_carried` where it has one: six things describe
     where they were sitting, which stops being true the moment they are picked
     up. Falling back to `look` is right for everything else.
+
+    **Looking at a source describes the source, not what it hands out.** A
+    source and its yield are one thing to the resolver - the only reason
+    `/take candy` does not raise an ambiguity prompt - so `found` carries the
+    yield's id and name. That is right for taking and using, and wrong for
+    looking: the writers described the bed of rosemary and the three cut
+    sprigs as a pair, and only one of them had ever been readable. The
+    resolution ladder sorts out which is meant, because a carried copy and a
+    loose copy both win over the source.
     """
     state = await _current_state(guild_id, user_id)
 
@@ -1414,15 +1423,28 @@ async def _look_at(guild_id: int, user_id: int, room_id: str, found) -> str:
         description = await phrasing.say(
             guild_id, found.thing_id, "look_carried", state=state, name=found.name
         )
+
+    looking_at, name = found.thing_id, found.name
+    if not description and found.where is reach.Where.SOURCE and found.source_id:
+        row = await phrasing.thing_row(found.source_id)
+        description = await phrasing.say(
+            guild_id, found.source_id, "look", state=state,
+            name=row.name if row else found.name,
+        )
+        if description and row is not None:
+            looking_at, name = found.source_id, row.name
+
     if not description:
+        # A source with no look text of its own falls back to its yield's,
+        # which is what every source did before this.
         description = await phrasing.say(
             guild_id, found.thing_id, "look", state=state, name=found.name
         )
     if not description:
-        description = f"You see {found.name}."
+        description = f"You see {name}."
 
     inside = await database.loose_here(
-        guild_id, room_id, container_id=found.thing_id,
+        guild_id, room_id, container_id=looking_at,
         held_states=await states.in_force(guild_id, user_id),
     )
     line = await phrasing.listing(
