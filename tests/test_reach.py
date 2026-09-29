@@ -496,14 +496,24 @@ async def test_an_ordinary_room_id_still_means_one_room(house):
     assert isinstance(elsewhere, NotFound)
 
 
-async def test_she_is_the_only_thing_declared_everywhere(house):
-    """If a second one ever appears, the listing rules below are worth
-    re-reading: this one is safe because a fixture is never listed."""
+async def test_everything_declared_everywhere_is_a_fixture(house):
+    """Two things are in every room: the smart speaker and the cat. Both are
+    safe to be everywhere for the same reason - `Also here:` lists loose
+    takeable objects, and a fixture is neither, so being omnipresent does not
+    drop either name into nine rooms' prose.
+
+    This started as "alexa is the only one", and caught the cat being added
+    in 2f. If a *takeable* thing ever gets `ALL`, the listing rules need
+    reading again before it ships."""
     parsed = content_module.load_files()
     everywhere = [
-        t.thing_id for t in parsed.things if t.room_id == content_module.EVERYWHERE
+        t for t in parsed.things if t.room_id == content_module.EVERYWHERE
     ]
-    assert everywhere == ["alexa"]
+
+    assert {t.thing_id for t in everywhere} == {"alexa", "eunoia"}
+    for thing in everywhere:
+        assert thing.type == "fixture", thing.thing_id
+        assert thing.takeable is False, thing.thing_id
 
 
 async def test_a_thing_that_is_everywhere_is_still_a_fixture(house):

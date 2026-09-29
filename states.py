@@ -29,7 +29,18 @@ log = logging.getLogger(__name__)
 # against the same names, so a typo in a gate is caught at load rather than
 # becoming content that never appears.
 SERVER_STATES = {"stairs_repaired"}
-PLAYER_STATES = {"has_key", "passage_open", "library_found", "drawer_unjammed"}
+PLAYER_STATES = {
+    "has_key",
+    "passage_open",
+    "library_found",
+    "drawer_unjammed",
+    # Two flags that gate a message rather than a door: the tutorial fires
+    # once ever, and the cat's reaction to a dirty diaper is only funny the
+    # first time. Both are the same shape as `drawer_unjammed` - set once,
+    # never cleared - which is why neither needs a table of its own.
+    "tutorial_seen",
+    "diaper_seen",
+}
 
 def required_things(requires: str | None) -> list[str]:
     """The thing ids a `requires` cell names, pipe separated as aliases are.

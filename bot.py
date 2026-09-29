@@ -9,7 +9,7 @@ import logging
 import os
 import random
 import sys
-from datetime import time as dt_time, timedelta
+from datetime import datetime, time as dt_time, timedelta
 from typing import NamedTuple
 
 import discord
@@ -31,6 +31,8 @@ import resolve
 import restocking
 import states
 import triggers
+
+TUTORIAL_SEEN = "tutorial_seen"
 import world
 
 load_dotenv()
@@ -631,24 +633,137 @@ async def _answer_guess(message: discord.Message, guess) -> None:
         await react(craving.NO_ROOM)
 
 
+# The cat is everywhere, so `/pet` needs no location check. It resolves in
+# all nine rooms and in the Halloween channel, and the public line posts
+# wherever the command was run.
+#
+# Two windows, deliberately separate, because they answer different
+# questions. Crowding is between a player and the cat: ten pets in ten
+# minutes and the private reply says so. The public rate limit is about noise
+# in a shared room: two lines per player per place per thirty minutes.
+CROWDING_PETS = 10
+PUBLIC_PETS = 2
+PUBLIC_WINDOW = timedelta(minutes=30)
+
+# (guild, player, place) -> when this window opened, and how many lines it has
+# spent. In memory on purpose, like the movement buffer *A Little Bit Lost*
+# keeps: a restart hands somebody two more public lines than they were owed,
+# which nobody can notice and which costs a table to prevent.
+_PUBLIC_PETS: dict[tuple[int, int, int], tuple[datetime, int]] = {}
+
+
+def forget_public_pets() -> None:
+    """Empty the public-pet windows. For tests."""
+    _PUBLIC_PETS.clear()
+
+
+def _public_pet_line(guild_id: int, user_id: int, place_id: int, now: datetime) -> str | None:
+    """Which public line this pet earns, or None to stay quiet.
+
+    The window opens on the first *line*, not the first pet, so a player can
+    never be surprised by which one they get: two get through, the rest are
+    silent, and thirty minutes after that first line the next pet is public
+    again as a normal first line.
+
+    The bucket is the member and the place. Two people in the same room each
+    get their own two; one person moving between rooms gets two in each,
+    because those are different audiences. The Halloween channel is its own
+    bucket alongside the nine rooms.
+    """
+    key = (guild_id, user_id, place_id)
+    opened, spent = _PUBLIC_PETS.get(key, (None, 0))
+    if opened is None or now - opened >= PUBLIC_WINDOW:
+        _PUBLIC_PETS[key] = (now, 1)
+        return "first"
+    if spent < PUBLIC_PETS:
+        _PUBLIC_PETS[key] = (opened, spent + 1)
+        return "continues"
+    return None
+
+
+async def _announce_pet(interaction, relationship: int) -> None:
+    """The public half: somebody pet the cat, and how it went.
+
+    Posted wherever the command was run, which is what makes the discovery
+    argument work - an admin can pet the cat in the Halloween channel on day
+    one, before anybody has run `/enter`, and everyone watching learns the
+    command exists.
+
+    The branch reads the meter **after** the pet, which is the boundary
+    *Making Friends* and *Trying to Make Friends* already split on, so the
+    game has one rule rather than two. Reporting whether this particular pet
+    moved the meter up or down would be a truer account of the moment, and
+    would publicly tell a player deep in the positive that the cat was
+    displeased, which reads as a bug.
+
+    The crowding nudge never appears here. It is between that player and the
+    cat, and broadcasting it would make it a scolding.
+    """
+    channel = interaction.channel
+    if channel is None or not hasattr(channel, "send"):
+        return
+
+    which = _public_pet_line(
+        interaction.guild_id, interaction.user.id, getattr(channel, "id", 0),
+        database._utcnow(),
+    )
+    if which is None:
+        return
+
+    key = (
+        "pet.public.continues"
+        if which == "continues"
+        else "pet.public.positive" if relationship > 0 else "pet.public.negative"
+    )
+    line = await phrasing.default_say(key, player=interaction.user.display_name)
+    if line:
+        await _post_quietly(channel, line)
+
+
 @bot.tree.command(name="pet", description="Pet the cat.")
 @app_commands.guild_only()
 async def pet(interaction: discord.Interaction) -> None:
-    # Defer first: the DB round trip can exceed Discord's 3s interaction deadline.
-    await interaction.response.defer()
+    """One command, two messages: the blurb in private, the event in public.
+
+    The private reply carries the cat's reaction and **no pet count**.
+    Progress toward *Making Friends* lives in `/stats` and nowhere else - two
+    hundred is better as a surprise than as a countdown, and a visible
+    counter turns petting a cat into filling a progress bar.
+
+    A member with no player row can run this, exactly as in v1: the row is
+    created, the meter starts, and the pet counts. It is how somebody can
+    hold a relationship score having never been in a room, which `/enter`
+    then has to handle.
+    """
+    # Ephemeral now: the blurb is the private half of the pair. Defer first,
+    # because the DB round trip can exceed Discord's 3s deadline.
+    await interaction.response.defer(ephemeral=True)
+    user, guild_id = interaction.user, interaction.guild_id
+
     try:
-        result = await database.increment_pet_count(interaction.user.id, interaction.guild_id)
+        result = await database.increment_pet_count(user.id, guild_id)
         reaction = choose_response(result.recent)
         delta = RELATIONSHIP_STEP if reaction.friendly else -RELATIONSHIP_STEP
-        relationship = await database.adjust_relationship(interaction.user.id, interaction.guild_id, delta)
+        relationship = await database.adjust_relationship(user.id, guild_id, delta)
     except SQLAlchemyError:
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
         return
 
-    message = f"{reaction.text}\n\nTotal pets: {result.total}"
+    message = reaction.text
+    # `recent` counts the pets this one arrived among, so the tenth pet sees
+    # nine. A nudge, not a limit: every pet still counts toward the
+    # achievement, and the relationship penalty it is warning about is the
+    # consequence doing the actual work.
+    crowded = result.recent + 1 >= CROWDING_PETS
+    if crowded:
+        nudge = await phrasing.default_say("pet.crowding")
+        if nudge:
+            message = f"{message}\n\n{nudge}"
     if SHOW_DEBUG_INFO:
         message += _debug_lines(reaction, result.recent, relationship)
-    await interaction.followup.send(message)
+    await interaction.followup.send(message, ephemeral=True)
+
+    await _announce_pet(interaction, relationship)
 
     await _fire(
         achievements.Context(
@@ -726,14 +841,15 @@ async def initialize_haunted_house(interaction: discord.Interaction) -> None:
         return
 
     try:
-        # Restock day numbers count from here, so a server that never records
-        # this never restocks.
-        await restocking.set_initialized_on(interaction.guild_id)
-        # And this is where achievement names get posted, recorded now so the
+        # This is where achievement names get posted, recorded now so the
         # announcement path never has to guess at a channel name.
+        #
+        # The restock calendar is deliberately *not* started here. Day one is
+        # the day the first player runs `/enter`, so a house can be built days
+        # before the game opens without the spice jars arriving early.
         await database.set_announcement_channel(interaction.guild_id, channel.id)
     except SQLAlchemyError:
-        log.exception("Could not record the initialization date")
+        log.exception("Could not record the announcement channel")
 
     try:
         result = await house_utils.initialize_threads(
@@ -783,15 +899,68 @@ async def _initialize_error(
     raise error
 
 
-# TODO(Phase 3): remove this command. It exists so testers can self-onboard without
-# an admin; a proper game start flow replaces it.
+async def _post_quietly(channel, text: str) -> None:
+    """Post without pinging anybody.
+
+    A display name is printed as plain text, so one containing something
+    mention-shaped cannot turn into a ping. Applied on every public line that
+    names a player.
+    """
+    try:
+        await channel.send(text, allowed_mentions=discord.AllowedMentions.none())
+    except discord.HTTPException:
+        log.warning("Could not post in %s", getattr(channel, "name", "?"), exc_info=True)
+
+
+async def _show_tutorial(thread, guild_id: int, user_id: int) -> None:
+    """Teach the three verbs, once per player and never again.
+
+    Not gated on petting the cat: a tutorial a player only sees if they happen
+    to find the cat is a tutorial some players never see. It teaches `/look`,
+    `/take` and `/use` and deliberately not `/pet` - the public line a pet
+    posts introduces that command by itself.
+    """
+    if await states.has(guild_id, user_id, TUTORIAL_SEEN):
+        return
+    text = await phrasing.default_say("tutorial")
+    if not text:
+        return
+    try:
+        await thread.send(text)
+    except discord.HTTPException:
+        # Better to show it next time than to burn the flag on a failed send.
+        log.warning("Could not post the tutorial for %s", user_id, exc_info=True)
+        return
+    await states.set_player_state(guild_id, user_id, TUTORIAL_SEEN)
+
+
+async def _arrive_in(thread, guild_id: int, user_id: int, room_id: str) -> None:
+    """Add the player to a room's thread and describe it to them."""
+    await house_utils.add_player_to_thread(thread, user_id)
+    await thread.send(await _look_around(guild_id, user_id, room_id))
+
+
 @bot.tree.command(
-    name="enter-entryway",
-    description="Enter the haunted house and begin in the Entryway.",
+    name="enter",
+    description="Enter the haunted house.",
 )
 @app_commands.guild_only()
-async def enter_entryway(interaction: discord.Interaction) -> None:
-    """Enrol the player and place them in the Entryway thread."""
+async def enter(interaction: discord.Interaction) -> None:
+    """Put a member inside the house, or put them back.
+
+    Self-serve, so nobody has to be awake when a latecomer turns up on 14
+    October, and there is no reaction handler to build.
+
+    For somebody already playing this is a repair tool rather than an error:
+    they land back in the room they were in, not the Entryway. People leave
+    threads by hand and need a way back, and that is cheaper than an admin
+    command.
+
+    **A player row is not the same as having been inside.** `/pet` creates one
+    for anybody who pets the cat in the channel, so a member can have a
+    relationship score and no room at all. That case takes the first-time
+    path, tutorial included.
+    """
     if interaction.guild is None:
         await interaction.response.send_message(
             "This command only works inside a server.", ephemeral=True
@@ -799,7 +968,7 @@ async def enter_entryway(interaction: discord.Interaction) -> None:
         return
 
     await interaction.response.defer(ephemeral=True, thinking=True)
-    user = interaction.user
+    user, guild_id = interaction.user, interaction.guild_id
 
     channel = house_utils.find_channel(interaction.guild)
     if channel is None:
@@ -810,21 +979,35 @@ async def enter_entryway(interaction: discord.Interaction) -> None:
         )
         return
 
-    # Check the Entryway thread exists before enrolling anyone: enrolling a
-    # player and then discovering the house was never built would leave them
-    # marked as inside a room that does not exist.
+    # The one place a member types a command before they are inside, so it has
+    # to be somewhere they can find: the channel the house was built in.
+    if interaction.channel != channel:
+        await interaction.followup.send(
+            f"Run this in {channel.mention} and I'll let you in.", ephemeral=True
+        )
+        return
+
     try:
-        start_id = await resolve.starting_room()
-        start_name = await resolve.room_name(start_id) if start_id else None
-        if start_name is None:
-            await interaction.followup.send(
-                "No rooms are loaded yet. Ask an admin to check the logs.",
-                ephemeral=True,
-            )
-            return
-        thread = await house_utils.get_thread_for_room(channel, start_name)
+        state = await database.get_game_state(user.id, guild_id)
+        # A row with no room is somebody who petted the cat and never came in.
+        returning = state is not None and state.current_room
+        room_id = state.current_room if returning else await resolve.starting_room()
+        room_name = await resolve.room_name(room_id) if room_id else None
+    except SQLAlchemyError:
+        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    if room_name is None:
+        await interaction.followup.send(
+            "No rooms are loaded yet. Ask an admin to check the logs.",
+            ephemeral=True,
+        )
+        return
+
+    try:
+        thread = await house_utils.get_thread_for_room(channel, room_name)
     except discord.HTTPException:
-        log.exception("Could not look up the Entryway thread")
+        log.exception("Could not look up the %s thread", room_name)
         await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
         return
 
@@ -836,43 +1019,59 @@ async def enter_entryway(interaction: discord.Interaction) -> None:
         )
         return
 
-    try:
-        # Everything open at launch starts unlocked. The Secret Library does not:
-        # it is found by climbing the oak and coming in through the window, and
-        # the mechanism that records that is 2c.
-        enrolled = await database.start_game(
-            user.id,
-            interaction.guild_id,
-            start_id,
-            await resolve.rooms_open_at_launch(),
+    if returning:
+        try:
+            await _arrive_in(thread, guild_id, user.id, room_id)
+        except discord.HTTPException:
+            log.exception("Could not put %s back in %s", user.id, room_id)
+            await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
+            return
+        await interaction.followup.send(
+            await phrasing.default_say(
+                "enter.returning", room=room_name, thread=thread.mention
+            ),
+            ephemeral=True,
         )
+        return
+
+    try:
+        # The Secret Library is not among these: it is found by climbing the
+        # oak, which is what puts it in the list.
+        await database.start_game(
+            user.id, guild_id, room_id, await resolve.rooms_open_at_launch()
+        )
+        # Day one is the day somebody first walked in, not the day the house
+        # was built - an admin can initialize days early. Idempotent, so only
+        # the first `/enter` on this server counts.
+        opened = await restocking.set_initialized_on(guild_id)
+        log.info("Guild %s: day one is %s (first entry by %s)", guild_id, opened, user.id)
     except SQLAlchemyError:
         await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
         return
 
-    if not enrolled:
-        await interaction.followup.send("You're already in the haunted house!", ephemeral=True)
-        return
-
     try:
-        await house_utils.add_player_to_thread(thread, user.id)
-        await thread.send(
-            f"Welcome, {user.mention}! You arrive at the entrance to the haunted "
-            "house. The cat appears at your side."
-        )
+        await _arrive_in(thread, guild_id, user.id, room_id)
     except discord.HTTPException:
-        # Undo the enrolment so the player can retry, rather than being recorded as
-        # inside a house they were never actually let into.
-        log.exception("Failed to place %s in the Entryway; rolling back", user.id)
+        # Undo the enrolment rather than record somebody as inside a house
+        # they were never let into.
+        log.exception("Failed to place %s in %s; rolling back", user.id, room_id)
         try:
-            await database.delete_game_state(user.id, interaction.guild_id)
+            await database.delete_game_state(user.id, guild_id)
         except SQLAlchemyError:
             log.error("Rollback failed for %s - player may be stuck enrolled", user.id)
         await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
         return
 
+    await _show_tutorial(thread, guild_id, user.id)
+
+    # Public, in the channel: it builds the sense of a group going in
+    # together and shows latecomers a working example of the command.
+    await _post_quietly(
+        channel,
+        await phrasing.default_say("enter.public", player=user.display_name),
+    )
     await interaction.followup.send(
-        f"You've entered the haunted house! Head to {thread.mention} to begin.",
+        await phrasing.default_say("enter.arrived", thread=thread.mention),
         ephemeral=True,
     )
 
@@ -905,7 +1104,7 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
         state = await database.get_game_state(user.id, guild_id)
         if state is None:
             await interaction.followup.send(
-                "You're not in the haunted house yet. Use `/enter-entryway` first.",
+                "You're not in the haunted house yet. Use `/enter` first.",
                 ephemeral=True,
             )
             return
@@ -980,8 +1179,27 @@ async def _finish_use(interaction, state, found) -> None:
     Every successful use comes through here, so the world effects cannot be
     wired into one branch and forgotten in another - and so the single public
     `/use` is decided in one place rather than by each branch remembering.
+
+    **A thing with a refusal written and no success written refuses.** The
+    cat is the only one today: `/use cat` should hand the player `/pet`
+    rather than the house's "you turn it over in your hands". A writer who
+    filled in `use_fail` and left `use` empty has said what they meant, and
+    unlike a state change a refusal cannot create a loop or an unreachable
+    room - so this one rule is safe to read out of content rather than
+    naming the cat in code the way `world` names the lumber.
     """
     user, guild_id = interaction.user, interaction.guild_id
+
+    held = await states.in_force(guild_id, user.id)
+    current = sorted(held)[0] if held else resolve.DEFAULT_STATE
+    if not await phrasing.say(guild_id, found.thing_id, "use", state=current):
+        refusal = await phrasing.say(
+            guild_id, found.thing_id, "use_fail", state=current, name=found.name
+        )
+        if refusal:
+            await interaction.followup.send(refusal, ephemeral=True)
+            return
+
     await database.record_use(user.id, guild_id, found.thing_id)
 
     effect = await world.after_use(guild_id, user.id, found.thing_id, state.current_room)

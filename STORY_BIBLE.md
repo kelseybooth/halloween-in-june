@@ -40,7 +40,7 @@ Release 1's content has been written and validated — 9 rooms, 135 things, 142 
 | **Alexa and the craving** | Possibly new commands, or `/use` with prompts | Neither. Alexa listens for messages beginning "alexa"; the craving is guessed with emoji reactions. Neither adds a command |
 | **Coffee maker** | A cold half-pot | A single-serve Keurig with pods, so a player can make fresh coffee rather than only find old coffee |
 | **David's grocery list** | "grocery list" | A **to-do list** — it was never mostly groceries |
-| **Command list** | Seven | Ten, settled and registered once: `/pet`, `/look`, `/take`, `/drop`, `/use`, `/inventory`, `/stats`, `/enter-entryway`, `/initialize-haunted-house`, `/admin_config` |
+| **Command list** | Seven | Ten, settled and registered once: `/pet`, `/look`, `/take`, `/drop`, `/use`, `/inventory`, `/stats`, `/enter`, `/initialize-haunted-house`, `/admin_config` |
 
 Two things this revision did **not** decide, and which are still open below: who the players are in-story, and what the drop calendar is.
 
@@ -138,7 +138,7 @@ The reply always says which one was used, for example *"You unwrap a piece of ca
 
 **Follow-up prompts.** Some things need more than a name to use. For these, `/use` replies privately with a player picker or a room picker. The bedsheet and the spirit board (below) work this way.
 
-**Two interactions are not commands at all.** Talking to Alexa and guessing the cat's daily craving looked like they needed their own commands, and they don't — Alexa listens for ordinary messages, and the craving is guessed with emoji reactions. Neither adds to the command list, which matters because slash commands register once and take about an hour to propagate. The full list is ten: `/pet`, `/look`, `/take`, `/drop`, `/use`, `/inventory`, `/stats`, `/enter-entryway`, and the admin commands `/initialize-haunted-house` and `/admin_config`.
+**Two interactions are not commands at all.** Talking to Alexa and guessing the cat's daily craving looked like they needed their own commands, and they don't — Alexa listens for ordinary messages, and the craving is guessed with emoji reactions. Neither adds to the command list, which matters because slash commands register once and take about an hour to propagate. The full list is ten: `/pet`, `/look`, `/take`, `/drop`, `/use`, `/inventory`, `/stats`, `/enter`, and the admin commands `/initialize-haunted-house` and `/admin_config`.
 
 ### Finding the Secret Library
 

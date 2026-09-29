@@ -1,5 +1,6 @@
 thing_id	name	aliases	type	room_id	quantity	takeable	droppable	cross_weight	max_per_player	requires	present_when	transforms_to	transform_room	yields	destination_room_id	contained_in	use_cooldown_hours	since_drop	sort_order
 alexa	Alexa	smart speaker|speaker|echo	fixture	ALL	1	no	yes	0										1	1
+eunoia	cat	cat|black cat|kitty|kitten|eunoia	fixture	ALL	1	no	yes	0										1	0
 lumber	stack of lumber	lumber|planks|plank|wood	object	EN	many	no	yes	0			!stairs_repaired						48	1	2
 intercom	intercom	intercom|door buzzer|buzzer	fixture	EN	1	no	yes	0										1	3
 amazon_box	Amazon box	amazon box|box|parcel|package	fixture	EN	1	no	yes	0										1	4
@@ -121,23 +122,23 @@ carving_tool_sleeve	carving tool sets	carving tools|tools|carving kit|sleeve|set
 costume_pile	pile of costumes	costumes|costume|costume pile|pile	source	BE	1	no	yes	0						costume		halloween_box		1	115
 ED	arched doorway	arch|arched doorway|dining room|dining	exit	EN	1	no	yes	0							DI			1	116
 DE	arched doorway	arch|arched doorway|entryway|hall	exit	DI	1	no	yes	0							EN			1	117
-EL	wide doorway	wide doorway|doorway|living room|living	exit	EN	1	no	yes	0							LI			1	118
+EL	wide doorway	wide doorway|living room|living	exit	EN	1	no	yes	0							LI			1	118
 LE	wide doorway	wide doorway|doorway|entryway|hall	exit	LI	1	no	yes	0							EN			1	119
-EH	main staircase	main staircase|staircase|stairs|banister|upstairs	exit	EN	1	no	yes	0							UH			1	120
+EH	main staircase	main staircase|staircase|stairs|banister|upstairs|grand staircase	exit	EN	1	no	yes	0							UH			1	120
 HE	main staircase	main staircase|staircase|stairs|downstairs	exit	UH	1	no	yes	0							EN			1	121
 DK	swinging door	swinging door|kitchen door|kitchen	exit	DI	1	no	yes	0							KI			1	122
 KD	swinging door	swinging door|dining room|dining	exit	KI	1	no	yes	0							DI			1	123
-KC	back door	back door|courtyard|garden|outside	exit	KI	1	no	yes	0							CO			1	124
-CK	back door	back door|kitchen|inside	exit	CO	1	no	yes	0							KI			1	125
-KH	back stairs	back stairs|back staircase|narrow stairs|upstairs	exit	KI	1	no	yes	0							UH			1	126
+KC	back door	back door|courtyard|garden|outside|glazed back door|glass door	exit	KI	1	no	yes	0							CO			1	124
+CK	back door	back door|kitchen|inside|door|kitchen door|steps	exit	CO	1	no	yes	0							KI			1	125
+KH	back stairs	back stairs|back staircase|narrow stairs|upstairs|pantry stairs	exit	KI	1	no	yes	0							UH			1	126
 HK	back stairs	back stairs|back staircase|narrow stairs|kitchen	exit	UH	1	no	yes	0							KI			1	127
 LS	curiosity cabinet	curiosity cabinet|cabinet|glass cabinet	exit	LI	1	no	yes	0							SE			1	128
-SL	back of the cabinet	cabinet|back of the cabinet|door|living room	exit	SE	1	no	yes	0							LI			1	129
+SL	back of the cabinet	cabinet|back of the cabinet|door|living room|heavy cabinet|keyhole	exit	SE	1	no	yes	0							LI			1	129
 CS	oak tree	oak tree|tree|oak|window	exit	CO	1	no	yes	0							SE			1	130
 SC	library window	window|library window|sill	exit	SE	1	no	yes	0							CO			1	131
 HB	bedroom door	bedroom door|bedroom	exit	UH	1	no	yes	0							BE			1	132
-BH	bedroom door	bedroom door|hallway|door|out	exit	BE	1	no	yes	0							UH			1	133
-HN	nursery door	nursery door|nursery	exit	UH	1	no	yes	0							NU			1	134
-NH	nursery door	nursery door|hallway|door|out	exit	NU	1	no	yes	0							UH			1	135
+BH	bedroom door	bedroom door|hallway|door|out|panelled door	exit	BE	1	no	yes	0							UH			1	133
+HN	nursery door	nursery door|nursery|green door|sage door	exit	UH	1	no	yes	0							NU			1	134
+NH	nursery door	nursery door|hallway|door|out|sage door|green door	exit	NU	1	no	yes	0							UH			1	135
 cake_box	cake box	cake box|white box|bakery box|caramel apple cake|cake	fixture	KI	1	no	yes	0										1	136
 cat_food_stash_gourmet	cans of gourmet cat food	gourmet cans|two cans|gourmet wet food|gourmet wet cat food|gourmet food|gourmet|gourmet cat food|good cat food|fancy cat food|gold cans	source	KI	1	no	yes	0						cat_food_gourmet		cake_box		1	137

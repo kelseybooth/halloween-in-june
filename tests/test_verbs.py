@@ -678,7 +678,7 @@ async def real_house(db):
 
 
 async def enter_properly(db, room="EN"):
-    """Entering the way `/enter-entryway` does, with ids in both columns."""
+    """Entering the way `/enter` does, with ids in both columns."""
     await db.ensure_user_exists(ALICE, GUILD_A)
     await db.start_game(ALICE, GUILD_A, room, await resolve.rooms_open_at_launch())
 

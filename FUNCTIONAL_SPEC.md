@@ -27,7 +27,7 @@ Slash commands register once and propagate for about an hour, so this list is se
 | `/take <thing>` | Player | **new** |
 | `/drop <thing>` | Player | **new** |
 | `/use <thing>` | Player | extended beyond exits |
-| `/enter-entryway` | Player | no longer assigns a cohort |
+| `/enter` | Player | renamed from `/enter-entryway` in 2f; no longer assigns a cohort, and returns an existing player to the room they were in |
 | `/initialize-haunted-house` | Admin | builds 9 threads, not 18 |
 | `/admin_config <key> <value>` | Admin | **new** |
 

@@ -436,12 +436,31 @@ async def test_setting_it_to_zero_stops_them(server):
 # --------------------------------------------------------------------------
 
 
-async def test_day_one_is_recorded_on_the_first_sweep(server):
+async def test_the_sweep_does_not_start_the_clock(server):
+    """Day one is the day the first player runs `/enter`, not the day the
+    sweep first ran. The sweep visits every guild the bot is in, including
+    ones where the house is built and nobody has come in yet - starting the
+    calendar there would put spice jars in the Amazon box before anybody
+    could find them."""
     await content_loader.load_content(a_world(a_restock()))
-    assert await restocking.initialized_on(GUILD_A) is None
 
     await restocking.run_for_guild(GUILD_A)
-    assert await restocking.initialized_on(GUILD_A) == database.pacific_today()
+
+    assert await restocking.initialized_on(GUILD_A) is None
+
+
+async def test_the_sweep_places_nothing_before_anybody_has_entered(server):
+    await content_loader.load_content(a_world(a_restock()))
+
+    assert (await restocking.run_for_guild(GUILD_A, now=end_of_day())).placed == []
+
+
+async def test_the_sweep_runs_normally_once_day_one_is_set(server):
+    """And the moment somebody enters, the calendar is live."""
+    await content_loader.load_content(a_world(a_restock()))
+    await restocking.set_initialized_on(GUILD_A)
+
+    assert (await restocking.run_for_guild(GUILD_A, now=end_of_day())).placed
 
 
 async def test_day_one_is_not_moved_once_set(server):

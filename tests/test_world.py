@@ -399,3 +399,32 @@ async def test_inventories_are_per_server(db):
 
     assert len(await database.get_carried(ALICE, GUILD_A)) == 1
     assert await database.get_carried(ALICE, GUILD_B) == []
+
+
+async def test_every_exit_is_named_in_its_room_prose(db):
+    """The only way a player learns a door exists.
+
+    `/look` prints the room's description and the `Also here:` line, and
+    `Also here:` holds loose takeable objects - never exits. So an exit that
+    the prose does not mention is an exit nobody can find, in exactly the way
+    an unmentioned source is a source nobody can find.
+
+    This became load-bearing in 2e, which settled that discovery stays in the
+    prose rather than adding an exit list. Before that the rule was implicit
+    and nothing checked it.
+    """
+    parsed = content_module.load_files()
+    prose = {
+        (row.entity_id, row.state): (row.text.get("look") or "").lower()
+        for row in parsed.room_text
+    }
+
+    unmentioned = []
+    for thing in parsed.things:
+        if thing.type != "exit" or not thing.room_id:
+            continue
+        here = prose.get((thing.room_id, "default"), "")
+        if not any(name.lower() in here for name in (thing.name, *thing.aliases) if name):
+            unmentioned.append(f"{thing.thing_id} ({thing.name}) in {thing.room_id}")
+
+    assert unmentioned == [], unmentioned
