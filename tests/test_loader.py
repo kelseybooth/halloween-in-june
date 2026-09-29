@@ -25,6 +25,13 @@ from content import Content, Drop, Restock, Room, TextRow, Thing
 # --------------------------------------------------------------------------
 
 
+# Read once, at import. `a_world` cannot call `load_files()` itself: one test
+# monkeypatches that function to *return* an `a_world`, and the call would
+# recurse forever. The same trap is waiting in `a_calendar` and `a_house` if
+# anybody ever patches it around them.
+HOUSE_DEFAULTS = dict(content_module.load_files().defaults)
+
+
 def a_thing(thing_id, **overrides):
     defaults = dict(
         thing_id=thing_id,
@@ -67,7 +74,7 @@ def a_world(*things, rooms=("EN", "KI")) -> Content:
         TextRow(entity_id=t.thing_id, state="default", since_drop=1, text={"look": "A thing."})
         for t in things
     ]
-    parsed.defaults = {"take.default": "You take the {name}."}
+    parsed.defaults = dict(HOUSE_DEFAULTS)
     parsed.drops = [
         Drop(
             drop_id=1,
