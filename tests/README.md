@@ -37,6 +37,7 @@ Discord, no network. CI runs the same command on Python 3.13.
 | `test_craving.py` | Alexa's two replies, and the daily craving — drawing, judging, and the tally |
 | `test_admin_config.py` | `/admin_config`, and the shape of the ten-command list |
 | `test_world_changes.py` | The staircase and the jammed drawer, `present_when` gates, and which scope each state has |
+| `test_secret_library.py` | Finding the library: the oak, the key, the cabinet, and what the rooms either side are told |
 | `test_achievements.py` | The ninth content file: parsing, validation, drop resolution, and idempotent awards |
 | `test_dispatcher.py` | The dispatcher and the nine hooks, and how an award gets announced |
 | `test_triggers.py` | All thirty-five conditions, the 43-hour date window, and the three group queries |
@@ -207,6 +208,34 @@ typed, so `FakeInteraction` defaults to a thread inside the house —
 `AnyRoomName` in `fake_discord.py` answers to whichever room it is compared
 against. A test that cares passes `a_room_thread("Kitchen")` or
 `somewhere_else()`.
+
+## Finding the Secret Library
+
+**The oak must be usable by a player who has not discovered it.** An exit
+gated on the state its own use produces is a locked door with the key inside,
+and the library could never be found by anyone — so `CS` is the deliberate
+exception to the `rooms_unlocked` check, and climbing it is what unlocks the
+room. Everything after that is ordinary gating.
+
+The order is structural rather than enforced: the keys hang on a nail on the
+library shelves, so nobody can hold one until they are already inside. There
+is no ordering check written anywhere, and `test_secret_library.py` asserts
+the fact that makes one unnecessary.
+
+**A discovery resolves its text *before* its effect**, which is the opposite
+of 2c.5. The drawer is described by the state it produced; the oak's long
+text is a reveal written to be read once, and the state it sets is what makes
+every later climb read the short line.
+
+**A player holding several states reads the most specific one the entity has
+a row for.** `_best` takes an ordered list now. Alphabetically `library_found`
+beats `passage_open`, so a naive pick showed the back of the cabinet nothing
+at all — and the same list asked about the oak has to fall past both to the
+oak's own row rather than replaying the discovery.
+
+**`has_key` is derived, never stored.** The key is `droppable = no`,
+`cross_weight = 0` and `max_per_player = 1`, so once taken it can never leave
+a player and a stored flag could only ever drift.
 
 ## Cohorts
 

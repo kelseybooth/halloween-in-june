@@ -457,6 +457,11 @@ class ThingText(Base):
     use_fail: Mapped[str | None] = mapped_column(Text, nullable=True)
     take_fail: Mapped[str | None] = mapped_column(Text, nullable=True)
     drop_fail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # What the rooms either side of a move are told. The house default names
+    # the room somebody came from, which is exactly what a secret exit must
+    # not do.
+    move_depart: Mapped[str | None] = mapped_column(Text, nullable=True)
+    move_arrive: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class DefaultText(Base):
@@ -824,6 +829,8 @@ _LATER_COLUMNS: list[tuple[str, str, str]] = [
     ("users", "relationship", f"INTEGER NOT NULL DEFAULT {RELATIONSHIP_START}"),
     ("users", "last_decay_date", "DATE"),
     ("things", "cohort", "VARCHAR(1)"),
+    ("thing_text", "move_depart", "TEXT"),
+    ("thing_text", "move_arrive", "TEXT"),
     ("things", "can_take", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ("things", "removed_on_take", "BOOLEAN NOT NULL DEFAULT TRUE"),
     # Rows written before this column existed read 0 rather than their true score,
@@ -878,6 +885,28 @@ class Migrated(NamedTuple):
 
     positions: int
     unlocked_lists: int
+
+
+async def unlock_room(user_id: int, guild_id: int, room_id: str) -> bool:
+    """Open a room for one player, permanently. False if it already was.
+
+    The first thing since 2a to write to `rooms_unlocked`, which until now was
+    set once at entry and never touched. The Secret Library is
+    `open_at_launch = no`, so climbing the oak is what puts it in the list -
+    per player, because the discovery is the content.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        state = await session.get(PlayerGameState, (user_id, guild_id))
+        if state is None or room_id in (state.rooms_unlocked or []):
+            return False
+        # Reassigned rather than appended: SQLAlchemy does not track mutation
+        # inside a JSON column, so an in-place append would never be written.
+        state.rooms_unlocked = [*state.rooms_unlocked, room_id]
+        await session.commit()
+
+    log.info("Guild %s, player %s unlocked %s", guild_id, user_id, room_id)
+    return True
 
 
 async def migrate_room_names_to_ids() -> Migrated:

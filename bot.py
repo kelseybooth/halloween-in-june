@@ -1203,10 +1203,20 @@ async def _use_exit(interaction, state, found, row) -> None:
     user, guild_id = interaction.user, interaction.guild_id
     destination = row.destination_room_id
 
-    if destination not in state.rooms_unlocked:
+    # `has_key` is folded in here: it is derived from the inventory rather
+    # than stored, and text keyed on it has to resolve like any other state.
+    held = await world.states_for_exit(guild_id, user.id)
+
+    # The oak is the exception to `rooms_unlocked`, and it has to be. The
+    # Secret Library is `open_at_launch = no`, so nobody starts with it
+    # unlocked - and an exit gated on the state its own use produces is a
+    # locked door with the key inside. Climbing the tree is what unlocks the
+    # room, so the check cannot come first.
+    unreachable = destination not in state.rooms_unlocked and found.thing_id != world.OAK
+    if unreachable or world.exit_refused_by(found.thing_id, held):
         await interaction.followup.send(
             await phrasing.say(
-                guild_id, found.thing_id, "use_fail",
+                guild_id, found.thing_id, "use_fail", state=world.exit_state(held),
                 fallback="use_fail.default", name=found.name,
             ),
             ephemeral=True,
@@ -1252,6 +1262,16 @@ async def _use_exit(interaction, state, found, row) -> None:
     try:
         await database.update_current_room(user.id, guild_id, destination)
         await database.record_use(user.id, guild_id, found.thing_id)
+        # The discovery is recorded after the move has committed, so a player
+        # who could not be moved is not told they found something.
+        await world.after_move(guild_id, user.id, found.thing_id)
+        if destination not in state.rooms_unlocked:
+            await database.unlock_room(user.id, guild_id, destination)
+        # `held` is deliberately *not* updated with what was just discovered.
+        # 2c.5 resolves a use's text after its effect, so the drawer can be
+        # described by the state it produced - but a discovery is the opposite
+        # case. The long text is the reveal and is written to be read once;
+        # the state it sets is what makes every later use read the short one.
     except SQLAlchemyError:
         try:
             await house_utils.remove_player_from_thread(destination_thread, user.id)
@@ -1262,11 +1282,20 @@ async def _use_exit(interaction, state, found, row) -> None:
 
     # The move has happened. What follows is presentational, so a failure is
     # logged rather than surfaced - the player is already through the door.
-    depart = await phrasing.default_say(
-        "move.depart", player=user.mention, name=found.name, room=origin_name
+    # A secret exit overrides both lines, because the house defaults give it
+    # away twice: "exits via the oak tree" teaches the Courtyard that the tree
+    # is a way out, and "arrives from the Secret Library" names the secret
+    # outright. The overrides say that somebody moved and nothing else.
+    state_now = world.exit_state(held)
+    depart = await phrasing.say(
+        guild_id, found.thing_id, "move_depart", state=state_now,
+        fallback="move.depart",
+        player=user.mention, name=found.name, room=origin_name,
     )
-    arrive = await phrasing.default_say(
-        "move.arrive", player=user.mention, name=found.name, room=origin_name
+    arrive = await phrasing.say(
+        guild_id, found.thing_id, "move_arrive", state=state_now,
+        fallback="move.arrive",
+        player=user.mention, name=found.name, room=origin_name,
     )
 
     if origin_thread is not None:
@@ -1284,8 +1313,16 @@ async def _use_exit(interaction, state, found, row) -> None:
     except discord.HTTPException:
         log.warning("Could not post arrival in %s", destination_name, exc_info=True)
 
+    # The exit's own words, which no exit has ever printed: every one of the
+    # twenty has a `use` line written and players only ever saw "You head to".
+    # It is what carries the discovery when somebody climbs the oak, and the
+    # state decides whether they get the long version or the short one.
+    walked = await phrasing.say(
+        guild_id, found.thing_id, "use", state=state_now, name=found.name
+    )
+    arriving = f"You head to {destination_thread.mention}."
     await interaction.followup.send(
-        f"You head to {destination_thread.mention}.", ephemeral=True
+        f"{walked}\n\n{arriving}" if walked else arriving, ephemeral=True
     )
 
     await _fire(
