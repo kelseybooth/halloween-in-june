@@ -196,13 +196,14 @@ def commands():
     return {c.name: c for c in bot.bot.tree.get_commands()}
 
 
-def test_there_are_eleven_commands():
-    """Ten were registered in one sync at the end of 2c; `/post-welcome` is
-    2f's, and it is an admin command that fires once a season.
+def test_there_are_twelve_commands():
+    """Ten were registered in one sync at the end of 2c. `/post-welcome`
+    opens the game and `/reset-haunted-house` wipes one server's, and both
+    are admin commands nobody runs twice in a day.
 
     Changing this list costs an hour of propagation and stale signatures in
     between, which is why the count is pinned rather than left to drift."""
-    assert len(commands()) == 11
+    assert len(commands()) == 12
 
 
 def test_the_two_testing_tools_are_gone():
@@ -221,7 +222,9 @@ def test_the_player_commands_are_registered(name):
 
 
 @pytest.mark.parametrize(
-    "name", ["initialize-haunted-house", "admin_config", "post-welcome"]
+    "name",
+    ["initialize-haunted-house", "admin_config", "post-welcome",
+     "reset-haunted-house"],
 )
 def test_the_admin_commands_are_registered(name):
     cmd = commands()[name]

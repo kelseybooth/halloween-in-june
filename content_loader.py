@@ -54,6 +54,67 @@ _WORLD_TABLES = (
 )
 
 
+def world_tables() -> tuple[str, ...]:
+    """Every table one server's progress lives in.
+
+    **Derived from the schema, not written down.** Phase 2b split content
+    from world state on exactly this line - content is global and carries no
+    `guild_id`, world state is per guild and always does - and
+    `test_schema.py` asserts it table by table in both directions. So "has a
+    `guild_id`" *is* "is this server's, not the house's", and reading it off
+    the columns cannot fall behind the way a hand-written list did: the one
+    in `reset_db.py` named four tables while eleven more had appeared.
+
+    Ordered children-first so a foreign key added later does not turn a
+    delete into a puzzle.
+    """
+    tables = database.Base.metadata.sorted_tables
+    return tuple(
+        t.name for t in reversed(tables) if "guild_id" in t.c
+    )
+
+
+async def reset_guild(guild_id: int) -> dict[str, int]:
+    """Wipe one server's game and put its starting stock back.
+
+    Scoped to the guild throughout: every table here carries a `guild_id`,
+    so a reset on one server cannot reach another the bot is also in.
+
+    Content is untouched - it is global, reloaded on every boot, and has
+    nothing to do with what a server has done. What comes back is the
+    starting placement, because clearing `room_contents` without re-placing
+    would leave a house with nothing in any room.
+    """
+    parsed = content_module.load()
+    placements = things_to_place(parsed)
+    today = database.pacific_today()
+
+    cleared: dict[str, int] = {}
+    session_factory = database._require_session()
+    async with session_factory() as session:
+        for name in world_tables():
+            table = database.Base.metadata.tables[name]
+            result = await session.execute(
+                table.delete().where(table.c.guild_id == guild_id)
+            )
+            if result.rowcount:
+                cleared[name] = result.rowcount
+
+        arrived = await _arrived_drops(session, guild_id, parsed, today)
+        placed, _, _ = await _place_for_guild(session, guild_id, placements, arrived)
+        await session.commit()
+
+    log.info(
+        "Guild %s reset: cleared %d row(s) across %d table(s), re-placed %d thing(s)",
+        guild_id,
+        sum(cleared.values()),
+        len(cleared),
+        placed,
+    )
+    cleared["_placed"] = placed
+    return cleared
+
+
 class OrphanedThings(Exception):
     """The files dropped a thing that world state still refers to.
 
