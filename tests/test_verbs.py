@@ -772,3 +772,104 @@ async def test_moving_posts_a_departure_and_an_arrival(real_house):
 
     assert any("exits via" in (line or "") for line in threads["Living Room"].posted)
     assert threads["Entryway"].posted
+
+
+# --------------------------------------------------------------------------
+# The thread is the room
+#
+# Reported from testing: `/look` in an unrelated channel answered with the
+# player's room. The four world verbs used to run from anywhere in the
+# server, which made the house a status readout rather than a place.
+# --------------------------------------------------------------------------
+
+
+from fake_discord import a_room_thread, somewhere_else  # noqa: E402
+
+
+async def command(fn, arg, channel, user_id=ALICE, guild_id=GUILD_A, guild=None):
+    from types import SimpleNamespace
+
+    interaction = FakeInteraction(
+        user_id,
+        guild_id,
+        guild=guild or SimpleNamespace(name="Test", text_channels=[]),
+        channel=channel,
+    )
+    args = () if arg is None else (arg,)
+    await fn.callback(interaction, *args)
+    return interaction
+
+
+WORLD_VERBS = [
+    pytest.param(lambda: bot.look, None, id="look"),
+    pytest.param(lambda: bot.take, "spoon", id="take"),
+    pytest.param(lambda: bot.drop, "spoon", id="drop"),
+    pytest.param(lambda: bot.use, "spoon", id="use"),
+]
+
+
+@pytest.mark.parametrize("verb, arg", WORLD_VERBS)
+async def test_a_world_verb_is_refused_outside_the_house(house, verb, arg):
+    await content_loader.load_content(a_house(a_thing("spoon")))
+
+    reply = (await command(verb(), arg, somewhere_else())).reply
+
+    assert "only works inside the house" in reply
+
+
+@pytest.mark.parametrize("verb, arg", WORLD_VERBS)
+async def test_a_world_verb_works_in_a_room_thread(house, verb, arg):
+    await content_loader.load_content(a_house(a_thing("spoon")))
+
+    # Threads are named after the room, not its id.
+    reply = (await command(verb(), arg, a_room_thread("Entryway"))).reply
+
+    assert "only works inside the house" not in reply
+
+
+async def test_the_refusal_says_where_the_player_actually_is(house):
+    """So a player who typed in the wrong place knows where to go."""
+    await content_loader.load_content(a_house(a_thing("spoon")))
+
+    reply = (await command(bot.look, None, somewhere_else())).reply
+
+    assert "Entryway" in reply
+
+
+async def test_a_thread_outside_the_halloween_channel_is_not_the_house(house):
+    """Somebody else's thread in another channel is not a room, however it is
+    named - the rooms are the threads under #halloween."""
+    from fake_discord import FakeChannel, FakeThread
+
+    await content_loader.load_content(a_house(a_thing("spoon")))
+    impostor = FakeThread("Entryway", channel=FakeChannel(name="off-topic"))
+
+    reply = (await command(bot.look, None, impostor)).reply
+
+    assert "only works inside the house" in reply
+
+
+async def test_a_thread_named_after_no_room_is_not_the_house(house):
+    """A thread under #halloween that is not one of the rooms - somebody's
+    own thread in the same channel."""
+    from fake_discord import FakeChannel, FakeThread
+
+    await content_loader.load_content(a_house(a_thing("spoon")))
+    chatter = FakeThread("spoilers", channel=FakeChannel(name="halloween"))
+
+    reply = (await command(bot.look, None, chatter)).reply
+
+    assert "only works inside the house" in reply
+
+
+async def test_the_player_verbs_are_not_gated(house):
+    """`/pet`, `/inventory` and `/stats` are about the player rather than the
+    room, so they answer anywhere - the house is not a place you have to
+    stand to check your own bag."""
+    await content_loader.load_content(a_house(a_thing("spoon")))
+    await carry(house, ALICE, GUILD_A, "spoon")
+
+    reply = (await command(bot.inventory, None, somewhere_else())).reply
+
+    assert "only works inside the house" not in reply
+    assert "spoon" in reply

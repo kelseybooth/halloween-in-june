@@ -440,16 +440,57 @@ async def _is_game_thread(channel) -> bool:
     Scoped deliberately: Alexa answering in every channel of the server would
     make her a nuisance rather than a fixture in the rooms.
     """
-    if not isinstance(channel, discord.Thread):
-        return False
-    parent = channel.parent
-    if parent is None or parent.name != house_utils.HALLOWEEN_CHANNEL_NAME:
-        return False
+    return await _room_of_thread(channel) is not None
+
+
+async def _room_of_thread(channel) -> str | None:
+    """Which room this thread *is*, or None if it is not a room thread.
+
+    Duck-typed on `parent` rather than `isinstance(channel, discord.Thread)`:
+    a text channel has no parent, so the check is just as tight, and it can be
+    exercised without constructing a real Thread.
+    """
+    parent = getattr(channel, "parent", None)
+    name = getattr(channel, "name", None)
+    if parent is None or getattr(parent, "name", None) != house_utils.HALLOWEEN_CHANNEL_NAME:
+        return None
     try:
-        return channel.name in set(await resolve.room_names())
+        for room_id, room_name in await resolve.all_rooms():
+            if room_name == name:
+                return room_id
     except SQLAlchemyError:
-        log.exception("Could not check whether %s is a game thread", channel.name)
-        return False
+        log.exception("Could not identify the thread %s", name)
+    return None
+
+
+async def _outside_the_house(interaction, room_id: str) -> str | None:
+    """Why `/look`, `/take`, `/drop` and `/use` cannot run here. None to go on.
+
+    **The thread is the room.** Without this the four world verbs answer from
+    anywhere in the server: a player standing in the Upstairs Hallway could
+    type `/look` in an unrelated channel and be told about the hallway, which
+    makes the house a status readout rather than a place.
+
+    Being in *a* room thread is enough, and it is not weaker than checking for
+    *the* room. The rooms are private threads created with `invitable=False`,
+    and the bot is the only thing that adds or removes anybody - on entry and
+    on every move. A player is therefore a member of exactly one room thread
+    and cannot type in another. Checking the specific room as well would add
+    no protection and one failure mode: a membership bug would strand somebody
+    with no room they are allowed to act in.
+
+    Nothing else is gated. `/pet`, `/inventory` and `/stats` are about the
+    player rather than the room, and the admin commands have to work before
+    any thread exists.
+    """
+    if await _room_of_thread(interaction.channel) is not None:
+        return None
+
+    name = await resolve.room_name(room_id) or "the house"
+    return (
+        f"That only works inside the house. You're in **{name}** - "
+        "open that room's thread and try again."
+    )
 
 
 @bot.event
@@ -869,6 +910,11 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
             )
             return
 
+        elsewhere = await _outside_the_house(interaction, state.current_room)
+        if elsewhere:
+            await interaction.followup.send(elsewhere, ephemeral=True)
+            return
+
         found = await reach.find(guild_id, user.id, state.current_room, thing, reach.Scope.REACH)
 
         if isinstance(found, reach.Ambiguous):
@@ -1280,6 +1326,11 @@ async def look(interaction: discord.Interaction, thing: str | None = None) -> No
             await interaction.followup.send(NOT_IN_ROOM_MESSAGE, ephemeral=True)
             return
 
+        elsewhere = await _outside_the_house(interaction, state.current_room)
+        if elsewhere:
+            await interaction.followup.send(elsewhere, ephemeral=True)
+            return
+
         if thing is None or not thing.strip():
             await interaction.followup.send(
                 await _look_around(guild_id, user.id, state.current_room), ephemeral=True
@@ -1355,6 +1406,15 @@ async def _look_at(guild_id: int, user_id: int, room_id: str, found) -> str:
     A carried thing uses `look_carried` where it has one: six things describe
     where they were sitting, which stops being true the moment they are picked
     up. Falling back to `look` is right for everything else.
+
+    **Looking at a source describes the source, not what it hands out.** A
+    source and its yield are one thing to the resolver - the only reason
+    `/take candy` does not raise an ambiguity prompt - so `found` carries the
+    yield's id and name. That is right for taking and using, and wrong for
+    looking: the writers described the bed of rosemary and the three cut
+    sprigs as a pair, and only one of them had ever been readable. The
+    resolution ladder sorts out which is meant, because a carried copy and a
+    loose copy both win over the source.
     """
     state = await _current_state(guild_id, user_id)
 
@@ -1363,15 +1423,28 @@ async def _look_at(guild_id: int, user_id: int, room_id: str, found) -> str:
         description = await phrasing.say(
             guild_id, found.thing_id, "look_carried", state=state, name=found.name
         )
+
+    looking_at, name = found.thing_id, found.name
+    if not description and found.where is reach.Where.SOURCE and found.source_id:
+        row = await phrasing.thing_row(found.source_id)
+        description = await phrasing.say(
+            guild_id, found.source_id, "look", state=state,
+            name=row.name if row else found.name,
+        )
+        if description and row is not None:
+            looking_at, name = found.source_id, row.name
+
     if not description:
+        # A source with no look text of its own falls back to its yield's,
+        # which is what every source did before this.
         description = await phrasing.say(
             guild_id, found.thing_id, "look", state=state, name=found.name
         )
     if not description:
-        description = f"You see {found.name}."
+        description = f"You see {name}."
 
     inside = await database.loose_here(
-        guild_id, room_id, container_id=found.thing_id,
+        guild_id, room_id, container_id=looking_at,
         held_states=await states.in_force(guild_id, user_id),
     )
     line = await phrasing.listing(
@@ -1423,6 +1496,19 @@ async def _player_room(interaction: discord.Interaction) -> str | None:
     return state.current_room if state else None
 
 
+async def _room_to_act_in(interaction) -> tuple[str | None, str | None]:
+    """(room, refusal). Exactly one is set.
+
+    `/take` and `/drop` share this: both need the player's room and both are
+    refused outside it, and having one function answer both means a verb
+    cannot be given the room without also being given the check.
+    """
+    room_id = await _player_room(interaction)
+    if room_id is None:
+        return None, NOT_IN_ROOM_MESSAGE
+    return room_id, await _outside_the_house(interaction, room_id)
+
+
 @bot.tree.command(name="take", description="Pick something up.")
 @app_commands.guild_only()
 @app_commands.describe(thing="What to pick up.")
@@ -1437,9 +1523,9 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
     user, guild_id = interaction.user, interaction.guild_id
 
     try:
-        room_id = await _player_room(interaction)
-        if room_id is None:
-            await interaction.followup.send(NOT_IN_ROOM_MESSAGE, ephemeral=True)
+        room_id, elsewhere = await _room_to_act_in(interaction)
+        if elsewhere:
+            await interaction.followup.send(elsewhere, ephemeral=True)
             return
 
         found = await reach.find(guild_id, user.id, room_id, thing, reach.Scope.ROOM)
@@ -1565,9 +1651,9 @@ async def drop(interaction: discord.Interaction, thing: str) -> None:
     user, guild_id = interaction.user, interaction.guild_id
 
     try:
-        room_id = await _player_room(interaction)
-        if room_id is None:
-            await interaction.followup.send(NOT_IN_ROOM_MESSAGE, ephemeral=True)
+        room_id, elsewhere = await _room_to_act_in(interaction)
+        if elsewhere:
+            await interaction.followup.send(elsewhere, ephemeral=True)
             return
 
         found = await reach.find(guild_id, user.id, room_id, thing, reach.Scope.CARRIED)

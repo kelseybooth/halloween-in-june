@@ -18,7 +18,7 @@ candle_stub	candle stub	candle|candle stub|stub	object	DI	1	yes	yes	1										1
 stove	cast-iron stove	stove|range|oven|burner	fixture	KI	1	no	yes	0		herbs|dark_chocolate|spice_jar								1	17
 sink	kitchen sink	sink|basin|tap|faucet	fixture	KI	1	no	yes	0										1	18
 coffee_maker	Keurig	keurig|coffee maker|coffee machine|coffee|pods|pod|k-cup|k-cups|mug	fixture	KI	1	no	yes	0										1	19
-trash_can	trash can	trash can|bin|rubbish bin|garbage	fixture	KI	1	no	yes	0										1	20
+trash_can	trash can	trash can|bin|rubbish bin|garbage|trash bin|trash|garbage bin|garbage can	fixture	KI	1	no	yes	0										1	20
 pasta_pot	pasta pot	pasta pot|stockpot|big pot	fixture	KI	1	no	yes	0										1	21
 chip_box	box of tortilla chips	case of chips|chip case|chips|tortilla chips|nachos|case of tortilla chips|chip box|box|bulk box|bulk box of tortilla chips	source	KI	1	no	yes	0						nacho_chips		pantry		1	22
 nacho_chips	nacho chips	nacho chips|chips|nachos|tortilla chips	object		0	yes	yes	1										1	22

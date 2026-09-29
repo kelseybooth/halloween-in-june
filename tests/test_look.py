@@ -451,3 +451,123 @@ async def test_alexa_is_not_in_the_also_here_line(house):
     reply = (await look()).reply
 
     assert "Alexa" not in reply.split("Also here")[-1]
+
+
+# --------------------------------------------------------------------------
+# Looking at a source describes the source
+#
+# A source and its yield are one thing to the resolver, which is the only
+# reason `/take candy` does not raise an ambiguity prompt. That is right for
+# taking and using and wrong for looking: the writers described the bed of
+# rosemary and the three cut sprigs as a pair, and until this only the second
+# was ever readable. Seventeen sources, thirty-seven passages.
+# --------------------------------------------------------------------------
+
+
+async def test_looking_at_a_source_shows_the_source(house):
+    await content_loader.load_content(content_module.load_files())
+    await database.update_current_room(ALICE, GUILD_A, "CO")
+
+    reply = (await look(thing="herb garden")).reply
+
+    assert "bed of lavender, sage and rosemary" in reply
+    assert "Three cut sprigs" not in reply
+
+
+async def test_every_name_for_a_source_shows_the_source(house):
+    """`freezer`, `fridge` and `aunt sue` all resolve to the burrito, so all
+    three used to answer with the burrito's description."""
+    await content_loader.load_content(content_module.load_files())
+    await database.update_current_room(ALICE, GUILD_A, "KI")
+
+    for word in ("freezer", "fridge", "aunt sue", "burritos"):
+        reply = (await look(thing=word)).reply
+        assert "packed solid with foil bricks" in reply, word
+
+
+async def test_a_loose_copy_still_shows_the_object(house):
+    """The ladder decides which is meant: a copy on the floor beats the
+    source, so a dropped sprig is still a sprig."""
+    await content_loader.load_content(content_module.load_files())
+    await database.update_current_room(ALICE, GUILD_A, "CO")
+    await database.take_from_source(ALICE, GUILD_A, "herbs")
+    await database.drop_into_room(ALICE, GUILD_A, "CO", "herbs")
+
+    reply = (await look(thing="herbs")).reply
+
+    assert "Three cut sprigs" in reply
+    assert "bed of lavender" not in reply
+
+
+async def test_a_carried_copy_still_shows_the_object(house):
+    await content_loader.load_content(content_module.load_files())
+    await database.update_current_room(ALICE, GUILD_A, "CO")
+    await database.take_from_source(ALICE, GUILD_A, "herbs")
+
+    reply = (await look(thing="herbs")).reply
+
+    assert "bed of lavender" not in reply
+
+
+async def test_taking_from_a_source_is_unchanged(house):
+    """Only `/look` moved. Taking and using still act on the yield, because
+    the thing id they resolve to drives real machinery - what is recorded,
+    what is carried, and which achievement fires."""
+    await content_loader.load_content(content_module.load_files())
+    await database.update_current_room(ALICE, GUILD_A, "CO")
+
+    from test_verbs import take
+
+    await take(thing="herb garden")
+
+    assert await database.carried_of(ALICE, GUILD_A, "herbs") == 1
+
+
+async def test_every_source_in_the_shipped_house_describes_itself(house):
+    """The sweep, as a test. Seventeen sources, each looked at where it
+    stands, each expected to answer with its own first sentence."""
+    parsed = content_module.load_files()
+    await content_loader.load_content(parsed)
+    import states
+
+    await states.set_player_state(GUILD_A, ALICE, "drawer_unjammed")
+    things = parsed.things_by_id
+    own_look = {
+        row.entity_id: row.text["look"]
+        for row in parsed.thing_text
+        if row.state == "default" and row.text.get("look")
+    }
+
+    checked = 0
+    for thing in parsed.things:
+        if not thing.is_source:
+            continue
+        room = thing.room_id
+        if room not in things and thing.contained_in:
+            room = things[thing.contained_in].room_id
+        await database.update_current_room(ALICE, GUILD_A, room)
+
+        reply = (await look(thing=thing.name)).reply
+        opening = own_look[thing.thing_id].split(".")[0]
+        assert opening in reply, thing.thing_id
+        checked += 1
+
+    assert checked == 17
+
+
+async def test_a_source_with_no_look_text_falls_back_to_its_yield(house):
+    """Every shipped source has one, but a new source written without a
+    description should still say something rather than "You see a thing"."""
+    from dataclasses import replace
+
+    parsed = content_module.load_files()
+    parsed.thing_text = [
+        replace(row, text={k: v for k, v in row.text.items() if k != "look"})
+        if row.entity_id == "herb_garden"
+        else row
+        for row in parsed.thing_text
+    ]
+    await content_loader.load_content(parsed)
+    await database.update_current_room(ALICE, GUILD_A, "CO")
+
+    assert "Three cut sprigs" in (await look(thing="herb garden")).reply

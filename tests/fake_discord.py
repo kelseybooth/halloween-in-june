@@ -29,6 +29,10 @@ class FakeThread:
         self.posted: list[str] = []
         self.mention = f"<#{self.id}>"
 
+    @property
+    def parent(self):
+        return self._channel
+
     async def send(self, content=None, **kwargs):
         """A room thread accepting a message: the arrival and departure lines,
         and the one public `/use`."""
@@ -138,6 +142,41 @@ class FakeChannel:
         return self
 
 
+class AnyRoomName(str):
+    """A thread name that answers to whichever room it is compared against.
+
+    Almost every command test is about what a verb *does*, not about where it
+    was typed, and every one of them was written assuming the player is in
+    their own room's thread - which is true in the real game, because the
+    rooms are private threads the bot adds and removes people from.
+
+    Making that the default keeps those tests saying what they mean. A test
+    that cares where the command was typed passes a real channel instead.
+    """
+
+    def __eq__(self, other):
+        return isinstance(other, str)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __hash__(self):
+        return hash("")
+
+
+def a_room_thread(name=None):
+    """A private thread under #halloween, as the house's rooms are."""
+    return FakeThread(
+        AnyRoomName() if name is None else name,
+        channel=FakeChannel(name="halloween"),
+    )
+
+
+def somewhere_else(name="general"):
+    """An ordinary channel with no parent - not part of the house."""
+    return SimpleNamespace(name=name)
+
+
 class FakeMember:
     """Somebody to DM an unlock description to.
 
@@ -212,12 +251,15 @@ class FakeInteraction:
     most of what a command's behaviour actually is.
     """
 
-    def __init__(self, user_id, guild_id, *, guild=None):
+    def __init__(self, user_id, guild_id, *, guild=None, channel=None):
         self.user = SimpleNamespace(
             id=user_id, mention=f"<@{user_id}>", display_name=f"Player {user_id}"
         )
         self.guild_id = guild_id
         self.guild = guild
+        # Where the command was typed. The four world verbs refuse
+        # outside the house, so the default is inside it.
+        self.channel = a_room_thread() if channel is None else channel
         self.deferred = False
         self.defer_kwargs = {}
         self.sent: list[tuple[str | None, dict]] = []
