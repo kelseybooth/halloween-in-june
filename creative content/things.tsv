@@ -120,9 +120,9 @@ cat_food_stash_sideboard	cupboard of salmon cat food	salmon cat food|salmon|cat 
 copper_wire_coil	coil of copper wire	copper wire|wire|copper|coil	source	SE	1	no	yes	0						copper_wire				1	113
 carving_tool_sleeve	carving tool sets	carving tools|tools|carving kit|sleeve|sets	source	BE	1	no	yes	0						carving_tools		halloween_box		1	114
 costume_pile	pile of costumes	costumes|costume|costume pile|pile	source	BE	1	no	yes	0						costume		halloween_box		1	115
-ED	arched doorway	arch|arched doorway|dining room|dining	exit	EN	1	no	yes	0							DI			1	116
+ED	arched doorway	arch|arched doorway|doorway|dining room|dining	exit	EN	1	no	yes	0							DI			1	116
 DE	arched doorway	arch|arched doorway|entryway|hall	exit	DI	1	no	yes	0							EN			1	117
-EL	wide doorway	wide doorway|living room|living	exit	EN	1	no	yes	0							LI			1	118
+EL	wide doorway	wide doorway|doorway|living room|living	exit	EN	1	no	yes	0							LI			1	118
 LE	wide doorway	wide doorway|doorway|entryway|hall	exit	LI	1	no	yes	0							EN			1	119
 EH	main staircase	main staircase|staircase|stairs|banister|upstairs|grand staircase	exit	EN	1	no	yes	0							UH			1	120
 HE	main staircase	main staircase|staircase|stairs|downstairs	exit	UH	1	no	yes	0							EN			1	121

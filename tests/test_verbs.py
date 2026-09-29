@@ -875,3 +875,38 @@ async def test_the_player_verbs_are_not_gated(house):
 
     assert "only works inside the house" not in reply
     assert "spoon" in reply
+
+
+async def test_a_word_two_doors_answer_to_asks_which(real_house):
+    """The Entryway has an arched doorway to the Dining Room and a wide one
+    to the Living Room, and its prose calls them both doorways. Before this
+    the word was taken off one of them, so `/use doorway` answered "you don't
+    see a doorway here" in a room that had just mentioned two."""
+    db, guild = real_house
+    await enter_properly(db, room="EN")
+
+    reply = (await use(thing="doorway", guild=guild)).reply
+
+    assert "Which one do you mean" in reply
+    assert "arched doorway" in reply and "wide doorway" in reply
+    assert await where_is_alice(db) == "EN"
+
+
+async def test_naming_which_door_still_walks_through_it(real_house):
+    db, guild = real_house
+    await enter_properly(db, room="EN")
+
+    await use(thing="wide doorway", guild=guild)
+
+    assert await where_is_alice(db) == "LI"
+
+
+async def test_a_room_with_one_doorway_does_not_ask(real_house):
+    """Only the Entryway has two. The Living Room's `doorway` is unambiguous
+    and still walks straight through."""
+    db, guild = real_house
+    await enter_properly(db, room="LI")
+
+    await use(thing="doorway", guild=guild)
+
+    assert await where_is_alice(db) == "EN"
