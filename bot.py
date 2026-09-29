@@ -9,7 +9,7 @@ import logging
 import os
 import random
 import sys
-from datetime import time as dt_time, timedelta
+from datetime import datetime, time as dt_time, timedelta
 from typing import NamedTuple
 
 import discord
@@ -633,24 +633,137 @@ async def _answer_guess(message: discord.Message, guess) -> None:
         await react(craving.NO_ROOM)
 
 
+# The cat is everywhere, so `/pet` needs no location check. It resolves in
+# all nine rooms and in the Halloween channel, and the public line posts
+# wherever the command was run.
+#
+# Two windows, deliberately separate, because they answer different
+# questions. Crowding is between a player and the cat: ten pets in ten
+# minutes and the private reply says so. The public rate limit is about noise
+# in a shared room: two lines per player per place per thirty minutes.
+CROWDING_PETS = 10
+PUBLIC_PETS = 2
+PUBLIC_WINDOW = timedelta(minutes=30)
+
+# (guild, player, place) -> when this window opened, and how many lines it has
+# spent. In memory on purpose, like the movement buffer *A Little Bit Lost*
+# keeps: a restart hands somebody two more public lines than they were owed,
+# which nobody can notice and which costs a table to prevent.
+_PUBLIC_PETS: dict[tuple[int, int, int], tuple[datetime, int]] = {}
+
+
+def forget_public_pets() -> None:
+    """Empty the public-pet windows. For tests."""
+    _PUBLIC_PETS.clear()
+
+
+def _public_pet_line(guild_id: int, user_id: int, place_id: int, now: datetime) -> str | None:
+    """Which public line this pet earns, or None to stay quiet.
+
+    The window opens on the first *line*, not the first pet, so a player can
+    never be surprised by which one they get: two get through, the rest are
+    silent, and thirty minutes after that first line the next pet is public
+    again as a normal first line.
+
+    The bucket is the member and the place. Two people in the same room each
+    get their own two; one person moving between rooms gets two in each,
+    because those are different audiences. The Halloween channel is its own
+    bucket alongside the nine rooms.
+    """
+    key = (guild_id, user_id, place_id)
+    opened, spent = _PUBLIC_PETS.get(key, (None, 0))
+    if opened is None or now - opened >= PUBLIC_WINDOW:
+        _PUBLIC_PETS[key] = (now, 1)
+        return "first"
+    if spent < PUBLIC_PETS:
+        _PUBLIC_PETS[key] = (opened, spent + 1)
+        return "continues"
+    return None
+
+
+async def _announce_pet(interaction, relationship: int) -> None:
+    """The public half: somebody pet the cat, and how it went.
+
+    Posted wherever the command was run, which is what makes the discovery
+    argument work - an admin can pet the cat in the Halloween channel on day
+    one, before anybody has run `/enter`, and everyone watching learns the
+    command exists.
+
+    The branch reads the meter **after** the pet, which is the boundary
+    *Making Friends* and *Trying to Make Friends* already split on, so the
+    game has one rule rather than two. Reporting whether this particular pet
+    moved the meter up or down would be a truer account of the moment, and
+    would publicly tell a player deep in the positive that the cat was
+    displeased, which reads as a bug.
+
+    The crowding nudge never appears here. It is between that player and the
+    cat, and broadcasting it would make it a scolding.
+    """
+    channel = interaction.channel
+    if channel is None or not hasattr(channel, "send"):
+        return
+
+    which = _public_pet_line(
+        interaction.guild_id, interaction.user.id, getattr(channel, "id", 0),
+        database._utcnow(),
+    )
+    if which is None:
+        return
+
+    key = (
+        "pet.public.continues"
+        if which == "continues"
+        else "pet.public.positive" if relationship > 0 else "pet.public.negative"
+    )
+    line = await phrasing.default_say(key, player=interaction.user.display_name)
+    if line:
+        await _post_quietly(channel, line)
+
+
 @bot.tree.command(name="pet", description="Pet the cat.")
 @app_commands.guild_only()
 async def pet(interaction: discord.Interaction) -> None:
-    # Defer first: the DB round trip can exceed Discord's 3s interaction deadline.
-    await interaction.response.defer()
+    """One command, two messages: the blurb in private, the event in public.
+
+    The private reply carries the cat's reaction and **no pet count**.
+    Progress toward *Making Friends* lives in `/stats` and nowhere else - two
+    hundred is better as a surprise than as a countdown, and a visible
+    counter turns petting a cat into filling a progress bar.
+
+    A member with no player row can run this, exactly as in v1: the row is
+    created, the meter starts, and the pet counts. It is how somebody can
+    hold a relationship score having never been in a room, which `/enter`
+    then has to handle.
+    """
+    # Ephemeral now: the blurb is the private half of the pair. Defer first,
+    # because the DB round trip can exceed Discord's 3s deadline.
+    await interaction.response.defer(ephemeral=True)
+    user, guild_id = interaction.user, interaction.guild_id
+
     try:
-        result = await database.increment_pet_count(interaction.user.id, interaction.guild_id)
+        result = await database.increment_pet_count(user.id, guild_id)
         reaction = choose_response(result.recent)
         delta = RELATIONSHIP_STEP if reaction.friendly else -RELATIONSHIP_STEP
-        relationship = await database.adjust_relationship(interaction.user.id, interaction.guild_id, delta)
+        relationship = await database.adjust_relationship(user.id, guild_id, delta)
     except SQLAlchemyError:
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
         return
 
-    message = f"{reaction.text}\n\nTotal pets: {result.total}"
+    message = reaction.text
+    # `recent` counts the pets this one arrived among, so the tenth pet sees
+    # nine. A nudge, not a limit: every pet still counts toward the
+    # achievement, and the relationship penalty it is warning about is the
+    # consequence doing the actual work.
+    crowded = result.recent + 1 >= CROWDING_PETS
+    if crowded:
+        nudge = await phrasing.default_say("pet.crowding")
+        if nudge:
+            message = f"{message}\n\n{nudge}"
     if SHOW_DEBUG_INFO:
         message += _debug_lines(reaction, result.recent, relationship)
-    await interaction.followup.send(message)
+    await interaction.followup.send(message, ephemeral=True)
+
+    await _announce_pet(interaction, relationship)
 
     await _fire(
         achievements.Context(
@@ -1066,8 +1179,27 @@ async def _finish_use(interaction, state, found) -> None:
     Every successful use comes through here, so the world effects cannot be
     wired into one branch and forgotten in another - and so the single public
     `/use` is decided in one place rather than by each branch remembering.
+
+    **A thing with a refusal written and no success written refuses.** The
+    cat is the only one today: `/use cat` should hand the player `/pet`
+    rather than the house's "you turn it over in your hands". A writer who
+    filled in `use_fail` and left `use` empty has said what they meant, and
+    unlike a state change a refusal cannot create a loop or an unreachable
+    room - so this one rule is safe to read out of content rather than
+    naming the cat in code the way `world` names the lumber.
     """
     user, guild_id = interaction.user, interaction.guild_id
+
+    held = await states.in_force(guild_id, user.id)
+    current = sorted(held)[0] if held else resolve.DEFAULT_STATE
+    if not await phrasing.say(guild_id, found.thing_id, "use", state=current):
+        refusal = await phrasing.say(
+            guild_id, found.thing_id, "use_fail", state=current, name=found.name
+        )
+        if refusal:
+            await interaction.followup.send(refusal, ephemeral=True)
+            return
+
     await database.record_use(user.id, guild_id, found.thing_id)
 
     effect = await world.after_use(guild_id, user.id, found.thing_id, state.current_room)
