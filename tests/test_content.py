@@ -415,3 +415,51 @@ def test_a_file_with_nothing_drawable_is_caught(shipped):
     broken.emoji_groups = [replace(e, drawable=False) for e in broken.emoji_groups]
 
     assert problems_matching(broken, "could never be drawn")
+
+
+# --------------------------------------------------------------------------
+# Two doors, one word
+# --------------------------------------------------------------------------
+
+
+def test_two_exits_in_a_room_may_share_a_word():
+    """A room can honestly contain two doorways, and its own prose calls them
+    both doorways. Refusing the load would force the shared word off both,
+    which leaves a player typing a word the room just used at them and being
+    told the house has no such thing. Asking is the better answer."""
+    parsed = content.load_files()
+    entryway = {t.thing_id: t for t in parsed.things if t.room_id == "EN"}
+
+    assert "doorway" in entryway["EL"].aliases
+    assert "doorway" in entryway["ED"].aliases
+    assert content.validate(parsed) == []
+
+
+def test_an_exit_sharing_a_word_with_an_object_is_still_an_error():
+    """The case that is almost always a slip rather than a choice."""
+    from dataclasses import replace
+
+    parsed = content.load_files()
+    parsed.things = [
+        replace(t, aliases=t.aliases + ("doorway",))
+        if t.thing_id == "coat_rack"
+        else t
+        for t in parsed.things
+    ]
+
+    problems = content.validate(parsed)
+    assert any("could mean any of" in p and "coat_rack" in p for p in problems)
+
+
+def test_two_objects_in_a_room_sharing_a_word_is_still_an_error():
+    from dataclasses import replace
+
+    parsed = content.load_files()
+    parsed.things = [
+        replace(t, aliases=t.aliases + ("thing",))
+        if t.thing_id in ("coat_rack", "ornate_mirror")
+        else t
+        for t in parsed.things
+    ]
+
+    assert any("'thing'" in p for p in content.validate(parsed))

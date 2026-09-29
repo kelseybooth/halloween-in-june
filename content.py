@@ -608,12 +608,28 @@ def _check_containers(content: Content, things: dict[str, Thing]) -> list[str]:
 
 
 def _check_aliases(content: Content) -> list[str]:
-    """Within one room, no two things may answer to the same word.
+    """Within one room, no two *things* may answer to the same word.
 
-    Across rooms it is fine - a player is only ever in one. Roomless objects are
-    excluded: several cat food flavours deliberately share "cat food", and an
-    ambiguous match in a bag is resolved by asking, not by refusing to load.
+    Across rooms it is fine - a player is only ever in one. Two exceptions,
+    and both come down to whether sharing a word is a mistake or the point.
+
+    Roomless objects are excluded: several cat food flavours deliberately
+    share "cat food", and an ambiguous match in a bag is resolved by asking,
+    not by refusing to load.
+
+    **Exits are excluded from each other**, for the same reason one layer up.
+    A room can honestly contain two doorways, and its own prose will call them
+    both doorways - the Entryway has an arched one to the Dining Room and a
+    wide one to the Living Room. Refusing the load would force the writers to
+    take the shared word off both, which leaves a player typing a word the
+    room just used at them and being told the house has no such thing.
+    Asking is the better answer and `ambiguous.match` already exists to ask.
+
+    An exit sharing a word with an *object* is still an error. That is the
+    case that is almost always a slip rather than a choice, and the resolution
+    ladder would answer it by scope rather than by asking.
     """
+    things = content.things_by_id
     problems = []
     seen: dict[tuple[str, str], list[str]] = {}
     for thing in content.things:
@@ -622,10 +638,14 @@ def _check_aliases(content: Content) -> list[str]:
         for name in thing.names:
             seen.setdefault((thing.room_id, name.lower()), []).append(thing.thing_id)
     for (room_id, name), owners in sorted(seen.items()):
-        if len(set(owners)) > 1:
-            problems.append(
-                f"in room {room_id}, {name!r} could mean any of {', '.join(sorted(set(owners)))}"
-            )
+        distinct = sorted(set(owners))
+        if len(distinct) <= 1:
+            continue
+        if all(things[key].type == "exit" for key in distinct if key in things):
+            continue
+        problems.append(
+            f"in room {room_id}, {name!r} could mean any of {', '.join(distinct)}"
+        )
     return problems
 
 
