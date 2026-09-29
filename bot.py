@@ -786,6 +786,104 @@ async def pet(interaction: discord.Interaction) -> None:
 
 
 @bot.tree.command(
+    name="reset-haunted-house",
+    description="(Admin) Wipe this server's game: progress, achievements, everything.",
+)
+@app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
+@app_commands.checks.has_permissions(administrator=True)
+@app_commands.describe(
+    confirm="Type this server's name exactly. There is no undo.",
+    keep_art="Keep the uploaded cat images, so a reset does not cost ten re-uploads.",
+)
+async def reset_haunted_house(
+    interaction: discord.Interaction,
+    confirm: str,
+    keep_art: bool = True,
+) -> None:
+    """Put one server back to the morning before anybody entered.
+
+    **Scoped to this server.** Every table it clears carries a `guild_id`
+    and every delete is filtered on it, so a reset here cannot reach another
+    server the bot is also in. That is the whole reason this exists as a
+    command rather than a script: `reset_db.py` clears the entire database,
+    and `load_content.py --fresh` clears every guild in it.
+
+    **Content is untouched.** Rooms, things, text, achievements and art rows
+    are global, reload on every boot, and have nothing to do with what a
+    server has done. What comes back afterwards is the starting stock, since
+    emptying `room_contents` without re-placing would leave a house with
+    nothing in any room.
+
+    **The calendar restarts too.** `initialized_on` lives in `server_config`
+    and goes with the rest, so the next `/enter` is day one again - which is
+    what makes this useful for testing the drop schedule.
+
+    The threads are left alone. `/initialize-haunted-house` rebuilds those,
+    and wanting a clean game is not the same as wanting nine channels
+    deleted and recreated.
+    """
+    if interaction.guild is None:
+        await interaction.response.send_message(
+            "This command only works inside a server.", ephemeral=True
+        )
+        return
+
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    guild = interaction.guild
+
+    # Typing the name is the whole safeguard. Nothing here is recoverable,
+    # and a mis-clicked slash command should not end a month of play.
+    if confirm.strip() != guild.name:
+        await interaction.followup.send(
+            f"That will wipe **every** player's progress in this server, and it "
+            f"cannot be undone.\n\nRun it again with `confirm` set to exactly "
+            f"**{guild.name}**.",
+            ephemeral=True,
+        )
+        return
+
+    keeping = {}
+    if keep_art:
+        try:
+            keeping = await database.art_urls(guild.id)
+        except SQLAlchemyError:
+            log.exception("Could not read the art before resetting %s", guild.id)
+
+    try:
+        cleared = await content_loader.reset_guild(guild.id)
+        for art_id, url in keeping.items():
+            await database.record_art(guild.id, art_id, url)
+    except (content.ContentError, SQLAlchemyError) as exc:
+        log.exception("Reset failed for %s", guild.id)
+        await interaction.followup.send(
+            f"The reset did not finish: {exc}. Nothing partial has been left "
+            "behind - the whole thing is one transaction.",
+            ephemeral=True,
+        )
+        return
+
+    placed = cleared.pop("_placed", 0)
+    rows = sum(cleared.values())
+    lines = [
+        f"**{guild.name}** is back to the morning before anybody entered.",
+        f"- cleared {rows} row(s) across {len(cleared)} table(s)",
+        f"- put {placed} thing(s) back in the house",
+    ]
+    if keeping:
+        lines.append(f"- kept {len(keeping)} uploaded image(s)")
+    lines.append(
+        "- day one starts again on the next `/enter`, and every player will "
+        "need to run it"
+    )
+    if cleared:
+        worst = sorted(cleared.items(), key=lambda kv: -kv[1])[:5]
+        lines.append("\n" + ", ".join(f"`{name}` {n}" for name, n in worst))
+
+    await interaction.followup.send("\n".join(lines), ephemeral=True)
+
+
+@bot.tree.command(
     name="post-welcome",
     description="(Admin) Post the pinned welcome in the Halloween channel.",
 )

@@ -1,12 +1,16 @@
-"""Wipe player data so a test run starts from a clean slate.
+"""Wipe every server's game so a test run starts from a clean slate.
 
-    python reset_db.py --yes           # delete every user and pet event
+    python reset_db.py --yes           # clear every server's progress
     python reset_db.py --yes --fresh   # local SQLite only: delete the file itself
 
-Both modes clear all players. `--fresh` additionally discards the schema so the
-next startup rebuilds it from the current models - worth using after changing a
-column default, since an ALTER-ed column keeps whatever SQL default it was
-created with even when the model changes.
+**This clears every server in the database.** To reset one, use the
+`/reset-haunted-house` command in that server - it is scoped to the guild it
+is run in, and it is the only option on a host with no shell.
+
+Both modes clear all progress. `--fresh` additionally discards the schema so
+the next startup rebuilds it from the current models - worth using after
+changing a column default, since an ALTER-ed column keeps whatever SQL default
+it was created with even when the model changes.
 
 A timestamped backup of the SQLite file is taken first, so a reset is always
 recoverable. PostgreSQL is not backed up: use your provider's snapshot tooling
@@ -21,8 +25,9 @@ import sys
 from datetime import datetime
 
 from dotenv import load_dotenv
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 
+import content_loader
 import database
 
 load_dotenv()
@@ -44,31 +49,44 @@ def _backup(path: str) -> str | None:
     return target
 
 
-async def _summarise() -> tuple[int, int]:
-    async with database._session_factory() as session:
-        users = await session.scalar(select(func.count()).select_from(database.User))
-        events = await session.scalar(select(func.count()).select_from(database.PetEvent))
-    return users or 0, events or 0
-
 
 async def _wipe() -> None:
-    """Delete every player record, children before parents.
+    """Delete every server's game, children before parents.
 
-    `inventory` and `player_game_state` both carry a foreign key to `users`, so
-    deleting users first fails the constraint. That is not hypothetical: it has
-    always failed on PostgreSQL for any server where somebody had entered the
-    house. It appeared to work locally only because SQLite ignored the
-    constraint and left the rows orphaned instead.
+    **The table list is read off the schema rather than written here.** It
+    used to be written here, and it fell eleven tables behind: it named
+    `inventory`, `player_game_state`, `pet_events` and `users` while
+    achievements, the current inventory, room contents, player and server
+    states, uses, config, drops, restocks and art all quietly survived a
+    "reset". The result was worse than doing nothing - players vanished and
+    everything they had done stayed.
 
-    Rooms and things are left alone - they are a server's content, not a
-    player's record, and rebuilding them is a writer's work to redo.
+    Phase 2b split content from world state on exactly the line this needs:
+    content is global and carries no `guild_id`, world state is per guild and
+    always does, and `test_schema.py` asserts it table by table in both
+    directions. So `content_loader.world_tables()` is the right question
+    asked of the schema, and it cannot drift again.
+
+    Order matters: `inventory` and `player_game_state` both carry a foreign
+    key to `users`, so deleting users first fails the constraint. That is not
+    hypothetical - it has always failed on PostgreSQL for any server where
+    somebody had entered the house, and appeared to work locally only because
+    SQLite ignored the constraint and left the rows orphaned instead.
     """
     async with database._session_factory() as session:
-        await session.execute(delete(database.InventoryItem))
-        await session.execute(delete(database.PlayerGameState))
-        await session.execute(delete(database.PetEvent))
-        await session.execute(delete(database.User))
+        for name in content_loader.world_tables():
+            await session.execute(database.Base.metadata.tables[name].delete())
         await session.commit()
+
+
+async def _counts() -> dict[str, int]:
+    """How many rows each world table holds, across every server."""
+    out = {}
+    async with database._session_factory() as session:
+        for name in content_loader.world_tables():
+            table = database.Base.metadata.tables[name]
+            out[name] = await session.scalar(select(func.count()).select_from(table))
+    return out
 
 
 async def main(fresh: bool) -> int:
@@ -97,13 +115,23 @@ async def main(fresh: bool) -> int:
         # the file has to be rebuilt.
         print("this database predates per-server scoping - re-run with --fresh to rebuild it")
         return 1
-    before = await _summarise()
+    before = await _counts()
     await _wipe()
-    after = await _summarise()
+    after = await _counts()
     await database.close_db()
 
-    print(f"users:      {before[0]} -> {after[0]}")
-    print(f"pet_events: {before[1]} -> {after[1]}")
+    touched = {name: n for name, n in before.items() if n}
+    if not touched:
+        print("nothing to clear - the database held no games")
+    for name, n in sorted(touched.items(), key=lambda kv: -kv[1]):
+        print(f"  {name:<22} {n} -> {after[name]}")
+    left = sum(after.values())
+    print(f"cleared {sum(touched.values())} row(s) across {len(touched)} table(s)")
+    if left:
+        print(f"WARNING: {left} row(s) survived, which should not happen")
+        return 1
+    print("content is untouched; the next `python bot.py` reloads it and "
+          "re-places every server's stock")
     return 0
 
 

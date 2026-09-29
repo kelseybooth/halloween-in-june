@@ -173,6 +173,28 @@ the house early costs nothing — but it does mean whoever enters first sets
 the schedule. Worth not testing `/enter` on the live server before you mean
 to open.
 
+## Starting a test run over
+
+**`/reset-haunted-house`**, run in the server you want wiped. It takes the
+server's own name as confirmation, because there is no undo.
+
+It clears that server's progress and nothing else: every player's inventory,
+achievements, states, pet count and craving tally, the room contents, the
+server settings and the drop clock. The other servers the bot is in are
+untouched, the content is untouched, and the room threads are left alone —
+`/initialize-haunted-house` rebuilds those if you want them rebuilt.
+
+Two things it does on purpose. It puts the starting stock back, so the house
+is not empty afterwards. And it keeps the uploaded cat images by default, so
+a reset does not cost ten re-uploads — pass `keep_art: False` if you want
+those gone too.
+
+**Day one starts again on the next `/enter`**, which is the main reason this
+is useful: it is how you test the drop calendar more than once.
+
+There is also `python reset_db.py --yes` for a local database, but it clears
+**every** server in it and needs a shell, which Railway does not give you.
+
 ## Debugging on Railway
 
 **View Logs:**
