@@ -1,3 +1,5 @@
 drop_id	trigger	date	event	name	notes
-1	date	launch		Launch	Everything in Release 1. Arrives the moment a server initializes.
-2	manual			The can opener	Placeholder for a later drop. Manual rather than dated, because nobody has picked the date - an admin fires it when the content is ready. Until then the cat food cannot be opened.
+0	manual			The Cat	A channel with a cat in it. No house, no rooms, no mention of either. Opened by /start-game.
+1	manual			A Place to Sleep	The cat bed appears in the channel, and with it /look and /use.
+2	manual			Something to Play With	The cat toy, /take and /inventory. Not built yet; defined here because content already waits on it.
+3	manual			The Door	The house opens. Every row carried over from Release 1 waits here - uniformly, because per-row accuracy for drops 3 to 7 belongs to whoever builds them.
