@@ -55,15 +55,15 @@ SHOW_DEBUG_INFO = False
 
 # Placeholder copy - writers will replace these in Phase 2.
 FRIENDLY_RESPONSES = [
-    "The cat purrs contentedly as you pet it, tail curling like smoke. Is this bonding?",
+    "The cat purrs contentedly as you pet her, tail curling like smoke. Is this bonding?",
     "The cat meows and rubs against your leg, eyes glinting in the dark. Maybe you'll be friends.",
     "The cat stretches, blinks slowly at you, and meows fondly.",
 ]
 
 STANDOFFISH_RESPONSES = [
-    "The cat meows admonishingly and turns its back on you. Oh no! You wanted to be friends.",
+    "The cat meows admonishingly and turns her back on you. Oh no! You wanted to be friends.",
     "The cat startles, hissing at you. You worry the cat may not like you.",
-    "The cat glares at you and gives you a warning bat with its paw. You hope this does not hurt your relationship.",
+    "The cat glares at you and gives you a warning bat with her paw. You hope this does not hurt your relationship.",
 ]
 
 PET_RESPONSES = FRIENDLY_RESPONSES + STANDOFFISH_RESPONSES
@@ -84,7 +84,7 @@ RESTOCK_SWEEP_MINUTES = 10
 RELATIONSHIP_STEP = 5
 
 DB_ERROR_MESSAGE = (
-    "The cat slips into the shadows and you lose track of it. "
+    "The cat slips into the shadows and you lose track of her. "
     "Something went wrong reaching the database - please try again in a moment."
 )
 
