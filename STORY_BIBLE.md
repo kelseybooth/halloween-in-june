@@ -40,7 +40,7 @@ Release 1's content has been written and validated — 9 rooms, 135 things, 142 
 | **Alexa and the craving** | Possibly new commands, or `/use` with prompts | Neither. Alexa listens for messages beginning "alexa"; the craving is guessed with emoji reactions. Neither adds a command |
 | **Coffee maker** | A cold half-pot | A single-serve Keurig with pods, so a player can make fresh coffee rather than only find old coffee |
 | **David's grocery list** | "grocery list" | A **to-do list** — it was never mostly groceries |
-| **Command list** | Seven | Ten, settled and registered once: `/pet`, `/look`, `/take`, `/drop`, `/use`, `/inventory`, `/stats`, `/enter`, `/initialize-haunted-house`, `/admin_config` |
+| **Command list** | Seven | Ten, settled and registered once: `/pet`, `/look`, `/take`, `/drop`, `/use`, `/inventory`, `/stats`, `/enter-entryway`, `/initialize-haunted-house`, `/admin_config` |
 
 Two things this revision did **not** decide, and which are still open below: who the players are in-story, and what the drop calendar is.
 
@@ -138,7 +138,7 @@ The reply always says which one was used, for example *"You unwrap a piece of ca
 
 **Follow-up prompts.** Some things need more than a name to use. For these, `/use` replies privately with a player picker or a room picker. The bedsheet and the spirit board (below) work this way.
 
-**Two interactions are not commands at all.** Talking to Alexa and guessing the cat's daily craving looked like they needed their own commands, and they don't — Alexa listens for ordinary messages, and the craving is guessed with emoji reactions. Neither adds to the command list, which matters because slash commands register once and take about an hour to propagate. The full list is ten: `/pet`, `/look`, `/take`, `/drop`, `/use`, `/inventory`, `/stats`, `/enter`, and the admin commands `/initialize-haunted-house` and `/admin_config`.
+**Two interactions are not commands at all.** Talking to Alexa and guessing the cat's daily craving looked like they needed their own commands, and they don't — Alexa listens for ordinary messages, and the craving is guessed with emoji reactions. Neither adds to the command list, which matters because slash commands register once and take about an hour to propagate. The full list is ten: `/pet`, `/look`, `/take`, `/drop`, `/use`, `/inventory`, `/stats`, `/enter-entryway`, and the admin commands `/initialize-haunted-house` and `/admin_config`.
 
 ### Finding the Secret Library
 
@@ -398,14 +398,14 @@ A **bonus** achievement is not a fourth kind. It is either of the two earned by 
 | Achievement | How to earn | Notes |
 | --- | --- | --- |
 | **Strength in Numbers** | Players together drop 25 identical things in one room | 25 cans of one common cat food flavor will do it |
-| **Overdue Returns** | Players together pile 200+ things into any one room | Any room counts, not only the Secret Library. The cat can send things away, so players have to coordinate |
+| **Making a Mess** | Players together pile 200+ things into any one room | Any room counts, not only the Secret Library. The cat can send things away, so players have to coordinate |
 | **The Feline Collection** — bonus | 100+ of that same room's things are cat food | One room has to hold both totals at the same time |
 
 ### Secret achievements
 
 | Achievement | How to earn | Notes |
 | --- | --- | --- |
-| **A Little Bit Lost** | Go Entryway to Living Room to Entryway five times within five minutes |  |
+| **A Little Bit Lost** | Enter the same room five times within five minutes, by any route | Generalised 28 September from the Entryway–Living Room loop. Any room counts, and the five arrivals need not be consecutive |
 | **Out on a Limb** | Find the Secret Library by climbing the oak tree in the Courtyard (first `/use tree`) | See Finding the Secret Library |
 | **Bulk Buyer** | Carry 25 cans of cat food | A nod to David's Costco habit |
 | **Making Friends** | Pet the cat 200 times with a positive relationship |  |
@@ -415,7 +415,7 @@ A **bonus** achievement is not a fourth kind. It is either of the two earned by 
 | **Brewing Trouble** | Use the Keurig on Oct 1 | International Coffee Day |
 | **Trash Panda** | Use the trash can on Oct 1 | International Raccoon Appreciation Day. The achievements doc gives Oct 1 in one place and Oct 2 in another; Oct 1 is the real date |
 | **Say Cheese** | Use a mirror on Oct 2 | World Smile Day. Any mirror in the house counts: the ornate mirror (Entryway), the cracked mirrors (Secret Library) or the dresser mirror (Bedroom) |
-| **Green Thumb** | Use the watering can or take herbs or use (carve) pumpkin on Oct 15 | International Day of Rural Women |
+| **Green Thumb** | Use the watering can or take herbs from the herb garden or use (carve) pumpkin on Oct 15 | International Day of Rural Women |
 | **Nacho Average Ghost** | Use the nacho chips on Oct 21 | International Day of the Nacho |
 | **Using Your Noodle** | Use the pasta pot on Oct 25 | World Pasta Day |
 | **Getting into the Spirit** | As the day's ghost, haunt a room with `/use bedsheet` | One random player per day is the ghost. See The ghost of the day |
@@ -554,7 +554,7 @@ For each thing: **Take** means it can go in an inventory. **Achievement** links 
 | Spirit board | No | Elena's board. Accuse a player of being the day's ghost | Ghostbuster |
 | Skeleton key | Yes, one per player | Unlocks the curiosity cabinet passage to the Living Room. Can't be dropped, taken from another player or sent to Dimension B | — |
 
-The Secret Library is not the only room that can earn *Overdue Returns* — any room holding 200+ things does it — but it is still the natural hoard, so its description should change as it fills up (e.g. at 50, 100 and 200 things).
+The Secret Library is not the only room that can earn *Making a Mess* — any room holding 200+ things does it — but it is still the natural hoard, so its description should change as it fills up (e.g. at 50, 100 and 200 things).
 
 ### 7. Upstairs Hallway
 
