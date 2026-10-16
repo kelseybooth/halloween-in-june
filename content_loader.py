@@ -41,7 +41,6 @@ _WORLD_TABLES = (
     "player_states",
     "server_states",
     "thing_uses",
-    "server_drops",
     "server_restocks",
     "server_config",
     # Earned achievements are world state, so `--fresh` clears them with
@@ -87,7 +86,6 @@ async def reset_guild(guild_id: int) -> dict[str, int]:
     """
     parsed = content_module.load()
     placements = things_to_place(parsed)
-    today = database.pacific_today()
 
     cleared: dict[str, int] = {}
     session_factory = database._require_session()
@@ -100,7 +98,7 @@ async def reset_guild(guild_id: int) -> dict[str, int]:
             if result.rowcount:
                 cleared[name] = result.rowcount
 
-        arrived = await _arrived_drops(session, guild_id, parsed, today)
+        arrived = await _arrived_drops(session, guild_id, parsed)
         placed, _, _ = await _place_for_guild(session, guild_id, placements, arrived)
         await session.commit()
 
@@ -313,29 +311,33 @@ def things_to_place(parsed: Content) -> list[tuple[str, str, str, int, int]]:
     return placements
 
 
-async def _arrived_drops(session, guild_id: int, parsed: Content, today) -> set[int]:
+async def _arrived_drops(session, guild_id: int, parsed: Content) -> set[int]:
     """Which drops have arrived on this server, judged from the files in hand.
 
-    Deliberately not resolve.arrived_drop_ids: that reads the drops table, which
-    this transaction has just rewritten and not yet committed. The parsed
-    calendar is the same data and is already here.
+    The same rule as `resolve.arrived_drop_ids`: at or below this server's
+    drop pointer. Read here rather than there because that one reads the
+    drops table, which this transaction has just rewritten and not yet
+    committed - the parsed files are the same data and are already in hand.
+
+    The pointer itself is safe to read: `server_config` is world state, and
+    the loader never writes it.
     """
-    recorded = {
-        row[0]
-        for row in await session.execute(
-            select(database.ServerDrop.drop_id).where(
-                database.ServerDrop.guild_id == guild_id
-            )
+    raw = await session.scalar(
+        select(database.ServerConfig.value).where(
+            database.ServerConfig.guild_id == guild_id,
+            database.ServerConfig.key == resolve.DROP_KEY,
         )
-    }
-    arrived = set()
-    for drop in parsed.drops:
-        if drop.trigger == "date":
-            if resolve._has_date_arrived(drop.date, today):
-                arrived.add(drop.drop_id)
-        elif drop.drop_id in recorded:
-            arrived.add(drop.drop_id)
-    return arrived
+    )
+    if raw is None:
+        return set()
+    try:
+        current = int(raw)
+    except ValueError:
+        log.warning(
+            "Guild %s has an unreadable drop pointer %r; placing nothing", guild_id, raw
+        )
+        return set()
+    return {drop.drop_id for drop in parsed.drops if drop.drop_id <= current}
 
 
 async def _known_guilds(session) -> list[int]:
@@ -495,9 +497,8 @@ async def load_content(
 
         guilds = guild_ids if guild_ids is not None else await _known_guilds(session)
         report.guilds = list(guilds)
-        today = database.pacific_today()
         for guild_id in guilds:
-            arrived = await _arrived_drops(session, guild_id, parsed, today)
+            arrived = await _arrived_drops(session, guild_id, parsed)
             placed, skipped, waiting = await _place_for_guild(
                 session, guild_id, placements, arrived
             )

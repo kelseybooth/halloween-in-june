@@ -644,25 +644,6 @@ class ThingUse(Base):
     use_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
-class ServerDrop(Base):
-    """A drop that has arrived on this server, recorded so it cannot un-arrive.
-
-    Only `event` and `manual` drops need rows. A `date` drop is answered by the
-    calendar every time it is asked, so storing it would be a second source of
-    truth. The reason arrival is recorded at all is that a condition can stop
-    being true - a counter falls back, a thing is taken - and content must not
-    vanish from a house it has already changed.
-    """
-
-    __tablename__ = "server_drops"
-
-    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
-    drop_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
-    arrived_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-
-
 class ServerRestock(Base):
     """Where a server has got to in one restock schedule.
 
@@ -2302,6 +2283,22 @@ CONFIG_KEYS: dict[str, tuple[int, str]] = {
         "How many used baby bottles are scattered through the house each day.",
     ),
 }
+
+
+async def get_config_raw(guild_id: int, key: str) -> str | None:
+    """One setting exactly as stored, or None if this server has never set it.
+
+    `get_setting` answers with a default, which is right for a tunable and
+    wrong for the drop pointer: there, "never set" is a state of its own and
+    0 is a real drop.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        return await session.scalar(
+            select(ServerConfig.value).where(
+                ServerConfig.guild_id == guild_id, ServerConfig.key == key
+            )
+        )
 
 
 async def get_setting(guild_id: int, key: str) -> int:

@@ -51,6 +51,13 @@ DROP_TRIGGERS = {"date", "event", "manual"}
 # A `date` drop whose date is this arrives the moment a server initializes.
 LAUNCH = "launch"
 
+# The Halloween channel, which is a room everywhere except in the ways that
+# make a room a room. It has no exits, no prose and no place in any listing:
+# `/look` there prints what is present and nothing else. It exists so the cat
+# bed can have an ordinary `room_id` and `/use` can resolve through the
+# ordinary path, rather than the channel being a special case in every verb.
+CHANNEL_ROOM = "CH"
+
 # Conditions an `event` drop may name. Release 1 ships none; the registry exists so
 # the second one needs no migration, and so a typo in the file is caught at load
 # rather than becoming a drop that never arrives.
@@ -578,6 +585,25 @@ def _check_duplicates(content: Content) -> list[str]:
             if identifier in seen:
                 problems.append(f"duplicate {label} id {identifier!r}")
             seen.add(identifier)
+
+    # Text rows are keyed on (entity, state, since_drop) in the database, and
+    # that key is a unique constraint. Two rows sharing it got as far as the
+    # INSERT before this check existed, which is a load that dies at startup
+    # over something the files could have said at `--check` time. It is easy
+    # to do accidentally: move a thing's drop-1 and drop-2 rows to the same
+    # drop and they collide.
+    for label, rows in (("room_text", content.room_text),
+                        ("thing_text", content.thing_text)):
+        seen = set()
+        for row in rows:
+            key = (row.entity_id, row.state, row.since_drop)
+            if key in seen:
+                problems.append(
+                    f"{label} has two rows for {row.entity_id} in state "
+                    f"{row.state!r} at drop {row.since_drop}; the database "
+                    "keeps one row per entity, state and drop"
+                )
+            seen.add(key)
     return problems
 
 
@@ -712,6 +738,14 @@ def _check_text_coverage(
                 continue
             by_entity.setdefault(row.entity_id, set()).add(row.state)
         for entity_id in known:
+            # The channel has no description on purpose, which is what settles
+            # the question of what it says: nothing.
+            if label == "room" and entity_id == CHANNEL_ROOM:
+                if entity_id in by_entity:
+                    problems.append(
+                        f"room {CHANNEL_ROOM} is the channel and must have no text row"
+                    )
+                continue
             states = by_entity.get(entity_id)
             if not states:
                 problems.append(f"{label} {entity_id} has no text row")
@@ -762,9 +796,19 @@ def _check_reachable_rooms(content: Content, rooms: dict[str, Room]) -> list[str
     A locked room is still reachable in the graph sense - it is opened later.
     A room with no exits leading to it is a content bug nobody would notice
     until a player failed to find it.
+
+    The channel is the one exception, and it is exempt in both directions: no
+    exit may lead to it and none may lead out of it. It is where players
+    already are, not somewhere they walk to.
     """
     if not content.rooms:
         return []
+    problems = [
+        f"exit {e.thing_id} joins the channel to the house, which has no door"
+        for e in content.things
+        if e.is_exit
+        and CHANNEL_ROOM in (e.room_id, e.destination_room_id)
+    ]
     start = next((r.room_id for r in content.rooms if r.open_at_launch), content.rooms[0].room_id)
 
     adjacency: dict[str, set[str]] = {r.room_id: set() for r in content.rooms}
@@ -779,9 +823,9 @@ def _check_reachable_rooms(content: Content, rooms: dict[str, Room]) -> list[str
                 seen.add(destination)
                 queue.append(destination)
 
-    return [
+    return problems + [
         f"room {room_id} cannot be reached from {start}"
-        for room_id in sorted(set(adjacency) - seen)
+        for room_id in sorted(set(adjacency) - seen - {CHANNEL_ROOM})
     ]
 
 

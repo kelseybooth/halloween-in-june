@@ -23,7 +23,6 @@ from __future__ import annotations
 import enum
 import unicodedata
 from dataclasses import dataclass
-from datetime import date
 
 from sqlalchemy import select
 
@@ -136,7 +135,7 @@ class _Candidate:
 
 
 async def _gather(
-    guild_id: int, user_id: int, room_id: str, scope: Scope, today: date | None
+    guild_id: int, user_id: int, room_id: str, scope: Scope
 ) -> dict[str, _Candidate]:
     """Everything in scope, grouped into one entry per distinct thing.
 
@@ -144,7 +143,7 @@ async def _gather(
     it yields, so the stash and the can it hands out are one candidate. That is
     what stops the "chicken or chicken?" prompt.
     """
-    visible = await resolve.visible_thing_ids(guild_id, today=today)
+    visible = await resolve.visible_thing_ids(guild_id)
     # Gates are per player, so two people standing in the same room can be
     # looking at different things - one has unjammed the drawer and one has not.
     held = await states.in_force(guild_id, user_id)
@@ -322,8 +321,6 @@ async def find(
     room_id: str,
     typed: str,
     scope: Scope,
-    *,
-    today: date | None = None,
 ) -> Resolution:
     """Resolve what a player typed to one thing and one copy of it.
 
@@ -334,7 +331,7 @@ async def find(
     if not needle:
         return NotFound(typed=typed)
 
-    candidates = await _gather(guild_id, user_id, room_id, scope, today)
+    candidates = await _gather(guild_id, user_id, room_id, scope)
     matches = [c for c in candidates.values() if needle in c.names]
 
     # Pass one: which thing. More than one and nothing is acted on.
@@ -346,7 +343,7 @@ async def find(
         if scope is Scope.ROOM:
             # /take needs to tell "there isn't one here" from "you already have
             # it", because take_fail.absent would be a lie in the second case.
-            bag = await _gather(guild_id, user_id, room_id, Scope.CARRIED, today)
+            bag = await _gather(guild_id, user_id, room_id, Scope.CARRIED)
             carried_elsewhere = any(needle in c.names for c in bag.values())
         return NotFound(
             typed=typed,

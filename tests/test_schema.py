@@ -35,7 +35,6 @@ WORLD_TABLES = {
     "server_states",
     "server_config",
     "thing_uses",
-    "server_drops",
     "server_restocks",
 }
 
