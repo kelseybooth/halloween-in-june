@@ -128,6 +128,29 @@ async def test_a_new_player_reads_as_zero_not_as_broken(playing, halloween):
     assert "doesn't seem to care" in reply
 
 
+async def test_the_pet_count_is_here_because_there_is_nowhere_else(playing, halloween):
+    """`/pet` stopped reporting it in 2f so that two hundred would be a
+    surprise rather than a countdown, and moved it here. Section 7 lists
+    three parts and does not mention it; dropping it would have deleted
+    it from the game rather than moved it, and left a player chasing
+    *Making Friends* with no way to know where they are."""
+    for _ in range(3):
+        await playing.increment_pet_count(ALICE, GUILD_A)
+
+    assert "Pets: 3" in body(await ask(guild=halloween))
+
+
+async def test_it_reads_zero_on_day_one(playing, halloween):
+    assert "Pets: 0" in body(await ask(guild=halloween))
+
+
+async def test_the_count_is_per_server(playing, db, halloween):
+    await db.ensure_user_exists(ALICE, GUILD_B)
+    await db.increment_pet_count(ALICE, GUILD_B)
+
+    assert "Pets: 0" in body(await ask(guild=halloween))
+
+
 # --------------------------------------------------------------------------
 # Open quests
 # --------------------------------------------------------------------------

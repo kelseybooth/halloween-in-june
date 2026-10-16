@@ -48,7 +48,7 @@ def test_the_shipped_content_parses():
     c = content.load_files()
     assert len(c.rooms) == 10  # nine rooms and the channel
     assert len(c.things) == 146  # the cat bed joined them
-    assert len(c.defaults) == 57  # V3 added nineteen strings
+    assert len(c.defaults) == 58  # V3 added twenty strings
     assert len(c.drops) == 4      # 0 and 1 are built; 2 and 3 are named
     assert len(c.restocks) == 3
 

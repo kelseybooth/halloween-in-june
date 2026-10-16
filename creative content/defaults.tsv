@@ -41,6 +41,7 @@ stats.rel.zero	The cat doesn't seem to care about you.
 stats.rel.negative	She has not forgiven you for something.
 stats.rel.positive	She tolerates you, and occasionally more.
 stats.rel.strong	She would notice if you stopped coming.
+stats.pets	Pets: {count}
 stats.header.quests	Open Quests
 stats.header.achievements	Completed Achievements
 stats.achievements.empty	No completed achievements. Try /pet.

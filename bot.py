@@ -2970,6 +2970,14 @@ async def stats(interaction: discord.Interaction) -> None:
     way they are moving, and the four bands beneath it are deliberately
     wide enough that it has to.
 
+    **And the pet count, which is here because there is nowhere else.**
+    2f took it out of `/pet` on the grounds that two hundred is better
+    as a surprise than as a countdown, and moved it here; section 7
+    lists three parts and does not mention it, which would have deleted
+    it from the game rather than moved it. A player chasing *Making
+    Friends* with no way to know where they are is a worse trade than a
+    number they can ignore.
+
     **Open quests, only when there are any.** With three public quests in
     the whole plan a player will spend long stretches with none, and a
     standing "No open quests" reads as broken rather than as waiting. The
@@ -2990,6 +2998,7 @@ async def stats(interaction: discord.Interaction) -> None:
 
     try:
         relationship = await database.get_relationship(user.id, guild_id)
+        pets = await database.get_pet_count(user.id, guild_id)
         quests = await resolve.open_quests(guild_id, user.id)
         earned = await _earned_lines(guild_id, user.id)
         await _mark_quests_seen(guild_id, user.id, quests)
@@ -2997,7 +3006,12 @@ async def stats(interaction: discord.Interaction) -> None:
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
         return
 
-    body = [str(relationship), await _relationship_band(relationship), ""]
+    body = [
+        str(relationship),
+        await _relationship_band(relationship),
+        await phrasing.default_say("stats.pets", count=pets),
+        "",
+    ]
 
     if quests:
         body.append(f"**{await phrasing.default_say('stats.header.quests')}**")
