@@ -27,7 +27,7 @@ BED = "cat_bed"
 
 
 @pytest.fixture
-async def started(db):
+async def started(db, registrations):
     """One server with content loaded and no game started in it yet."""
     await content_loader.load_content(content_module.load_files())
     halloween = FakeChannel(name="halloween")
@@ -36,7 +36,7 @@ async def started(db):
     )
     await unstart(GUILD_A)
     await unstart(GUILD_B)
-    return db, guild, halloween
+    return db, guild, halloween, registrations
 
 
 async def unstart(guild_id):
@@ -56,14 +56,14 @@ def an_admin(guild, channel):
 
 
 async def start(started, channel=None):
-    _, guild, halloween = started
+    _, guild, halloween, _ = started
     interaction = an_admin(guild, halloween)
     await bot.start_game.callback(interaction, channel or halloween)
     return interaction
 
 
 async def advance(started, confirm=True):
-    _, guild, halloween = started
+    _, guild, halloween, _ = started
     interaction = an_admin(guild, halloween)
     await bot.advance_game.callback(interaction, confirm)
     return interaction
@@ -170,7 +170,7 @@ async def test_the_petting_achievements_do_not_wait(started):
 
 
 async def test_starting_opens_drop_zero(started):
-    _, _, halloween = started
+    _, _, halloween, _ = started
     await start(started)
 
     assert await resolve.current_drop(GUILD_A) == 0
@@ -190,7 +190,7 @@ async def test_starting_twice_in_the_same_channel_changes_nothing(started):
 async def test_a_second_channel_is_refused(started):
     """Moving a running game would leave every player looking at the
     channel it used to be in."""
-    _, guild, halloween = started
+    _, guild, halloween, _ = started
     await start(started)
     somewhere_else = FakeChannel(name="general")
     guild.text_channels.append(somewhere_else)
@@ -269,7 +269,7 @@ async def test_the_drops_own_line_is_public(started):
     """In-world and everybody's: the whole channel watches the cat swat
     something across the floor. Nothing in that line names a drop, a
     command or an admin."""
-    _, _, halloween = started
+    _, _, halloween, _ = started
     await start(started)
 
     await advance(started)
@@ -294,7 +294,7 @@ async def test_the_two_halves_do_not_overlap(started):
     exactly how these two got swapped once already: the private reply must
     not carry the in-world line, and the public line must not carry the
     bookkeeping."""
-    _, _, halloween = started
+    _, _, halloween, _ = started
     await start(started)
 
     interaction = await advance(started)
@@ -306,7 +306,7 @@ async def test_the_two_halves_do_not_overlap(started):
 
 
 async def test_the_public_line_posts_once_per_drop(started):
-    _, _, halloween = started
+    _, _, halloween, _ = started
     await start(started)
     await advance(started)
     before = len(halloween.posted)
@@ -376,3 +376,40 @@ def a_calendar(*drops, things=(), room_text=(), thing_text=()):
     parsed.defaults = dict(content_module.load_files().defaults)
     parsed.drops = list(drops)
     return parsed
+
+
+# --------------------------------------------------------------------------
+# The menu follows the drop
+# --------------------------------------------------------------------------
+
+
+async def test_starting_registers_drop_zeros_commands(started):
+    *_, registrations = started
+
+    await start(started)
+
+    assert registrations == [(GUILD_A, 0)]
+
+
+async def test_advancing_registers_drop_ones(started):
+    """Both halves: the drop moved, and the menu was asked to move with
+    it. Either alone is also true of the arrangement where they do not
+    agree."""
+    *_, registrations = started
+    await start(started)
+
+    await advance(started)
+
+    assert registrations[-1] == (GUILD_A, 1)
+    assert await resolve.current_drop(GUILD_A) == 1
+
+
+async def test_a_refused_advance_registers_nothing(started):
+    *_, registrations = started
+    await start(started)
+    await advance(started)
+    before = len(registrations)
+
+    await advance(started)  # drop 1 is the last one built
+
+    assert len(registrations) == before

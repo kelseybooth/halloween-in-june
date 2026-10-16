@@ -135,3 +135,26 @@ def fixed_rng():
             return list(seq)[0]
 
     return FixedRNG()
+
+
+@pytest.fixture
+def registrations(monkeypatch):
+    """Record what the commands asked to register, without a gateway.
+
+    `tree.sync` needs a real connection, and the three commands that move
+    a server's drop all call it. Patching here keeps those suites about
+    the drop while still letting them assert that the menu was asked to
+    follow - which is the half a one-sided test would miss.
+    """
+    import bot
+
+    calls: list[tuple[int, int | None]] = []
+
+    async def record(guild, drop=None, tree=None):
+        import gating
+
+        calls.append((guild.id, drop))
+        return gating.commands_for(drop)
+
+    monkeypatch.setattr(bot, "register_commands_for", record)
+    return calls

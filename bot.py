@@ -24,6 +24,7 @@ import content
 import content_loader
 import craving
 import database
+import gating
 import house_utils
 import phrasing
 import reach
@@ -227,6 +228,73 @@ async def load_content_at_startup() -> None:
         )
 
 
+# Every command this file defines, by name, captured before any of them is
+# registered anywhere. The decorators put them in the tree's global set;
+# `setup_hook` takes them straight back out again, because nothing in this
+# game is a global command any more. This dict is what they are added back
+# from, one guild at a time.
+_DEFINED: dict[str, app_commands.Command] = {}
+
+
+def _capture_commands(tree) -> dict[str, app_commands.Command]:
+    """Snapshot the decorated commands, then clear the global set.
+
+    Called once at startup. After this the tree has no global commands at
+    all, and `sync()` with none left is the bulk overwrite that removes
+    whatever this bot registered globally in an earlier release - without
+    it, every player keeps a stale menu of nine verbs for up to an hour
+    and then forever, because nothing would ever replace it.
+    """
+    defined = {c.name: c for c in tree.get_commands()}
+    tree.clear_commands(guild=None)
+    return defined
+
+
+async def register_commands_for(guild, drop: int | None = None, tree=None) -> set[str]:
+    """Put exactly this server's command set in place, in one request.
+
+    **Bulk overwrite, not create-and-delete.** `sync` for a guild is a
+    single PUT of the whole set, which is one request per advance rather
+    than one per command, and stays clear of the per-command create limits
+    that `/qa-drop` churn would otherwise walk into.
+
+    Returns the names registered, so a caller can say what just appeared.
+
+    `tree` is an argument because `commands.Bot.tree` is a read-only
+    property, and a registration path worth having is a registration path
+    worth testing without a gateway connection.
+    """
+    tree = tree if tree is not None else bot.tree
+    if drop is None:
+        drop = await resolve.current_drop(guild.id)
+    wanted = gating.commands_for(drop)
+
+    missing = wanted - set(_DEFINED)
+    if missing:
+        # A name in the table that no command answers to. Logged rather
+        # than raised: the rest of the set is still worth registering, and
+        # a typo here should not leave a server with no commands at all.
+        log.error(
+            "Guild %s wants commands this bot does not define: %s",
+            guild.id,
+            ", ".join(sorted(missing)),
+        )
+
+    tree.clear_commands(guild=guild)
+    for name in sorted(wanted & set(_DEFINED)):
+        tree.add_command(_DEFINED[name], guild=guild)
+    await tree.sync(guild=guild)
+
+    log.info(
+        "Guild %s is on drop %s with %d command(s): %s",
+        guild.id,
+        drop,
+        len(wanted),
+        ", ".join(sorted(wanted)),
+    )
+    return wanted
+
+
 class CatBot(commands.Bot):
     def __init__(self) -> None:
         # Slash commands need no privileged intents, but Alexa does: without
@@ -260,18 +328,19 @@ class CatBot(commands.Bot):
         keep_threads_alive.start()
         restock_sweep.start()
 
-        # Global syncs can take up to an hour to propagate. Setting GUILD_ID copies
-        # the commands into one server instead, where they appear immediately - much
-        # faster to iterate on locally. Leave it unset in production.
-        guild_id = os.getenv("GUILD_ID", "").strip()
-        if guild_id:
-            guild = discord.Object(id=int(guild_id))
-            self.tree.copy_global_to(guild=guild)
-            synced = await self.tree.sync(guild=guild)
-            log.info("Synced %d command(s) to guild %s (instant)", len(synced), guild_id)
-        else:
-            synced = await self.tree.sync()
-            log.info("Synced %d command(s) globally (may take up to an hour)", len(synced))
+        # Nothing is a global command any more. Which commands exist is a
+        # per-server question now - two servers can sit on different drops
+        # - so the global set is emptied once here and every guild gets its
+        # own in `on_ready`. GUILD_ID is gone with it: per-guild is what
+        # this does everywhere, so the local shortcut is the normal path.
+        global _DEFINED
+        _DEFINED = _capture_commands(self.tree)
+        await self.tree.sync()
+        log.info(
+            "Cleared the global command set; %d command(s) defined and "
+            "registered per guild",
+            len(_DEFINED),
+        )
 
     async def on_ready(self) -> None:
         log.info("Logged in as %s (id: %s)", self.user, self.user.id)
@@ -279,8 +348,16 @@ class CatBot(commands.Bot):
         # Say up front what the haunted house is missing, rather than letting it
         # surface later as an opaque "Missing Access" error mid-command.
         for guild in self.guilds:
-            # Logged so GUILD_ID can be set without hunting for it in Discord's UI.
-            log.info("In guild %r (GUILD_ID=%s)", guild.name, guild.id)
+            log.info("In guild %r (%s)", guild.name, guild.id)
+
+            # Every server gets the set its own drop calls for. Done on
+            # every boot rather than only on a change, because this is the
+            # only thing that repairs a guild whose registration failed
+            # halfway through an advance.
+            try:
+                await register_commands_for(guild)
+            except discord.HTTPException:
+                log.exception("Could not register commands in guild %s", guild.id)
 
             channel = house_utils.find_channel(guild)
             if channel is None:
@@ -302,6 +379,19 @@ class CatBot(commands.Bot):
                 )
 
         log.info("Ready - try /pet in your server")
+
+    async def on_guild_join(self, guild) -> None:
+        """A server that invited the bot has no game and sees `/start-game`.
+
+        Without this a new server would have no commands at all until the
+        next restart, because nothing is global any more and registration
+        only ever happens per guild.
+        """
+        log.info("Joined guild %r (%s)", guild.name, guild.id)
+        try:
+            await register_commands_for(guild)
+        except discord.HTTPException:
+            log.exception("Could not register commands in new guild %s", guild.id)
 
     async def close(self) -> None:
         """Graceful shutdown: stop the scheduler, release the pool, then disconnect."""
@@ -790,6 +880,29 @@ async def pet(interaction: discord.Interaction) -> None:
     )
 
 
+async def _reregister(interaction, guild, drop: int | None) -> str:
+    """Put the server's command set where its drop says, and name the
+    player half for the reply.
+
+    A failure here is reported rather than raised, and caught broadly: the
+    drop has already moved and the database is committed, so whatever
+    Discord objects to, the honest thing is to say the menu did not follow
+    rather than to throw away a committed advance.
+    """
+    try:
+        await register_commands_for(guild, drop)
+    except discord.DiscordException:
+        log.exception("Could not re-register commands in guild %s", guild.id)
+        await interaction.followup.send(
+            "The drop moved, but Discord would not take the new command "
+            "list. Run the command again, or restart the bot - every boot "
+            "re-registers every server.",
+            ephemeral=True,
+        )
+    names = sorted(gating.player_commands_for(drop))
+    return ", ".join(f"`/{name}`" for name in names) or "nothing yet"
+
+
 @bot.tree.command(
     name="start-game",
     description="(Admin) Open drop 0 in a channel. The game lives there from then on.",
@@ -875,9 +988,12 @@ async def start_game(
         channel.id,
         FIRST_DROP,
     )
+    opened = await _reregister(interaction, guild, FIRST_DROP)
     await interaction.followup.send(
         f"The game is open in {channel.mention}, on drop {FIRST_DROP}. There "
-        "is a cat there and nothing else. `/advance-game` brings the next one.",
+        f"is a cat there and nothing else.\n"
+        f"- players here can now use {opened}\n"
+        "- `/advance-game` brings the next drop",
         ephemeral=True,
     )
 
@@ -971,6 +1087,12 @@ async def advance_game(interaction: discord.Interaction, confirm: bool = False) 
     lines = [f"Drop {target}{titled} is open."]
     if placed:
         lines.append(f"- put {placed} new thing(s) in place")
+    await _reregister(interaction, guild, target)
+    arrived = gating.arrivals(current, target)
+    if arrived:
+        lines.append(
+            "- " + ", ".join(f"`/{name}`" for name in sorted(arrived)) + " appeared"
+        )
     lines.append(
         "- announced in the channel"
         if announced
@@ -1134,6 +1256,9 @@ async def reset_haunted_house(
             ephemeral=True,
         )
         return
+
+    if landing != current:
+        await _reregister(interaction, guild, landing)
 
     placed = cleared.pop("_placed", 0)
     rows = sum(cleared.values())

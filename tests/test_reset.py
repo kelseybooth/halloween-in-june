@@ -31,7 +31,7 @@ SERVER_NAME = "Halloween in June"
 
 
 @pytest.fixture
-async def two_games(db):
+async def two_games(db, registrations):
     """Two servers, both mid-game, so a reset can be caught reaching across."""
     halloween = FakeChannel(name="halloween")
     guild = FakeGuild(
@@ -43,7 +43,7 @@ async def two_games(db):
     halloween.add_active(*[name for _, name in await resolve.all_rooms()])
     for where in (GUILD_A, GUILD_B):
         await play(db, where)
-    return db, guild, halloween
+    return db, guild, halloween, registrations
 
 
 async def play(db, guild_id):
@@ -76,7 +76,7 @@ async def rows(guild_id) -> dict[str, int]:
 
 
 async def reset(two_games, confirm=SERVER_NAME, keep_art=True, back_to_drop=None):
-    _, guild, halloween = two_games
+    _, guild, halloween, _ = two_games
     interaction = FakeInteraction(ALICE, GUILD_A, guild=guild, channel=halloween)
     await bot.reset_haunted_house.callback(interaction, confirm, keep_art, back_to_drop)
     return interaction
@@ -223,7 +223,7 @@ async def test_the_art_can_be_cleared_too(two_games):
 
 async def test_a_player_can_enter_again_afterwards(two_games):
     """The whole point: the next run starts clean rather than half-wiped."""
-    db, guild, halloween = two_games
+    db, guild, halloween, _ = two_games
     await reset(two_games)
 
     interaction = FakeInteraction(ALICE, GUILD_A, guild=guild, channel=halloween)
@@ -269,7 +269,7 @@ async def test_the_game_stays_where_it_was(two_games):
 
 
 async def test_the_channel_stays_too(two_games):
-    _, guild, halloween = two_games
+    _, guild, halloween, _ = two_games
     await database.set_announcement_channel(GUILD_A, halloween.id)
 
     await reset(two_games)
@@ -324,3 +324,21 @@ async def test_the_house_is_put_back_at_the_drop_it_lands_on(two_games):
     await reset(two_games, back_to_drop=0)
 
     assert (await rows(GUILD_A)).get("room_contents", 0) == 0
+
+
+async def test_a_rewind_takes_the_menu_back_with_it(two_games):
+    """An admin who advanced by mistake wants the verbs gone too, not just
+    the content."""
+    *_, registrations = two_games
+
+    await reset(two_games, back_to_drop=0)
+
+    assert registrations[-1] == (GUILD_A, 0)
+
+
+async def test_a_reset_that_stays_put_leaves_the_menu_alone(two_games):
+    *_, registrations = two_games
+
+    await reset(two_games)
+
+    assert registrations == []
