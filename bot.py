@@ -1745,6 +1745,25 @@ async def enter(interaction: discord.Interaction) -> None:
     )
 
 
+class _InTheChannel:
+    """What `/use` needs of a game state, for a player who has no row.
+
+    `/enter` does not exist at the drops where the channel is the only
+    place there is, so nobody standing in it has a `player_game_state`.
+    The use path reads exactly one field off it, and inventing a row in
+    the database to carry that would be a player record for somebody who
+    has not played.
+    """
+
+    current_room = content.CHANNEL_ROOM
+
+
+# Things that are the cat, for the purpose of the nightly drift. Using
+# any of them counts as having turned up, whether or not it worked. The
+# toy and the food join this set when drops 2 and 3 build them.
+CAT_INTERACTIONS = frozenset({world.CAT_BED})
+
+
 @bot.tree.command(name="use", description="Attempt to use an object or exit.")
 @app_commands.guild_only()
 @app_commands.describe(thing="The object or exit to use.")
@@ -1770,18 +1789,26 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
     user, guild_id = interaction.user, interaction.guild_id
 
     try:
-        state = await database.get_game_state(user.id, guild_id)
-        if state is None:
-            await interaction.followup.send(
-                "You're not in the haunted house yet. Use `/enter` first.",
-                ephemeral=True,
-            )
-            return
+        # Standing in the channel, which is a room with no player rows in
+        # it. Checked before the game state for the same reason `/look`
+        # checks it there: at the drops where this is the only place
+        # there is, nobody has entered anything.
+        if await _in_the_channel(interaction):
+            await database.ensure_user_exists(user.id, guild_id)
+            state = _InTheChannel()
+        else:
+            state = await database.get_game_state(user.id, guild_id)
+            if state is None:
+                await interaction.followup.send(
+                    "You're not in the haunted house yet. Use `/enter` first.",
+                    ephemeral=True,
+                )
+                return
 
-        elsewhere = await _outside_the_house(interaction, state.current_room)
-        if elsewhere:
-            await interaction.followup.send(elsewhere, ephemeral=True)
-            return
+            elsewhere = await _outside_the_house(interaction, state.current_room)
+            if elsewhere:
+                await interaction.followup.send(elsewhere, ephemeral=True)
+                return
 
         found = await reach.find(guild_id, user.id, state.current_room, thing, reach.Scope.REACH)
 
@@ -1800,6 +1827,15 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
                 await phrasing.default_say(key, name=thing.strip()), ephemeral=True
             )
             return
+
+        # Reaching for the cat counts as turning up, whether or not it
+        # works. The bed refuses inside its window and the toy's first
+        # offer is a guaranteed refusal; the drift exists to notice
+        # absence, and a player who tried was not absent.
+        if found.thing_id in CAT_INTERACTIONS:
+            await database.touched_the_cat(
+                user.id, guild_id, database.pacific_today()
+            )
 
         row = await phrasing.thing_row(found.thing_id)
         if row is None:
@@ -1914,6 +1950,12 @@ async def _finish_use(interaction, state, found) -> None:
         ),
         interaction=interaction,
     )
+
+    # A use that moved the meter is the case `on_relationship_change`
+    # exists for: reaching fifty by fluffing the bed has to be noticed
+    # without waiting for the player's next pet.
+    if effect and effect.relationship is not None:
+        await _fire_relationship(interaction, user.id, guild_id, effect.relationship)
 
 
 async def _fire(context, *, interaction=None, guild=None) -> None:

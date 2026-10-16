@@ -19,7 +19,7 @@ find them.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import database
 import states
@@ -28,6 +28,13 @@ log = logging.getLogger(__name__)
 
 # The staircase: one plank per distinct player, counted from thing_uses.
 LUMBER = "lumber"
+
+# The cat bed, and what fluffing it is worth. Fifteen is three friendly
+# pets, for an action a player can only take once a day - deliberately
+# the better rate, because it is the one interaction that cannot go
+# wrong and the one the cat visibly enjoys.
+CAT_BED = "cat_bed"
+BED_FLUFF = 15
 PLANKS_SETTING = "planks_required"
 STAIRS_REPAIRED = "stairs_repaired"
 
@@ -121,9 +128,13 @@ async def after_move(guild_id: int, user_id: int, thing_id: str) -> str | None:
 class Effect:
     """What a world-changing use did, for the handler to phrase and route."""
 
-    tokens: dict[str, object]
+    tokens: dict[str, object] = field(default_factory=dict)
     public: bool = False
     announce: str | None = None
+    # The player's score after this use moved it, for the handler to fire
+    # `on_relationship_change` on. None when the use did not touch it,
+    # which is every use but one.
+    relationship: int | None = None
 
     @property
     def changed_the_world(self) -> bool:
@@ -164,7 +175,26 @@ async def after_use(
     if thing_id == GRAPHITE and room_id == DRAWER_ROOM:
         return await _unjam_the_drawer(guild_id, user_id)
 
+    if thing_id == CAT_BED:
+        return await _fluff_the_bed(guild_id, user_id)
+
     return None
+
+
+async def _fluff_the_bed(guild_id: int, user_id: int) -> Effect:
+    """Fifteen points, once a day, for shaking out a cushion.
+
+    The bed is a shared fixture with a per-player cooldown: everyone can
+    fluff it, nobody can fluff it twice. The cooldown itself is the
+    ordinary `use_cooldown_hours` path - rolling 24 hours rather than a
+    Pacific day, which is what that column already meant and what the
+    design accepted rather than coding around.
+
+    No state is set and nothing is consumed. The bed in the channel on
+    the last day of October is the same bed as on the first.
+    """
+    score = await database.adjust_relationship(user_id, guild_id, BED_FLUFF)
+    return Effect(relationship=score)
 
 
 async def _place_a_plank(guild_id: int) -> Effect:
