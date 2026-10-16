@@ -236,6 +236,41 @@ async def visible_thing_ids(guild_id: int) -> set[str]:
     return {thing_id for thing_id, since_drop in rows if since_drop in arrived}
 
 
+async def things_in_room(guild_id: int, room_id: str) -> list[tuple[str, str | None]]:
+    """(name, present_when) for everything whose home is this room.
+
+    Every type, fixtures and sources included, which is what separates this
+    from `loose_here`: that one reads `room_contents` and so sees only the
+    finite objects that were placed. In the house the difference does not
+    matter, because a room's prose names its own scenery - the stove, the
+    mirror, the bulletin board. The channel has no prose, so its list is
+    the only thing that can name anything.
+
+    Exits are left out: a door is not an item in the room, and the channel
+    has none anyway.
+    """
+    arrived = await arrived_drop_ids(guild_id)
+    session_factory = database._require_session()
+    async with session_factory() as session:
+        rows = (
+            await session.execute(
+                select(
+                    database.ThingType.name,
+                    database.ThingType.present_when,
+                    database.ThingType.since_drop,
+                    database.ThingType.type,
+                )
+                .where(database.ThingType.room_id == room_id)
+                .order_by(database.ThingType.sort_order, database.ThingType.thing_id)
+            )
+        ).all()
+    return [
+        (name, gate)
+        for name, gate, since_drop, kind in rows
+        if since_drop in arrived and kind != "exit"
+    ]
+
+
 class AchievementRow(NamedTuple):
     """An achievement as one server currently sees it."""
 

@@ -265,24 +265,24 @@ async def for_the_bed():
     )
 
 
-async def test_the_drop_is_announced_in_the_channel(started):
+async def test_the_drops_own_line_goes_to_the_admin(started):
+    interaction = await start(started)
+    interaction = await advance(started)
+
+    assert "swats her paw" in interaction.reply
+    assert interaction.was_private
+
+
+async def test_nothing_is_posted_where_players_can_see_it(started):
+    """A drop should be discovered, not read about. Announcing it in the
+    channel would tell everybody something had changed before any of them
+    found it - and the thing that changed is one cushion."""
     _, _, halloween = started
     await start(started)
 
     await advance(started)
 
-    assert any("swats her paw" in line for line in halloween.posted)
-
-
-async def test_the_announcement_does_not_repeat(started):
-    _, _, halloween = started
-    await start(started)
-    await advance(started)
-    before = len(halloween.posted)
-
-    await advance(started)
-
-    assert len(halloween.posted) == before
+    assert halloween.posted == []
 
 
 # --------------------------------------------------------------------------

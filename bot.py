@@ -967,36 +967,21 @@ async def advance_game(interaction: discord.Interaction, confirm: bool = False) 
         target,
     )
 
-    announced = await _announce_drop(guild, target)
     lines = [f"Drop {target}{titled} is open."]
     if placed:
         lines.append(f"- put {placed} new thing(s) in place")
-    lines.append(
-        "- announced in the channel"
-        if announced
-        else f"- nothing posted; drop {target} has no announcement line"
-    )
+
+    # The drop's own line goes to the admin and nobody else. Posting it in
+    # the channel would tell players something had changed before any of
+    # them found it, which is the thing this phase spends its time
+    # subtracting: a drop should be discovered, not read about. They learn
+    # there is something new from the hint rail, privately, on their next
+    # command - which makes that hint the mechanism rather than a fallback
+    # for whoever missed the post.
+    flavour = await phrasing.default_say(f"drop.{target}.announce")
+    if flavour:
+        lines.append(f"\n> {flavour}")
     await interaction.followup.send("\n".join(lines), ephemeral=True)
-
-
-async def _announce_drop(guild, drop_id: int) -> bool:
-    """Post a drop's arrival in the channel, if it has a line to post.
-
-    The hint that rides beneath it belongs to the hint rail and arrives
-    with it. What matters here is that the announcement is public and
-    happens once, on the advance itself - a player who was not looking
-    gets the private fallback later.
-    """
-    line = await phrasing.default_say(f"drop.{drop_id}.announce")
-    if not line:
-        return False
-    channel_id = await database.announcement_channel(guild.id)
-    channel = guild.get_channel(channel_id) if channel_id else None
-    if channel is None:
-        log.warning("Guild %s has no channel to announce drop %s in", guild.id, drop_id)
-        return False
-    await _post_quietly(channel, line)
-    return True
 
 
 @bot.tree.command(
@@ -2193,6 +2178,20 @@ async def look(interaction: discord.Interaction, thing: str | None = None) -> No
     user, guild_id = interaction.user, interaction.guild_id
 
     try:
+        # The channel is a room, and standing in it needs no player row:
+        # `/enter` does not exist at the drops where this is the only place
+        # there is. Checked before the game state for exactly that reason.
+        if await _in_the_channel(interaction):
+            if thing is None or not thing.strip():
+                await interaction.followup.send(
+                    await _look_in_the_channel(guild_id, user.id), ephemeral=True
+                )
+                return
+            await _look_at_one_thing(
+                interaction, guild_id, user.id, content.CHANNEL_ROOM, thing
+            )
+            return
+
         state = await database.get_game_state(user.id, guild_id)
         if state is None:
             await interaction.followup.send(NOT_IN_ROOM_MESSAGE, ephemeral=True)
@@ -2205,52 +2204,72 @@ async def look(interaction: discord.Interaction, thing: str | None = None) -> No
 
         if thing is None or not thing.strip():
             await interaction.followup.send(
-                await _look_around(guild_id, user.id, state.current_room), ephemeral=True
+                await _look_here(guild_id, user.id, state.current_room), ephemeral=True
             )
             return
 
-        found = await reach.find(
-            guild_id, user.id, state.current_room, thing, reach.Scope.REACH
+        await _look_at_one_thing(
+            interaction, guild_id, user.id, state.current_room, thing
         )
-
-        if isinstance(found, reach.Ambiguous):
-            await interaction.followup.send(
-                await phrasing.default_say(
-                    "ambiguous.match", options=", ".join(found.options)
-                ),
-                ephemeral=True,
-            )
-            return
-
-        if isinstance(found, reach.NotFound):
-            # Naming the room you are standing in is the same question as
-            # `/look` with no argument, and players ask it that way. Checked
-            # only after resolution fails, so a thing sharing a word with the
-            # room still wins - in the Courtyard `/look kitchen` is the back
-            # door, because that is what is in front of you.
-            if await _is_this_room(state.current_room, thing):
-                await interaction.followup.send(
-                    await _look_around(guild_id, user.id, state.current_room),
-                    ephemeral=True,
-                )
-                return
-
-            # One refusal per verb for a word the house does not know:
-            # `look_fail.unknown` here, `take_fail.unknown` in /take,
-            # `use_fail.unknown` in /use. They used to share one line, which
-            # meant any rewrite of it had to read sensibly after all three.
-            key = "take_fail.absent" if found.exists_elsewhere else "look_fail.unknown"
-            await interaction.followup.send(
-                await phrasing.default_say(key, name=thing.strip()), ephemeral=True
-            )
-            return
-
-        text, art = await _look_at(guild_id, user.id, state.current_room, found)
-        content_, embed = await _with_art(interaction.guild, text, art)
-        await interaction.followup.send(content_, embed=embed, ephemeral=True)
     except SQLAlchemyError:
         log.exception("Failed to look at %r in guild %s", thing, guild_id)
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+
+
+async def _look_at_one_thing(
+    interaction, guild_id: int, user_id: int, room_id: str, thing: str
+) -> None:
+    """`/look <thing>`, from wherever the player is standing.
+
+    Shared by the nine rooms and the channel. The only thing that differs
+    between them is which room is passed in - resolution, the two refusals
+    and the art all behave the same, and a second copy of this would be a
+    second place for them to drift.
+    """
+    found = await reach.find(guild_id, user_id, room_id, thing, reach.Scope.REACH)
+
+    if isinstance(found, reach.Ambiguous):
+        await interaction.followup.send(
+            await phrasing.default_say(
+                "ambiguous.match", options=", ".join(found.options)
+            ),
+            ephemeral=True,
+        )
+        return
+
+    if isinstance(found, reach.NotFound):
+        # Naming the room you are standing in is the same question as
+        # `/look` with no argument, and players ask it that way. Checked
+        # only after resolution fails, so a thing sharing a word with the
+        # room still wins - in the Courtyard `/look kitchen` is the back
+        # door, because that is what is in front of you.
+        if await _is_this_room(room_id, thing):
+            await interaction.followup.send(
+                await _look_here(guild_id, user_id, room_id), ephemeral=True
+            )
+            return
+
+        # One refusal per verb for a word the house does not know:
+        # `look_fail.unknown` here, `take_fail.unknown` in /take,
+        # `use_fail.unknown` in /use. They used to share one line, which
+        # meant any rewrite of it had to read sensibly after all three.
+        key = "take_fail.absent" if found.exists_elsewhere else "look_fail.unknown"
+        await interaction.followup.send(
+            await phrasing.default_say(key, name=thing.strip()), ephemeral=True
+        )
+        return
+
+    text, art = await _look_at(guild_id, user_id, room_id, found)
+    content_, embed = await _with_art(interaction.guild, text, art)
+    await interaction.followup.send(content_, embed=embed, ephemeral=True)
+
+
+async def _look_here(guild_id: int, user_id: int, room_id: str) -> str:
+    """Looking around, wherever "around" is. The channel is a list; a room
+    is its prose and then what is loose in it."""
+    if room_id == content.CHANNEL_ROOM:
+        return await _look_in_the_channel(guild_id, user_id)
+    return await _look_around(guild_id, user_id, room_id)
 
 
 async def _current_state(guild_id: int, user_id: int) -> str:
@@ -2302,6 +2321,48 @@ async def _look_around(guild_id: int, user_id: int, room_id: str) -> str:
         budget=phrasing.MESSAGE_LIMIT - len(description) - 2,
     )
     return f"{description}\n\n{line}" if line else description
+
+
+async def _in_the_channel(interaction) -> bool:
+    """Whether this command was run in the channel the game lives in.
+
+    Decided by id alone. A room thread has its own id, distinct from the
+    channel it hangs off, so this is already false inside one - and asking
+    the id rather than the type keeps it true of anything that behaves like
+    the channel, which is what the tests hand it.
+    """
+    if interaction.guild is None:
+        return False
+    here = getattr(interaction.channel, "id", None)
+    return here is not None and here == await database.announcement_channel(
+        interaction.guild_id
+    )
+
+
+async def _look_in_the_channel(guild_id: int, user_id: int) -> str:
+    """What is in the channel, as a list. There is no description.
+
+    **The channel has no prose, and that is the answer rather than a gap.**
+    A `room_text` row for it is a load error. In the house the division of
+    labour is that the writer's prose names the scenery and the `Also here:`
+    line carries what is loose; here there is no prose to do the first half,
+    so the list does both and names fixtures too.
+
+    **The cat is not in it.** Her row is `room_id = ALL` rather than the
+    channel's, so she falls out of this query for free - which is the
+    behaviour the work order asks for and the reason it asks: `/look cat`
+    is an easter egg, found rather than signposted, and a list reading
+    "a cat, a cat bed" would hand over the only discovery drops 0 and 1
+    have.
+    """
+    held = await states.in_force(guild_id, user_id)
+    entries = [
+        (name, 1)
+        for name, gate in await resolve.things_in_room(guild_id, content.CHANNEL_ROOM)
+        if states.passes(gate, held)
+    ]
+    line = await phrasing.listing(entries, prefix_key="channel.look_prefix")
+    return line or await phrasing.default_say("channel.look_empty")
 
 
 async def _look_at(
