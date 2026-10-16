@@ -41,7 +41,6 @@ _WORLD_TABLES = (
     "player_states",
     "server_states",
     "thing_uses",
-    "server_drops",
     "server_restocks",
     "server_config",
     # Earned achievements are world state, so `--fresh` clears them with
@@ -74,7 +73,7 @@ def world_tables() -> tuple[str, ...]:
     )
 
 
-async def reset_guild(guild_id: int) -> dict[str, int]:
+async def reset_guild(guild_id: int, *, drop: int | None = None) -> dict[str, int]:
     """Wipe one server's game and put its starting stock back.
 
     Scoped to the guild throughout: every table here carries a `guild_id`,
@@ -84,10 +83,15 @@ async def reset_guild(guild_id: int) -> dict[str, int]:
     nothing to do with what a server has done. What comes back is the
     starting placement, because clearing `room_contents` without re-placing
     would leave a house with nothing in any room.
+
+    `drop` is where the server lands. It is written back **before** the
+    placement rather than after, because what gets placed is decided by
+    which drops have arrived, and the clear above took the pointer with it.
+    Passing None leaves the game unstarted, which is a reset nobody has run
+    `/start-game` on yet - an empty channel, correctly.
     """
     parsed = content_module.load()
     placements = things_to_place(parsed)
-    today = database.pacific_today()
 
     cleared: dict[str, int] = {}
     session_factory = database._require_session()
@@ -100,7 +104,15 @@ async def reset_guild(guild_id: int) -> dict[str, int]:
             if result.rowcount:
                 cleared[name] = result.rowcount
 
-        arrived = await _arrived_drops(session, guild_id, parsed, today)
+        if drop is not None:
+            session.add(
+                database.ServerConfig(
+                    guild_id=guild_id, key=resolve.DROP_KEY, value=str(drop)
+                )
+            )
+            await session.flush()
+
+        arrived = await _arrived_drops(session, guild_id, parsed)
         placed, _, _ = await _place_for_guild(session, guild_id, placements, arrived)
         await session.commit()
 
@@ -113,6 +125,26 @@ async def reset_guild(guild_id: int) -> dict[str, int]:
     )
     cleared["_placed"] = placed
     return cleared
+
+
+async def place_arrived(guild_id: int) -> int:
+    """Put down anything this server's current drop has brought with it.
+
+    Called after `/advance-game`, because placement otherwise only happens
+    at load and at reset, and a drop that arrives between boots would be a
+    cat bed nobody can see. Placement is judged per thing and skips what a
+    server already knows, so calling this twice places nothing twice.
+    """
+    parsed = content_module.load()
+    placements = things_to_place(parsed)
+    session_factory = database._require_session()
+    async with session_factory() as session:
+        arrived = await _arrived_drops(session, guild_id, parsed)
+        placed, _, _ = await _place_for_guild(session, guild_id, placements, arrived)
+        await session.commit()
+    if placed:
+        log.info("Drop placement put %d new thing(s) in guild %s", placed, guild_id)
+    return placed
 
 
 class OrphanedThings(Exception):
@@ -255,6 +287,9 @@ def _rows_for(parsed: Content) -> dict[str, list[dict]]:
             {
                 "achievement_id": a.achievement_id,
                 "since_drop": a.since_drop,
+                "offered": a.offered,
+                "prompt": a.prompt,
+                "requires": a.requires,
                 "kind": a.kind,
                 "name": a.name,
                 "unlock": a.unlock,
@@ -313,29 +348,33 @@ def things_to_place(parsed: Content) -> list[tuple[str, str, str, int, int]]:
     return placements
 
 
-async def _arrived_drops(session, guild_id: int, parsed: Content, today) -> set[int]:
+async def _arrived_drops(session, guild_id: int, parsed: Content) -> set[int]:
     """Which drops have arrived on this server, judged from the files in hand.
 
-    Deliberately not resolve.arrived_drop_ids: that reads the drops table, which
-    this transaction has just rewritten and not yet committed. The parsed
-    calendar is the same data and is already here.
+    The same rule as `resolve.arrived_drop_ids`: at or below this server's
+    drop pointer. Read here rather than there because that one reads the
+    drops table, which this transaction has just rewritten and not yet
+    committed - the parsed files are the same data and are already in hand.
+
+    The pointer itself is safe to read: `server_config` is world state, and
+    the loader never writes it.
     """
-    recorded = {
-        row[0]
-        for row in await session.execute(
-            select(database.ServerDrop.drop_id).where(
-                database.ServerDrop.guild_id == guild_id
-            )
+    raw = await session.scalar(
+        select(database.ServerConfig.value).where(
+            database.ServerConfig.guild_id == guild_id,
+            database.ServerConfig.key == resolve.DROP_KEY,
         )
-    }
-    arrived = set()
-    for drop in parsed.drops:
-        if drop.trigger == "date":
-            if resolve._has_date_arrived(drop.date, today):
-                arrived.add(drop.drop_id)
-        elif drop.drop_id in recorded:
-            arrived.add(drop.drop_id)
-    return arrived
+    )
+    if raw is None:
+        return set()
+    try:
+        current = int(raw)
+    except ValueError:
+        log.warning(
+            "Guild %s has an unreadable drop pointer %r; placing nothing", guild_id, raw
+        )
+        return set()
+    return {drop.drop_id for drop in parsed.drops if drop.drop_id <= current}
 
 
 async def _known_guilds(session) -> list[int]:
@@ -369,8 +408,23 @@ async def _find_orphans(session, known_ids: set[str]):
     return held, in_rooms
 
 
+# The two `server_config` rows that survive a `--fresh`. Both say what a
+# server *is* rather than what has happened in it: which drop it is on and
+# which channel it lives in. Wiping the world is not the same as un-starting
+# every game on it, and an admin who reloads content with `--fresh` should
+# not have to re-run `/start-game` in every server the bot is in - the same
+# argument `/reset-haunted-house` makes, for the same two keys.
+_KEPT_SETTINGS = (resolve.DROP_KEY, database.CONFIG_ANNOUNCE_CHANNEL)
+
+
 async def _wipe_world_state(session) -> None:
     for table in _WORLD_TABLES:
+        if table == "server_config":
+            config = database.ServerConfig.__table__
+            await session.execute(
+                config.delete().where(config.c.key.notin_(_KEPT_SETTINGS))
+            )
+            continue
         await session.execute(database.Base.metadata.tables[table].delete())
 
 
@@ -495,9 +549,8 @@ async def load_content(
 
         guilds = guild_ids if guild_ids is not None else await _known_guilds(session)
         report.guilds = list(guilds)
-        today = database.pacific_today()
         for guild_id in guilds:
-            arrived = await _arrived_drops(session, guild_id, parsed, today)
+            arrived = await _arrived_drops(session, guild_id, parsed)
             placed, skipped, waiting = await _place_for_guild(
                 session, guild_id, placements, arrived
             )

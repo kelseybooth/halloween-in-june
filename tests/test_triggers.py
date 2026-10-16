@@ -87,14 +87,20 @@ def test_every_achievement_in_the_file_has_a_trigger():
     assert achievements.registration_problems(parsed.achievement_ids) == []
 
 
-def test_all_thirty_five_are_registered():
-    assert len(achievements.registered_ids()) == 35
+def test_every_row_in_the_file_is_registered():
+    """Thirty-five from Release 1, and V3's seven. The count is pinned
+    against the file rather than written down twice, so adding a row and
+    forgetting the predicate fails here as well as at boot."""
+    parsed = content_module.load_files()
+
+    assert achievements.registered_ids() == set(parsed.achievement_ids)
 
 
 def test_registering_twice_is_a_no_op():
     """The bot's boot path and a test fixture can both call it."""
+    before = len(achievements.registered_ids())
     triggers.register_all()
-    assert len(achievements.registered_ids()) == 35
+    assert len(achievements.registered_ids()) == before
 
 
 def test_every_thing_a_trigger_names_exists_in_the_content():
@@ -429,6 +435,7 @@ async def test_group_achievements_are_scoped_to_one_server(playing, db):
 # --------------------------------------------------------------------------
 
 BLOCKED = [
+    # Waiting on cat crossing, the ghosts, the doorbell and the letter.
     "unsticking_the_situation",
     "return_to_sender",
     "it_takes_a_village",
@@ -436,6 +443,11 @@ BLOCKED = [
     "ghostbuster",
     "signed_sealed_delivered",
     "forwarding_address",
+    # Waiting on V3's own unbuilt drops: the cat toy at drop 2, feeding
+    # at drop 3. Registered for the same reason as the five above.
+    "persuasive",
+    "impressively_bad_luck",
+    "bowl_half_empty",
 ]
 
 
@@ -462,8 +474,11 @@ async def test_nothing_blocked_can_be_earned_by_any_use(playing):
     assert not (got & set(BLOCKED))
 
 
-def test_exactly_twenty_eight_are_earnable():
-    assert len(achievements.registered_ids()) - len(BLOCKED) == 28
+def test_what_can_actually_be_earned():
+    """Twenty-eight of Release 1's thirty-five, plus the four V3 adds that
+    have content behind them: making first contact, the two score
+    thresholds below 250, and fluffing the bed."""
+    assert len(achievements.registered_ids()) - len(BLOCKED) == 32
 
 
 # --------------------------------------------------------------------------
@@ -587,82 +602,130 @@ async def test_bulk_buyer_needs_twenty_five(playing):
     assert "bulk_buyer" not in await earned(a_context("on_take"))
 
 
-async def pet(times, relationship, user_id=ALICE):
-    """Pets with `relationship_at_pet` pinned, which is what the split reads.
+async def petted(times, user_id=ALICE):
+    """Put this player's lifetime pet count at `times`.
 
-    Written directly because the real `/pet` moves the relationship as it
-    goes, and these two achievements turn on the score *at* each pet - which
-    is exactly why the column exists.
+    Written directly rather than by calling `/pet` two hundred times. The
+    count is all the fork reads now - which pets were friendly no longer
+    matters, only how many there were and where the meter ended up.
     """
-    now = database._utcnow()
     async with database._require_session()() as session:
-        for _ in range(times):
-            session.add(
-                database.PetEvent(
-                    user_id=user_id,
-                    guild_id=GUILD_A,
-                    created_at=now,
-                    relationship_at_pet=relationship,
-                )
-            )
+        await session.execute(
+            database.update(database.User)
+            .where(database.User.id == user_id, database.User.guild_id == GUILD_A)
+            .values(pet_count=times)
+        )
         await session.commit()
 
 
-async def test_making_friends_counts_only_friendly_pets(playing):
-    await pet(199, 50)
-    assert "making_friends" not in await earned(a_context("on_pet"))
-
-    await pet(1, 50)
-    assert "making_friends" in await earned(a_context("on_pet"))
+def after(score):
+    """An `on_pet` context carrying the score as it stands after the pet."""
+    return a_context("on_pet", extra={"relationship": score})
 
 
-async def test_trying_to_make_friends_counts_the_other_side(playing):
-    await pet(200, -50)
+async def test_two_hundred_pets_and_a_cat_that_likes_you(playing):
+    await petted(199)
+    assert "making_friends" not in await earned(after(50))
 
-    got = await earned(a_context("on_pet"))
+    await petted(200)
+    assert "making_friends" in await earned(after(50))
+
+
+async def test_two_hundred_pets_and_a_cat_that_does_not(playing):
+    await petted(200)
+
+    got = await earned(after(-50))
+
     assert "trying_to_make_friends" in got
     assert "making_friends" not in got
 
 
-async def test_a_pet_at_exactly_zero_counts_toward_trying(playing):
-    """The boundary the Story Bible was revised to state - "zero or below",
-    not "negative". It matters on day one."""
-    await pet(200, 0)
+async def test_zero_counts_as_does_not(playing):
+    """The boundary the Story Bible was revised to state - "zero or
+    below", not "negative". It matters more now than it did: every player
+    starts there."""
+    await petted(200)
 
-    got = await earned(a_context("on_pet"))
+    got = await earned(after(0))
+
     assert "trying_to_make_friends" in got
     assert "making_friends" not in got
 
 
-async def test_the_two_do_not_share_a_count(playing):
-    """A hundred friendly and a hundred hostile earns neither."""
-    await pet(100, 50)
-    await pet(100, -50)
+async def test_a_mixed_two_hundred_now_earns_one_of_them(playing):
+    """**The bug this change exists for.** This test used to assert the
+    opposite - a hundred pets on each side of zero earned neither,
+    because each half was tallied separately and neither tally reached
+    two hundred. A player could pet the cat two hundred times and get
+    nothing. One counter, and the sign at the end decides."""
+    await petted(200)
 
-    got = await earned(a_context("on_pet"))
-    assert "making_friends" not in got
-    assert "trying_to_make_friends" not in got
+    got = await earned(after(-10))
+
+    assert "trying_to_make_friends" in got
+
+
+async def test_the_two_are_mutually_exclusive(playing):
+    """Both conditions are true the moment the count is reached, and only
+    the sign separates them - so each refuses while the other is held."""
+    await petted(200)
+    first = await earned(after(50))
+    assert "making_friends" in first
+
+    second = await earned(after(-50))
+
+    assert "trying_to_make_friends" not in second
+
+
+async def test_passing_two_hundred_unnoticed_is_not_lost(playing):
+    """"At least two hundred", not "exactly the two hundredth". A check
+    that only fired on the 200th pet would be lost for good if the bot
+    were down for it, or if two pets raced."""
+    await petted(250)
+
+    assert "making_friends" in await earned(after(50))
 
 
 async def test_cats_best_friend_at_a_perfect_relationship(playing):
     assert "cats_best_friend" in await earned(
-        a_context("on_pet", extra={"relationship": database.RELATIONSHIP_MAX})
+        a_context("on_relationship_change", extra={"relationship": database.PERFECT_RELATIONSHIP})
     )
 
 
 async def test_cats_best_friend_not_below_it(playing):
     assert "cats_best_friend" not in await earned(
-        a_context("on_pet", extra={"relationship": 99})
+        a_context("on_relationship_change", extra={"relationship": 99})
     )
 
 
 async def test_cats_best_friend_announces_once(playing):
     """True forever once true, which is the standing condition the idempotent
     award exists for."""
-    top = {"relationship": database.RELATIONSHIP_MAX}
-    assert "cats_best_friend" in await earned(a_context("on_pet", extra=top))
+    top = {"relationship": database.PERFECT_RELATIONSHIP}
+
+    first = await earned(a_context("on_relationship_change", extra=top))
+
+    # A hundred passes fifty on the way, so both land in one move.
+    assert {"cats_best_friend", "a_paw_in_the_door"} <= first
     for _ in range(5):
-        assert await earned(a_context("on_pet", extra=top)) == set()
+        assert await earned(a_context("on_relationship_change", extra=top)) == set()
+
+
+async def test_a_threshold_passed_without_petting_still_fires(playing):
+    """The reason these moved off `on_pet`. A player pushed past fifty by
+    a bed fluff would otherwise go unchecked until their next pet."""
+    assert "a_paw_in_the_door" in await earned(
+        a_context("on_relationship_change", extra={"relationship": 50})
+    )
+
+
+async def test_favorite_human_needs_a_meter_with_no_ceiling(playing):
+    assert "favorite_human" not in await earned(
+        a_context("on_relationship_change", extra={"relationship": 249})
+    )
+    assert "favorite_human" in await earned(
+        a_context("on_relationship_change", extra={"relationship": 250})
+    )
 
 
 async def test_passing_a_message_to_david(playing):

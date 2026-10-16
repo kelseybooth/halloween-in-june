@@ -51,6 +51,13 @@ DROP_TRIGGERS = {"date", "event", "manual"}
 # A `date` drop whose date is this arrives the moment a server initializes.
 LAUNCH = "launch"
 
+# The Halloween channel, which is a room everywhere except in the ways that
+# make a room a room. It has no exits, no prose and no place in any listing:
+# `/look` there prints what is present and nothing else. It exists so the cat
+# bed can have an ordinary `room_id` and `/use` can resolve through the
+# ordinary path, rather than the channel being a special case in every verb.
+CHANNEL_ROOM = "CH"
+
 # Conditions an `event` drop may name. Release 1 ships none; the registry exists so
 # the second one needs no migration, and so a typo in the file is caught at load
 # rather than becoming a drop that never arrives.
@@ -243,6 +250,13 @@ class Achievement:
     since_drop: int
     sort_order: int
     notes: str | None
+    # A public achievement with a visibility prerequisite *is* a quest.
+    # `offered` is whether a player is shown it before earning it,
+    # `prompt` is the prospective wording, and `requires` is the one
+    # achievement they must already hold for it to appear.
+    offered: bool = False
+    prompt: str | None = None
+    requires: str | None = None
 
 
 @dataclass(frozen=True)
@@ -333,6 +347,19 @@ def _int(value: str | None, *, default: int | None = None) -> int | None:
     return int(raw)
 
 
+def _since_drop(row: dict[str, str]) -> int:
+    """Which drop a content row waits for, defaulting to the first one.
+
+    Its own function because of one character. This used to read
+    `_int(...) or 1`, and the `or` was harmless for as long as there was no
+    drop 0 - V3 starts numbering at 0, which is falsy, so every drop-0 row
+    was silently rewritten to drop 1. That made the cat invisible in the
+    one drop she is the whole of.
+    """
+    value = _int(row.get("since_drop"))
+    return 1 if value is None else value
+
+
 def normalise_emoji(value: str) -> str:
     """Strip the variation selector so the file and a reaction compare equal.
 
@@ -388,7 +415,7 @@ def _text_rows(path: Path, id_column: str, columns: tuple[str, ...]) -> list[Tex
             TextRow(
                 entity_id=row[id_column].strip(),
                 state=_text(row.get("state")) or "default",
-                since_drop=_int(row.get("since_drop"), default=1) or 1,
+                since_drop=_since_drop(row),
                 text={c: row[c].strip() for c in columns if _text(row.get(c))},
             )
         )
@@ -438,7 +465,7 @@ def load_files(directory: Path | None = None) -> Content:
                 destination_room_id=_text(row.get("destination_room_id")),
                 contained_in=_text(row.get("contained_in")),
                 use_cooldown_hours=_int(row.get("use_cooldown_hours")),
-                since_drop=_int(row.get("since_drop"), default=1) or 1,
+                since_drop=_since_drop(row),
                 sort_order=_int(row.get("sort_order"), default=0) or 0,
             )
         )
@@ -479,7 +506,7 @@ def load_files(directory: Path | None = None) -> Content:
                 window_start=_text(row.get("window_start")) or "00:00",
                 window_end=_text(row.get("window_end")) or "23:59",
                 config_key=_text(row.get("config_key")),
-                since_drop=_int(row.get("since_drop"), default=1) or 1,
+                since_drop=_since_drop(row),
                 notes=_text(row.get("notes")),
             )
         )
@@ -508,9 +535,12 @@ def load_files(directory: Path | None = None) -> Content:
                 kind=(_text(row.get("kind")) or "").lower(),
                 name=_text(row.get("name")) or "",
                 unlock=_text(row.get("unlock")) or "",
-                since_drop=_int(row.get("since_drop"), default=1) or 1,
+                since_drop=_since_drop(row),
                 sort_order=_int(row.get("sort_order"), default=0) or 0,
                 notes=_text(row.get("notes")),
+                offered=_bool(row.get("offered")),
+                prompt=_text(row.get("prompt")),
+                requires=_text(row.get("requires")),
             )
         )
 
@@ -562,6 +592,7 @@ def validate(content: Content) -> list[str]:
     problems += _check_sources_are_named_in_prose(content, rooms)
     problems += _check_emoji_groups(content)
     problems += _check_achievements(content)
+    problems += _check_quests(content)
     problems += _check_art(content)
     problems += _check_consumables(content)
     return problems
@@ -578,6 +609,25 @@ def _check_duplicates(content: Content) -> list[str]:
             if identifier in seen:
                 problems.append(f"duplicate {label} id {identifier!r}")
             seen.add(identifier)
+
+    # Text rows are keyed on (entity, state, since_drop) in the database, and
+    # that key is a unique constraint. Two rows sharing it got as far as the
+    # INSERT before this check existed, which is a load that dies at startup
+    # over something the files could have said at `--check` time. It is easy
+    # to do accidentally: move a thing's drop-1 and drop-2 rows to the same
+    # drop and they collide.
+    for label, rows in (("room_text", content.room_text),
+                        ("thing_text", content.thing_text)):
+        seen = set()
+        for row in rows:
+            key = (row.entity_id, row.state, row.since_drop)
+            if key in seen:
+                problems.append(
+                    f"{label} has two rows for {row.entity_id} in state "
+                    f"{row.state!r} at drop {row.since_drop}; the database "
+                    "keeps one row per entity, state and drop"
+                )
+            seen.add(key)
     return problems
 
 
@@ -712,6 +762,14 @@ def _check_text_coverage(
                 continue
             by_entity.setdefault(row.entity_id, set()).add(row.state)
         for entity_id in known:
+            # The channel has no description on purpose, which is what settles
+            # the question of what it says: nothing.
+            if label == "room" and entity_id == CHANNEL_ROOM:
+                if entity_id in by_entity:
+                    problems.append(
+                        f"room {CHANNEL_ROOM} is the channel and must have no text row"
+                    )
+                continue
             states = by_entity.get(entity_id)
             if not states:
                 problems.append(f"{label} {entity_id} has no text row")
@@ -762,9 +820,19 @@ def _check_reachable_rooms(content: Content, rooms: dict[str, Room]) -> list[str
     A locked room is still reachable in the graph sense - it is opened later.
     A room with no exits leading to it is a content bug nobody would notice
     until a player failed to find it.
+
+    The channel is the one exception, and it is exempt in both directions: no
+    exit may lead to it and none may lead out of it. It is where players
+    already are, not somewhere they walk to.
     """
     if not content.rooms:
         return []
+    problems = [
+        f"exit {e.thing_id} joins the channel to the house, which has no door"
+        for e in content.things
+        if e.is_exit
+        and CHANNEL_ROOM in (e.room_id, e.destination_room_id)
+    ]
     start = next((r.room_id for r in content.rooms if r.open_at_launch), content.rooms[0].room_id)
 
     adjacency: dict[str, set[str]] = {r.room_id: set() for r in content.rooms}
@@ -779,9 +847,9 @@ def _check_reachable_rooms(content: Content, rooms: dict[str, Room]) -> list[str
                 seen.add(destination)
                 queue.append(destination)
 
-    return [
+    return problems + [
         f"room {room_id} cannot be reached from {start}"
-        for room_id in sorted(set(adjacency) - seen)
+        for room_id in sorted(set(adjacency) - seen - {CHANNEL_ROOM})
     ]
 
 
@@ -1109,6 +1177,37 @@ def _check_consumables(content: Content) -> list[str]:
                 "transforms into or restocks it, so using it would destroy it "
                 "for good"
             )
+    return problems
+
+
+def _check_quests(content: Content) -> list[str]:
+    """The three columns that turn an achievement into a quest.
+
+    A quest the player cannot read is worse than no quest, and a `requires`
+    naming nothing is a quest that can never appear - neither raises at
+    runtime, which is exactly why they are caught here.
+    """
+    problems = []
+    known = {a.achievement_id for a in content.achievements}
+    for row in content.achievements:
+        if row.offered and not row.prompt:
+            problems.append(
+                f"achievement {row.achievement_id} is offered as a quest but "
+                "has no prompt, so it would appear in /stats as a blank line"
+            )
+        if row.prompt and row.prompt.rstrip().endswith("."):
+            problems.append(
+                f"achievement {row.achievement_id} has a prompt ending in a "
+                "full stop; the quest notice puts it at the end of its own "
+                "sentence and would double the stop"
+            )
+        if row.requires and row.requires not in known:
+            problems.append(
+                f"achievement {row.achievement_id} requires "
+                f"{row.requires!r}, which is not an achievement"
+            )
+        if row.requires == row.achievement_id:
+            problems.append(f"achievement {row.achievement_id} requires itself")
     return problems
 
 

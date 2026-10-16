@@ -24,6 +24,7 @@ import content
 import content_loader
 import craving
 import database
+import gating
 import house_utils
 import phrasing
 import reach
@@ -55,15 +56,15 @@ SHOW_DEBUG_INFO = False
 
 # Placeholder copy - writers will replace these in Phase 2.
 FRIENDLY_RESPONSES = [
-    "The cat purrs contentedly as you pet it, tail curling like smoke. Is this bonding?",
+    "The cat purrs contentedly as you pet her, tail curling like smoke. Is this bonding?",
     "The cat meows and rubs against your leg, eyes glinting in the dark. Maybe you'll be friends.",
     "The cat stretches, blinks slowly at you, and meows fondly.",
 ]
 
 STANDOFFISH_RESPONSES = [
-    "The cat meows admonishingly and turns its back on you. Oh no! You wanted to be friends.",
+    "The cat meows admonishingly and turns her back on you. Oh no! You wanted to be friends.",
     "The cat startles, hissing at you. You worry the cat may not like you.",
-    "The cat glares at you and gives you a warning bat with its paw. You hope this does not hurt your relationship.",
+    "The cat glares at you and gives you a warning bat with her paw. You hope this does not hurt your relationship.",
 ]
 
 PET_RESPONSES = FRIENDLY_RESPONSES + STANDOFFISH_RESPONSES
@@ -83,8 +84,13 @@ RESTOCK_SWEEP_MINUTES = 10
 # How far one reaction moves the relationship meter.
 RELATIONSHIP_STEP = 5
 
+# Where `/start-game` puts a server: a channel with a cat in it, and nothing
+# else at all. Not a magic number in the command, because drop 0 meaning
+# "the beginning" is a fact about the schedule rather than about the command.
+FIRST_DROP = 0
+
 DB_ERROR_MESSAGE = (
-    "The cat slips into the shadows and you lose track of it. "
+    "The cat slips into the shadows and you lose track of her. "
     "Something went wrong reaching the database - please try again in a moment."
 )
 
@@ -121,6 +127,29 @@ def choose_response(recent_pets: int, rng=random) -> Reaction:
     return Reaction(rng.choice(STANDOFFISH_RESPONSES), False, chance)
 
 
+def _crowded(recent_pets: int) -> bool:
+    """Whether this pet should carry the nudge to give the cat some space.
+
+    **The first pet that cannot possibly go well.** `friendly_chance` is
+    `80 - 10 x recent`, so this is the ninth pet inside ten minutes, where
+    the cat is certain to be standoffish and every further pet is a
+    guaranteed five points off.
+
+    Tied to the chance rather than to a count of its own, because a count
+    would be a second number to keep in step with the weighting: retune
+    `BASE_FRIENDLY_CHANCE` and the nudge follows by itself.
+
+    Worth recording that the penalty starts earlier than the nudge does.
+    The fourth pet in the window is break-even in expectation and the
+    fifth is the first that loses points on average. The nudge waits for
+    certainty because it is the only place a player can ever learn the
+    penalty exists - the public line no longer reports the meter - and a
+    warning that fires while the odds are still even would be crying
+    wolf.
+    """
+    return friendly_chance(recent_pets) == 0
+
+
 def _debug_lines(reaction: Reaction, recent: int, relationship: int) -> str:
     """TEMPORARY (testing) diagnostics appended to /pet replies."""
     mood = "friendly" if reaction.friendly else "standoffish"
@@ -129,7 +158,7 @@ def _debug_lines(reaction: Reaction, recent: int, relationship: int) -> str:
         "\n\n`[testing]`"
         f"\n`mood:` {mood} ({delta:+d}) - {reaction.chance}% friendly chance"
         f" after {recent} recent pet(s)"
-        f"\n`relationship:` {relationship} / {database.RELATIONSHIP_MAX}"
+        f"\n`relationship:` {relationship}"
     )
 
 
@@ -222,6 +251,73 @@ async def load_content_at_startup() -> None:
         )
 
 
+# Every command this file defines, by name, captured before any of them is
+# registered anywhere. The decorators put them in the tree's global set;
+# `setup_hook` takes them straight back out again, because nothing in this
+# game is a global command any more. This dict is what they are added back
+# from, one guild at a time.
+_DEFINED: dict[str, app_commands.Command] = {}
+
+
+def _capture_commands(tree) -> dict[str, app_commands.Command]:
+    """Snapshot the decorated commands, then clear the global set.
+
+    Called once at startup. After this the tree has no global commands at
+    all, and `sync()` with none left is the bulk overwrite that removes
+    whatever this bot registered globally in an earlier release - without
+    it, every player keeps a stale menu of nine verbs for up to an hour
+    and then forever, because nothing would ever replace it.
+    """
+    defined = {c.name: c for c in tree.get_commands()}
+    tree.clear_commands(guild=None)
+    return defined
+
+
+async def register_commands_for(guild, drop: int | None = None, tree=None) -> set[str]:
+    """Put exactly this server's command set in place, in one request.
+
+    **Bulk overwrite, not create-and-delete.** `sync` for a guild is a
+    single PUT of the whole set, which is one request per advance rather
+    than one per command, and stays clear of the per-command create limits
+    that `/qa-drop` churn would otherwise walk into.
+
+    Returns the names registered, so a caller can say what just appeared.
+
+    `tree` is an argument because `commands.Bot.tree` is a read-only
+    property, and a registration path worth having is a registration path
+    worth testing without a gateway connection.
+    """
+    tree = tree if tree is not None else bot.tree
+    if drop is None:
+        drop = await resolve.current_drop(guild.id)
+    wanted = gating.commands_for(drop)
+
+    missing = wanted - set(_DEFINED)
+    if missing:
+        # A name in the table that no command answers to. Logged rather
+        # than raised: the rest of the set is still worth registering, and
+        # a typo here should not leave a server with no commands at all.
+        log.error(
+            "Guild %s wants commands this bot does not define: %s",
+            guild.id,
+            ", ".join(sorted(missing)),
+        )
+
+    tree.clear_commands(guild=guild)
+    for name in sorted(wanted & set(_DEFINED)):
+        tree.add_command(_DEFINED[name], guild=guild)
+    await tree.sync(guild=guild)
+
+    log.info(
+        "Guild %s is on drop %s with %d command(s): %s",
+        guild.id,
+        drop,
+        len(wanted),
+        ", ".join(sorted(wanted)),
+    )
+    return wanted
+
+
 class CatBot(commands.Bot):
     def __init__(self) -> None:
         # Slash commands need no privileged intents, but Alexa does: without
@@ -255,18 +351,19 @@ class CatBot(commands.Bot):
         keep_threads_alive.start()
         restock_sweep.start()
 
-        # Global syncs can take up to an hour to propagate. Setting GUILD_ID copies
-        # the commands into one server instead, where they appear immediately - much
-        # faster to iterate on locally. Leave it unset in production.
-        guild_id = os.getenv("GUILD_ID", "").strip()
-        if guild_id:
-            guild = discord.Object(id=int(guild_id))
-            self.tree.copy_global_to(guild=guild)
-            synced = await self.tree.sync(guild=guild)
-            log.info("Synced %d command(s) to guild %s (instant)", len(synced), guild_id)
-        else:
-            synced = await self.tree.sync()
-            log.info("Synced %d command(s) globally (may take up to an hour)", len(synced))
+        # Nothing is a global command any more. Which commands exist is a
+        # per-server question now - two servers can sit on different drops
+        # - so the global set is emptied once here and every guild gets its
+        # own in `on_ready`. GUILD_ID is gone with it: per-guild is what
+        # this does everywhere, so the local shortcut is the normal path.
+        global _DEFINED
+        _DEFINED = _capture_commands(self.tree)
+        await self.tree.sync()
+        log.info(
+            "Cleared the global command set; %d command(s) defined and "
+            "registered per guild",
+            len(_DEFINED),
+        )
 
     async def on_ready(self) -> None:
         log.info("Logged in as %s (id: %s)", self.user, self.user.id)
@@ -274,8 +371,16 @@ class CatBot(commands.Bot):
         # Say up front what the haunted house is missing, rather than letting it
         # surface later as an opaque "Missing Access" error mid-command.
         for guild in self.guilds:
-            # Logged so GUILD_ID can be set without hunting for it in Discord's UI.
-            log.info("In guild %r (GUILD_ID=%s)", guild.name, guild.id)
+            log.info("In guild %r (%s)", guild.name, guild.id)
+
+            # Every server gets the set its own drop calls for. Done on
+            # every boot rather than only on a change, because this is the
+            # only thing that repairs a guild whose registration failed
+            # halfway through an advance.
+            try:
+                await register_commands_for(guild)
+            except discord.HTTPException:
+                log.exception("Could not register commands in guild %s", guild.id)
 
             channel = house_utils.find_channel(guild)
             if channel is None:
@@ -297,6 +402,19 @@ class CatBot(commands.Bot):
                 )
 
         log.info("Ready - try /pet in your server")
+
+    async def on_guild_join(self, guild) -> None:
+        """A server that invited the bot has no game and sees `/start-game`.
+
+        Without this a new server would have no commands at all until the
+        next restart, because nothing is global any more and registration
+        only ever happens per guild.
+        """
+        log.info("Joined guild %r (%s)", guild.name, guild.id)
+        try:
+            await register_commands_for(guild)
+        except discord.HTTPException:
+            log.exception("Could not register commands in new guild %s", guild.id)
 
     async def close(self) -> None:
         """Graceful shutdown: stop the scheduler, release the pool, then disconnect."""
@@ -638,10 +756,10 @@ async def _answer_guess(message: discord.Message, guess) -> None:
 # wherever the command was run.
 #
 # Two windows, deliberately separate, because they answer different
-# questions. Crowding is between a player and the cat: ten pets in ten
-# minutes and the private reply says so. The public rate limit is about noise
-# in a shared room: two lines per player per place per thirty minutes.
-CROWDING_PETS = 10
+# questions. Crowding is between a player and the cat, and fires the first
+# time a pet cannot possibly go well - see `_crowded`. The public rate
+# limit is about noise in a shared room: two lines per player per place
+# per thirty minutes.
 PUBLIC_PETS = 2
 PUBLIC_WINDOW = timedelta(minutes=30)
 
@@ -681,7 +799,7 @@ def _public_pet_line(guild_id: int, user_id: int, place_id: int, now: datetime) 
     return None
 
 
-async def _announce_pet(interaction, relationship: int) -> None:
+async def _announce_pet(interaction, friendly: bool) -> None:
     """The public half: somebody pet the cat, and how it went.
 
     Posted wherever the command was run, which is what makes the discovery
@@ -689,12 +807,20 @@ async def _announce_pet(interaction, relationship: int) -> None:
     one, before anybody has run `/enter`, and everyone watching learns the
     command exists.
 
-    The branch reads the meter **after** the pet, which is the boundary
-    *Making Friends* and *Trying to Make Friends* already split on, so the
-    game has one rule rather than two. Reporting whether this particular pet
-    moved the meter up or down would be a truer account of the moment, and
-    would publicly tell a player deep in the positive that the cat was
-    displeased, which reads as a bug.
+    **It reports the pet, not the relationship.** The branch is the mood
+    roll this pet made, and the meter is not read at all.
+
+    This reverses what Phase 2f recommended and what the code correctly
+    did until now. 2f branched on the score afterwards, so that the line
+    agreed with the boundary the two friendship achievements split on -
+    and that boundary no longer exists in that form, because those two
+    became one fork evaluated once at two hundred pets. What is left is
+    the plainer reading: the room watched somebody pet the cat, and the
+    line says how the cat took it.
+
+    It also keeps the score out of public view entirely, which the
+    crowding nudge now depends on - that nudge is the only place the
+    penalty is ever mentioned.
 
     The crowding nudge never appears here. It is between that player and the
     cat, and broadcasting it would make it a scolding.
@@ -713,11 +839,45 @@ async def _announce_pet(interaction, relationship: int) -> None:
     key = (
         "pet.public.continues"
         if which == "continues"
-        else "pet.public.positive" if relationship > 0 else "pet.public.negative"
+        else "pet.public.friendly" if friendly else "pet.public.standoffish"
     )
     line = await phrasing.default_say(key, player=interaction.user.display_name)
     if line:
         await _post_quietly(channel, line)
+
+
+async def _move_the_meter(user_id: int, guild_id: int, delta: int) -> int:
+    """Touch the cat: stamp the day, then move the score.
+
+    Every way of touching the cat goes through here, which is the point.
+    The stamp is what the nightly drift reads, and it happens on the
+    attempt rather than on the result - the toy's first offer is a
+    guaranteed refusal and the bed refuses inside its window, and a
+    player who tried was not absent. Pass `delta=0` for an attempt that
+    moved nothing.
+    """
+    await database.touched_the_cat(user_id, guild_id, database.pacific_today())
+    if not delta:
+        return await database.get_relationship(user_id, guild_id)
+    return await database.adjust_relationship(user_id, guild_id, delta)
+
+
+async def _fire_relationship(interaction, user_id: int, guild_id: int, score: int) -> None:
+    """Let the three thresholds look, wherever the score just moved.
+
+    Separate from `_move_the_meter` because the hook wants an interaction
+    to answer privately and the move does not, and because it belongs
+    after the command has replied rather than in the middle of it.
+    """
+    await _fire(
+        achievements.Context(
+            guild_id=guild_id,
+            hook="on_relationship_change",
+            user_id=user_id,
+            extra={"relationship": score},
+        ),
+        interaction=interaction,
+    )
 
 
 @bot.tree.command(name="pet", description="Pet the cat.")
@@ -744,17 +904,13 @@ async def pet(interaction: discord.Interaction) -> None:
         result = await database.increment_pet_count(user.id, guild_id)
         reaction = choose_response(result.recent)
         delta = RELATIONSHIP_STEP if reaction.friendly else -RELATIONSHIP_STEP
-        relationship = await database.adjust_relationship(user.id, guild_id, delta)
+        relationship = await _move_the_meter(user.id, guild_id, delta)
     except SQLAlchemyError:
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
         return
 
     message = reaction.text
-    # `recent` counts the pets this one arrived among, so the tenth pet sees
-    # nine. A nudge, not a limit: every pet still counts toward the
-    # achievement, and the relationship penalty it is warning about is the
-    # consequence doing the actual work.
-    crowded = result.recent + 1 >= CROWDING_PETS
+    crowded = _crowded(result.recent)
     if crowded:
         nudge = await phrasing.default_say("pet.crowding")
         if nudge:
@@ -772,17 +928,270 @@ async def pet(interaction: discord.Interaction) -> None:
     content_, embed = await _with_art(interaction.guild, message, art)
     await interaction.followup.send(content_, embed=embed, ephemeral=True)
 
-    await _announce_pet(interaction, relationship)
+    await _announce_pet(interaction, reaction.friendly)
 
     await _fire(
         achievements.Context(
             guild_id=interaction.guild_id,
             hook="on_pet",
             user_id=interaction.user.id,
-            extra={"total": result.total, "relationship": relationship},
+            extra={
+                "total": result.total,
+                "relationship": relationship,
+                "friendly": reaction.friendly,
+            },
         ),
         interaction=interaction,
     )
+    await _fire_relationship(interaction, user.id, guild_id, relationship)
+
+
+async def _reregister(interaction, guild, drop: int | None) -> str:
+    """Put the server's command set where its drop says, and name the
+    player half for the reply.
+
+    A failure here is reported rather than raised, and caught broadly: the
+    drop has already moved and the database is committed, so whatever
+    Discord objects to, the honest thing is to say the menu did not follow
+    rather than to throw away a committed advance.
+    """
+    try:
+        await register_commands_for(guild, drop)
+    except discord.DiscordException:
+        log.exception("Could not re-register commands in guild %s", guild.id)
+        await interaction.followup.send(
+            "The drop moved, but Discord would not take the new command "
+            "list. Run the command again, or restart the bot - every boot "
+            "re-registers every server.",
+            ephemeral=True,
+        )
+    names = sorted(gating.player_commands_for(drop))
+    return ", ".join(f"`/{name}`" for name in names) or "nothing yet"
+
+
+@bot.tree.command(
+    name="start-game",
+    description="(Admin) Open drop 0 in a channel. The game lives there from then on.",
+)
+@app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
+@app_commands.checks.has_permissions(administrator=True)
+@app_commands.describe(
+    channel="Where the game lives. Every public line it ever posts goes here.",
+)
+async def start_game(
+    interaction: discord.Interaction, channel: discord.TextChannel
+) -> None:
+    """Put a server on drop 0, in a named channel.
+
+    **The channel is an argument rather than a name the bot goes looking
+    for.** Servers call it different things, and this one will be renamed
+    before launch; a command that is told cannot be wrong.
+
+    **Idempotent in the same channel.** Running it twice reports where the
+    server is and changes nothing, which is what an admin who cannot
+    remember whether they already ran it deserves.
+
+    **Refused against a second channel.** Moving a running game would
+    leave every player's sense of where it lives pointing at the old one,
+    and nothing in the game would tell them otherwise. Wiping first with
+    `/reset-haunted-house` is the way, and it is deliberately the longer
+    way round.
+    """
+    if interaction.guild is None:
+        await interaction.response.send_message(
+            "This command only works inside a server.", ephemeral=True
+        )
+        return
+
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    guild = interaction.guild
+
+    try:
+        current = await resolve.current_drop(guild.id)
+        existing = await database.announcement_channel(guild.id)
+    except SQLAlchemyError:
+        log.exception("Could not read the game's state in %s", guild.id)
+        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    if current is not None:
+        if existing is not None and existing != channel.id:
+            where = guild.get_channel(existing)
+            await interaction.followup.send(
+                "This server's game is already running in "
+                + (where.mention if where else "another channel")
+                + f", on drop {current}. Moving it would leave every player "
+                "looking at the wrong channel, so it is refused. "
+                "`/reset-haunted-house` first if you really mean to start "
+                "over somewhere else.",
+                ephemeral=True,
+            )
+            return
+        await interaction.followup.send(
+            f"The game is already open in {channel.mention}, on drop "
+            f"{current}. Nothing changed.",
+            ephemeral=True,
+        )
+        return
+
+    try:
+        await database.set_announcement_channel(guild.id, channel.id)
+        await resolve.set_current_drop(guild.id, FIRST_DROP)
+        await content_loader.place_arrived(guild.id)
+    except (resolve.UnknownDrop, SQLAlchemyError, content.ContentError) as exc:
+        log.exception("Could not start the game in %s", guild.id)
+        await interaction.followup.send(
+            f"The game did not open: {exc}", ephemeral=True
+        )
+        return
+
+    log.info(
+        "AUDIT %s (%s) started the game in guild %s, channel %s, at drop %s",
+        interaction.user,
+        interaction.user.id,
+        guild.id,
+        channel.id,
+        FIRST_DROP,
+    )
+    opened = await _reregister(interaction, guild, FIRST_DROP)
+    await interaction.followup.send(
+        f"The game is open in {channel.mention}, on drop {FIRST_DROP}. There "
+        f"is a cat there and nothing else.\n"
+        f"- players here can now use {opened}\n"
+        "- `/advance-game` brings the next drop",
+        ephemeral=True,
+    )
+
+
+@bot.tree.command(
+    name="advance-game",
+    description="(Admin) Move this server forward exactly one drop.",
+)
+@app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
+@app_commands.checks.has_permissions(administrator=True)
+@app_commands.describe(
+    confirm="Leave this off once to see which drop is next before it opens.",
+)
+async def advance_game(interaction: discord.Interaction, confirm: bool = False) -> None:
+    """One drop forward, and only forward.
+
+    **It names the destination before going there.** Run without `confirm`
+    and it says which drop it would open; run again with it and the drop
+    opens. Cheaper than a button, and the confirmation says *which* drop
+    rather than merely asking twice.
+
+    **Backwards is not here.** That is `/qa-drop` on the test servers, and
+    `/reset-haunted-house back_to_drop` everywhere else - which may rewind
+    only because it has just wiped the progress that going back would
+    otherwise invalidate.
+    """
+    if interaction.guild is None:
+        await interaction.response.send_message(
+            "This command only works inside a server.", ephemeral=True
+        )
+        return
+
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    guild = interaction.guild
+
+    try:
+        current = await resolve.current_drop(guild.id)
+    except SQLAlchemyError:
+        log.exception("Could not read the drop in %s", guild.id)
+        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    if current is None:
+        await interaction.followup.send(
+            "There is no game in this server yet. `/start-game` opens one.",
+            ephemeral=True,
+        )
+        return
+
+    target = current + 1
+    if target > resolve.LAST_PLAYABLE_DROP:
+        await interaction.followup.send(
+            f"Drop {current} is the last one built. There is nothing to "
+            "advance into yet.",
+            ephemeral=True,
+        )
+        return
+
+    name = await resolve.drop_name(target)
+    titled = f": **{name}**" if name else ""
+    if not confirm:
+        await interaction.followup.send(
+            f"This would move the server from drop {current} to drop "
+            f"{target}{titled}, for everybody, now.\nRun it again with "
+            "`confirm` set to open it.",
+            ephemeral=True,
+        )
+        return
+
+    try:
+        await resolve.set_current_drop(guild.id, target)
+        placed = await content_loader.place_arrived(guild.id)
+    except (resolve.UnknownDrop, SQLAlchemyError, content.ContentError) as exc:
+        log.exception("Could not advance %s to drop %s", guild.id, target)
+        await interaction.followup.send(
+            f"The drop did not open: {exc}", ephemeral=True
+        )
+        return
+
+    log.info(
+        "AUDIT %s (%s) advanced guild %s from drop %s to drop %s",
+        interaction.user,
+        interaction.user.id,
+        guild.id,
+        current,
+        target,
+    )
+
+    announced = await _announce_drop(guild, target)
+    lines = [f"Drop {target}{titled} is open."]
+    if placed:
+        lines.append(f"- put {placed} new thing(s) in place")
+    await _reregister(interaction, guild, target)
+    arrived = gating.arrivals(current, target)
+    if arrived:
+        lines.append(
+            "- " + ", ".join(f"`/{name}`" for name in sorted(arrived)) + " appeared"
+        )
+    lines.append(
+        "- announced in the channel"
+        if announced
+        else f"- nothing posted; drop {target} has no announcement line"
+    )
+    await interaction.followup.send("\n".join(lines), ephemeral=True)
+
+
+async def _announce_drop(guild, drop_id: int) -> bool:
+    """Post a drop's arrival in the channel, if it has a line to post.
+
+    **Two messages, as everywhere else in this game.** The admin's
+    ephemeral reply says what the command did - which drop, what got
+    placed, whether this posted - and is nobody else's business. The
+    drop's own line is in-world and belongs to the server: everyone
+    standing in the channel sees the cat swat something across the floor,
+    and nothing in it names a drop, a command or an admin.
+
+    The hint that rides beneath it belongs to the hint rail and arrives
+    with it. The private firing of that hint stays either way, as the
+    fallback for anybody who was not looking at the channel when this
+    went out.
+    """
+    line = await phrasing.default_say(f"drop.{drop_id}.announce")
+    if not line:
+        return False
+    channel_id = await database.announcement_channel(guild.id)
+    channel = guild.get_channel(channel_id) if channel_id else None
+    if channel is None:
+        log.warning("Guild %s has no channel to announce drop %s in", guild.id, drop_id)
+        return False
+    await _post_quietly(channel, line)
+    return True
 
 
 @bot.tree.command(
@@ -795,11 +1204,13 @@ async def pet(interaction: discord.Interaction) -> None:
 @app_commands.describe(
     confirm="Type this server's name exactly. There is no undo.",
     keep_art="Keep the uploaded cat images, so a reset does not cost ten re-uploads.",
+    back_to_drop="Also rewind the game to this drop. Backwards only; leave it out to stay put.",
 )
 async def reset_haunted_house(
     interaction: discord.Interaction,
     confirm: str,
     keep_art: bool = True,
+    back_to_drop: int | None = None,
 ) -> None:
     """Put one server back to the morning before anybody entered.
 
@@ -818,6 +1229,20 @@ async def reset_haunted_house(
     **The calendar restarts too.** `initialized_on` lives in `server_config`
     and goes with the rest, so the next `/enter` is day one again - which is
     what makes this useful for testing the drop schedule.
+
+    **The drop and the channel survive by default.** Both live in
+    `server_config` and so are cleared with everything else, and both are
+    written straight back: wiping everyone's progress is not the same as
+    the house never having opened, and re-running `/start-game` plus one
+    `/advance-game` per drop after every reset is friction that grows with
+    the schedule.
+
+    `back_to_drop` is the way back. It only ever goes **backwards or
+    stays** - forward movement belongs to `/advance-game`, which confirms
+    and steps once. The rule that makes rewinding safe at all is that it
+    comes bundled with the wipe: a player cannot be left holding a drop-1
+    achievement on a drop-0 server, because that player has no achievements
+    left.
 
     The threads are left alone. `/initialize-haunted-house` rebuilds those,
     and wanting a clean game is not the same as wanting nine channels
@@ -843,6 +1268,39 @@ async def reset_haunted_house(
         )
         return
 
+    try:
+        current = await resolve.current_drop(guild.id)
+        channel_id = await database.announcement_channel(guild.id)
+    except SQLAlchemyError:
+        log.exception("Could not read the game's state before resetting %s", guild.id)
+        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    landing = current
+    if back_to_drop is not None:
+        if current is None:
+            await interaction.followup.send(
+                "There is no game in this server to rewind. Run "
+                "`/start-game` first.",
+                ephemeral=True,
+            )
+            return
+        if back_to_drop > current:
+            await interaction.followup.send(
+                f"This server is on drop {current}, and `back_to_drop` only "
+                f"goes backwards. Use `/advance-game` to move forward - it "
+                "goes one drop at a time, on purpose.",
+                ephemeral=True,
+            )
+            return
+        if back_to_drop not in await resolve.defined_drop_ids():
+            await interaction.followup.send(
+                f"There is no drop {back_to_drop} in the content files.",
+                ephemeral=True,
+            )
+            return
+        landing = back_to_drop
+
     keeping = {}
     if keep_art:
         try:
@@ -851,7 +1309,9 @@ async def reset_haunted_house(
             log.exception("Could not read the art before resetting %s", guild.id)
 
     try:
-        cleared = await content_loader.reset_guild(guild.id)
+        cleared = await content_loader.reset_guild(guild.id, drop=landing)
+        if channel_id is not None:
+            await database.set_announcement_channel(guild.id, channel_id)
         for art_id, url in keeping.items():
             await database.record_art(guild.id, art_id, url)
     except (content.ContentError, SQLAlchemyError) as exc:
@@ -863,6 +1323,9 @@ async def reset_haunted_house(
         )
         return
 
+    if landing != current:
+        await _reregister(interaction, guild, landing)
+
     placed = cleared.pop("_placed", 0)
     rows = sum(cleared.values())
     lines = [
@@ -872,6 +1335,12 @@ async def reset_haunted_house(
     ]
     if keeping:
         lines.append(f"- kept {len(keeping)} uploaded image(s)")
+    if landing is None:
+        lines.append("- no game here yet; `/start-game` opens one")
+    elif landing == current:
+        lines.append(f"- still on drop {landing}, in the same channel")
+    else:
+        lines.append(f"- rewound from drop {current} to drop {landing}")
     lines.append(
         "- day one starts again on the next `/enter`, and every player will "
         "need to run it"
@@ -881,54 +1350,6 @@ async def reset_haunted_house(
         lines.append("\n" + ", ".join(f"`{name}` {n}" for name, n in worst))
 
     await interaction.followup.send("\n".join(lines), ephemeral=True)
-
-
-@bot.tree.command(
-    name="post-welcome",
-    description="(Admin) Post the pinned welcome in the Halloween channel.",
-)
-@app_commands.guild_only()
-@app_commands.default_permissions(administrator=True)
-@app_commands.checks.has_permissions(administrator=True)
-async def post_welcome(interaction: discord.Interaction) -> None:
-    """Open the game.
-
-    Separate from building the house on purpose. Posting it automatically at
-    initialization would guarantee it exists and is correct, but it puts
-    writer copy inside an admin command where nobody would think to update
-    it - and, more usefully, keeping them apart lets the house be built days
-    before the game opens.
-
-    The copy lives in `defaults.tsv`, so a writer can change it without a
-    deploy and without anybody going near this function.
-    """
-    if interaction.guild is None:
-        await interaction.response.send_message(
-            "This command only works inside a server.", ephemeral=True
-        )
-        return
-
-    await interaction.response.defer(ephemeral=True, thinking=True)
-
-    channel = house_utils.find_channel(interaction.guild)
-    if channel is None:
-        await interaction.followup.send(
-            f"There's no #{house_utils.HALLOWEEN_CHANNEL_NAME} channel to post in.",
-            ephemeral=True,
-        )
-        return
-
-    text = await phrasing.default_say("welcome")
-    if not text:
-        await interaction.followup.send(
-            "The welcome copy is missing from defaults.tsv.", ephemeral=True
-        )
-        return
-
-    await _post_quietly(channel, text, ART_WELCOME)
-    await interaction.followup.send(
-        f"Posted in {channel.mention}. Pin it, and the house is open.", ephemeral=True
-    )
 
 
 @bot.tree.command(
@@ -1105,7 +1526,6 @@ ART_FOR_ACHIEVEMENT = {
     "getting_into_the_spirit": "eunoia_startled",
 }
 
-ART_WELCOME = "eunoia_alert"
 ART_FIRST_PET = "eunoia_alert"
 ART_CROWDING = "eunoia_suspicious"
 ART_DIAPER = "eunoia_sniffing"
@@ -1922,6 +2342,20 @@ async def look(interaction: discord.Interaction, thing: str | None = None) -> No
     user, guild_id = interaction.user, interaction.guild_id
 
     try:
+        # The channel is a room, and standing in it needs no player row:
+        # `/enter` does not exist at the drops where this is the only place
+        # there is. Checked before the game state for exactly that reason.
+        if await _in_the_channel(interaction):
+            if thing is None or not thing.strip():
+                await interaction.followup.send(
+                    await _look_in_the_channel(guild_id, user.id), ephemeral=True
+                )
+                return
+            await _look_at_one_thing(
+                interaction, guild_id, user.id, content.CHANNEL_ROOM, thing
+            )
+            return
+
         state = await database.get_game_state(user.id, guild_id)
         if state is None:
             await interaction.followup.send(NOT_IN_ROOM_MESSAGE, ephemeral=True)
@@ -1934,52 +2368,72 @@ async def look(interaction: discord.Interaction, thing: str | None = None) -> No
 
         if thing is None or not thing.strip():
             await interaction.followup.send(
-                await _look_around(guild_id, user.id, state.current_room), ephemeral=True
+                await _look_here(guild_id, user.id, state.current_room), ephemeral=True
             )
             return
 
-        found = await reach.find(
-            guild_id, user.id, state.current_room, thing, reach.Scope.REACH
+        await _look_at_one_thing(
+            interaction, guild_id, user.id, state.current_room, thing
         )
-
-        if isinstance(found, reach.Ambiguous):
-            await interaction.followup.send(
-                await phrasing.default_say(
-                    "ambiguous.match", options=", ".join(found.options)
-                ),
-                ephemeral=True,
-            )
-            return
-
-        if isinstance(found, reach.NotFound):
-            # Naming the room you are standing in is the same question as
-            # `/look` with no argument, and players ask it that way. Checked
-            # only after resolution fails, so a thing sharing a word with the
-            # room still wins - in the Courtyard `/look kitchen` is the back
-            # door, because that is what is in front of you.
-            if await _is_this_room(state.current_room, thing):
-                await interaction.followup.send(
-                    await _look_around(guild_id, user.id, state.current_room),
-                    ephemeral=True,
-                )
-                return
-
-            # One refusal per verb for a word the house does not know:
-            # `look_fail.unknown` here, `take_fail.unknown` in /take,
-            # `use_fail.unknown` in /use. They used to share one line, which
-            # meant any rewrite of it had to read sensibly after all three.
-            key = "take_fail.absent" if found.exists_elsewhere else "look_fail.unknown"
-            await interaction.followup.send(
-                await phrasing.default_say(key, name=thing.strip()), ephemeral=True
-            )
-            return
-
-        text, art = await _look_at(guild_id, user.id, state.current_room, found)
-        content_, embed = await _with_art(interaction.guild, text, art)
-        await interaction.followup.send(content_, embed=embed, ephemeral=True)
     except SQLAlchemyError:
         log.exception("Failed to look at %r in guild %s", thing, guild_id)
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+
+
+async def _look_at_one_thing(
+    interaction, guild_id: int, user_id: int, room_id: str, thing: str
+) -> None:
+    """`/look <thing>`, from wherever the player is standing.
+
+    Shared by the nine rooms and the channel. The only thing that differs
+    between them is which room is passed in - resolution, the two refusals
+    and the art all behave the same, and a second copy of this would be a
+    second place for them to drift.
+    """
+    found = await reach.find(guild_id, user_id, room_id, thing, reach.Scope.REACH)
+
+    if isinstance(found, reach.Ambiguous):
+        await interaction.followup.send(
+            await phrasing.default_say(
+                "ambiguous.match", options=", ".join(found.options)
+            ),
+            ephemeral=True,
+        )
+        return
+
+    if isinstance(found, reach.NotFound):
+        # Naming the room you are standing in is the same question as
+        # `/look` with no argument, and players ask it that way. Checked
+        # only after resolution fails, so a thing sharing a word with the
+        # room still wins - in the Courtyard `/look kitchen` is the back
+        # door, because that is what is in front of you.
+        if await _is_this_room(room_id, thing):
+            await interaction.followup.send(
+                await _look_here(guild_id, user_id, room_id), ephemeral=True
+            )
+            return
+
+        # One refusal per verb for a word the house does not know:
+        # `look_fail.unknown` here, `take_fail.unknown` in /take,
+        # `use_fail.unknown` in /use. They used to share one line, which
+        # meant any rewrite of it had to read sensibly after all three.
+        key = "take_fail.absent" if found.exists_elsewhere else "look_fail.unknown"
+        await interaction.followup.send(
+            await phrasing.default_say(key, name=thing.strip()), ephemeral=True
+        )
+        return
+
+    text, art = await _look_at(guild_id, user_id, room_id, found)
+    content_, embed = await _with_art(interaction.guild, text, art)
+    await interaction.followup.send(content_, embed=embed, ephemeral=True)
+
+
+async def _look_here(guild_id: int, user_id: int, room_id: str) -> str:
+    """Looking around, wherever "around" is. The channel is a list; a room
+    is its prose and then what is loose in it."""
+    if room_id == content.CHANNEL_ROOM:
+        return await _look_in_the_channel(guild_id, user_id)
+    return await _look_around(guild_id, user_id, room_id)
 
 
 async def _current_state(guild_id: int, user_id: int) -> str:
@@ -2031,6 +2485,48 @@ async def _look_around(guild_id: int, user_id: int, room_id: str) -> str:
         budget=phrasing.MESSAGE_LIMIT - len(description) - 2,
     )
     return f"{description}\n\n{line}" if line else description
+
+
+async def _in_the_channel(interaction) -> bool:
+    """Whether this command was run in the channel the game lives in.
+
+    Decided by id alone. A room thread has its own id, distinct from the
+    channel it hangs off, so this is already false inside one - and asking
+    the id rather than the type keeps it true of anything that behaves like
+    the channel, which is what the tests hand it.
+    """
+    if interaction.guild is None:
+        return False
+    here = getattr(interaction.channel, "id", None)
+    return here is not None and here == await database.announcement_channel(
+        interaction.guild_id
+    )
+
+
+async def _look_in_the_channel(guild_id: int, user_id: int) -> str:
+    """What is in the channel, as a list. There is no description.
+
+    **The channel has no prose, and that is the answer rather than a gap.**
+    A `room_text` row for it is a load error. In the house the division of
+    labour is that the writer's prose names the scenery and the `Also here:`
+    line carries what is loose; here there is no prose to do the first half,
+    so the list does both and names fixtures too.
+
+    **The cat is not in it.** Her row is `room_id = ALL` rather than the
+    channel's, so she falls out of this query for free - which is the
+    behaviour the work order asks for and the reason it asks: `/look cat`
+    is an easter egg, found rather than signposted, and a list reading
+    "a cat, a cat bed" would hand over the only discovery drops 0 and 1
+    have.
+    """
+    held = await states.in_force(guild_id, user_id)
+    entries = [
+        (name, 1)
+        for name, gate in await resolve.things_in_room(guild_id, content.CHANNEL_ROOM)
+        if states.passes(gate, held)
+    ]
+    line = await phrasing.listing(entries, prefix_key="channel.look_prefix")
+    return line or await phrasing.default_say("channel.look_empty")
 
 
 async def _look_at(
@@ -2442,88 +2938,159 @@ async def admin_config(interaction: discord.Interaction, key: str, value: int) -
 # of October for exactly the players who played the most.
 EMBED_LIMIT = 4096
 
-# What each kind is called in /stats. `group` says "server" because that is
-# the fact a reader needs: nobody earned it, everybody has it.
-KIND_HEADINGS = {
-    "public": "Achievements",
-    "secret": "Secret achievements",
-    "group": "Server achievements",
-}
-KIND_ORDER = ("public", "secret", "group")
+# `/stats` used to group earned achievements under three headings and
+# order them by `sort_order`. V3 lists them newest first and ungrouped, so
+# `KIND_HEADINGS`, `KIND_ORDER` and the `NOTHING_YET` line are gone: the
+# empty state is a writer's string in `defaults.tsv` now, and the kind of
+# an achievement is no longer something the player is shown.
 
-NOTHING_YET = (
-    "Nothing here yet. Pet the cat, open a few doors, and come back - "
-    "the house notices more than it lets on."
-)
+
+# The flag the quest notice reads: has this player ever opened `/stats`.
+# Lives in the notices table with the hints, because "true once something
+# has happened, per player, per server" is the same shape.
+OPENED_STATS = "opened_stats"
+
+# What a quest looks like in the list. The prompt carries no terminal full
+# stop - every string that gets interpolated into the end of another one
+# punctuates nothing - so the line supplies its own.
+QUEST_LINE = "**{name}** - {prompt}"
 
 
 @bot.tree.command(name="stats", description="See what you've earned, and how the cat feels.")
 @app_commands.guild_only()
 async def stats(interaction: discord.Interaction) -> None:
-    """Everything this player has earned, privately.
+    """Everything this player has, privately. Three parts, in order.
 
     **Ephemeral, always.** It carries unlock descriptions, which are the
-    spoilers the public announcement deliberately withholds - posting them in
-    the channel would defeat keeping that announcement to a name.
+    spoilers the public announcement deliberately withholds - posting
+    them in the channel would defeat keeping that announcement to a name.
 
-    Release 1 shows your own stats only. Looking up another member is a later
-    release and changes what the command has to protect.
+    **The relationship, as a figure and a sentence.** The number stays
+    visible and unrounded: it is the only thing telling a player which
+    way they are moving, and the four bands beneath it are deliberately
+    wide enough that it has to.
+
+    **And the pet count, which is here because there is nowhere else.**
+    2f took it out of `/pet` on the grounds that two hundred is better
+    as a surprise than as a countdown, and moved it here; section 7
+    lists three parts and does not mention it, which would have deleted
+    it from the game rather than moved it. A player chasing *Making
+    Friends* with no way to know where they are is a worse trade than a
+    number they can ignore.
+
+    **Open quests, only when there are any.** With three public quests in
+    the whole plan a player will spend long stretches with none, and a
+    standing "No open quests" reads as broken rather than as waiting. The
+    string for that exists and nothing reads it, in case testing
+    disagrees.
+
+    **Completed achievements, header always** - including when empty,
+    because its empty line is the only instruction anywhere in the game.
+    With no `/help` and no welcome text, hiding it would leave a first
+    `/stats` showing nothing but a number.
+
+    Opening it also marks every quest currently visible as seen, which is
+    what stops the notice telling a player about a quest they have just
+    read.
     """
     await interaction.response.defer(ephemeral=True)
     user, guild_id = interaction.user, interaction.guild_id
 
     try:
-        count = await database.get_pet_count(user.id, guild_id)
         relationship = await database.get_relationship(user.id, guild_id)
-        tally = await craving.tally(guild_id, user.id)
+        pets = await database.get_pet_count(user.id, guild_id)
+        quests = await resolve.open_quests(guild_id, user.id)
         earned = await _earned_lines(guild_id, user.id)
+        await _mark_quests_seen(guild_id, user.id, quests)
     except SQLAlchemyError:
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
         return
 
-    embed = discord.Embed(
-        title=f"{user.display_name}'s stats",
-        description=_fit(earned) if earned else NOTHING_YET,
-    )
-    # Always shown, including on day one, so the empty state reads as an
-    # invitation rather than an error.
-    embed.add_field(name="Pets", value=str(count))
-    embed.add_field(name="Relationship", value=str(relationship))
-    # Here rather than with the achievement that rewards it, so the daily game
-    # outlives being rewarded once.
-    embed.add_field(name="Cravings found", value=str(tally))
+    body = [
+        str(relationship),
+        await _relationship_band(relationship),
+        await phrasing.default_say("stats.pets", count=pets),
+        "",
+    ]
 
+    if quests:
+        body.append(f"**{await phrasing.default_say('stats.header.quests')}**")
+        body.extend(
+            QUEST_LINE.format(name=row.name, prompt=row.prompt) for row in quests
+        )
+        body.append("")
+
+    body.append(f"**{await phrasing.default_say('stats.header.achievements')}**")
+    body.extend(earned or [await phrasing.default_say("stats.achievements.empty")])
+
+    embed = discord.Embed(
+        title=f"{user.display_name}'s stats", description=_fit(body)
+    )
     await interaction.followup.send(embed=embed, ephemeral=True)
 
 
+async def _relationship_band(score: int) -> str:
+    """The sentence under the figure. Four bands, and zero is its own.
+
+    Zero is not "below zero rounded up": it is where everybody starts and
+    where the drift returns them, so it says the cat has no opinion
+    rather than that it is holding something against you.
+    """
+    if score >= database.PERFECT_RELATIONSHIP:
+        key = "stats.rel.strong"
+    elif score > 0:
+        key = "stats.rel.positive"
+    elif score < 0:
+        key = "stats.rel.negative"
+    else:
+        key = "stats.rel.zero"
+    return await phrasing.default_say(key) or ""
+
+
+async def _mark_quests_seen(guild_id: int, user_id: int, quests) -> None:
+    """Reading the list counts as being told about everything in it.
+
+    Both halves matter. The per-quest rows are what stop the notice
+    announcing a quest the player is looking at, and they are also the
+    order the list is drawn in next time. The `opened_stats` flag is the
+    other half of the condition that graduates the notice from "check
+    /stats" to naming the quest inline.
+    """
+    for row in quests:
+        await database.notice(guild_id, user_id, row.achievement_id)
+    await database.notice(guild_id, user_id, OPENED_STATS)
+
+
 async def _earned_lines(guild_id: int, user_id: int) -> list[str]:
-    """Every achievement this player has, as rendered lines, grouped by kind.
+    """Every achievement this player has, newest first.
 
     Nothing about achievements **not** yet earned: no count out of
-    thirty-five, no locked rows, no progress bars. A secret achievement's
+    forty-two, no locked rows, no progress bars. A secret achievement's
     existence is revealed by somebody earning it, not by this command.
 
-    A group achievement appears for every current member with nobody named as
-    the earner, because there is no earner - crediting whoever dropped the two
-    hundredth thing rewards arriving last at something everyone built.
+    **Newest first, and no longer grouped by kind.** `sort_order` used to
+    drive this and does not any more: a player opens `/stats` because
+    something just happened, and the thing that just happened should be
+    at the top. *Making First Contact* sits at the bottom forever, which
+    is right - it is the oldest thing they did.
+
+    A group achievement appears for every current member with nobody
+    named as the earner, because there is no earner. It is dated by when
+    the server earned it, so it sorts among a player's own.
+
+    Ties are broken on the id. Two achievements can land from one action
+    - carving a pumpkin on 15 October earns two - and in Postgres they
+    share a transaction timestamp, so without a tiebreak the same list
+    could render in two orders.
     """
     available = await resolve.achievements(guild_id)
     mine = await database.player_achievements_of(guild_id, user_id)
     ours = await database.server_achievements_of(guild_id)
-    held = set(mine) | set(ours)
+    when = {**ours, **mine}
 
-    lines = []
-    for kind in KIND_ORDER:
-        rows = sorted(
-            (row for key, row in available.items() if key in held and row.kind == kind),
-            key=lambda row: (row.sort_order, row.name),
-        )
-        if not rows:
-            continue
-        lines.append(f"**{KIND_HEADINGS[kind]}**")
-        lines.extend(f"**{row.name}** - {row.unlock}" for row in rows)
-        lines.append("")
-    return lines[:-1] if lines else []
+    rows = [(when[key], key, row) for key, row in available.items() if key in when]
+    rows.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    return [f"**{row.name}** - {row.unlock}" for _, _, row in rows]
 
 
 def _fit(lines: list[str]) -> str:

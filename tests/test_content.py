@@ -46,10 +46,10 @@ def problems_matching(c, fragment):
 
 def test_the_shipped_content_parses():
     c = content.load_files()
-    assert len(c.rooms) == 9
-    assert len(c.things) == 145
-    assert len(c.defaults) == 38
-    assert len(c.drops) == 2
+    assert len(c.rooms) == 10  # nine rooms and the channel
+    assert len(c.things) == 146  # the cat bed joined them
+    assert len(c.defaults) == 58  # V3 added twenty strings
+    assert len(c.drops) == 4      # 0 and 1 are built; 2 and 3 are named
     assert len(c.restocks) == 3
 
 
@@ -80,13 +80,20 @@ def test_there_are_twenty_exits_and_they_match_the_rooms(shipped):
 
 
 def test_the_secret_library_is_the_only_room_locked_at_launch(shipped):
+    """The channel is `open_at_launch = no` as well, for a different
+    reason: the Secret Library is found, and the channel is never walked
+    into at all."""
     locked = [r.room_id for r in shipped.rooms if not r.open_at_launch]
-    assert locked == ["SE"]
+    assert locked == ["SE", content.CHANNEL_ROOM]
 
 
-def test_lumber_is_the_only_thing_with_a_cooldown(shipped):
+def test_what_carries_a_cooldown(shipped):
+    """The staircase's two days between planks, and the bed's one day
+    between fluffs - rolling hours rather than a calendar day, which is
+    what this column already meant and what the design accepted rather
+    than coding around."""
     cooled = {t.thing_id: t.use_cooldown_hours for t in shipped.things if t.use_cooldown_hours}
-    assert cooled == {"lumber": 48}
+    assert cooled == {"lumber": 48, "cat_bed": 24}
 
 
 def test_quantity_many_parses_as_no_count(shipped):

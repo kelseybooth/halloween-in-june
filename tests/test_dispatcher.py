@@ -132,6 +132,9 @@ def test_every_hook_in_the_spec_exists():
         "on_message",
         "on_midnight",
         "on_cross",
+        # V3. The three score thresholds listen here rather than on
+        # `on_pet`, because the bed moves the meter too.
+        "on_relationship_change",
     }
 
 
@@ -288,12 +291,12 @@ async def test_a_group_achievement_is_earned_once_for_everybody(guild):
 async def test_an_achievement_whose_drop_has_not_arrived_cannot_be_earned(guild):
     """It does not exist on this server yet, and awarding it would announce a
     name nobody can read."""
-    from datetime import date, timedelta
+    import resolve
 
-    tomorrow = date.today() + timedelta(days=30)
-    parsed = a_calendar(a_drop(1, value="launch"), a_drop(2, value=str(tomorrow)))
+    parsed = a_calendar(a_drop(1), a_drop(2))
     parsed.achievements = [an_achievement("gourd_job", since_drop=2)]
     await content_loader.load_content(parsed)
+    await resolve.set_current_drop(GUILD_A, 1)
     achievements.register("gourd_job", "on_use", always)
 
     assert await achievements.fire(a_context(hook="on_use")) == []

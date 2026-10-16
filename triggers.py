@@ -84,8 +84,13 @@ BABY_BOTTLES = {"used_baby_bottle", "sanitized_baby_bottle"}
 BULK_BUYER_CANS = 25
 CATPROOF_BOTTLES = 5
 BURRITOS_EATEN = 10
+CAT_BED = "cat_bed"
 FRIENDLY_PETS = 200
-PERFECT_RELATIONSHIP = database.RELATIONSHIP_MAX
+
+# The three score thresholds, in the order a player meets them.
+PAW_IN_THE_DOOR = 50
+PERFECT_RELATIONSHIP = database.PERFECT_RELATIONSHIP  # 100
+FAVORITE_HUMAN = 250
 STRENGTH_IN_NUMBERS = 25
 MAKING_A_MESS = 200
 FELINE_COLLECTION_CANS = 100
@@ -368,37 +373,99 @@ async def bulk_buyer(context: Context) -> bool:
     return held >= BULK_BUYER_CANS
 
 
+async def _two_hundred_pets_in(context: Context) -> bool:
+    """Whether this player has petted the cat enough for the fork.
+
+    **"At least two hundred", not "exactly the two hundredth".** A check
+    that only fired on the 200th pet would be lost forever if the bot were
+    down, or if two pets raced, and the player would never earn either
+    half of a pair they had plainly qualified for.
+    """
+    total = context.extra.get("total")
+    if total is None:
+        total = await database.get_pet_count(context.user_id, context.guild_id)
+    return total >= FRIENDLY_PETS
+
+
+async def _already_forked(context: Context) -> bool:
+    """Whether this player holds the other half of the fork.
+
+    The two are mutually exclusive, and the only way to guarantee it is
+    for each to refuse while the other is held: both become true the
+    moment the count is reached, and which one lands depends on the sign
+    at that moment.
+    """
+    held = await database.player_achievements_of(context.guild_id, context.user_id)
+    return bool({"making_friends", "trying_to_make_friends"} & set(held))
+
+
 async def making_friends(context: Context) -> bool:
-    """Two hundred pets while the relationship was above zero."""
-    pets = await database.pets_while_relationship(
-        context.user_id, context.guild_id, positive=True
-    )
-    return pets >= FRIENDLY_PETS
+    """Two hundred pets, and the cat likes you at the end of them.
+
+    **One counter, evaluated once**, rather than two tallies of qualifying
+    pets. It used to count only the pets made while the meter was above
+    zero, which meant a player could pet two hundred times and earn
+    neither - half on each side of the line and neither tally reaching the
+    target. Now the count is every pet, and the sign *after* the pet that
+    reaches it decides which of the two fires.
+    """
+    if await _already_forked(context) or not await _two_hundred_pets_in(context):
+        return False
+    return await _score(context) > 0
 
 
 async def trying_to_make_friends(context: Context) -> bool:
-    """Two hundred pets while the relationship was at or below zero.
+    """Two hundred pets, and the cat still does not.
 
-    Zero counts here rather than toward *Making Friends*, which is the
-    boundary the Story Bible was revised to state. It matters on day one: a
-    new player starts the game at a relationship the first pet reads.
+    Zero counts here rather than toward *Making Friends* - the boundary
+    the Story Bible was revised to state, and the one the new player
+    starting at zero makes real.
     """
-    pets = await database.pets_while_relationship(
-        context.user_id, context.guild_id, positive=False
-    )
-    return pets >= FRIENDLY_PETS
+    if await _already_forked(context) or not await _two_hundred_pets_in(context):
+        return False
+    return await _score(context) <= 0
+
+
+async def _score(context: Context) -> int:
+    """This player's relationship, from the event if it carried one.
+
+    The three thresholds all read it, and all three are standing
+    conditions - true forever once true - which is what the idempotent
+    award exists for. Without it each would re-announce every time the
+    score moved for the rest of October.
+    """
+    score = context.extra.get("relationship")
+    if score is None:
+        score = await database.get_relationship(context.user_id, context.guild_id)
+    return score
+
+
+async def making_first_contact(context: Context) -> bool:
+    """The first pet that rolls friendly, and the spine of drop 0.
+
+    "First" needs no state: the award is idempotent, so this can be true
+    of every friendly pet for the rest of October and still land once.
+
+    Reads the roll rather than the score, because the score is the same
+    either way on a brand-new player - they start at nothing, and what
+    makes this a moment is that the cat let them.
+    """
+    return bool(context.extra.get("friendly"))
+
+
+async def a_paw_in_the_door(context: Context) -> bool:
+    """Fifty, and the first quest in the game."""
+    return await _score(context) >= PAW_IN_THE_DOOR
 
 
 async def cats_best_friend(context: Context) -> bool:
-    """A perfect relationship, which stays true forever once it is true.
+    """A hundred: as fond of you as the game has a name for."""
+    return await _score(context) >= PERFECT_RELATIONSHIP
 
-    The standing condition the idempotent award exists for: without it this
-    would re-announce on every `/pet` for the rest of October.
-    """
-    relationship = context.extra.get("relationship")
-    if relationship is None:
-        relationship = await database.get_relationship(context.user_id, context.guild_id)
-    return relationship >= PERFECT_RELATIONSHIP
+
+async def favorite_human(context: Context) -> bool:
+    """Two hundred and fifty, which the meter has no ceiling for a reason."""
+    return await _score(context) >= FAVORITE_HUMAN
 
 
 async def passing_a_message_to_david(context: Context) -> bool:
@@ -453,13 +520,28 @@ def register_all() -> None:
     add("met_the_craving", "on_reaction", met_the_craving)
     add("forwarding_address", "on_use", _blocked("the letter"))
 
+    # Drop 0 and drop 1: the proof of concept's own four.
+    add("making_first_contact", "on_pet", making_first_contact)
+    add("fluffed_to_perfection", "on_use", _used(CAT_BED))
+    # Drop 2 and drop 3. Final copy, no content yet - registered for the
+    # same reason the letter and the doorbell are, so that building the
+    # toy is a registration change rather than a reopened phase.
+    add("persuasive", "on_use", _blocked("the cat toy"))
+    add("impressively_bad_luck", "on_use", _blocked("the cat toy"))
+    add("bowl_half_empty", "on_use", _blocked("feeding the cat"))
+
     # Secret
     add("a_little_bit_lost", "on_move", a_little_bit_lost)
     add("out_on_a_limb", "on_move", out_on_a_limb)
     add("bulk_buyer", "on_take", bulk_buyer)
     add("making_friends", "on_pet", making_friends)
     add("trying_to_make_friends", "on_pet", trying_to_make_friends)
-    add("cats_best_friend", "on_pet", cats_best_friend)
+    # The three thresholds, all on the hook that fires wherever the score
+    # moves rather than on `on_pet`. Reaching 50 by fluffing the bed is
+    # the case that proves the difference.
+    add("a_paw_in_the_door", "on_relationship_change", a_paw_in_the_door)
+    add("cats_best_friend", "on_relationship_change", cats_best_friend)
+    add("favorite_human", "on_relationship_change", favorite_human)
     add("signed_sealed_delivered", "on_use", _blocked("the doorbell"))
     add("brewing_trouble", "on_use", _on_date(on_october(1), {KEURIG}))
     add("trash_panda", "on_use", _on_date(on_october(1), {TRASH_CAN}))

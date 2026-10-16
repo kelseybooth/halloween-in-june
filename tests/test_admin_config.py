@@ -85,15 +85,18 @@ async def test_an_unknown_key_is_refused_and_the_real_ones_listed(server):
 
 
 async def test_an_unknown_key_writes_nothing(server):
+    """Asserted against the key rather than against an empty table:
+    `server_config` is no longer only tunables - it also carries which
+    drop a server is on and which channel it lives in."""
     await configure("nonsense", 4)
 
     async with server._require_session()() as session:
-        from sqlalchemy import func, select
+        from sqlalchemy import select
 
-        rows = await session.scalar(
-            select(func.count()).select_from(database.ServerConfig)
-        )
-    assert rows == 0
+        rows = (
+            await session.execute(select(database.ServerConfig.key))
+        ).scalars().all()
+    assert "nonsense" not in rows
 
 
 @pytest.mark.parametrize("value", [0, -1, -100])
@@ -196,14 +199,19 @@ def commands():
     return {c.name: c for c in bot.bot.tree.get_commands()}
 
 
-def test_there_are_twelve_commands():
-    """Ten were registered in one sync at the end of 2c. `/post-welcome`
-    opens the game and `/reset-haunted-house` wipes one server's, and both
-    are admin commands nobody runs twice in a day.
+def test_there_are_fourteen_commands():
+    """Ten were registered in one sync at the end of 2c, then
+    then `/reset-haunted-house`, and now `/start-game` and
+    `/advance-game`. `/post-welcome` went the other way: V3 ships with no
+    welcome text, and the copy is parked in `defaults.tsv` under a key
+    nothing reads.
 
-    Changing this list costs an hour of propagation and stale signatures in
-    between, which is why the count is pinned rather than left to drift."""
-    assert len(commands()) == 12
+    The count is pinned rather than left to drift, though the reason is
+    about to change: Phase 3a registers a server's command set per guild
+    and per drop, so what matters will become which of these a player can
+    see rather than how many exist."""
+    assert len(commands()) == 13
+    assert {"start-game", "advance-game"} <= set(commands())
 
 
 def test_the_two_testing_tools_are_gone():
@@ -223,7 +231,7 @@ def test_the_player_commands_are_registered(name):
 
 @pytest.mark.parametrize(
     "name",
-    ["initialize-haunted-house", "admin_config", "post-welcome",
+    ["initialize-haunted-house", "admin_config",
      "reset-haunted-house"],
 )
 def test_the_admin_commands_are_registered(name):

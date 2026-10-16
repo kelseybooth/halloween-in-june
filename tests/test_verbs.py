@@ -1090,13 +1090,25 @@ async def test_a_can_cannot_be_opened_yet(real_house):
     assert await db.carried_of(ALICE, GUILD_A, "cat_food_tuna") == 1
 
 
-async def test_the_opener_is_not_in_the_game_yet(real_house):
-    """It waits on a drop nobody has fired, so the gate can never be met and
-    every can refuses."""
+async def test_the_opener_now_arrives_with_the_house(real_house):
+    """**This used to assert the opposite**, and the change is a real one
+    rather than a test being brought into line.
+
+    The opener waited on a manual drop nobody had fired, so the gate could
+    never be met and every can refused. V3's renumbering moved every
+    Release 1 row to drop 3 uniformly - the content spec's decision, on the
+    grounds that per-row accuracy for drops 3 through 7 belongs to whoever
+    builds those drops - and the opener went with them. From the drop the
+    house opens, the cans can be opened.
+
+    Recorded here rather than left to be discovered, because it is a
+    gameplay change hiding inside a bulk edit: whoever builds drop 3 should
+    decide whether the opener still belongs in it.
+    """
     parsed = content_module.load_files()
 
-    assert parsed.things_by_id["can_opener"].since_drop == 2
-    assert parsed.drops_by_id[2].trigger == "manual"
+    assert parsed.things_by_id["can_opener"].since_drop == 3
+    assert parsed.things_by_id["coat_rack"].since_drop == 3
 
 
 @pytest.mark.parametrize(

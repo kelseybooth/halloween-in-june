@@ -62,18 +62,31 @@ RECENT_PET_WINDOW = timedelta(minutes=10)
 # A real zone, not a fixed offset, so midnight stays midnight across DST.
 PACIFIC = ZoneInfo("America/Los_Angeles")
 
+# The floor, and there is deliberately no ceiling. A grudge bottoms out -
+# a cat that already wants nothing to do with you cannot want less - but
+# affection is the thing the game is about, and *Favorite Human* asks for
+# 250. A clamp at 100 would have made that unreachable while looking like
+# a balance number rather than a bug.
 RELATIONSHIP_MIN = -100
-RELATIONSHIP_MAX = 100
 
-# Where a brand-new player starts. Above neutral, so the cat is friendly by
-# default and has to be annoyed into hostility - but this is a starting point,
-# not a resting one: the nightly decay below still pulls an inactive player back
-# to 0, so a new player who never returns drifts to neutral over five days.
-# Referenced by both the model default and the ALTER in _add_missing_columns;
-# keep them reading from here so the two cannot disagree.
-RELATIONSHIP_START = 50
+# Not the clamp any more: the score at which the cat is as fond of you as
+# the game has a name for. *Cat's Best Friend* reads this and nothing
+# else does.
+PERFECT_RELATIONSHIP = 100
 
-# Nightly drift back toward neutral, applied only to users who did not pet that day.
+# Where a brand-new player starts: nowhere. The cat has no opinion of
+# somebody it has never met, and every point after this one was earned.
+# Starting above neutral made the first several days a slow loss of
+# something the player was given rather than a gain of something they
+# did, and the drift pulled them to 0 whether they played or not.
+#
+# Referenced by both the model default and the ALTER in
+# _add_missing_columns; keep them reading from here so the two cannot
+# disagree.
+RELATIONSHIP_START = 0
+
+# Nightly drift back toward neutral, applied only to players who did not
+# touch the cat at all that day - see `last_cat_interaction_date`.
 DECAY_POSITIVE_THRESHOLD = 10   # at or above this, affection fades...
 DECAY_POSITIVE_STEP = 10        # ...by this much, never past 0
 DECAY_NEGATIVE_THRESHOLD = -20  # at or below this, grudges soften...
@@ -186,6 +199,12 @@ class User(Base):
     # Last Pacific day the nightly decay was evaluated for this row. Lets the
     # bot catch up on days it was offline without double-applying any of them.
     last_decay_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    # The last Pacific day this player touched the cat in this server, by
+    # any means and whether or not it worked. One column rather than four
+    # branches in the decay query, and the reason it is a date rather than
+    # a count is that the drift only ever asks "was this player here".
+    last_cat_interaction_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -210,8 +229,17 @@ class PetEvent(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    # The relationship score as it stood *before* this pet applied. Two
-    # achievements count 200 pets while the relationship was positive or
+    # The relationship score as it stood *before* this pet applied.
+    #
+    # **Nothing reads this any more.** Two achievements used to count the
+    # pets made on each side of zero, and V3 made them one counter of
+    # every pet with the sign checked once at two hundred - so the column
+    # is now a record of how a player's meter moved rather than a source
+    # of truth for anything. Kept because that history cannot be
+    # reconstructed afterwards and is the only way to see the shape of a
+    # relationship over a month; delete it if nobody ever looks.
+    #
+    # Formerly: two achievements counted 200 pets while the score was
     # negative, and no other table can answer that after the fact - the score is
     # a running total, so history cannot be reconstructed from it. Recorded now,
     # ahead of the achievements themselves, because the only moment backfill is
@@ -644,25 +672,6 @@ class ThingUse(Base):
     use_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
-class ServerDrop(Base):
-    """A drop that has arrived on this server, recorded so it cannot un-arrive.
-
-    Only `event` and `manual` drops need rows. A `date` drop is answered by the
-    calendar every time it is asked, so storing it would be a second source of
-    truth. The reason arrival is recorded at all is that a condition can stop
-    being true - a counter falls back, a thing is taken - and content must not
-    vanish from a house it has already changed.
-    """
-
-    __tablename__ = "server_drops"
-
-    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
-    drop_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
-    arrived_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-
-
 class ServerRestock(Base):
     """Where a server has got to in one restock schedule.
 
@@ -781,6 +790,43 @@ class Achievement(Base):
     unlock: Mapped[str] = mapped_column(Text, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # A public achievement with a prerequisite is a quest: shown before it
+    # is earned, in the prospective wording, to the players who hold what
+    # it asks for.
+    offered: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    requires: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
+class PlayerNotice(Base):
+    """What this player has already been told, once per thing.
+
+    One table for three jobs, because they are the same shape and the
+    alternative is three tables of two columns: the hints they have seen,
+    the quests they have been notified about, and the flags that are
+    simply true once something has happened - `opened_stats` is one.
+
+    A handful of rows per player. `/qa-reset-player` must clear it, or
+    the hint ladder is one-shot per tester per server.
+
+    The autoincrementing id is load-bearing rather than decoration: it is
+    the order quests became visible, which is the order `/stats` lists
+    them in.
+    """
+
+    __tablename__ = "player_notices"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    notice_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    noticed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("guild_id", "user_id", "notice_id", name="uq_player_notice"),
+    )
 
 
 class PlayerAchievement(Base):
@@ -864,6 +910,10 @@ async def _reject_pre_guild_schema(conn) -> None:
 _LATER_COLUMNS: list[tuple[str, str, str]] = [
     ("users", "relationship", f"INTEGER NOT NULL DEFAULT {RELATIONSHIP_START}"),
     ("users", "last_decay_date", "DATE"),
+    ("users", "last_cat_interaction_date", "DATE"),
+    ("achievements", "offered", "BOOLEAN NOT NULL DEFAULT FALSE"),
+    ("achievements", "prompt", "TEXT"),
+    ("achievements", "requires", "VARCHAR(64)"),
     ("things", "cohort", "VARCHAR(1)"),
     ("thing_types", "consumed_on_use", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ("thing_text", "move_depart", "TEXT"),
@@ -1161,11 +1211,15 @@ async def increment_pet_count(user_id: int, guild_id: int) -> PetResult:
 
 
 async def adjust_relationship(user_id: int, guild_id: int, delta: int) -> int:
-    """Move this player's relationship in this server by `delta`, clamped to [-100, 100].
+    """Move this player's relationship in this server by `delta`.
 
-    The clamp is expressed as a SQL CASE so the read, the arithmetic and the
-    write are one atomic statement - two rapid pets cannot both read the same
-    starting value and lose an update between them.
+    Floored at RELATIONSHIP_MIN and **not capped**. A grudge bottoms out,
+    because a cat that already wants nothing to do with you cannot want
+    less; affection does not, because the game asks for 250 of it.
+
+    The floor is expressed as a SQL CASE so the read, the arithmetic and
+    the write are one atomic statement - two rapid pets cannot both read
+    the same starting value and lose an update between them.
     """
     session_factory = _require_session()
 
@@ -1175,7 +1229,6 @@ async def adjust_relationship(user_id: int, guild_id: int, delta: int) -> int:
         .where(User.id == user_id, User.guild_id == guild_id)
         .values(
             relationship=case(
-                (moved > RELATIONSHIP_MAX, RELATIONSHIP_MAX),
                 (moved < RELATIONSHIP_MIN, RELATIONSHIP_MIN),
                 else_=moved,
             ),
@@ -1198,6 +1251,36 @@ async def adjust_relationship(user_id: int, guild_id: int, delta: int) -> int:
     except SQLAlchemyError:
         log.exception("Failed to adjust relationship for %s in guild %s", user_id, guild_id)
         raise
+
+
+async def touched_the_cat(user_id: int, guild_id: int, day: date) -> None:
+    """Record that this player interacted with the cat today.
+
+    **Attempts count, not just successes.** Three of the four ways to
+    touch the cat can fail - the toy's first offer is a guaranteed
+    refusal, the bed refuses inside its window, and a pet can roll
+    standoffish. The drift exists to notice absence, and a player who
+    tried four times was not absent.
+
+    Called from every one of them, which is why it is one column and not
+    a branch per interaction in the nightly query.
+    """
+    session_factory = _require_session()
+    try:
+        async with session_factory() as session:
+            await session.execute(
+                update(User)
+                .where(User.id == user_id, User.guild_id == guild_id)
+                .values(last_cat_interaction_date=day)
+            )
+            await session.commit()
+    except SQLAlchemyError:
+        # Decoration on an action that has already happened. Losing the
+        # stamp costs the player ten points overnight, which is worth less
+        # than failing the command they actually ran.
+        log.exception(
+            "Could not stamp a cat interaction for %s in guild %s", user_id, guild_id
+        )
 
 
 async def get_relationship(user_id: int, guild_id: int) -> int:
@@ -1420,42 +1503,41 @@ class LookResult(NamedTuple):
 async def apply_daily_decay(day: date) -> list[DecayChange]:
     """Settle one Pacific calendar day, drifting idle players back toward neutral.
 
-    Each (player, server) row is independent: a player is skipped in a server
-    only if they petted *in that server* during `day`. Rows at or above
-    DECAY_POSITIVE_THRESHOLD lose DECAY_POSITIVE_STEP without crossing below 0;
-    rows at or below DECAY_NEGATIVE_THRESHOLD gain DECAY_NEGATIVE_STEP without
-    crossing above 0. Scores between those thresholds are left alone.
+    Each (player, server) row is independent: a player is skipped in a
+    server only if they touched the cat *in that server* during `day` -
+    petting it, playing with it, fluffing its bed or feeding it, and
+    whether or not any of those worked. It used to be petting alone, which
+    would have meant a player who spent the evening fluffing the bed and
+    offering the toy still lost ten points for not having petted.
+
+    Rows at or above DECAY_POSITIVE_THRESHOLD lose DECAY_POSITIVE_STEP
+    without crossing below 0; rows at or below DECAY_NEGATIVE_THRESHOLD
+    gain DECAY_NEGATIVE_STEP without crossing above 0. Scores between those
+    thresholds are left alone.
 
     Every row considered has `last_decay_date` stamped to `day`, so a restart
     cannot apply the same night twice.
     """
     session_factory = _require_session()
-    start, end = pacific_day_bounds_utc(day)
     changes: list[DecayChange] = []
 
     try:
         async with session_factory() as session:
             pending = (
                 await session.execute(
-                    select(User.id, User.guild_id, User.relationship).where(
+                    select(
+                        User.id,
+                        User.guild_id,
+                        User.relationship,
+                        User.last_cat_interaction_date,
+                    ).where(
                         (User.last_decay_date.is_(None)) | (User.last_decay_date < day)
                     )
                 )
             ).all()
 
-            for user_id, guild_id, score in pending:
-                petted = await session.scalar(
-                    select(func.count())
-                    .select_from(PetEvent)
-                    .where(
-                        PetEvent.user_id == user_id,
-                        PetEvent.guild_id == guild_id,
-                        PetEvent.created_at >= start,
-                        PetEvent.created_at < end,
-                    )
-                )
-
-                if not petted:
+            for user_id, guild_id, score, touched in pending:
+                if touched != day:
                     if score >= DECAY_POSITIVE_THRESHOLD:
                         new_score = max(0, score - DECAY_POSITIVE_STEP)
                     elif score <= DECAY_NEGATIVE_THRESHOLD:
@@ -2056,36 +2138,6 @@ async def use_count_of(user_id: int, guild_id: int, thing_id: str) -> int:
     return int(count or 0)
 
 
-async def pets_while_relationship(
-    user_id: int, guild_id: int, *, positive: bool
-) -> int:
-    """Pets by this player with the relationship above zero, or at or below.
-
-    The split is `> 0` against `<= 0`, so a pet at exactly zero counts toward
-    *Trying to Make Friends*. The Story Bible was revised from "negative" to
-    "zero or below" for exactly this boundary, and a relationship starting at
-    zero means the first pet of the game lands on it.
-
-    Reads `relationship_at_pet`, which is the score as it stood *before* the
-    pet applied - the running total cannot answer this after the fact.
-    """
-    session_factory = _require_session()
-    condition = (
-        PetEvent.relationship_at_pet > 0 if positive else PetEvent.relationship_at_pet <= 0
-    )
-    async with session_factory() as session:
-        count = await session.scalar(
-            select(func.count())
-            .select_from(PetEvent)
-            .where(
-                PetEvent.guild_id == guild_id,
-                PetEvent.user_id == user_id,
-                condition,
-            )
-        )
-    return int(count or 0)
-
-
 async def art_urls(guild_id: int) -> dict[str, str]:
     """Every image this server has uploaded, by art_id."""
     session_factory = _require_session()
@@ -2302,6 +2354,92 @@ CONFIG_KEYS: dict[str, tuple[int, str]] = {
         "How many used baby bottles are scattered through the house each day.",
     ),
 }
+
+
+# --------------------------------------------------------------------------
+# What a player has already been told
+# --------------------------------------------------------------------------
+
+
+async def notice(guild_id: int, user_id: int, notice_id: str) -> bool:
+    """Record that this player has been told one thing. False if they had.
+
+    The return value is the whole point for a hint: it fires on the
+    transition, so a caller can say "if await notice(...)" and append the
+    line only the first time.
+    """
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    stmt = (
+        insert(PlayerNotice)
+        .values(guild_id=guild_id, user_id=user_id, notice_id=notice_id)
+        .on_conflict_do_nothing(
+            index_elements=[
+                PlayerNotice.guild_id,
+                PlayerNotice.user_id,
+                PlayerNotice.notice_id,
+            ]
+        )
+        .returning(PlayerNotice.id)
+    )
+    try:
+        async with session_factory() as session:
+            created = (await session.execute(stmt)).scalar_one_or_none()
+            await session.commit()
+            return created is not None
+    except SQLAlchemyError:
+        # Decoration on something that has already happened. Losing the
+        # row means a hint may be shown twice, which is better than
+        # failing the command that carried it.
+        log.exception("Could not record notice %s for %s", notice_id, user_id)
+        return False
+
+
+async def has_been_told(guild_id: int, user_id: int, notice_id: str) -> bool:
+    session_factory = _require_session()
+    async with session_factory() as session:
+        found = await session.scalar(
+            select(PlayerNotice.id).where(
+                PlayerNotice.guild_id == guild_id,
+                PlayerNotice.user_id == user_id,
+                PlayerNotice.notice_id == notice_id,
+            )
+        )
+    return found is not None
+
+
+async def notice_order(guild_id: int, user_id: int) -> dict[str, int]:
+    """Everything this player has been told, by the order it was told.
+
+    The id rather than the timestamp: two notices written in one
+    transaction share a `now()` in Postgres, and the order still has to
+    be total for `/stats` to render the same way twice.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(PlayerNotice.notice_id, PlayerNotice.id).where(
+                PlayerNotice.guild_id == guild_id,
+                PlayerNotice.user_id == user_id,
+            )
+        )
+    return {notice_id: row_id for notice_id, row_id in rows}
+
+
+async def get_config_raw(guild_id: int, key: str) -> str | None:
+    """One setting exactly as stored, or None if this server has never set it.
+
+    `get_setting` answers with a default, which is right for a tunable and
+    wrong for the drop pointer: there, "never set" is a state of its own and
+    0 is a real drop.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        return await session.scalar(
+            select(ServerConfig.value).where(
+                ServerConfig.guild_id == guild_id, ServerConfig.key == key
+            )
+        )
 
 
 async def get_setting(guild_id: int, key: str) -> int:

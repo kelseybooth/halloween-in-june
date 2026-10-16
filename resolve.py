@@ -9,12 +9,22 @@ Every content row carries `since_drop`. A row whose drop has not arrived is
 loaded, present, and simply not yet reachable: text for it resolves to an earlier
 drop's row, and things from it are not placed. When the drop arrives the row
 starts winning, with no deploy and no migration.
+
+**A server sits on one drop at a time, and that pointer is the whole rule.**
+Everything numbered at or below it has arrived; everything above it has not.
+Two servers can sit on different drops at once, which is what lets one be
+played while another is tested a week ahead.
+
+The pointer starts unset, which is not the same as drop 0: a server where
+nobody has run `/start-game` has no game, and no content at all is reachable
+in it. The calendar that used to answer this is gone for V3 - drops advance
+by admin command only, and dates return once a few servers have run and the
+pacing is known.
 """
 
 from __future__ import annotations
 
 import logging
-from datetime import date
 from typing import NamedTuple, Sequence
 
 from sqlalchemy import select
@@ -23,99 +33,94 @@ import database
 
 log = logging.getLogger(__name__)
 
-# A date drop carrying this arrives the moment a server initializes, rather than
-# on a calendar date. Every Release 1 row uses it.
-LAUNCH = "launch"
-
 DEFAULT_STATE = "default"
+
+# Where a server's drop pointer lives. Deliberately not in `CONFIG_KEYS`:
+# `/admin_config` tunes numbers an admin may reasonably want to change
+# mid-game, and which drop a server is on is not one of them. It moves by
+# `/start-game`, `/advance-game` and nothing else.
+DROP_KEY = "current_drop"
+
+# What an unset pointer reads as. Not 0, which is a real drop.
+NO_GAME = None
+
+# The furthest `/advance-game` will take a server. `drops.tsv` defines drops
+# the content already waits on - every Release 1 row sits at drop 3 - but
+# defining a drop is not the same as having built it, and "the last defined
+# drop" would walk a live server into one with no commands and no content.
+#
+# A constant rather than a per-server setting: there is no reason for two
+# servers to disagree about which drops exist, and the test servers get
+# anywhere they like through `/qa-drop`. Raise it when drop 2 ships.
+LAST_PLAYABLE_DROP = 1
 
 
 class UnknownDrop(Exception):
     """An admin tried to fire a drop the content files do not define."""
 
 
-def _has_date_arrived(value: str | None, today: date) -> bool:
-    """Whether a `date` trigger has come due.
+async def current_drop(guild_id: int) -> int | None:
+    """Which drop this server is on, or None if its game has not started.
 
-    Answered from the calendar every time it is asked rather than recorded, so a
-    dated drop lands at the same moment on every server and there is only one
-    source of truth for it. An unparseable date is treated as not yet arrived:
-    content appearing early because of a typo is worse than content appearing
-    late, and the loader rejects the file anyway.
+    The distinction matters: drop 0 is a channel with a cat in it, and
+    `None` is a server the bot is merely a member of.
     """
-    if not value:
-        return False
-    if value.strip().lower() == LAUNCH:
-        return True
+    raw = await database.get_config_raw(guild_id, DROP_KEY)
+    if raw is None:
+        return NO_GAME
     try:
-        return date.fromisoformat(value.strip()) <= today
+        return int(raw)
     except ValueError:
-        log.warning("Drop has an unreadable date %r; treating it as not yet arrived", value)
-        return False
+        log.warning(
+            "server_config %s is %r in guild %s, which is not a drop number; "
+            "treating the game as not started",
+            DROP_KEY,
+            raw,
+            guild_id,
+        )
+        return NO_GAME
 
 
-async def arrived_drop_ids(guild_id: int, *, today: date | None = None) -> set[int]:
+async def set_current_drop(guild_id: int, drop_id: int) -> None:
+    """Move this server to a drop, which must be one the files define.
+
+    Forward and backward both go through here. Only `/advance-game` and the
+    QA commands call it, and only `/advance-game` is on the live server.
+    """
+    if drop_id not in await defined_drop_ids():
+        raise UnknownDrop(f"No drop {drop_id} in the content files")
+    await database.set_setting(guild_id, DROP_KEY, drop_id)
+    log.info("Guild %s is now on drop %s", guild_id, drop_id)
+
+
+async def defined_drop_ids() -> set[int]:
+    """Every drop the content files define, whether or not anyone is on it."""
+    session_factory = database._require_session()
+    async with session_factory() as session:
+        rows = await session.execute(select(database.Drop.drop_id))
+    return {row[0] for row in rows}
+
+
+async def drop_name(drop_id: int) -> str | None:
+    """What the files call a drop, for an admin about to open one."""
+    session_factory = database._require_session()
+    async with session_factory() as session:
+        return await session.scalar(
+            select(database.Drop.name).where(database.Drop.drop_id == drop_id)
+        )
+
+
+async def arrived_drop_ids(guild_id: int) -> set[int]:
     """Every drop that has arrived on this server.
 
-    Dated drops are computed. Event and manual drops are read from server_drops,
-    never re-evaluated: a condition can stop being true - a counter falls back, a
-    thing is taken out of a room - and content must not vanish from a house it
-    has already changed.
+    One rule: at or below the pointer. A server with no pointer has nothing,
+    which is why a bot sitting in a server nobody has started shows that
+    server's members no content at all.
     """
-    today = today or database.pacific_today()
-    session_factory = database._require_session()
-
-    async with session_factory() as session:
-        rows = (
-            await session.execute(select(database.Drop.drop_id, database.Drop.trigger, database.Drop.date))
-        ).all()
-        recorded = {
-            row[0]
-            for row in await session.execute(
-                select(database.ServerDrop.drop_id).where(
-                    database.ServerDrop.guild_id == guild_id
-                )
-            )
-        }
-
-    arrived = set()
-    for drop_id, trigger, value in rows:
-        if trigger == "date":
-            if _has_date_arrived(value, today):
-                arrived.add(drop_id)
-        elif drop_id in recorded:
-            arrived.add(drop_id)
-    return arrived
-
-
-async def record_arrival(guild_id: int, drop_id: int) -> bool:
-    """Mark an event or manual drop as arrived. False if it already had.
-
-    Permanent by design. This is the write that makes an arrival survive the
-    condition that caused it going away again.
-    """
-    session_factory = database._require_session()
-    async with session_factory() as session:
-        known = await session.scalar(
-            select(database.Drop.drop_id).where(database.Drop.drop_id == drop_id)
-        )
-        if known is None:
-            raise UnknownDrop(f"No drop {drop_id} in the content files")
-
-        already = await session.scalar(
-            select(database.ServerDrop.drop_id).where(
-                database.ServerDrop.guild_id == guild_id,
-                database.ServerDrop.drop_id == drop_id,
-            )
-        )
-        if already is not None:
-            return False
-
-        session.add(database.ServerDrop(guild_id=guild_id, drop_id=drop_id))
-        await session.commit()
-
-    log.info("Drop %s arrived in guild %s", drop_id, guild_id)
-    return True
+    current = await current_drop(guild_id)
+    if current is NO_GAME:
+        return set()
+    return {d for d in await defined_drop_ids() if d <= current}
 
 
 def _best(rows, arrived: set[int], state, column: str) -> str | None:
@@ -147,10 +152,10 @@ def _best(rows, arrived: set[int], state, column: str) -> str | None:
 
 
 async def room_look(
-    guild_id: int, room_id: str, state: str = DEFAULT_STATE, *, today: date | None = None
+    guild_id: int, room_id: str, state: str = DEFAULT_STATE
 ) -> str | None:
     """The description of a room as this server currently sees it."""
-    arrived = await arrived_drop_ids(guild_id, today=today)
+    arrived = await arrived_drop_ids(guild_id)
     session_factory = database._require_session()
     async with session_factory() as session:
         rows = (
@@ -176,8 +181,6 @@ async def thing_text(
     thing_id: str,
     column: str,
     state: "str | Sequence[str]" = DEFAULT_STATE,
-    *,
-    today: date | None = None,
 ) -> str | None:
     """One column of a thing's text, resolved for state and arrived drops.
 
@@ -187,7 +190,7 @@ async def thing_text(
     if column not in database.ThingText.__table__.columns:
         raise ValueError(f"{column!r} is not a thing text column")
 
-    arrived = await arrived_drop_ids(guild_id, today=today)
+    arrived = await arrived_drop_ids(guild_id)
     session_factory = database._require_session()
     async with session_factory() as session:
         rows = (
@@ -216,13 +219,13 @@ async def default_text(key: str) -> str | None:
         )
 
 
-async def visible_thing_ids(guild_id: int, *, today: date | None = None) -> set[str]:
+async def visible_thing_ids(guild_id: int) -> set[str]:
     """Things whose drop has arrived on this server.
 
     A thing from a later drop is loaded and inert: not placed, not listed, not
     resolvable. This is the gate the loader consults before placing anything.
     """
-    arrived = await arrived_drop_ids(guild_id, today=today)
+    arrived = await arrived_drop_ids(guild_id)
     session_factory = database._require_session()
     async with session_factory() as session:
         rows = (
@@ -233,6 +236,41 @@ async def visible_thing_ids(guild_id: int, *, today: date | None = None) -> set[
     return {thing_id for thing_id, since_drop in rows if since_drop in arrived}
 
 
+async def things_in_room(guild_id: int, room_id: str) -> list[tuple[str, str | None]]:
+    """(name, present_when) for everything whose home is this room.
+
+    Every type, fixtures and sources included, which is what separates this
+    from `loose_here`: that one reads `room_contents` and so sees only the
+    finite objects that were placed. In the house the difference does not
+    matter, because a room's prose names its own scenery - the stove, the
+    mirror, the bulletin board. The channel has no prose, so its list is
+    the only thing that can name anything.
+
+    Exits are left out: a door is not an item in the room, and the channel
+    has none anyway.
+    """
+    arrived = await arrived_drop_ids(guild_id)
+    session_factory = database._require_session()
+    async with session_factory() as session:
+        rows = (
+            await session.execute(
+                select(
+                    database.ThingType.name,
+                    database.ThingType.present_when,
+                    database.ThingType.since_drop,
+                    database.ThingType.type,
+                )
+                .where(database.ThingType.room_id == room_id)
+                .order_by(database.ThingType.sort_order, database.ThingType.thing_id)
+            )
+        ).all()
+    return [
+        (name, gate)
+        for name, gate, since_drop, kind in rows
+        if since_drop in arrived and kind != "exit"
+    ]
+
+
 class AchievementRow(NamedTuple):
     """An achievement as one server currently sees it."""
 
@@ -241,11 +279,12 @@ class AchievementRow(NamedTuple):
     name: str
     unlock: str
     sort_order: int
+    offered: bool = False
+    prompt: str | None = None
+    requires: str | None = None
 
 
-async def achievements(
-    guild_id: int, *, today: date | None = None
-) -> dict[str, AchievementRow]:
+async def achievements(guild_id: int) -> dict[str, AchievementRow]:
     """Every achievement that exists on this server, by id.
 
     Same resolution as every other content row: within an id, the highest
@@ -257,7 +296,7 @@ async def achievements(
     of one row, which is the same work spread thinner and goes stale the
     moment content reloads.
     """
-    arrived = await arrived_drop_ids(guild_id, today=today)
+    arrived = await arrived_drop_ids(guild_id)
     session_factory = database._require_session()
     async with session_factory() as session:
         rows = (
@@ -269,21 +308,66 @@ async def achievements(
                     database.Achievement.name,
                     database.Achievement.unlock,
                     database.Achievement.sort_order,
+                    database.Achievement.offered,
+                    database.Achievement.prompt,
+                    database.Achievement.requires,
                 )
             )
         ).all()
 
     best: dict[str, tuple[int, AchievementRow]] = {}
-    for achievement_id, since_drop, kind, name, unlock, sort_order in rows:
+    for row in rows:
+        achievement_id, since_drop = row[0], row[1]
         if since_drop not in arrived:
             continue
         if achievement_id in best and best[achievement_id][0] >= since_drop:
             continue
         best[achievement_id] = (
             since_drop,
-            AchievementRow(achievement_id, kind, name, unlock, sort_order),
+            AchievementRow(achievement_id, *row[2:]),
         )
     return {key: row for key, (_, row) in best.items()}
+
+
+async def open_quests(guild_id: int, user_id: int) -> list[AchievementRow]:
+    """Every quest this player can currently see, newest first.
+
+    **A public achievement with a visibility prerequisite is a quest.**
+    Four conditions, all of which have to hold: it is `offered`, its drop
+    has arrived here, this player holds what it `requires`, and they have
+    not earned it yet.
+
+    `requires` is single-valued on purpose. Every public quest is rooted
+    at *Making First Contact*, so one id is enough - and the moment one
+    needs two unrelated prerequisites this becomes a resolver, so the
+    tree stays rooted.
+
+    **Newest first**, because a player opens `/stats` just after being
+    told a new quest is available and should not have to read to the
+    bottom for it. "Newest" is the order they became visible, which is
+    what the notices table records; a quest the player has not been
+    notified of yet is newer than all of them and sorts above.
+    """
+    rows = await achievements(guild_id)
+    earned = set(await database.player_achievements_of(guild_id, user_id))
+    seen = await database.notice_order(guild_id, user_id)
+
+    quests = [
+        row
+        for row in rows.values()
+        if row.offered
+        and row.achievement_id not in earned
+        and (not row.requires or row.requires in earned)
+    ]
+    # Unseen first (they just appeared), then most recently seen.
+    return sorted(
+        quests,
+        key=lambda row: (
+            0 if row.achievement_id not in seen else 1,
+            -seen.get(row.achievement_id, 0),
+            row.achievement_id,
+        ),
+    )
 
 
 # --------------------------------------------------------------------------
@@ -360,11 +444,9 @@ async def rooms_open_at_launch() -> list[str]:
         return [row[0] for row in rows]
 
 
-async def exits_from(
-    guild_id: int, room_id: str, *, today: date | None = None
-) -> list[Exit]:
+async def exits_from(guild_id: int, room_id: str) -> list[Exit]:
     """Every exit out of a room whose drop has arrived on this server."""
-    arrived = await arrived_drop_ids(guild_id, today=today)
+    arrived = await arrived_drop_ids(guild_id)
     session_factory = database._require_session()
     async with session_factory() as session:
         rows = (
@@ -391,9 +473,7 @@ async def exits_from(
     ]
 
 
-async def resolve_exit(
-    guild_id: int, room_id: str, typed: str, *, today: date | None = None
-) -> Exit | None:
+async def resolve_exit(guild_id: int, room_id: str, typed: str) -> Exit | None:
     """Match what a player typed against the exits out of their room.
 
     Case-insensitive, whitespace-trimmed, and matching the exit's name or any of
@@ -404,7 +484,7 @@ async def resolve_exit(
     if not needle:
         return None
 
-    for exit_ in await exits_from(guild_id, room_id, today=today):
+    for exit_ in await exits_from(guild_id, room_id):
         if needle == exit_.name.lower() or needle in {a.lower() for a in exit_.aliases}:
             return exit_
         if needle == exit_.thing_id.lower():

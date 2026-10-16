@@ -18,6 +18,7 @@ import pytest_asyncio
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 import database  # noqa: E402
+import resolve  # noqa: E402
 from sqlalchemy.ext.asyncio import (  # noqa: E402
     async_sessionmaker,
     create_async_engine,
@@ -28,6 +29,12 @@ from sqlalchemy.ext.asyncio import (  # noqa: E402
 # what catches a column that was declared INTEGER instead of BIGINT.
 GUILD_A = 900000000000000001
 GUILD_B = 900000000000000002
+
+# The drop the house opens on. Everything carried over from Release 1 waits
+# here, so a test that wants nine rooms and 35 achievements wants a server
+# sitting on this drop - which is why the `db` fixture puts both test guilds
+# on it. A test about the drops themselves moves its own server and says so.
+HOUSE_DROP = 3
 
 ALICE = 100000000000000001
 BOB = 100000000000000002
@@ -87,6 +94,14 @@ async def db(tmp_path, monkeypatch, schema_template):
     database._engine = create_async_engine(url, pool_pre_ping=True)
     database._enforce_sqlite_foreign_keys(database._engine)
     database._session_factory = async_sessionmaker(database._engine, expire_on_commit=False)
+
+    # Open the house in both test servers before anything runs. Content
+    # resolution answers to one pointer now, and without this every test in
+    # the suite would be asserting against a server where the game has not
+    # started and nothing exists.
+    for guild_id in (GUILD_A, GUILD_B):
+        await database.set_setting(guild_id, resolve.DROP_KEY, HOUSE_DROP)
+
     try:
         yield database
     finally:
@@ -120,3 +135,26 @@ def fixed_rng():
             return list(seq)[0]
 
     return FixedRNG()
+
+
+@pytest.fixture
+def registrations(monkeypatch):
+    """Record what the commands asked to register, without a gateway.
+
+    `tree.sync` needs a real connection, and the three commands that move
+    a server's drop all call it. Patching here keeps those suites about
+    the drop while still letting them assert that the menu was asked to
+    follow - which is the half a one-sided test would miss.
+    """
+    import bot
+
+    calls: list[tuple[int, int | None]] = []
+
+    async def record(guild, drop=None, tree=None):
+        import gating
+
+        calls.append((guild.id, drop))
+        return gating.commands_for(drop)
+
+    monkeypatch.setattr(bot, "register_commands_for", record)
+    return calls

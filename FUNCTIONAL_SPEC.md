@@ -27,7 +27,7 @@ Slash commands register once and propagate for about an hour, so this list is se
 | `/take <thing>` | Player | **new** |
 | `/drop <thing>` | Player | **new** |
 | `/use <thing>` | Player | extended beyond exits |
-| `/enter` | Player | renamed from `/enter-entryway` in 2f; no longer assigns a cohort, and returns an existing player to the room they were in |
+| `/enter` | Player | renamed from /enter-entryway, no longer assigns a cohort, behavior specified in 2f |
 | `/initialize-haunted-house` | Admin | builds 9 threads, not 18 |
 | `/admin_config <key> <value>` | Admin | **new** |
 
@@ -98,6 +98,8 @@ Resolution is scoped to the room, never the inventory (see Resolution). Resolve,
 
 **A source** hands over the object named in its `yields`, and is not itself consumed. The reply uses **the yielded object's** `take` text, not the source's — the source has none. `yields` sits on 17 rows, and all 17 are `type = source`: the seven cat food stashes, the copper wire coil, the carving tool sets, the pile of costumes, the graphite tin, the herb garden, the candy bowl, the box of tortilla chips, the freezer of burritos, the hollowed-out book and the ring of iron keys. Between them they hand out fifteen distinct objects. The herb garden and the candy bowl were fixtures with a `yields` cell until 26 September; they behaved as sources in every respect, so the column was corrected rather than the behavior. Key the implementation on `yields`, not on `type` — in particular the rule that **a source and its yield count as one thing** during resolution, which is the only reason `/take candy` and `/take herbs` do not raise a spurious ambiguity prompt.
 
+**A successful `/take` reports which source it resolved against, or none.** Because a source and its yield count as one thing, `/take herbs` at the herb garden and `/take herbs` off the Entryway floor hand the player an identical `herbs` and are otherwise indistinguishable afterwards. Pass the resolved source id along with the `thing_id` — `herb_garden` in the first case, null in the second. Release 1 needs it in exactly one place, *Green Thumb*, which counts taking herbs from the garden as gardening and picking dropped herbs up off the floor as scavenging; but it belongs on the take rather than inside that achievement, because any future "harvest it yourself" condition will want the same distinction.
+
 **A finite object** decrements `room_contents` and increments `player_inventory`. When the count reaches zero it leaves the room — and the `Also here:` line — entirely. This is what lets one player take the only copy.
 
 **`max_per_player`** is checked before either. Three things set it, all at 1: the gourmet can, the skeleton key and the carving tools. Over the cap, the thing's own `take_fail` fires — all three have one written, and they read as refusals rather than errors ("You've already found yours"). The used baby bottle deliberately has **no** cap: *Catproof the House* is earnable by everyone because eight bottles scatter into the house every day, not because a cap spreads a fixed supply around.
@@ -139,7 +141,7 @@ The widest verb. Resolve first, then check `requires`, then take the first branc
 
 | Thing | `requires` |
 | --- | --- |
-| `stove` (Kitchen fixture) | `dark_chocolate\|herbs\|spice_jar` |
+| `stove` (Kitchen fixture) | `herbs\|dark_chocolate\|spice_jar` |
 
 **An unmet `requires` refuses the whole use.** Reply with the thing's own `use_fail`, falling through to `use_fail.default` if it is blank. Nothing is consumed, no state changes, and **no `on_use` hook fires** — a refused use is not a use.
 

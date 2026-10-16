@@ -55,12 +55,24 @@ async def house(db):
     return db, guild, halloween, assets
 
 
-def image_of(interaction) -> str | None:
-    """The image on the last thing sent, by file name."""
-    embed = interaction.sent[-1][1].get("embed")
+def image_of(interaction, which: int = -1) -> str | None:
+    """The image on one of the things sent, by file name.
+
+    The last by default, which is what an achievement test wants. The
+    pet tests pass 0 for the first, and have to: a pet can now award
+    *Making First Contact*, which sends its own private line afterwards,
+    so "the last thing sent" stopped meaning "the reply to the pet" on
+    four pets in five.
+    """
+    embed = interaction.sent[which][1].get("embed")
     if embed is None or not embed.image:
         return None
     return embed.image.url.rsplit("/", 1)[-1]
+
+
+def pet_image_of(interaction) -> str | None:
+    """The image on the reply to the pet itself, whatever followed it."""
+    return image_of(interaction, 0)
 
 
 def text_of(interaction) -> str:
@@ -126,7 +138,7 @@ def test_every_art_id_the_code_uses_exists_in_the_file():
     appearing, with nothing raising anywhere."""
     known = {row.art_id for row in content_module.load_files().art}
     used = set(bot.ART_FOR_ACHIEVEMENT.values()) | {
-        bot.ART_WELCOME, bot.ART_FIRST_PET, bot.ART_CROWDING,
+        bot.ART_FIRST_PET, bot.ART_CROWDING,
         bot.ART_DIAPER, bot.ART_AVATAR,
     }
 
@@ -194,7 +206,7 @@ async def test_the_first_pet_of_all(house):
     _, guild, _, assets = house
     await bot.upload_art(guild, assets)
 
-    assert image_of(await pet(house)) == "eunoia_alert.png"
+    assert pet_image_of(await pet(house)) == "eunoia_alert.png"
 
 
 async def test_and_nothing_until_the_crowding_nudge(house):
@@ -202,10 +214,10 @@ async def test_and_nothing_until_the_crowding_nudge(house):
     await bot.upload_art(guild, assets)
     await pet(house)
 
-    for n in range(2, 10):
-        assert image_of(await pet(house)) is None, n
+    for n in range(2, 9):
+        assert pet_image_of(await pet(house)) is None, n
 
-    assert image_of(await pet(house)) == "eunoia_suspicious.png"
+    assert pet_image_of(await pet(house)) == "eunoia_suspicious.png"
 
 
 async def test_the_nudge_image_rides_the_private_reply_only(house):
@@ -308,16 +320,6 @@ async def test_the_diaper_is_per_player(house):
     assert image_of(theirs) == "eunoia_sniffing.png"
 
 
-async def test_the_welcome_carries_her(house):
-    _, guild, halloween, assets = house
-    await bot.upload_art(guild, assets)
-    interaction = FakeInteraction(ALICE, GUILD_A, guild=guild, channel=halloween)
-
-    await bot.post_welcome.callback(interaction)
-
-    assert halloween.posted[-1] is None  # the copy moved into the embed
-
-
 # --------------------------------------------------------------------------
 # Where it must not appear
 # --------------------------------------------------------------------------
@@ -362,7 +364,7 @@ async def test_the_avatar_is_never_sent_as_an_image(house):
     like a mistake."""
     assert bot.ART_AVATAR not in bot.ART_FOR_ACHIEVEMENT.values()
     assert bot.ART_AVATAR not in (
-        bot.ART_WELCOME, bot.ART_FIRST_PET, bot.ART_CROWDING, bot.ART_DIAPER,
+        bot.ART_FIRST_PET, bot.ART_CROWDING, bot.ART_DIAPER,
     )
 
 
@@ -373,7 +375,7 @@ async def test_no_image_is_tied_to_the_relationship_meter(house):
     assert bot.ART_FOR_ACHIEVEMENT["making_friends"] == "eunoia_content"
     assert bot.ART_FOR_ACHIEVEMENT["trying_to_make_friends"] == "eunoia_disdain"
     assert "eunoia_content" not in (
-        bot.ART_FIRST_PET, bot.ART_CROWDING, bot.ART_WELCOME,
+        bot.ART_FIRST_PET, bot.ART_CROWDING,
     )
 
 

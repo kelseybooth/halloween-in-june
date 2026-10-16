@@ -345,8 +345,7 @@ async def test_a_fixture_in_another_room_is_not(house):
 
 
 async def test_a_thing_from_an_unarrived_drop_is_out_of_reach(house):
-    from datetime import date, timedelta
-
+    import resolve
     from content import Drop
 
     parsed = a_house(a_thing("lantern", since_drop=2))
@@ -354,9 +353,27 @@ async def test_a_thing_from_an_unarrived_drop_is_out_of_reach(house):
         Drop(drop_id=2, trigger="manual", date=None, event=None, name="Later", notes=None)
     )
     await content_loader.load_content(parsed)
+    await resolve.set_current_drop(GUILD_A, 1)
 
     result = await reach.find(GUILD_A, ALICE, "EN", "lantern", Scope.REACH)
     assert isinstance(result, NotFound)
+
+
+async def test_and_is_in_reach_once_the_drop_opens(house):
+    """The other half. Without it this suite would pass just as happily
+    against a loader that placed nothing at all."""
+    import resolve
+    from content import Drop
+
+    parsed = a_house(a_thing("lantern", since_drop=2))
+    parsed.drops.append(
+        Drop(drop_id=2, trigger="manual", date=None, event=None, name="Later", notes=None)
+    )
+    await content_loader.load_content(parsed)
+    await resolve.set_current_drop(GUILD_A, 2)
+
+    result = await reach.find(GUILD_A, ALICE, "EN", "lantern", Scope.REACH)
+    assert isinstance(result, Found)
 
 
 # --------------------------------------------------------------------------

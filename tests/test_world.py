@@ -86,10 +86,13 @@ async def test_rooms_are_ordered_by_sort_order(house):
 
 
 async def test_the_shipped_house_has_nine_rooms_and_twenty_exits(house):
+    """Ten rows, nine rooms. The tenth is the channel, which is a room in
+    the registry and nowhere else: no exits, no prose, never walked to."""
     await content_loader.load_content(content_module.load_files())
 
     rooms = await resolve.all_rooms()
-    assert len(rooms) == 9
+    assert len(rooms) == 10
+    assert len([r for r in rooms if r[0] != content_module.CHANNEL_ROOM]) == 9
 
     total = 0
     for room_id, _ in rooms:
@@ -109,7 +112,9 @@ async def test_the_shipped_house_is_still_fully_connected(house):
                 seen.add(exit_.destination)
                 queue.append(exit_.destination)
 
-    assert seen == set(rooms)
+    # The channel is deliberately unreachable: it is where players
+    # already are, not somewhere they walk to.
+    assert seen == set(rooms) - {content_module.CHANNEL_ROOM}
 
 
 # --------------------------------------------------------------------------

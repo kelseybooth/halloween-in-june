@@ -1,0 +1,89 @@
+"""Which commands a server can see, and therefore which exist in it.
+
+**A command a player cannot use is not in their slash menu at all.** It is
+not registered, so it cannot be typed, guessed, or half-learned from the
+autocomplete. That is the whole point: the overwhelm the testers hit came
+from a menu full of verbs with nothing to use them on, and a refusal is
+still a verb - it teaches the player the command exists and that they got
+it wrong, which is worse than silence.
+
+So registration is per guild rather than global. Guild registration is
+what lets two servers sit on different drops at once, and guild command
+updates propagate in seconds where global ones can take an hour.
+
+The tables below are keyed by the drop that *introduces* a set, and a
+server uses the highest entry at or below its own drop. Writing each set
+out in full rather than as a diff from the one before is deliberate: the
+question anybody ever asks of this file is "what can a player see at drop
+N", and a list of additions makes that a calculation.
+"""
+
+from __future__ import annotations
+
+# What players get. Drop 2 is absent on purpose - it adds `/take` and
+# `/inventory` when the cat toy is built, and until then a server that QA
+# has jumped to drop 2 correctly sees drop 1's verbs, because drop 1's
+# verbs are all there is anything to use.
+PLAYER_COMMANDS: dict[int, tuple[str, ...]] = {
+    0: ("pet", "stats"),
+    1: ("pet", "stats", "look", "use"),
+    # The house. Not part of the proof of concept, and defined anyway: the
+    # content files put every Release 1 row at drop 3, so a test server
+    # sent there with drop 1's four verbs would be a nine-room house
+    # nobody can walk into. Phase 3b owns making this list honest.
+    3: ("pet", "stats", "look", "use", "take", "drop", "inventory", "enter"),
+}
+
+# What admins get. Separate because it does not follow the player ladder:
+# an admin needs `/start-game` in a server that has no game at all, which
+# is the one state where players get nothing.
+ADMIN_COMMANDS: dict[int, tuple[str, ...]] = {
+    0: ("start-game", "advance-game", "admin_config", "reset-haunted-house"),
+    3: (
+        "start-game",
+        "advance-game",
+        "admin_config",
+        "reset-haunted-house",
+        "initialize-haunted-house",
+    ),
+}
+
+# Before `/start-game`. No game, so no player commands - a member of a
+# server the bot was invited to and never set up sees nothing from it.
+NO_GAME_COMMANDS: tuple[str, ...] = ADMIN_COMMANDS[0]
+
+
+def _highest_at_or_below(table: dict[int, tuple[str, ...]], drop: int) -> tuple[str, ...]:
+    keys = [k for k in table if k <= drop]
+    if not keys:
+        # A drop below every entry. Cannot happen while 0 is the first one,
+        # and returning nothing is the safe answer if that ever changes.
+        return ()
+    return table[max(keys)]
+
+
+def commands_for(drop: int | None) -> set[str]:
+    """Every command registered in a server sitting on this drop.
+
+    `None` is a server whose game has not been started, which is not the
+    same as drop 0: drop 0 is a channel with a cat in it, and `None` is a
+    server where there is not yet anywhere for the cat to be.
+    """
+    if drop is None:
+        return set(NO_GAME_COMMANDS)
+    return set(_highest_at_or_below(PLAYER_COMMANDS, drop)) | set(
+        _highest_at_or_below(ADMIN_COMMANDS, drop)
+    )
+
+
+def player_commands_for(drop: int | None) -> set[str]:
+    """The player half, for saying what a drop opened without listing the
+    admin commands nobody but an admin can see anyway."""
+    if drop is None:
+        return set()
+    return set(_highest_at_or_below(PLAYER_COMMANDS, drop))
+
+
+def arrivals(previous: int | None, current: int | None) -> set[str]:
+    """Which player commands a move between two drops just turned on."""
+    return player_commands_for(current) - player_commands_for(previous)
