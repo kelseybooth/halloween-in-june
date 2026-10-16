@@ -602,61 +602,88 @@ async def test_bulk_buyer_needs_twenty_five(playing):
     assert "bulk_buyer" not in await earned(a_context("on_take"))
 
 
-async def pet(times, relationship, user_id=ALICE):
-    """Pets with `relationship_at_pet` pinned, which is what the split reads.
+async def petted(times, user_id=ALICE):
+    """Put this player's lifetime pet count at `times`.
 
-    Written directly because the real `/pet` moves the relationship as it
-    goes, and these two achievements turn on the score *at* each pet - which
-    is exactly why the column exists.
+    Written directly rather than by calling `/pet` two hundred times. The
+    count is all the fork reads now - which pets were friendly no longer
+    matters, only how many there were and where the meter ended up.
     """
-    now = database._utcnow()
     async with database._require_session()() as session:
-        for _ in range(times):
-            session.add(
-                database.PetEvent(
-                    user_id=user_id,
-                    guild_id=GUILD_A,
-                    created_at=now,
-                    relationship_at_pet=relationship,
-                )
-            )
+        await session.execute(
+            database.update(database.User)
+            .where(database.User.id == user_id, database.User.guild_id == GUILD_A)
+            .values(pet_count=times)
+        )
         await session.commit()
 
 
-async def test_making_friends_counts_only_friendly_pets(playing):
-    await pet(199, 50)
-    assert "making_friends" not in await earned(a_context("on_pet"))
-
-    await pet(1, 50)
-    assert "making_friends" in await earned(a_context("on_pet"))
+def after(score):
+    """An `on_pet` context carrying the score as it stands after the pet."""
+    return a_context("on_pet", extra={"relationship": score})
 
 
-async def test_trying_to_make_friends_counts_the_other_side(playing):
-    await pet(200, -50)
+async def test_two_hundred_pets_and_a_cat_that_likes_you(playing):
+    await petted(199)
+    assert "making_friends" not in await earned(after(50))
 
-    got = await earned(a_context("on_pet"))
+    await petted(200)
+    assert "making_friends" in await earned(after(50))
+
+
+async def test_two_hundred_pets_and_a_cat_that_does_not(playing):
+    await petted(200)
+
+    got = await earned(after(-50))
+
     assert "trying_to_make_friends" in got
     assert "making_friends" not in got
 
 
-async def test_a_pet_at_exactly_zero_counts_toward_trying(playing):
-    """The boundary the Story Bible was revised to state - "zero or below",
-    not "negative". It matters on day one."""
-    await pet(200, 0)
+async def test_zero_counts_as_does_not(playing):
+    """The boundary the Story Bible was revised to state - "zero or
+    below", not "negative". It matters more now than it did: every player
+    starts there."""
+    await petted(200)
 
-    got = await earned(a_context("on_pet"))
+    got = await earned(after(0))
+
     assert "trying_to_make_friends" in got
     assert "making_friends" not in got
 
 
-async def test_the_two_do_not_share_a_count(playing):
-    """A hundred friendly and a hundred hostile earns neither."""
-    await pet(100, 50)
-    await pet(100, -50)
+async def test_a_mixed_two_hundred_now_earns_one_of_them(playing):
+    """**The bug this change exists for.** This test used to assert the
+    opposite - a hundred pets on each side of zero earned neither,
+    because each half was tallied separately and neither tally reached
+    two hundred. A player could pet the cat two hundred times and get
+    nothing. One counter, and the sign at the end decides."""
+    await petted(200)
 
-    got = await earned(a_context("on_pet"))
-    assert "making_friends" not in got
-    assert "trying_to_make_friends" not in got
+    got = await earned(after(-10))
+
+    assert "trying_to_make_friends" in got
+
+
+async def test_the_two_are_mutually_exclusive(playing):
+    """Both conditions are true the moment the count is reached, and only
+    the sign separates them - so each refuses while the other is held."""
+    await petted(200)
+    first = await earned(after(50))
+    assert "making_friends" in first
+
+    second = await earned(after(-50))
+
+    assert "trying_to_make_friends" not in second
+
+
+async def test_passing_two_hundred_unnoticed_is_not_lost(playing):
+    """"At least two hundred", not "exactly the two hundredth". A check
+    that only fired on the 200th pet would be lost for good if the bot
+    were down for it, or if two pets raced."""
+    await petted(250)
+
+    assert "making_friends" in await earned(after(50))
 
 
 async def test_cats_best_friend_at_a_perfect_relationship(playing):

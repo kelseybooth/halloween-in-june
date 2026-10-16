@@ -373,25 +373,57 @@ async def bulk_buyer(context: Context) -> bool:
     return held >= BULK_BUYER_CANS
 
 
+async def _two_hundred_pets_in(context: Context) -> bool:
+    """Whether this player has petted the cat enough for the fork.
+
+    **"At least two hundred", not "exactly the two hundredth".** A check
+    that only fired on the 200th pet would be lost forever if the bot were
+    down, or if two pets raced, and the player would never earn either
+    half of a pair they had plainly qualified for.
+    """
+    total = context.extra.get("total")
+    if total is None:
+        total = await database.get_pet_count(context.user_id, context.guild_id)
+    return total >= FRIENDLY_PETS
+
+
+async def _already_forked(context: Context) -> bool:
+    """Whether this player holds the other half of the fork.
+
+    The two are mutually exclusive, and the only way to guarantee it is
+    for each to refuse while the other is held: both become true the
+    moment the count is reached, and which one lands depends on the sign
+    at that moment.
+    """
+    held = await database.player_achievements_of(context.guild_id, context.user_id)
+    return bool({"making_friends", "trying_to_make_friends"} & set(held))
+
+
 async def making_friends(context: Context) -> bool:
-    """Two hundred pets while the relationship was above zero."""
-    pets = await database.pets_while_relationship(
-        context.user_id, context.guild_id, positive=True
-    )
-    return pets >= FRIENDLY_PETS
+    """Two hundred pets, and the cat likes you at the end of them.
+
+    **One counter, evaluated once**, rather than two tallies of qualifying
+    pets. It used to count only the pets made while the meter was above
+    zero, which meant a player could pet two hundred times and earn
+    neither - half on each side of the line and neither tally reaching the
+    target. Now the count is every pet, and the sign *after* the pet that
+    reaches it decides which of the two fires.
+    """
+    if await _already_forked(context) or not await _two_hundred_pets_in(context):
+        return False
+    return await _score(context) > 0
 
 
 async def trying_to_make_friends(context: Context) -> bool:
-    """Two hundred pets while the relationship was at or below zero.
+    """Two hundred pets, and the cat still does not.
 
-    Zero counts here rather than toward *Making Friends*, which is the
-    boundary the Story Bible was revised to state. It matters on day one: a
-    new player starts the game at a relationship the first pet reads.
+    Zero counts here rather than toward *Making Friends* - the boundary
+    the Story Bible was revised to state, and the one the new player
+    starting at zero makes real.
     """
-    pets = await database.pets_while_relationship(
-        context.user_id, context.guild_id, positive=False
-    )
-    return pets >= FRIENDLY_PETS
+    if await _already_forked(context) or not await _two_hundred_pets_in(context):
+        return False
+    return await _score(context) <= 0
 
 
 async def _score(context: Context) -> int:

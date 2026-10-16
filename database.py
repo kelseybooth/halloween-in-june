@@ -229,8 +229,17 @@ class PetEvent(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    # The relationship score as it stood *before* this pet applied. Two
-    # achievements count 200 pets while the relationship was positive or
+    # The relationship score as it stood *before* this pet applied.
+    #
+    # **Nothing reads this any more.** Two achievements used to count the
+    # pets made on each side of zero, and V3 made them one counter of
+    # every pet with the sign checked once at two hundred - so the column
+    # is now a record of how a player's meter moved rather than a source
+    # of truth for anything. Kept because that history cannot be
+    # reconstructed afterwards and is the only way to see the shape of a
+    # relationship over a month; delete it if nobody ever looks.
+    #
+    # Formerly: two achievements counted 200 pets while the score was
     # negative, and no other table can answer that after the fact - the score is
     # a running total, so history cannot be reconstructed from it. Recorded now,
     # ahead of the achievements themselves, because the only moment backfill is
@@ -2084,36 +2093,6 @@ async def use_count_of(user_id: int, guild_id: int, thing_id: str) -> int:
                 ThingUse.guild_id == guild_id,
                 ThingUse.user_id == user_id,
                 ThingUse.thing_id == thing_id,
-            )
-        )
-    return int(count or 0)
-
-
-async def pets_while_relationship(
-    user_id: int, guild_id: int, *, positive: bool
-) -> int:
-    """Pets by this player with the relationship above zero, or at or below.
-
-    The split is `> 0` against `<= 0`, so a pet at exactly zero counts toward
-    *Trying to Make Friends*. The Story Bible was revised from "negative" to
-    "zero or below" for exactly this boundary, and a relationship starting at
-    zero means the first pet of the game lands on it.
-
-    Reads `relationship_at_pet`, which is the score as it stood *before* the
-    pet applied - the running total cannot answer this after the fact.
-    """
-    session_factory = _require_session()
-    condition = (
-        PetEvent.relationship_at_pet > 0 if positive else PetEvent.relationship_at_pet <= 0
-    )
-    async with session_factory() as session:
-        count = await session.scalar(
-            select(func.count())
-            .select_from(PetEvent)
-            .where(
-                PetEvent.guild_id == guild_id,
-                PetEvent.user_id == user_id,
-                condition,
             )
         )
     return int(count or 0)

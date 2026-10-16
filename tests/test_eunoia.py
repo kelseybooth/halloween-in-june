@@ -184,20 +184,36 @@ async def test_no_pet_count_appears_anywhere_in_it(house):
     assert "3" not in reply
 
 
-async def test_the_tenth_pet_in_ten_minutes_nudges(house):
-    for n in range(1, 11):
+async def test_the_first_pet_that_cannot_go_well_nudges(house):
+    """The ninth inside ten minutes: `80 - 10 x recent` reaches zero at
+    eight previous pets, so that is the first one the cat is certain to
+    refuse. It moved here from the tenth so that the nudge is tied to the
+    weighting rather than to a second number kept in step with it."""
+    for n in range(1, 9):
         interaction = await act(house, bot.pet, None, "KI")
-        if n < 10:
-            assert "give the cat some space" not in replies(interaction), n
+        assert "give the cat some space" not in replies(interaction), n
+
+    ninth = await act(house, bot.pet, None, "KI")
+
+    assert "give the cat some space" in replies(ninth)
+
+
+async def test_and_so_does_every_pet_after_it(house):
+    for _ in range(10):
+        interaction = await act(house, bot.pet, None, "KI")
 
     assert "give the cat some space" in replies(interaction)
 
 
-async def test_and_so_does_the_eleventh(house):
-    for _ in range(11):
-        interaction = await act(house, bot.pet, None, "KI")
+def test_the_nudge_follows_the_weighting():
+    """Asserted against the chance rather than against a count, because
+    that is why it moved: retune the weighting and the nudge comes with
+    it instead of needing to be kept in step by hand."""
+    certain = next(n for n in range(50) if bot.friendly_chance(n) == 0)
 
-    assert "give the cat some space" in replies(interaction)
+    assert bot._crowded(certain)
+    assert not bot._crowded(certain - 1)
+    assert bot.friendly_chance(certain - 1) > 0
 
 
 async def test_the_nudge_never_appears_in_public(house):
@@ -245,16 +261,46 @@ async def test_the_public_line_names_the_player_and_pings_nobody(house):
     assert f"<@{ALICE}>" not in line
 
 
-async def test_the_branch_reads_the_meter_after_the_pet(house):
-    """Above zero reads "seems to like it", zero or below "does not seem
-    pleased" — the boundary *Making Friends* already splits on, so the game
-    has one rule instead of two."""
-    db, _, _, _, threads = house
-    await db.adjust_relationship(ALICE, GUILD_A, -database.RELATIONSHIP_START - 50)
+async def test_the_line_reports_the_pet_not_the_relationship(house, monkeypatch):
+    """The reversal. 2f branched on the score after the pet so the line
+    would agree with the boundary the two friendship achievements split
+    on; those became one fork evaluated once, so that reason is gone and
+    the plainer reading is left - the room watched somebody pet the cat,
+    and the line says how the cat took it.
 
+    Pinned by driving the meter deep into the negative and then forcing a
+    friendly roll: under the old rule this said "does not seem pleased".
+    """
+    db, _, _, _, threads = house
+    await db.adjust_relationship(ALICE, GUILD_A, -200)
+
+    rolls(monkeypatch, friendly=True)
+    await act(house, bot.pet, None, "KI")
+
+    assert "seems to like it" in threads["Kitchen"].posted[0]
+
+
+async def test_and_the_other_way_round(house, monkeypatch):
+    """A standoffish roll on a player the cat adores still reads badly,
+    which is the half that makes it a report of the moment."""
+    db, _, _, _, threads = house
+    await db.adjust_relationship(ALICE, GUILD_A, 500)
+
+    rolls(monkeypatch, friendly=False)
     await act(house, bot.pet, None, "KI")
 
     assert "does not seem pleased" in threads["Kitchen"].posted[0]
+
+
+async def test_the_meter_never_appears_in_public(house):
+    """It is now mentioned in exactly one place, the crowding nudge, and
+    that is private."""
+    db, _, _, _, threads = house
+    await db.adjust_relationship(ALICE, GUILD_A, 137)
+
+    await act(house, bot.pet, None, "KI")
+
+    assert "137" not in threads["Kitchen"].posted[0]
 
 
 async def test_the_second_line_reads_continues(house):
@@ -367,8 +413,8 @@ def test_the_public_strings_live_in_defaults():
     defaults = content_module.load_files().defaults
 
     for key in (
-        "pet.public.positive",
-        "pet.public.negative",
+        "pet.public.friendly",
+        "pet.public.standoffish",
         "pet.public.continues",
         "pet.crowding",
     ):
@@ -380,5 +426,18 @@ def test_they_use_the_token_that_already_exists():
     spelling for the same thing renders as literal text."""
     defaults = content_module.load_files().defaults
 
-    for key in ("pet.public.positive", "pet.public.negative", "pet.public.continues"):
+    for key in ("pet.public.friendly", "pet.public.standoffish", "pet.public.continues"):
         assert "{player}" in defaults[key], key
+
+
+def rolls(monkeypatch, *, friendly: bool):
+    """Force the mood roll for the two tests that need a known one.
+
+    Patches `choose_response` rather than the module's `random`, because
+    the rng is a default argument and so was bound at definition time -
+    rebinding `bot.random` leaves the default pointing at the original
+    module, and the test runs on real dice while appearing not to.
+    """
+    pool = bot.FRIENDLY_RESPONSES if friendly else bot.STANDOFFISH_RESPONSES
+    reaction = bot.Reaction(pool[0], friendly, 80 if friendly else 0)
+    monkeypatch.setattr(bot, "choose_response", lambda *a, **k: reaction)

@@ -127,6 +127,29 @@ def choose_response(recent_pets: int, rng=random) -> Reaction:
     return Reaction(rng.choice(STANDOFFISH_RESPONSES), False, chance)
 
 
+def _crowded(recent_pets: int) -> bool:
+    """Whether this pet should carry the nudge to give the cat some space.
+
+    **The first pet that cannot possibly go well.** `friendly_chance` is
+    `80 - 10 x recent`, so this is the ninth pet inside ten minutes, where
+    the cat is certain to be standoffish and every further pet is a
+    guaranteed five points off.
+
+    Tied to the chance rather than to a count of its own, because a count
+    would be a second number to keep in step with the weighting: retune
+    `BASE_FRIENDLY_CHANCE` and the nudge follows by itself.
+
+    Worth recording that the penalty starts earlier than the nudge does.
+    The fourth pet in the window is break-even in expectation and the
+    fifth is the first that loses points on average. The nudge waits for
+    certainty because it is the only place a player can ever learn the
+    penalty exists - the public line no longer reports the meter - and a
+    warning that fires while the odds are still even would be crying
+    wolf.
+    """
+    return friendly_chance(recent_pets) == 0
+
+
 def _debug_lines(reaction: Reaction, recent: int, relationship: int) -> str:
     """TEMPORARY (testing) diagnostics appended to /pet replies."""
     mood = "friendly" if reaction.friendly else "standoffish"
@@ -733,10 +756,10 @@ async def _answer_guess(message: discord.Message, guess) -> None:
 # wherever the command was run.
 #
 # Two windows, deliberately separate, because they answer different
-# questions. Crowding is between a player and the cat: ten pets in ten
-# minutes and the private reply says so. The public rate limit is about noise
-# in a shared room: two lines per player per place per thirty minutes.
-CROWDING_PETS = 10
+# questions. Crowding is between a player and the cat, and fires the first
+# time a pet cannot possibly go well - see `_crowded`. The public rate
+# limit is about noise in a shared room: two lines per player per place
+# per thirty minutes.
 PUBLIC_PETS = 2
 PUBLIC_WINDOW = timedelta(minutes=30)
 
@@ -776,7 +799,7 @@ def _public_pet_line(guild_id: int, user_id: int, place_id: int, now: datetime) 
     return None
 
 
-async def _announce_pet(interaction, relationship: int) -> None:
+async def _announce_pet(interaction, friendly: bool) -> None:
     """The public half: somebody pet the cat, and how it went.
 
     Posted wherever the command was run, which is what makes the discovery
@@ -784,12 +807,20 @@ async def _announce_pet(interaction, relationship: int) -> None:
     one, before anybody has run `/enter`, and everyone watching learns the
     command exists.
 
-    The branch reads the meter **after** the pet, which is the boundary
-    *Making Friends* and *Trying to Make Friends* already split on, so the
-    game has one rule rather than two. Reporting whether this particular pet
-    moved the meter up or down would be a truer account of the moment, and
-    would publicly tell a player deep in the positive that the cat was
-    displeased, which reads as a bug.
+    **It reports the pet, not the relationship.** The branch is the mood
+    roll this pet made, and the meter is not read at all.
+
+    This reverses what Phase 2f recommended and what the code correctly
+    did until now. 2f branched on the score afterwards, so that the line
+    agreed with the boundary the two friendship achievements split on -
+    and that boundary no longer exists in that form, because those two
+    became one fork evaluated once at two hundred pets. What is left is
+    the plainer reading: the room watched somebody pet the cat, and the
+    line says how the cat took it.
+
+    It also keeps the score out of public view entirely, which the
+    crowding nudge now depends on - that nudge is the only place the
+    penalty is ever mentioned.
 
     The crowding nudge never appears here. It is between that player and the
     cat, and broadcasting it would make it a scolding.
@@ -808,7 +839,7 @@ async def _announce_pet(interaction, relationship: int) -> None:
     key = (
         "pet.public.continues"
         if which == "continues"
-        else "pet.public.positive" if relationship > 0 else "pet.public.negative"
+        else "pet.public.friendly" if friendly else "pet.public.standoffish"
     )
     line = await phrasing.default_say(key, player=interaction.user.display_name)
     if line:
@@ -879,11 +910,7 @@ async def pet(interaction: discord.Interaction) -> None:
         return
 
     message = reaction.text
-    # `recent` counts the pets this one arrived among, so the tenth pet sees
-    # nine. A nudge, not a limit: every pet still counts toward the
-    # achievement, and the relationship penalty it is warning about is the
-    # consequence doing the actual work.
-    crowded = result.recent + 1 >= CROWDING_PETS
+    crowded = _crowded(result.recent)
     if crowded:
         nudge = await phrasing.default_say("pet.crowding")
         if nudge:
@@ -901,7 +928,7 @@ async def pet(interaction: discord.Interaction) -> None:
     content_, embed = await _with_art(interaction.guild, message, art)
     await interaction.followup.send(content_, embed=embed, ephemeral=True)
 
-    await _announce_pet(interaction, relationship)
+    await _announce_pet(interaction, reaction.friendly)
 
     await _fire(
         achievements.Context(
