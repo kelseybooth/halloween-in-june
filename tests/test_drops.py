@@ -265,24 +265,55 @@ async def for_the_bed():
     )
 
 
-async def test_the_drops_own_line_goes_to_the_admin(started):
-    interaction = await start(started)
-    interaction = await advance(started)
-
-    assert "swats her paw" in interaction.reply
-    assert interaction.was_private
-
-
-async def test_nothing_is_posted_where_players_can_see_it(started):
-    """A drop should be discovered, not read about. Announcing it in the
-    channel would tell everybody something had changed before any of them
-    found it - and the thing that changed is one cushion."""
+async def test_the_drops_own_line_is_public(started):
+    """In-world and everybody's: the whole channel watches the cat swat
+    something across the floor. Nothing in that line names a drop, a
+    command or an admin."""
     _, _, halloween = started
     await start(started)
 
     await advance(started)
 
-    assert halloween.posted == []
+    assert any("swats her paw" in line for line in halloween.posted)
+
+
+async def test_the_admins_own_reply_is_private(started):
+    """The other half of the pair. What the command *did* - which drop,
+    what was placed, whether it posted - is nobody else's business."""
+    await start(started)
+
+    interaction = await advance(started)
+
+    assert interaction.was_private
+    assert "Drop 1" in interaction.reply
+    assert "announced in the channel" in interaction.reply
+
+
+async def test_the_two_halves_do_not_overlap(started):
+    """Asserted in both directions, because a one-sided check here is
+    exactly how these two got swapped once already: the private reply must
+    not carry the in-world line, and the public line must not carry the
+    bookkeeping."""
+    _, _, halloween = started
+    await start(started)
+
+    interaction = await advance(started)
+
+    assert "swats her paw" not in interaction.reply
+    posted = "\n".join(halloween.posted)
+    assert "Drop 1" not in posted
+    assert "placed" not in posted
+
+
+async def test_the_public_line_posts_once_per_drop(started):
+    _, _, halloween = started
+    await start(started)
+    await advance(started)
+    before = len(halloween.posted)
+
+    await advance(started)  # refused: drop 1 is the last one built
+
+    assert len(halloween.posted) == before
 
 
 # --------------------------------------------------------------------------

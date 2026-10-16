@@ -967,21 +967,43 @@ async def advance_game(interaction: discord.Interaction, confirm: bool = False) 
         target,
     )
 
+    announced = await _announce_drop(guild, target)
     lines = [f"Drop {target}{titled} is open."]
     if placed:
         lines.append(f"- put {placed} new thing(s) in place")
-
-    # The drop's own line goes to the admin and nobody else. Posting it in
-    # the channel would tell players something had changed before any of
-    # them found it, which is the thing this phase spends its time
-    # subtracting: a drop should be discovered, not read about. They learn
-    # there is something new from the hint rail, privately, on their next
-    # command - which makes that hint the mechanism rather than a fallback
-    # for whoever missed the post.
-    flavour = await phrasing.default_say(f"drop.{target}.announce")
-    if flavour:
-        lines.append(f"\n> {flavour}")
+    lines.append(
+        "- announced in the channel"
+        if announced
+        else f"- nothing posted; drop {target} has no announcement line"
+    )
     await interaction.followup.send("\n".join(lines), ephemeral=True)
+
+
+async def _announce_drop(guild, drop_id: int) -> bool:
+    """Post a drop's arrival in the channel, if it has a line to post.
+
+    **Two messages, as everywhere else in this game.** The admin's
+    ephemeral reply says what the command did - which drop, what got
+    placed, whether this posted - and is nobody else's business. The
+    drop's own line is in-world and belongs to the server: everyone
+    standing in the channel sees the cat swat something across the floor,
+    and nothing in it names a drop, a command or an admin.
+
+    The hint that rides beneath it belongs to the hint rail and arrives
+    with it. The private firing of that hint stays either way, as the
+    fallback for anybody who was not looking at the channel when this
+    went out.
+    """
+    line = await phrasing.default_say(f"drop.{drop_id}.announce")
+    if not line:
+        return False
+    channel_id = await database.announcement_channel(guild.id)
+    channel = guild.get_channel(channel_id) if channel_id else None
+    if channel is None:
+        log.warning("Guild %s has no channel to announce drop %s in", guild.id, drop_id)
+        return False
+    await _post_quietly(channel, line)
+    return True
 
 
 @bot.tree.command(
