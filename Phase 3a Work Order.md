@@ -172,13 +172,17 @@ One bed, in the channel, present from the moment drop 1 opens. **Usable, not tak
 
 ## 12. New per-player state
 
-| Field | Why |
-| --- | --- |
-| `last_cat_interaction_date` | the drift's skip condition, widened beyond petting |
-| `last_bed_fluff_date` | the bed's once-a-day cooldown |
-| hint/quest/stats rows | the rail's told-you table, keyed `(guild, player, hint_id)` |
+| Field | Why | Built as |
+| --- | --- | --- |
+| `last_cat_interaction_date` | the drift's skip condition, widened beyond petting | a column on `users` |
+| `last_bed_fluff_date` | the bed's once-a-day cooldown | **not needed** — the cooldown is rolling hours, so `thing_uses.last_used_at` answers it |
+| hint/quest/stats rows | the rail's told-you table, keyed `(guild, player, hint_id)` | `player_notices` |
 
 The toy's ramp counter and cooldown, and the feed counter, arrive with drop 2 and drop 3. Three new per-player values here, five by drop 3 — worth deciding now whether this stays as columns on the player row or becomes a small per-player key-value table, because the answer changes once more fields arrive.
+
+**Settled 16 October: columns, not a key-value table.** Building drops 0 and 1 answered four of the five without anybody choosing: the bed's fluff date evaporated with the rolling cooldown, and the toy's cooldown and the feed count are both already `thing_uses`, which exists for per-(player, thing) cooldowns and counts. Only the toy's ramp needed somewhere new, because it resets on a success and `use_count` never goes down — it is `thing_uses.miss_streak`, added now though nothing writes it until drop 2.
+
+The full reasoning, and the rule for whoever adds the next one, is in the drop unlock schedule under section 12's heading.
 
 ## 13. QA commands
 

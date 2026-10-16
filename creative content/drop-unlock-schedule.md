@@ -392,9 +392,25 @@ Already fully specified in Phase 2e, including the four custom departure and arr
 
 **The meter change touches more than the meter.** Starting at 0 inverts the two petting-achievement boundaries, retires the Story Bible's "a perfect relationship is 100", changes the `/stats` display from a bar to a tier, makes the decay function the real balance lever, and sends the 2f pet blurbs back for a voice pass. None of it is expensive; all of it is easy to miss. The Achievement Trigger Spec in particular carries a dated decision whose stated rationale is now false, so it needs editing rather than merely re-reading.
 
-**Five new pieces of per-player state now, and none is a boolean:** the toy ramp counter, the toy cooldown expiry, the last bed fluff, the last cat-interaction date, and the feed count. That is past the point where "a few columns on the player row" is obviously right — three was proportionate, five is the shape of a small per-player key-value table, and a sixth is coming the moment anything else is counted. Worth deciding now rather than after the fifth column is added.
+**Settled 16 October: no key-value table. One new column, on `thing_uses`.**
 
-**The original three, for reference:** the toy ramp counter, the toy cooldown expiry, and the last bed fluff. The existing per-player states (`library_found`, `drawer_unjammed`) are flags, and the Functional Spec deliberately declined a `player_thing_seen` table. Three columns on the player row is the proportionate answer; a general per-player key-value store is not needed yet, but is what this becomes if a fourth and fifth arrive.
+This section used to argue that five new per-player values was the shape of a small per-player key-value store. It counted five: the toy ramp counter, the toy cooldown expiry, the last bed fluff, the last cat-interaction date, and the feed count. Building drops 0 and 1 settled four of them without anybody deciding anything, so the count the argument rests on is now one.
+
+| Value | Where it lives |
+| --- | --- |
+| Last bed fluff | Nowhere. The bed's cooldown is rolling hours, so `thing_uses.last_used_at` already answers it |
+| Toy cooldown expiry | The same column, with `use_cooldown_hours` from the content files |
+| Feed count | `thing_uses.use_count`, which exists for "do this N times" achievements |
+| Last cat-interaction date | One column on the player row, where it belongs: it is a fact about the player rather than about a thing |
+| **Toy ramp counter** | **`thing_uses.miss_streak`, added 16 October** |
+
+The ramp is the only one that needed anywhere new, and only because it resets. `use_count` counts uses rather than misses and never goes down, and the ramp does both — so it is refusals in a row since the last success, per player per thing, which is exactly what `thing_uses` is keyed on.
+
+**The rule this leaves behind,** for whoever adds the next one: a fact about the player goes on the player row; a fact about a (player, thing) goes in `thing_uses`; "has this player been told X" goes in `player_notices`, which is already a key-value table and is the one place the shape fits — open-ended keys, and every row meaning the same thing.
+
+**Why not the key-value store after all.** The migration cost that usually drives the decision is already solved here: adding a column is one line in `_LATER_COLUMNS` and it lands on every database at the next boot. What a key-value store would cost is real — every value becomes a string parsed at each read, a mistyped key reads as zero rather than failing, and the nightly drift trades an indexed column on a row it already has for a join per player per night. The deciding argument is narrower than any of those: this codebase derives its safety net from the schema. The reset works out which tables are one server's by looking for a `guild_id`; `test_schema.py` asserts the content and world-state split table by table. A bag of keys is invisible to all of it.
+
+Revisit if drops 4 and 5 bring three more per-thing counters of genuinely different shapes. Not before — the last time this was estimated the number was five and the answer was one.
 
 **The drop numbering collides with the content files.** `achievements.tsv` has `since_drop = 1` on all 35 rows, and `drops.tsv` has a single launch row. If launch is drop 0, either the files renumber or drop 0 maps to `since_drop = 1` and this table is off by one against the data. Going from six drops to eight makes settling it more urgent, not less.
 

@@ -714,12 +714,16 @@ class ServerConfig(Base):
 
 
 class ThingUse(Base):
-    """One row per (player, thing): when they last used it, and how many times.
+    """One row per (player, thing): when they last used it, and how often.
 
-    Three jobs in one table. `last_used_at` answers the 48-hour lumber cooldown;
-    counting distinct rows for a thing answers "{n} of {total} repairs done", which
-    the staircase needs by distinct player; and `use_count` answers "do this N
-    times" achievements, of which ten frozen burritos is the first.
+    Four jobs in one table, which is why V3's per-player counters landed
+    here rather than in a key-value store. `last_used_at` answers the
+    48-hour lumber cooldown and the bed's 24; counting distinct rows for
+    a thing answers "{n} of {total} repairs done", which the staircase
+    needs by distinct player; `use_count` answers "do this N times"
+    achievements, of which ten frozen burritos is the first and feeding
+    the cat twenty-five times is the next; and `miss_streak` answers the
+    one shape the other three cannot.
     """
 
     __tablename__ = "thing_uses"
@@ -729,6 +733,21 @@ class ThingUse(Base):
     thing_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     last_used_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     use_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Refusals in a row since the last success, for a use that can fail
+    # on a roll rather than on a rule.
+    #
+    # **Nothing writes this yet.** The cat toy at drop 2 is the first use
+    # with odds: its ramp runs 0, 25, 50, 75, 100 per cent, resets on a
+    # success, and does not advance during the cooldown - so it is
+    # neither `use_count`, which counts uses rather than misses and never
+    # resets, nor `last_used_at`. *Impressively Bad Luck* reads it at
+    # four.
+    #
+    # Added ahead of the toy because the question it settles was asked
+    # now: section 12 of the Phase 3a work order asked whether the next
+    # five per-player values should become a key-value table, and four of
+    # the five turned out to live here already. This is the fifth.
+    miss_streak: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class ServerRestock(Base):
@@ -985,6 +1004,7 @@ _LATER_COLUMNS: list[tuple[str, str, str]] = [
     ("pet_events", "relationship_at_pet", "INTEGER NOT NULL DEFAULT 0"),
     ("room_contents", "container_id", "VARCHAR(64) NOT NULL DEFAULT ''"),
     ("thing_uses", "use_count", "INTEGER NOT NULL DEFAULT 0"),
+    ("thing_uses", "miss_streak", "INTEGER NOT NULL DEFAULT 0"),
 ]
 
 
