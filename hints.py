@@ -27,6 +27,7 @@ import logging
 from dataclasses import dataclass
 
 import database
+import gating
 import resolve
 
 log = logging.getLogger(__name__)
@@ -57,24 +58,63 @@ GRADUATES_AT = 3
 
 @dataclass(frozen=True)
 class Hint:
-    """One nudge: the string it renders, and what makes it unnecessary.
+    """One nudge: what it says, and everything that makes it wrong.
 
     `recommends` is the action the hint tells the player to take. When
     they take it the hint is retired whether or not they ever saw it,
     which is what stops the rail advising somebody to do a thing they
     did yesterday.
+
+    `needs_commands` and `needs_thing` are the other half, and they
+    exist because the first version of this did not have them: a tester
+    on drop 0 was told *"There is something new here. Try /look"* when
+    there was nothing new and `/look` was not in their slash menu.
+
+    **A hint that names a command or a thing declares it here**, and the
+    rail checks both against the same gates the game itself uses - the
+    command tables in `gating`, and whether the thing's drop has
+    arrived. Writing the drop number on the hint instead would have
+    duplicated knowledge `gating` already owns, and gone stale the first
+    time a drop moved.
     """
 
     hint_id: str
     recommends: str | None = None
+    needs_commands: tuple[str, ...] = ()
+    needs_thing: str | None = None
 
 
-FIRST_FRIENDLY = Hint("hint.first_friendly")
-FIRST_STANDOFFISH = Hint("hint.first_standoffish")
-SOMETHING_NEW = Hint("hint.something_new", recommends=DID_LOOK)
-LOOK_SPECIFIC = Hint("hint.look_specific", recommends=DID_LOOK_BED)
-TRY_USE = Hint("hint.try_use", recommends=DID_USE_BED)
-TRY_LOOK = Hint("hint.try_look", recommends=DID_LOOK_BED)
+CAT_BED = "cat_bed"
+
+FIRST_FRIENDLY = Hint("hint.first_friendly", needs_commands=("stats",))
+FIRST_STANDOFFISH = Hint("hint.first_standoffish", needs_commands=("stats",))
+SOMETHING_NEW = Hint(
+    "hint.something_new",
+    recommends=DID_LOOK,
+    needs_commands=("look",),
+    # The something that is new *is* the bed. Without this the hint
+    # fires the moment `/look` exists, which on a server QA has moved
+    # by hand need not be the moment there is anything to look at.
+    needs_thing=CAT_BED,
+)
+LOOK_SPECIFIC = Hint(
+    "hint.look_specific",
+    recommends=DID_LOOK_BED,
+    needs_commands=("look",),
+    needs_thing=CAT_BED,
+)
+TRY_USE = Hint(
+    "hint.try_use",
+    recommends=DID_USE_BED,
+    needs_commands=("use",),
+    needs_thing=CAT_BED,
+)
+TRY_LOOK = Hint(
+    "hint.try_look",
+    recommends=DID_LOOK_BED,
+    needs_commands=("look",),
+    needs_thing=CAT_BED,
+)
 
 ALL = (FIRST_FRIENDLY, FIRST_STANDOFFISH, SOMETHING_NEW, LOOK_SPECIFIC, TRY_USE, TRY_LOOK)
 
@@ -98,6 +138,24 @@ async def did(guild_id: int, user_id: int, action: str) -> None:
         await database.notice(guild_id, user_id, hint_id)
 
 
+async def reachable(guild_id: int, hint: Hint) -> bool:
+    """Whether this hint's advice is possible on this server yet.
+
+    Asked of the same gates the game uses rather than of a drop number
+    written on the hint: the command tables decide what a player can
+    type, and `since_drop` decides what exists. A hint pointing past
+    either is not early, it is wrong.
+    """
+    if hint.needs_commands:
+        drop = await resolve.current_drop(guild_id)
+        if not set(hint.needs_commands) <= gating.player_commands_for(drop):
+            return False
+    if hint.needs_thing:
+        if hint.needs_thing not in await resolve.visible_thing_ids(guild_id):
+            return False
+    return True
+
+
 async def pick(guild_id: int, user_id: int, *candidates: Hint) -> str | None:
     """The one hint to append to this message, or None to stay quiet.
 
@@ -105,11 +163,17 @@ async def pick(guild_id: int, user_id: int, *candidates: Hint) -> str | None:
     wins. Choosing it records it, so the same hint never arrives twice,
     and the ones passed over are left untouched - a hint that lost to a
     better one this time is still waiting next time.
+
+    A hint that is not reachable yet is passed over **without being
+    recorded**, which is the difference between "not yet" and "already
+    said": it has to still be waiting when its drop opens.
     """
     for hint in candidates:
         if hint.recommends and await database.has_been_told(
             guild_id, user_id, hint.recommends
         ):
+            continue
+        if not await reachable(guild_id, hint):
             continue
         if not await database.notice(guild_id, user_id, hint.hint_id):
             continue
