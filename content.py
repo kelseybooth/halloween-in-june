@@ -340,6 +340,19 @@ def _int(value: str | None, *, default: int | None = None) -> int | None:
     return int(raw)
 
 
+def _since_drop(row: dict[str, str]) -> int:
+    """Which drop a content row waits for, defaulting to the first one.
+
+    Its own function because of one character. This used to read
+    `_int(...) or 1`, and the `or` was harmless for as long as there was no
+    drop 0 - V3 starts numbering at 0, which is falsy, so every drop-0 row
+    was silently rewritten to drop 1. That made the cat invisible in the
+    one drop she is the whole of.
+    """
+    value = _int(row.get("since_drop"))
+    return 1 if value is None else value
+
+
 def normalise_emoji(value: str) -> str:
     """Strip the variation selector so the file and a reaction compare equal.
 
@@ -395,7 +408,7 @@ def _text_rows(path: Path, id_column: str, columns: tuple[str, ...]) -> list[Tex
             TextRow(
                 entity_id=row[id_column].strip(),
                 state=_text(row.get("state")) or "default",
-                since_drop=_int(row.get("since_drop"), default=1) or 1,
+                since_drop=_since_drop(row),
                 text={c: row[c].strip() for c in columns if _text(row.get(c))},
             )
         )
@@ -445,7 +458,7 @@ def load_files(directory: Path | None = None) -> Content:
                 destination_room_id=_text(row.get("destination_room_id")),
                 contained_in=_text(row.get("contained_in")),
                 use_cooldown_hours=_int(row.get("use_cooldown_hours")),
-                since_drop=_int(row.get("since_drop"), default=1) or 1,
+                since_drop=_since_drop(row),
                 sort_order=_int(row.get("sort_order"), default=0) or 0,
             )
         )
@@ -486,7 +499,7 @@ def load_files(directory: Path | None = None) -> Content:
                 window_start=_text(row.get("window_start")) or "00:00",
                 window_end=_text(row.get("window_end")) or "23:59",
                 config_key=_text(row.get("config_key")),
-                since_drop=_int(row.get("since_drop"), default=1) or 1,
+                since_drop=_since_drop(row),
                 notes=_text(row.get("notes")),
             )
         )
@@ -515,7 +528,7 @@ def load_files(directory: Path | None = None) -> Content:
                 kind=(_text(row.get("kind")) or "").lower(),
                 name=_text(row.get("name")) or "",
                 unlock=_text(row.get("unlock")) or "",
-                since_drop=_int(row.get("since_drop"), default=1) or 1,
+                since_drop=_since_drop(row),
                 sort_order=_int(row.get("sort_order"), default=0) or 0,
                 notes=_text(row.get("notes")),
             )

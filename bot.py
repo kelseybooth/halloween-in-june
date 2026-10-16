@@ -795,11 +795,13 @@ async def pet(interaction: discord.Interaction) -> None:
 @app_commands.describe(
     confirm="Type this server's name exactly. There is no undo.",
     keep_art="Keep the uploaded cat images, so a reset does not cost ten re-uploads.",
+    back_to_drop="Also rewind the game to this drop. Backwards only; leave it out to stay put.",
 )
 async def reset_haunted_house(
     interaction: discord.Interaction,
     confirm: str,
     keep_art: bool = True,
+    back_to_drop: int | None = None,
 ) -> None:
     """Put one server back to the morning before anybody entered.
 
@@ -818,6 +820,20 @@ async def reset_haunted_house(
     **The calendar restarts too.** `initialized_on` lives in `server_config`
     and goes with the rest, so the next `/enter` is day one again - which is
     what makes this useful for testing the drop schedule.
+
+    **The drop and the channel survive by default.** Both live in
+    `server_config` and so are cleared with everything else, and both are
+    written straight back: wiping everyone's progress is not the same as
+    the house never having opened, and re-running `/start-game` plus one
+    `/advance-game` per drop after every reset is friction that grows with
+    the schedule.
+
+    `back_to_drop` is the way back. It only ever goes **backwards or
+    stays** - forward movement belongs to `/advance-game`, which confirms
+    and steps once. The rule that makes rewinding safe at all is that it
+    comes bundled with the wipe: a player cannot be left holding a drop-1
+    achievement on a drop-0 server, because that player has no achievements
+    left.
 
     The threads are left alone. `/initialize-haunted-house` rebuilds those,
     and wanting a clean game is not the same as wanting nine channels
@@ -843,6 +859,39 @@ async def reset_haunted_house(
         )
         return
 
+    try:
+        current = await resolve.current_drop(guild.id)
+        channel_id = await database.announcement_channel(guild.id)
+    except SQLAlchemyError:
+        log.exception("Could not read the game's state before resetting %s", guild.id)
+        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    landing = current
+    if back_to_drop is not None:
+        if current is None:
+            await interaction.followup.send(
+                "There is no game in this server to rewind. Run "
+                "`/start-game` first.",
+                ephemeral=True,
+            )
+            return
+        if back_to_drop > current:
+            await interaction.followup.send(
+                f"This server is on drop {current}, and `back_to_drop` only "
+                f"goes backwards. Use `/advance-game` to move forward - it "
+                "goes one drop at a time, on purpose.",
+                ephemeral=True,
+            )
+            return
+        if back_to_drop not in await resolve.defined_drop_ids():
+            await interaction.followup.send(
+                f"There is no drop {back_to_drop} in the content files.",
+                ephemeral=True,
+            )
+            return
+        landing = back_to_drop
+
     keeping = {}
     if keep_art:
         try:
@@ -851,7 +900,9 @@ async def reset_haunted_house(
             log.exception("Could not read the art before resetting %s", guild.id)
 
     try:
-        cleared = await content_loader.reset_guild(guild.id)
+        cleared = await content_loader.reset_guild(guild.id, drop=landing)
+        if channel_id is not None:
+            await database.set_announcement_channel(guild.id, channel_id)
         for art_id, url in keeping.items():
             await database.record_art(guild.id, art_id, url)
     except (content.ContentError, SQLAlchemyError) as exc:
@@ -872,6 +923,12 @@ async def reset_haunted_house(
     ]
     if keeping:
         lines.append(f"- kept {len(keeping)} uploaded image(s)")
+    if landing is None:
+        lines.append("- no game here yet; `/start-game` opens one")
+    elif landing == current:
+        lines.append(f"- still on drop {landing}, in the same channel")
+    else:
+        lines.append(f"- rewound from drop {current} to drop {landing}")
     lines.append(
         "- day one starts again on the next `/enter`, and every player will "
         "need to run it"

@@ -73,7 +73,7 @@ def world_tables() -> tuple[str, ...]:
     )
 
 
-async def reset_guild(guild_id: int) -> dict[str, int]:
+async def reset_guild(guild_id: int, *, drop: int | None = None) -> dict[str, int]:
     """Wipe one server's game and put its starting stock back.
 
     Scoped to the guild throughout: every table here carries a `guild_id`,
@@ -83,6 +83,12 @@ async def reset_guild(guild_id: int) -> dict[str, int]:
     nothing to do with what a server has done. What comes back is the
     starting placement, because clearing `room_contents` without re-placing
     would leave a house with nothing in any room.
+
+    `drop` is where the server lands. It is written back **before** the
+    placement rather than after, because what gets placed is decided by
+    which drops have arrived, and the clear above took the pointer with it.
+    Passing None leaves the game unstarted, which is a reset nobody has run
+    `/start-game` on yet - an empty channel, correctly.
     """
     parsed = content_module.load()
     placements = things_to_place(parsed)
@@ -97,6 +103,14 @@ async def reset_guild(guild_id: int) -> dict[str, int]:
             )
             if result.rowcount:
                 cleared[name] = result.rowcount
+
+        if drop is not None:
+            session.add(
+                database.ServerConfig(
+                    guild_id=guild_id, key=resolve.DROP_KEY, value=str(drop)
+                )
+            )
+            await session.flush()
 
         arrived = await _arrived_drops(session, guild_id, parsed)
         placed, _, _ = await _place_for_guild(session, guild_id, placements, arrived)

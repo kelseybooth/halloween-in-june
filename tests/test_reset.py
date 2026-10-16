@@ -14,7 +14,7 @@ the question cannot fall behind the answer again.
 
 import pytest
 
-from conftest import ALICE, BOB, GUILD_A, GUILD_B
+from conftest import ALICE, BOB, GUILD_A, GUILD_B, HOUSE_DROP
 from fake_discord import FakeChannel, FakeGuild, FakeInteraction, FakeMember
 
 import bot
@@ -75,10 +75,10 @@ async def rows(guild_id) -> dict[str, int]:
     return out
 
 
-async def reset(two_games, confirm=SERVER_NAME, keep_art=True):
+async def reset(two_games, confirm=SERVER_NAME, keep_art=True, back_to_drop=None):
     _, guild, halloween = two_games
     interaction = FakeInteraction(ALICE, GUILD_A, guild=guild, channel=halloween)
-    await bot.reset_haunted_house.callback(interaction, confirm, keep_art)
+    await bot.reset_haunted_house.callback(interaction, confirm, keep_art, back_to_drop)
     return interaction
 
 
@@ -155,13 +155,13 @@ async def test_every_trace_of_the_game_is_gone(two_games):
     await reset(two_games)
 
     left = await rows(GUILD_A)
-    assert set(left) <= {"server_art", "room_contents"}
+    assert set(left) <= {"server_art", "room_contents", "server_config"}
 
 
 @pytest.mark.parametrize(
     "table",
     ["player_achievements", "server_achievements", "player_states",
-     "server_states", "thing_uses", "player_inventory", "server_config",
+     "server_states", "thing_uses", "player_inventory",
      "craving_tally", "player_game_state", "pet_events", "users"],
 )
 async def test_each_kind_of_progress_is_cleared(two_games, table):
@@ -204,8 +204,8 @@ async def test_the_house_is_not_left_empty(two_games):
 async def test_the_content_is_still_loaded(two_games):
     await reset(two_games)
 
-    assert len(await resolve.all_rooms()) == 9
-    assert len(await resolve.achievements(GUILD_A)) == 35
+    assert len(await resolve.all_rooms()) == 10  # nine rooms and the channel
+    assert len(await resolve.achievements(GUILD_A)) == 42
 
 
 async def test_the_art_is_kept_by_default(two_games):
@@ -243,3 +243,84 @@ async def test_the_report_says_what_it_did(two_games):
     assert "back to the morning before anybody entered" in reply
     assert "table(s)" in reply
     assert "back in the house" in reply
+
+
+# --------------------------------------------------------------------------
+# What survives on purpose, and the way back
+# --------------------------------------------------------------------------
+
+
+async def test_the_tunables_go_with_everything_else(two_games):
+    """`server_config` is not exempt. Two of its rows are."""
+    assert await database.get_setting(GUILD_A, "planks_required") == 3
+
+    await reset(two_games)
+
+    assert await database.get_setting(GUILD_A, "planks_required") == 10  # the default
+
+
+async def test_the_game_stays_where_it_was(two_games):
+    """Wiping everyone's progress is not the same as the house never
+    having opened, and re-running `/start-game` plus one `/advance-game`
+    per drop after every reset is friction that grows with the schedule."""
+    await reset(two_games)
+
+    assert await resolve.current_drop(GUILD_A) == HOUSE_DROP
+
+
+async def test_the_channel_stays_too(two_games):
+    _, guild, halloween = two_games
+    await database.set_announcement_channel(GUILD_A, halloween.id)
+
+    await reset(two_games)
+
+    assert await database.announcement_channel(GUILD_A) == halloween.id
+
+
+async def test_rewinding_is_what_back_to_drop_is_for(two_games):
+    """The admin who advanced a drop before opening the doors."""
+    interaction = await reset(two_games, back_to_drop=0)
+
+    assert await resolve.current_drop(GUILD_A) == 0
+    assert "rewound" in interaction.reply
+
+
+async def test_a_rewind_takes_the_content_back_with_it(two_games):
+    """The point of rewinding: the house is out of reach again."""
+    await reset(two_games, back_to_drop=0)
+
+    assert await resolve.arrived_drop_ids(GUILD_A) == {0}
+    assert await resolve.visible_thing_ids(GUILD_A) == {"eunoia"}
+
+
+async def test_it_only_goes_backwards(two_games):
+    """Forward movement belongs to `/advance-game`, which steps once and
+    confirms. A reset is not a shortcut around that."""
+    interaction = await reset(two_games, back_to_drop=HOUSE_DROP + 1)
+
+    assert await resolve.current_drop(GUILD_A) == HOUSE_DROP
+    assert "/advance-game" in interaction.reply
+
+
+async def test_standing_still_is_allowed(two_games):
+    """Naming the drop you are already on is not an error."""
+    await reset(two_games, back_to_drop=HOUSE_DROP)
+
+    assert await resolve.current_drop(GUILD_A) == HOUSE_DROP
+
+
+async def test_a_drop_that_does_not_exist_is_refused(two_games):
+    """Below the current drop, so it gets past the backwards-only check and
+    reaches the one that asks whether the drop is real at all."""
+    interaction = await reset(two_games, back_to_drop=-1)
+
+    assert await resolve.current_drop(GUILD_A) == HOUSE_DROP
+    assert "no drop -1" in interaction.reply.lower()
+
+
+async def test_the_house_is_put_back_at_the_drop_it_lands_on(two_games):
+    """The pointer is written before the placement, not after - what gets
+    placed is decided by which drops have arrived."""
+    await reset(two_games, back_to_drop=0)
+
+    assert (await rows(GUILD_A)).get("room_contents", 0) == 0
