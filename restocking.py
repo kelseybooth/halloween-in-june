@@ -230,7 +230,7 @@ async def set_initialized_on(guild_id: int, on: date | None = None) -> date:
     if existing:
         return existing
 
-    on = on or database.pacific_today()
+    on = on or await database.server_today(guild_id)
     session_factory = database._require_session()
     insert = database._upsert_statement()
     async with session_factory() as session:
@@ -261,7 +261,7 @@ async def run_for_guild(
     instead of skipping them.
     """
     report = RestockReport()
-    now = now or database._utcnow()
+    now = now or await database.server_now(guild_id)
     # Derived from `now` rather than read from the clock, so the two cannot
     # disagree: passing a `now` in the future has to move the day with it, or
     # catch-up tests silently exercise nothing.

@@ -156,8 +156,67 @@ def _utcnow() -> datetime:
 
 
 def pacific_today() -> date:
-    """Today's calendar date in Pacific time, which is what the decay runs on."""
+    """Today's calendar date in Pacific time, by the real clock.
+
+    Almost nothing should call this. The game's clock is
+    `server_today`, which is this shifted by whatever `/qa-clock` has
+    set on that server - see the note on `CLOCK_KEY`.
+    """
     return datetime.now(PACIFIC).date()
+
+
+# How many days this server's clock is shifted by. Deliberately not in
+# `CONFIG_KEYS`: `/admin_config` is for numbers an admin tunes mid-game
+# and refuses anything below 1, and this one is a QA lever that wants
+# zero and negatives.
+#
+# **One offset moves every dated behaviour at once**, which is the whole
+# argument for routing the clock through one pair of functions: the
+# nightly drift, the bed's cooldown, the ten-minute pet window and the
+# date-gated achievements all read it, so a tester can age a server a
+# week with one command instead of waiting one.
+CLOCK_KEY = "clock_offset_days"
+
+
+async def clock_offset(guild_id: int) -> int:
+    """How many days ahead this server's clock is running."""
+    raw = await get_config_raw(guild_id, CLOCK_KEY)
+    if raw is None:
+        return 0
+    try:
+        return int(raw)
+    except ValueError:
+        log.warning(
+            "server_config %s is %r in guild %s, which is not a number of "
+            "days; using the real clock",
+            CLOCK_KEY,
+            raw,
+            guild_id,
+        )
+        return 0
+
+
+async def server_now(guild_id: int) -> datetime:
+    """This server's idea of now, as a naive UTC timestamp.
+
+    Every time-of-day read in the game goes through here or through
+    `server_today`. Nothing else calls the system clock - which is an
+    hour's work once and a week of hunting later, and is what makes a
+    single `clock_offset_days` test every dated behaviour at the same
+    time.
+    """
+    return _utcnow() + timedelta(days=await clock_offset(guild_id))
+
+
+async def server_today(guild_id: int) -> date:
+    """This server's calendar date, in Pacific time.
+
+    Shifted in whole days, so a server running a week ahead is at the
+    same time of day a week later rather than at some hour nobody
+    chose. Pacific midnight is still the boundary.
+    """
+    offset = await clock_offset(guild_id)
+    return (datetime.now(PACIFIC) + timedelta(days=offset)).date()
 
 
 def pacific_day_bounds_utc(day: date) -> tuple[datetime, datetime]:
@@ -1157,7 +1216,7 @@ async def increment_pet_count(user_id: int, guild_id: int) -> PetResult:
     """
     session_factory = _require_session()
 
-    now = _utcnow()
+    now = await server_now(guild_id)
     cutoff = now - RECENT_PET_WINDOW
 
     insert = _upsert_statement()
@@ -1500,7 +1559,7 @@ class LookResult(NamedTuple):
 # --------------------------------------------------------------------------
 
 
-async def apply_daily_decay(day: date) -> list[DecayChange]:
+async def apply_daily_decay(day: date, *, guild_id: int | None = None) -> list[DecayChange]:
     """Settle one Pacific calendar day, drifting idle players back toward neutral.
 
     Each (player, server) row is independent: a player is skipped in a
@@ -1531,7 +1590,8 @@ async def apply_daily_decay(day: date) -> list[DecayChange]:
                         User.relationship,
                         User.last_cat_interaction_date,
                     ).where(
-                        (User.last_decay_date.is_(None)) | (User.last_decay_date < day)
+                        (User.last_decay_date.is_(None)) | (User.last_decay_date < day),
+                        *( [User.guild_id == guild_id] if guild_id is not None else [] ),
                     )
                 )
             ).all()
@@ -1570,21 +1630,40 @@ async def apply_daily_decay(day: date) -> list[DecayChange]:
 
 
 async def run_pending_decay() -> list[DecayChange]:
-    """Settle every fully elapsed Pacific day that has not been decayed yet.
+    """Settle every fully elapsed day that has not been decayed yet.
 
-    Called at startup and after each scheduled midnight run, so an outage of a
-    few days is caught up rather than silently skipped. Only days that have
-    fully ended are settled - today is still in progress and is left alone.
+    Called at startup and after each scheduled midnight run, so an outage
+    of a few days is caught up rather than silently skipped. Only days
+    that have fully ended are settled - today is still in progress.
+
+    **Per server, because each server has its own today.** A test server
+    running a week ahead on `/qa-clock` has a week of nights to settle
+    that the live one does not, and settling them all against one
+    calendar would either skip its days or decay everybody else's
+    future.
     """
     session_factory = _require_session()
-    today = pacific_today()
 
     async with session_factory() as session:
-        population = await session.scalar(select(func.count()).select_from(User))
-        earliest = await session.scalar(select(func.min(User.last_decay_date)))
+        guilds = (
+            await session.execute(select(User.guild_id).distinct())
+        ).scalars().all()
 
-    if not population:
-        return []
+    changes: list[DecayChange] = []
+    for guild_id in sorted(guilds):
+        changes.extend(await _catch_up(guild_id))
+    return changes
+
+
+async def _catch_up(guild_id: int) -> list[DecayChange]:
+    """Every night one server owes, oldest first."""
+    session_factory = _require_session()
+    today = await server_today(guild_id)
+
+    async with session_factory() as session:
+        earliest = await session.scalar(
+            select(func.min(User.last_decay_date)).where(User.guild_id == guild_id)
+        )
 
     # Never decayed before: settle yesterday only, rather than all of history.
     first_day = (earliest + timedelta(days=1)) if earliest else today - timedelta(days=1)
@@ -1593,7 +1672,7 @@ async def run_pending_decay() -> list[DecayChange]:
     changes: list[DecayChange] = []
     day = first_day
     while day < today:
-        changes.extend(await apply_daily_decay(day))
+        changes.extend(await apply_daily_decay(day, guild_id=guild_id))
         day += timedelta(days=1)
     return changes
 
@@ -1996,7 +2075,7 @@ async def record_use(user_id: int, guild_id: int, thing_id: str) -> UseRecord:
     """
     session_factory = _require_session()
     insert = _upsert_statement()
-    now = _utcnow()
+    now = await server_now(guild_id)
 
     async with session_factory() as session:
         previous = (

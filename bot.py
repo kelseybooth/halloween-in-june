@@ -5,6 +5,7 @@ Slash commands:
   /stats  - show your pet total
 """
 
+import dataclasses
 import logging
 import os
 import random
@@ -832,7 +833,7 @@ async def _announce_pet(interaction, friendly: bool) -> None:
 
     which = _public_pet_line(
         interaction.guild_id, interaction.user.id, getattr(channel, "id", 0),
-        database._utcnow(),
+        await database.server_now(interaction.guild_id),
     )
     if which is None:
         return
@@ -857,7 +858,9 @@ async def _move_the_meter(user_id: int, guild_id: int, delta: int) -> int:
     player who tried was not absent. Pass `delta=0` for an attempt that
     moved nothing.
     """
-    await database.touched_the_cat(user_id, guild_id, database.pacific_today())
+    await database.touched_the_cat(
+        user_id, guild_id, await database.server_today(guild_id)
+    )
     if not delta:
         return await database.get_relationship(user_id, guild_id)
     return await database.adjust_relationship(user_id, guild_id, delta)
@@ -1854,7 +1857,7 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
         # absence, and a player who tried was not absent.
         if found.thing_id in CAT_INTERACTIONS:
             await database.touched_the_cat(
-                user.id, guild_id, database.pacific_today()
+                user.id, guild_id, await database.server_today(guild_id)
             )
         if found.thing_id == world.CAT_BED:
             # Recorded on the attempt, like the stamp above: a player
@@ -2001,6 +2004,14 @@ async def _fire(context, *, interaction=None, guild=None) -> None:
     the thing.
     """
     try:
+        # Give the context this server's clock unless the caller pinned
+        # one. The date-gated achievements read `context.when`, and a
+        # test server a week ahead has to be able to reach 31 October
+        # without waiting for it.
+        if context.now is None:
+            context = dataclasses.replace(
+                context, now=await database.server_now(context.guild_id)
+            )
         earned = await achievements.fire(context)
     except Exception:
         log.exception("Achievement hook %s failed", context.hook)
@@ -2231,7 +2242,7 @@ async def _use_with_cooldown(interaction, state, found, row) -> None:
 
     previous = await database.last_used(user.id, guild_id, found.thing_id)
     if previous is not None:
-        elapsed = database._utcnow() - previous
+        elapsed = await database.server_now(guild_id) - previous
         if elapsed < window:
             await interaction.followup.send(
                 await phrasing.say(
