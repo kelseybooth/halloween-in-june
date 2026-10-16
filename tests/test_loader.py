@@ -416,7 +416,7 @@ async def test_fresh_ignores_orphans_rather_than_aborting(two_servers):
     assert report.orphans_ignored == []
 
 
-async def test_fresh_clears_states_and_config_too(two_servers):
+async def test_fresh_clears_states_and_tunables_too(two_servers):
     async with two_servers._require_session()() as session:
         session.add_all(
             [
@@ -429,8 +429,37 @@ async def test_fresh_clears_states_and_config_too(two_servers):
 
     await content_loader.load_content(a_world(a_thing("spoon")), fresh=True)
 
-    for table in ("player_states", "server_states", "server_config"):
+    for table in ("player_states", "server_states"):
         assert await row_count(two_servers, table) == 0
+    assert await setting(two_servers, GUILD_A, "planks_required") is None
+
+
+async def test_fresh_does_not_un_start_anybodys_game(two_servers):
+    """Two `server_config` rows survive, and they are the two that say
+    what a server *is* rather than what has happened in it. Wiping the
+    world should not mean re-running `/start-game` in every server the
+    bot is in - the same argument `/reset-haunted-house` makes."""
+    import resolve
+
+    await database.set_setting(GUILD_A, resolve.DROP_KEY, 1)
+    await database.set_announcement_channel(GUILD_A, 4242)
+
+    await content_loader.load_content(a_world(a_thing("spoon")), fresh=True)
+
+    assert await resolve.current_drop(GUILD_A) == 1
+    assert await database.announcement_channel(GUILD_A) == 4242
+
+
+async def setting(db, guild_id, key):
+    from sqlalchemy import select
+
+    async with db._require_session()() as session:
+        return await session.scalar(
+            select(database.ServerConfig.value).where(
+                database.ServerConfig.guild_id == guild_id,
+                database.ServerConfig.key == key,
+            )
+        )
 
 
 async def test_fresh_leaves_players_in_the_house(two_servers):
@@ -475,9 +504,9 @@ async def test_the_shipped_content_loads(two_servers):
     parsed = content_module.load_files()
     report = await content_loader.load_content(parsed)
 
-    assert report.content_rows["room_types"] == 9
-    assert report.content_rows["thing_types"] == 145
-    assert report.content_rows["drops"] == 2
+    assert report.content_rows["room_types"] == 10  # nine rooms and the channel
+    assert report.content_rows["thing_types"] == 146  # the cat bed joined them
+    assert report.content_rows["drops"] == 4  # 0 and 1 built, 2 and 3 named
     assert report.content_rows["restocks"] == 3
 
 

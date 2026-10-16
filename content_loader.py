@@ -405,8 +405,23 @@ async def _find_orphans(session, known_ids: set[str]):
     return held, in_rooms
 
 
+# The two `server_config` rows that survive a `--fresh`. Both say what a
+# server *is* rather than what has happened in it: which drop it is on and
+# which channel it lives in. Wiping the world is not the same as un-starting
+# every game on it, and an admin who reloads content with `--fresh` should
+# not have to re-run `/start-game` in every server the bot is in - the same
+# argument `/reset-haunted-house` makes, for the same two keys.
+_KEPT_SETTINGS = (resolve.DROP_KEY, database.CONFIG_ANNOUNCE_CHANNEL)
+
+
 async def _wipe_world_state(session) -> None:
     for table in _WORLD_TABLES:
+        if table == "server_config":
+            config = database.ServerConfig.__table__
+            await session.execute(
+                config.delete().where(config.c.key.notin_(_KEPT_SETTINGS))
+            )
+            continue
         await session.execute(database.Base.metadata.tables[table].delete())
 
 

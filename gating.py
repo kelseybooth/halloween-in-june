@@ -45,7 +45,6 @@ ADMIN_COMMANDS: dict[int, tuple[str, ...]] = {
         "admin_config",
         "reset-haunted-house",
         "initialize-haunted-house",
-        "post-welcome",
     ),
 }
 

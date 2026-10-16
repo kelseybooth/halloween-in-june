@@ -1353,54 +1353,6 @@ async def reset_haunted_house(
 
 
 @bot.tree.command(
-    name="post-welcome",
-    description="(Admin) Post the pinned welcome in the Halloween channel.",
-)
-@app_commands.guild_only()
-@app_commands.default_permissions(administrator=True)
-@app_commands.checks.has_permissions(administrator=True)
-async def post_welcome(interaction: discord.Interaction) -> None:
-    """Open the game.
-
-    Separate from building the house on purpose. Posting it automatically at
-    initialization would guarantee it exists and is correct, but it puts
-    writer copy inside an admin command where nobody would think to update
-    it - and, more usefully, keeping them apart lets the house be built days
-    before the game opens.
-
-    The copy lives in `defaults.tsv`, so a writer can change it without a
-    deploy and without anybody going near this function.
-    """
-    if interaction.guild is None:
-        await interaction.response.send_message(
-            "This command only works inside a server.", ephemeral=True
-        )
-        return
-
-    await interaction.response.defer(ephemeral=True, thinking=True)
-
-    channel = house_utils.find_channel(interaction.guild)
-    if channel is None:
-        await interaction.followup.send(
-            f"There's no #{house_utils.HALLOWEEN_CHANNEL_NAME} channel to post in.",
-            ephemeral=True,
-        )
-        return
-
-    text = await phrasing.default_say("welcome")
-    if not text:
-        await interaction.followup.send(
-            "The welcome copy is missing from defaults.tsv.", ephemeral=True
-        )
-        return
-
-    await _post_quietly(channel, text, ART_WELCOME)
-    await interaction.followup.send(
-        f"Posted in {channel.mention}. Pin it, and the house is open.", ephemeral=True
-    )
-
-
-@bot.tree.command(
     name="initialize-haunted-house",
     description="(Admin) Rebuild every haunted house thread from scratch.",
 )
@@ -1574,7 +1526,6 @@ ART_FOR_ACHIEVEMENT = {
     "getting_into_the_spirit": "eunoia_startled",
 }
 
-ART_WELCOME = "eunoia_alert"
 ART_FIRST_PET = "eunoia_alert"
 ART_CROWDING = "eunoia_suspicious"
 ART_DIAPER = "eunoia_sniffing"

@@ -60,6 +60,9 @@ async def test_nightly_decay_treats_each_server_separately(db):
             db.PetEvent(user_id=ALICE, guild_id=GUILD_A, created_at=start + timedelta(hours=1))
         )
         await session.commit()
+    # The drift reads the stamp rather than the pet log now, and the stamp
+    # is per (player, server) like everything else here.
+    await db.touched_the_cat(ALICE, GUILD_A, day)
 
     await db.apply_daily_decay(day)
 
@@ -172,10 +175,9 @@ async def test_a_drop_fired_on_one_server_does_not_fire_on_another(db):
 
     await db.ensure_user_exists(ALICE, GUILD_A)
     await db.ensure_user_exists(BOB, GUILD_B)
-    await content_loader.load_content(
-        a_calendar(a_drop(1, value="launch"), a_drop(2, trigger="manual"))
-    )
-    await resolve.record_arrival(GUILD_A, 2)
+    await content_loader.load_content(a_calendar(a_drop(1), a_drop(2)))
+    await resolve.set_current_drop(GUILD_A, 2)
+    await resolve.set_current_drop(GUILD_B, 1)
 
     assert await resolve.arrived_drop_ids(GUILD_A) == {1, 2}
     assert await resolve.arrived_drop_ids(GUILD_B) == {1}

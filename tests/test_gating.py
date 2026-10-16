@@ -65,7 +65,7 @@ def test_the_out_of_scope_verbs_are_absent_from_both_poc_drops(verb):
     assert verb in gating.commands_for(HOUSE_DROP)
 
 
-@pytest.mark.parametrize("name", ["initialize-haunted-house", "post-welcome"])
+@pytest.mark.parametrize("name", ["initialize-haunted-house"])
 def test_the_house_admin_commands_wait_for_the_house(name):
     assert name not in gating.commands_for(1)
     assert name in gating.commands_for(HOUSE_DROP)

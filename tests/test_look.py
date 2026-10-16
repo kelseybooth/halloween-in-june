@@ -9,7 +9,7 @@ missing. Everything else about `/look` follows from where a thing is.
 
 import pytest
 
-from conftest import ALICE, BOB, GUILD_A
+from conftest import HOUSE_DROP, ALICE, BOB, GUILD_A
 from fake_discord import FakeInteraction
 
 import bot
@@ -524,8 +524,13 @@ async def test_taking_from_a_source_is_unchanged(house):
 
 
 async def test_every_source_in_the_shipped_house_describes_itself(house):
-    """The sweep, as a test. Seventeen sources, each looked at where it
-    stands, each expected to answer with its own first sentence."""
+    """The sweep, as a test. Eighteen sources, each looked at where it
+    stands, each expected to answer with its own first sentence.
+
+    Seventeen until the drop renumbering: the can opener's rail used to
+    wait on a drop nobody had fired, and the bulk move put it with the
+    rest of the house. It is checked now like everything else.
+    """
     parsed = content_module.load_files()
     await content_loader.load_content(parsed)
     import states
@@ -542,10 +547,9 @@ async def test_every_source_in_the_shipped_house_describes_itself(house):
     for thing in parsed.things:
         if not thing.is_source:
             continue
-        if thing.since_drop != 1:
-            # The can opener's rail waits on a drop nobody has fired, so it
-            # does not resolve yet. Its prose is checked by the loader's
-            # source-in-prose rule all the same.
+        if thing.since_drop > HOUSE_DROP:
+            # Nothing is, today. Kept so a source written for a later
+            # drop is skipped rather than failing for not resolving.
             continue
         room = thing.room_id
         if room not in things and thing.contained_in:
@@ -560,7 +564,7 @@ async def test_every_source_in_the_shipped_house_describes_itself(house):
     # Seventeen have arrived; the can opener's rail is the eighteenth and
     # waits on a drop. The count is here so a nineteenth added without a
     # description fails rather than quietly joining the buried pile.
-    assert checked == 17
+    assert checked == 18
     assert sum(1 for t in parsed.things if t.is_source) == 18
 
 
