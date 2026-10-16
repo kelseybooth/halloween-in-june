@@ -83,6 +83,11 @@ RESTOCK_SWEEP_MINUTES = 10
 # How far one reaction moves the relationship meter.
 RELATIONSHIP_STEP = 5
 
+# Where `/start-game` puts a server: a channel with a cat in it, and nothing
+# else at all. Not a magic number in the command, because drop 0 meaning
+# "the beginning" is a fact about the schedule rather than about the command.
+FIRST_DROP = 0
+
 DB_ERROR_MESSAGE = (
     "The cat slips into the shadows and you lose track of her. "
     "Something went wrong reaching the database - please try again in a moment."
@@ -783,6 +788,215 @@ async def pet(interaction: discord.Interaction) -> None:
         ),
         interaction=interaction,
     )
+
+
+@bot.tree.command(
+    name="start-game",
+    description="(Admin) Open drop 0 in a channel. The game lives there from then on.",
+)
+@app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
+@app_commands.checks.has_permissions(administrator=True)
+@app_commands.describe(
+    channel="Where the game lives. Every public line it ever posts goes here.",
+)
+async def start_game(
+    interaction: discord.Interaction, channel: discord.TextChannel
+) -> None:
+    """Put a server on drop 0, in a named channel.
+
+    **The channel is an argument rather than a name the bot goes looking
+    for.** Servers call it different things, and this one will be renamed
+    before launch; a command that is told cannot be wrong.
+
+    **Idempotent in the same channel.** Running it twice reports where the
+    server is and changes nothing, which is what an admin who cannot
+    remember whether they already ran it deserves.
+
+    **Refused against a second channel.** Moving a running game would
+    leave every player's sense of where it lives pointing at the old one,
+    and nothing in the game would tell them otherwise. Wiping first with
+    `/reset-haunted-house` is the way, and it is deliberately the longer
+    way round.
+    """
+    if interaction.guild is None:
+        await interaction.response.send_message(
+            "This command only works inside a server.", ephemeral=True
+        )
+        return
+
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    guild = interaction.guild
+
+    try:
+        current = await resolve.current_drop(guild.id)
+        existing = await database.announcement_channel(guild.id)
+    except SQLAlchemyError:
+        log.exception("Could not read the game's state in %s", guild.id)
+        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    if current is not None:
+        if existing is not None and existing != channel.id:
+            where = guild.get_channel(existing)
+            await interaction.followup.send(
+                "This server's game is already running in "
+                + (where.mention if where else "another channel")
+                + f", on drop {current}. Moving it would leave every player "
+                "looking at the wrong channel, so it is refused. "
+                "`/reset-haunted-house` first if you really mean to start "
+                "over somewhere else.",
+                ephemeral=True,
+            )
+            return
+        await interaction.followup.send(
+            f"The game is already open in {channel.mention}, on drop "
+            f"{current}. Nothing changed.",
+            ephemeral=True,
+        )
+        return
+
+    try:
+        await database.set_announcement_channel(guild.id, channel.id)
+        await resolve.set_current_drop(guild.id, FIRST_DROP)
+        await content_loader.place_arrived(guild.id)
+    except (resolve.UnknownDrop, SQLAlchemyError, content.ContentError) as exc:
+        log.exception("Could not start the game in %s", guild.id)
+        await interaction.followup.send(
+            f"The game did not open: {exc}", ephemeral=True
+        )
+        return
+
+    log.info(
+        "AUDIT %s (%s) started the game in guild %s, channel %s, at drop %s",
+        interaction.user,
+        interaction.user.id,
+        guild.id,
+        channel.id,
+        FIRST_DROP,
+    )
+    await interaction.followup.send(
+        f"The game is open in {channel.mention}, on drop {FIRST_DROP}. There "
+        "is a cat there and nothing else. `/advance-game` brings the next one.",
+        ephemeral=True,
+    )
+
+
+@bot.tree.command(
+    name="advance-game",
+    description="(Admin) Move this server forward exactly one drop.",
+)
+@app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
+@app_commands.checks.has_permissions(administrator=True)
+@app_commands.describe(
+    confirm="Leave this off once to see which drop is next before it opens.",
+)
+async def advance_game(interaction: discord.Interaction, confirm: bool = False) -> None:
+    """One drop forward, and only forward.
+
+    **It names the destination before going there.** Run without `confirm`
+    and it says which drop it would open; run again with it and the drop
+    opens. Cheaper than a button, and the confirmation says *which* drop
+    rather than merely asking twice.
+
+    **Backwards is not here.** That is `/qa-drop` on the test servers, and
+    `/reset-haunted-house back_to_drop` everywhere else - which may rewind
+    only because it has just wiped the progress that going back would
+    otherwise invalidate.
+    """
+    if interaction.guild is None:
+        await interaction.response.send_message(
+            "This command only works inside a server.", ephemeral=True
+        )
+        return
+
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    guild = interaction.guild
+
+    try:
+        current = await resolve.current_drop(guild.id)
+    except SQLAlchemyError:
+        log.exception("Could not read the drop in %s", guild.id)
+        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    if current is None:
+        await interaction.followup.send(
+            "There is no game in this server yet. `/start-game` opens one.",
+            ephemeral=True,
+        )
+        return
+
+    target = current + 1
+    if target > resolve.LAST_PLAYABLE_DROP:
+        await interaction.followup.send(
+            f"Drop {current} is the last one built. There is nothing to "
+            "advance into yet.",
+            ephemeral=True,
+        )
+        return
+
+    name = await resolve.drop_name(target)
+    titled = f": **{name}**" if name else ""
+    if not confirm:
+        await interaction.followup.send(
+            f"This would move the server from drop {current} to drop "
+            f"{target}{titled}, for everybody, now.\nRun it again with "
+            "`confirm` set to open it.",
+            ephemeral=True,
+        )
+        return
+
+    try:
+        await resolve.set_current_drop(guild.id, target)
+        placed = await content_loader.place_arrived(guild.id)
+    except (resolve.UnknownDrop, SQLAlchemyError, content.ContentError) as exc:
+        log.exception("Could not advance %s to drop %s", guild.id, target)
+        await interaction.followup.send(
+            f"The drop did not open: {exc}", ephemeral=True
+        )
+        return
+
+    log.info(
+        "AUDIT %s (%s) advanced guild %s from drop %s to drop %s",
+        interaction.user,
+        interaction.user.id,
+        guild.id,
+        current,
+        target,
+    )
+
+    announced = await _announce_drop(guild, target)
+    lines = [f"Drop {target}{titled} is open."]
+    if placed:
+        lines.append(f"- put {placed} new thing(s) in place")
+    lines.append(
+        "- announced in the channel"
+        if announced
+        else f"- nothing posted; drop {target} has no announcement line"
+    )
+    await interaction.followup.send("\n".join(lines), ephemeral=True)
+
+
+async def _announce_drop(guild, drop_id: int) -> bool:
+    """Post a drop's arrival in the channel, if it has a line to post.
+
+    The hint that rides beneath it belongs to the hint rail and arrives
+    with it. What matters here is that the announcement is public and
+    happens once, on the advance itself - a player who was not looking
+    gets the private fallback later.
+    """
+    line = await phrasing.default_say(f"drop.{drop_id}.announce")
+    if not line:
+        return False
+    channel_id = await database.announcement_channel(guild.id)
+    channel = guild.get_channel(channel_id) if channel_id else None
+    if channel is None:
+        log.warning("Guild %s has no channel to announce drop %s in", guild.id, drop_id)
+        return False
+    await _post_quietly(channel, line)
+    return True
 
 
 @bot.tree.command(

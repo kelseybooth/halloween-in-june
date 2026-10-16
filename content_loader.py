@@ -127,6 +127,26 @@ async def reset_guild(guild_id: int, *, drop: int | None = None) -> dict[str, in
     return cleared
 
 
+async def place_arrived(guild_id: int) -> int:
+    """Put down anything this server's current drop has brought with it.
+
+    Called after `/advance-game`, because placement otherwise only happens
+    at load and at reset, and a drop that arrives between boots would be a
+    cat bed nobody can see. Placement is judged per thing and skips what a
+    server already knows, so calling this twice places nothing twice.
+    """
+    parsed = content_module.load()
+    placements = things_to_place(parsed)
+    session_factory = database._require_session()
+    async with session_factory() as session:
+        arrived = await _arrived_drops(session, guild_id, parsed)
+        placed, _, _ = await _place_for_guild(session, guild_id, placements, arrived)
+        await session.commit()
+    if placed:
+        log.info("Drop placement put %d new thing(s) in guild %s", placed, guild_id)
+    return placed
+
+
 class OrphanedThings(Exception):
     """The files dropped a thing that world state still refers to.
 

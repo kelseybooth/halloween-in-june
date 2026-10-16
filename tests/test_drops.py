@@ -1,38 +1,325 @@
-"""Drop arrival, and the text a player sees because of it.
+"""The drop machine: one pointer, and the two commands that move it.
 
-Every row in the shipped content is drop 1, so the mechanism is entirely
-untested by the data - which is exactly why the work order asks for faked drops
-rather than trust. Everything here builds a calendar by hand: a drop dated in
-the past, one dated in the future, one waiting on an event, one waiting on an
-admin.
+A server sits on one drop. Everything numbered at or below it has arrived;
+everything above it is loaded, present in the files, and unreachable. That
+is the whole rule, and it replaced a calendar - dated arrival plus a row
+per arrived drop were two more answers to a question that now has one.
 
-The distinction the tests keep returning to is that a dated drop is *computed*
-and an event drop is *recorded*. Getting that backwards either way is a real bug:
-recording a date would let two servers disagree about the same calendar day, and
-computing an event would let content vanish from a house it had already changed.
+The property the proof of concept exists to prove is at the bottom: two
+servers on different drops at the same time, each seeing its own game.
 """
 
-from datetime import date, timedelta
-
 import pytest
-from sqlalchemy import select
 
-from conftest import ALICE, BOB, GUILD_A, GUILD_B
+from conftest import ALICE, GUILD_A, GUILD_B, HOUSE_DROP
+from fake_discord import FakeChannel, FakeGuild, FakeInteraction, FakeMember
 
+import bot
 import content as content_module
 import content_loader
 import database
+import reach
 import resolve
-from content import Content, Drop, Room, TextRow, Thing
-from test_loader import a_thing, contents
+from content import Content, Drop, Room, TextRow
+
+CAT = "eunoia"
+BED = "cat_bed"
 
 
-TODAY = date(2026, 10, 15)
-YESTERDAY = TODAY - timedelta(days=1)
-TOMORROW = TODAY + timedelta(days=1)
+@pytest.fixture
+async def started(db):
+    """One server with content loaded and no game started in it yet."""
+    await content_loader.load_content(content_module.load_files())
+    halloween = FakeChannel(name="halloween")
+    guild = FakeGuild(
+        GUILD_A, name="Test Server", channels=[halloween], members=[FakeMember(ALICE)]
+    )
+    await unstart(GUILD_A)
+    await unstart(GUILD_B)
+    return db, guild, halloween
 
 
-def a_drop(drop_id, trigger="date", value=None, event=None):
+async def unstart(guild_id):
+    """Undo the fixture's helpfulness: this file is about not being started."""
+    async with database._require_session()() as session:
+        table = database.ServerConfig.__table__
+        await session.execute(
+            table.delete().where(
+                table.c.guild_id == guild_id, table.c.key == resolve.DROP_KEY
+            )
+        )
+        await session.commit()
+
+
+def an_admin(guild, channel):
+    return FakeInteraction(ALICE, guild.id, guild=guild, channel=channel)
+
+
+async def start(started, channel=None):
+    _, guild, halloween = started
+    interaction = an_admin(guild, halloween)
+    await bot.start_game.callback(interaction, channel or halloween)
+    return interaction
+
+
+async def advance(started, confirm=True):
+    _, guild, halloween = started
+    interaction = an_admin(guild, halloween)
+    await bot.advance_game.callback(interaction, confirm)
+    return interaction
+
+
+# --------------------------------------------------------------------------
+# The pointer
+# --------------------------------------------------------------------------
+
+
+async def test_a_server_nobody_started_has_no_game(started):
+    """Unset is not drop 0. A bot sitting in a server it was invited to and
+    never set up shows that server's members nothing at all."""
+    assert await resolve.current_drop(GUILD_A) is None
+    assert await resolve.arrived_drop_ids(GUILD_A) == set()
+    assert await resolve.visible_thing_ids(GUILD_A) == set()
+
+
+async def test_everything_at_or_below_the_pointer_has_arrived(started):
+    await resolve.set_current_drop(GUILD_A, 1)
+
+    assert await resolve.arrived_drop_ids(GUILD_A) == {0, 1}
+
+
+async def test_everything_above_it_has_not(started):
+    await resolve.set_current_drop(GUILD_A, 1)
+
+    arrived = await resolve.arrived_drop_ids(GUILD_A)
+    assert 2 not in arrived and HOUSE_DROP not in arrived
+
+
+async def test_a_drop_the_files_do_not_define_is_refused(started):
+    with pytest.raises(resolve.UnknownDrop):
+        await resolve.set_current_drop(GUILD_A, 99)
+
+
+async def test_an_unreadable_pointer_reads_as_no_game(started):
+    """Somebody hand-edits the row. Showing nothing is the safe failure;
+    showing everything is not."""
+    await database.set_setting(GUILD_A, resolve.DROP_KEY, 0)
+    async with database._require_session()() as session:
+        table = database.ServerConfig.__table__
+        await session.execute(
+            table.update()
+            .where(table.c.guild_id == GUILD_A, table.c.key == resolve.DROP_KEY)
+            .values(value="soon")
+        )
+        await session.commit()
+
+    assert await resolve.current_drop(GUILD_A) is None
+
+
+# --------------------------------------------------------------------------
+# What each drop actually contains
+# --------------------------------------------------------------------------
+
+
+async def test_drop_zero_is_the_cat_and_nothing_else(started):
+    await resolve.set_current_drop(GUILD_A, 0)
+
+    assert await resolve.visible_thing_ids(GUILD_A) == {CAT}
+
+
+async def test_drop_one_adds_the_bed_and_still_no_house(started):
+    await resolve.set_current_drop(GUILD_A, 1)
+
+    assert await resolve.visible_thing_ids(GUILD_A) == {CAT, BED}
+
+
+async def test_the_house_waits_for_its_own_drop(started):
+    """The leak test. Nothing from drop 3 is reachable at drop 1 - not a
+    room, not a thing, not an achievement."""
+    await resolve.set_current_drop(GUILD_A, 1)
+
+    visible = await resolve.visible_thing_ids(GUILD_A)
+    assert "coat_rack" not in visible
+    assert "lumber" not in visible
+    assert await resolve.exits_from(GUILD_A, "EN") == []
+
+
+async def test_the_pre_existing_achievements_wait_too(started):
+    """Twenty-eight earnable achievements and seven blocked ones all belong
+    to the house, and a drop-1 server must not offer any of them."""
+    await resolve.set_current_drop(GUILD_A, 1)
+
+    offered = await resolve.achievements(GUILD_A)
+    assert "gourd_job" not in offered
+    assert "making_a_mess" not in offered
+
+
+async def test_the_petting_achievements_do_not_wait(started):
+    """They fire on `on_pet` and `on_relationship_change` rather than being
+    gated content, and `fire()` reads this same resolution - so a row out
+    of reach could never award."""
+    await resolve.set_current_drop(GUILD_A, 0)
+
+    offered = await resolve.achievements(GUILD_A)
+    assert {"making_friends", "trying_to_make_friends", "cats_best_friend"} <= set(offered)
+
+
+# --------------------------------------------------------------------------
+# /start-game
+# --------------------------------------------------------------------------
+
+
+async def test_starting_opens_drop_zero(started):
+    _, _, halloween = started
+    await start(started)
+
+    assert await resolve.current_drop(GUILD_A) == 0
+    assert await database.announcement_channel(GUILD_A) == halloween.id
+
+
+async def test_starting_twice_in_the_same_channel_changes_nothing(started):
+    await start(started)
+    await resolve.set_current_drop(GUILD_A, 1)
+
+    interaction = await start(started)
+
+    assert await resolve.current_drop(GUILD_A) == 1
+    assert "already open" in interaction.reply
+
+
+async def test_a_second_channel_is_refused(started):
+    """Moving a running game would leave every player looking at the
+    channel it used to be in."""
+    _, guild, halloween = started
+    await start(started)
+    somewhere_else = FakeChannel(name="general")
+    guild.text_channels.append(somewhere_else)
+
+    interaction = await start(started, channel=somewhere_else)
+
+    assert await database.announcement_channel(GUILD_A) == halloween.id
+    assert "refused" in interaction.reply
+
+
+async def test_the_reply_is_private(started):
+    interaction = await start(started)
+
+    assert interaction.was_private
+
+
+# --------------------------------------------------------------------------
+# /advance-game
+# --------------------------------------------------------------------------
+
+
+async def test_advancing_before_starting_is_refused(started):
+    interaction = await advance(started)
+
+    assert await resolve.current_drop(GUILD_A) is None
+    assert "/start-game" in interaction.reply
+
+
+async def test_it_names_the_drop_before_opening_it(started):
+    await start(started)
+
+    interaction = await advance(started, confirm=False)
+
+    assert await resolve.current_drop(GUILD_A) == 0
+    assert "A Place to Sleep" in interaction.reply
+
+
+async def test_confirming_opens_it(started):
+    await start(started)
+
+    await advance(started)
+
+    assert await resolve.current_drop(GUILD_A) == 1
+
+
+async def test_it_moves_exactly_one_drop(started):
+    await start(started)
+
+    await advance(started)
+    second = await advance(started)
+
+    assert await resolve.current_drop(GUILD_A) == 1
+    assert "last one built" in second.reply
+
+
+async def test_the_bed_arrives_with_its_drop(started):
+    """What a player can actually reach, which for a fixture is not
+    `room_contents`: fixtures are scenery and are resolved from their own
+    `room_id`. Reaching for it is the test that matters either way."""
+    await start(started)
+    assert isinstance(await for_the_bed(), reach.NotFound)
+
+    await advance(started)
+
+    found = await for_the_bed()
+    assert isinstance(found, reach.Found) and found.thing_id == BED
+
+
+async def for_the_bed():
+    return await reach.find(
+        GUILD_A, ALICE, content_module.CHANNEL_ROOM, "cat bed", reach.Scope.ROOM
+    )
+
+
+async def test_the_drop_is_announced_in_the_channel(started):
+    _, _, halloween = started
+    await start(started)
+
+    await advance(started)
+
+    assert any("swats her paw" in line for line in halloween.posted)
+
+
+async def test_the_announcement_does_not_repeat(started):
+    _, _, halloween = started
+    await start(started)
+    await advance(started)
+    before = len(halloween.posted)
+
+    await advance(started)
+
+    assert len(halloween.posted) == before
+
+
+# --------------------------------------------------------------------------
+# The property the whole phase exists to prove
+# --------------------------------------------------------------------------
+
+
+async def test_two_servers_sit_on_different_drops(started):
+    await resolve.set_current_drop(GUILD_A, 0)
+    await resolve.set_current_drop(GUILD_B, 1)
+
+    assert await resolve.visible_thing_ids(GUILD_A) == {CAT}
+    assert await resolve.visible_thing_ids(GUILD_B) == {CAT, BED}
+
+
+async def test_advancing_one_leaves_the_other_where_it_was(started):
+    await resolve.set_current_drop(GUILD_B, 0)
+    await start(started)
+
+    await advance(started)
+
+    assert await resolve.current_drop(GUILD_A) == 1
+    assert await resolve.current_drop(GUILD_B) == 0
+
+
+# --------------------------------------------------------------------------
+# Small handmade worlds, shared with the achievement and dispatcher suites
+# --------------------------------------------------------------------------
+
+
+def a_drop(drop_id, trigger="manual", value=None, event=None):
+    """One row of a handmade calendar.
+
+    `trigger` and `value` are still columns on a drop and the loader still
+    validates them; nothing reads them to decide arrival any more, because
+    that is the pointer's job.
+    """
     return Drop(
         drop_id=drop_id,
         trigger=trigger,
@@ -44,7 +331,7 @@ def a_drop(drop_id, trigger="date", value=None, event=None):
 
 
 def a_calendar(*drops, things=(), room_text=(), thing_text=()):
-    """Content with a handmade drop calendar."""
+    """Content with a handmade set of drops, and one room to hang it on."""
     parsed = Content()
     parsed.rooms = [Room(room_id="EN", name="Entryway", sort_order=1, open_at_launch=True)]
     parsed.room_text = list(room_text) or [
@@ -58,378 +345,3 @@ def a_calendar(*drops, things=(), room_text=(), thing_text=()):
     parsed.defaults = dict(content_module.load_files().defaults)
     parsed.drops = list(drops)
     return parsed
-
-
-@pytest.fixture
-async def guild(db):
-    await db.ensure_user_exists(ALICE, GUILD_A)
-    await db.ensure_user_exists(BOB, GUILD_B)
-    return db
-
-
-# --------------------------------------------------------------------------
-# Arrival
-# --------------------------------------------------------------------------
-
-
-async def test_launch_has_always_arrived(guild):
-    await content_loader.load_content(a_calendar(a_drop(1, value="launch")))
-    assert await resolve.arrived_drop_ids(GUILD_A, today=TODAY) == {1}
-
-
-async def test_a_past_date_has_arrived(guild):
-    await content_loader.load_content(a_calendar(a_drop(1, value=str(YESTERDAY))))
-    assert await resolve.arrived_drop_ids(GUILD_A, today=TODAY) == {1}
-
-
-async def test_todays_date_has_arrived(guild):
-    """At or before today, so a drop lands on its own date rather than the next."""
-    await content_loader.load_content(a_calendar(a_drop(1, value=str(TODAY))))
-    assert await resolve.arrived_drop_ids(GUILD_A, today=TODAY) == {1}
-
-
-async def test_a_future_date_has_not_arrived(guild):
-    await content_loader.load_content(a_calendar(a_drop(1, value=str(TOMORROW))))
-    assert await resolve.arrived_drop_ids(GUILD_A, today=TODAY) == set()
-
-
-async def test_a_dated_drop_arrives_on_every_server_at_once(guild):
-    """Computed, not recorded, so there is nothing to get out of step."""
-    await content_loader.load_content(a_calendar(a_drop(1, value=str(YESTERDAY))))
-
-    assert await resolve.arrived_drop_ids(GUILD_A, today=TODAY) == {1}
-    assert await resolve.arrived_drop_ids(GUILD_B, today=TODAY) == {1}
-
-
-async def test_a_dated_drop_needs_no_row(guild):
-    await content_loader.load_content(a_calendar(a_drop(1, value=str(YESTERDAY))))
-    await resolve.arrived_drop_ids(GUILD_A, today=TODAY)
-
-    async with guild._require_session()() as session:
-        rows = (await session.execute(select(database.ServerDrop))).all()
-    assert rows == []
-
-
-async def test_an_unreadable_date_is_treated_as_not_yet_arrived(guild):
-    """Early content is worse than late content, and the loader rejects the file
-    anyway - this is the belt to that braces."""
-    await content_loader.load_content(a_calendar(a_drop(1, value="soon-ish")))
-    assert await resolve.arrived_drop_ids(GUILD_A, today=TODAY) == set()
-
-
-async def test_an_event_drop_waits_until_it_is_recorded(guild):
-    await content_loader.load_content(a_calendar(a_drop(1, trigger="event", event="whatever")))
-    assert await resolve.arrived_drop_ids(GUILD_A, today=TODAY) == set()
-
-    await resolve.record_arrival(GUILD_A, 1)
-    assert await resolve.arrived_drop_ids(GUILD_A, today=TODAY) == {1}
-
-
-async def test_a_manual_drop_waits_for_an_admin(guild):
-    await content_loader.load_content(a_calendar(a_drop(1, trigger="manual")))
-    assert await resolve.arrived_drop_ids(GUILD_A, today=TODAY) == set()
-
-    await resolve.record_arrival(GUILD_A, 1)
-    assert await resolve.arrived_drop_ids(GUILD_A, today=TODAY) == {1}
-
-
-async def test_an_event_arrival_is_per_server(guild):
-    await content_loader.load_content(a_calendar(a_drop(1, trigger="event", event="whatever")))
-    await resolve.record_arrival(GUILD_A, 1)
-
-    assert await resolve.arrived_drop_ids(GUILD_B, today=TODAY) == set()
-
-
-async def test_recording_the_same_arrival_twice_is_harmless(guild):
-    await content_loader.load_content(a_calendar(a_drop(1, trigger="manual")))
-
-    assert await resolve.record_arrival(GUILD_A, 1) is True
-    assert await resolve.record_arrival(GUILD_A, 1) is False
-
-
-async def test_firing_a_drop_that_does_not_exist_is_refused(guild):
-    await content_loader.load_content(a_calendar(a_drop(1, value="launch")))
-    with pytest.raises(resolve.UnknownDrop):
-        await resolve.record_arrival(GUILD_A, 99)
-
-
-async def test_an_arrival_is_permanent(guild):
-    """The whole reason arrivals are stored: a condition can stop being true, and
-    content must not vanish from a house it has already changed."""
-    await content_loader.load_content(a_calendar(a_drop(1, trigger="event", event="whatever")))
-    await resolve.record_arrival(GUILD_A, 1)
-
-    # Whatever caused it is now false again; the drop stays arrived regardless.
-    assert await resolve.arrived_drop_ids(GUILD_A, today=TODAY) == {1}
-    assert await resolve.arrived_drop_ids(GUILD_A, today=TODAY + timedelta(days=365)) == {1}
-
-
-async def test_drops_can_arrive_out_of_order(guild):
-    """An event drop can land while a lower-numbered dated one has not, which is
-    why 'highest arrived' is not the same as 'highest'."""
-    await content_loader.load_content(
-        a_calendar(
-            a_drop(1, value="launch"),
-            a_drop(2, value=str(TOMORROW)),
-            a_drop(3, trigger="manual"),
-        )
-    )
-    await resolve.record_arrival(GUILD_A, 3)
-
-    assert await resolve.arrived_drop_ids(GUILD_A, today=TODAY) == {1, 3}
-
-
-# --------------------------------------------------------------------------
-# Text resolution
-# --------------------------------------------------------------------------
-
-
-async def test_a_later_drop_supersedes_an_earlier_one(guild):
-    parsed = a_calendar(
-        a_drop(1, value="launch"),
-        a_drop(2, value=str(YESTERDAY)),
-        room_text=[
-            TextRow(entity_id="EN", state="default", since_drop=1, text={"look": "Before."}),
-            TextRow(entity_id="EN", state="default", since_drop=2, text={"look": "After."}),
-        ],
-    )
-    await content_loader.load_content(parsed)
-
-    assert await resolve.room_look(GUILD_A, "EN", today=TODAY) == "After."
-
-
-async def test_an_unarrived_row_is_invisible(guild):
-    """In the files, loaded, and simply not yet reachable."""
-    parsed = a_calendar(
-        a_drop(1, value="launch"),
-        a_drop(2, value=str(TOMORROW)),
-        room_text=[
-            TextRow(entity_id="EN", state="default", since_drop=1, text={"look": "Before."}),
-            TextRow(entity_id="EN", state="default", since_drop=2, text={"look": "After."}),
-        ],
-    )
-    await content_loader.load_content(parsed)
-
-    assert await resolve.room_look(GUILD_A, "EN", today=TODAY) == "Before."
-    # ...and the same database answers differently once the day comes.
-    assert await resolve.room_look(GUILD_A, "EN", today=TOMORROW) == "After."
-
-
-async def test_the_highest_arrived_wins_not_the_highest(guild):
-    parsed = a_calendar(
-        a_drop(1, value="launch"),
-        a_drop(2, value=str(TOMORROW)),
-        a_drop(3, trigger="manual"),
-        room_text=[
-            TextRow(entity_id="EN", state="default", since_drop=1, text={"look": "One."}),
-            TextRow(entity_id="EN", state="default", since_drop=2, text={"look": "Two."}),
-            TextRow(entity_id="EN", state="default", since_drop=3, text={"look": "Three."}),
-        ],
-    )
-    await content_loader.load_content(parsed)
-    await resolve.record_arrival(GUILD_A, 3)
-
-    assert await resolve.room_look(GUILD_A, "EN", today=TODAY) == "Three."
-
-
-async def test_two_servers_can_see_different_text(guild):
-    """One has fired the manual drop; the other has not."""
-    parsed = a_calendar(
-        a_drop(1, value="launch"),
-        a_drop(2, trigger="manual"),
-        room_text=[
-            TextRow(entity_id="EN", state="default", since_drop=1, text={"look": "Before."}),
-            TextRow(entity_id="EN", state="default", since_drop=2, text={"look": "After."}),
-        ],
-    )
-    await content_loader.load_content(parsed)
-    await resolve.record_arrival(GUILD_A, 2)
-
-    assert await resolve.room_look(GUILD_A, "EN", today=TODAY) == "After."
-    assert await resolve.room_look(GUILD_B, "EN", today=TODAY) == "Before."
-
-
-async def test_state_is_matched_before_drop(guild):
-    parsed = a_calendar(
-        a_drop(1, value="launch"),
-        room_text=[
-            TextRow(entity_id="EN", state="default", since_drop=1, text={"look": "Ruined."}),
-            TextRow(
-                entity_id="EN", state="stairs_repaired", since_drop=1, text={"look": "Mended."}
-            ),
-        ],
-    )
-    await content_loader.load_content(parsed)
-
-    assert await resolve.room_look(GUILD_A, "EN", "stairs_repaired", today=TODAY) == "Mended."
-    assert await resolve.room_look(GUILD_A, "EN", today=TODAY) == "Ruined."
-
-
-async def test_an_unwritten_state_falls_back_to_default(guild):
-    await content_loader.load_content(a_calendar(a_drop(1, value="launch")))
-    assert await resolve.room_look(GUILD_A, "EN", "drawer_unjammed", today=TODAY) == "The hall."
-
-
-async def test_a_state_resolves_within_its_own_drops(guild):
-    """A state row from an unarrived drop does not win either."""
-    parsed = a_calendar(
-        a_drop(1, value="launch"),
-        a_drop(2, value=str(TOMORROW)),
-        room_text=[
-            TextRow(entity_id="EN", state="default", since_drop=1, text={"look": "Plain."}),
-            TextRow(entity_id="EN", state="lit", since_drop=1, text={"look": "Lit."}),
-            TextRow(entity_id="EN", state="lit", since_drop=2, text={"look": "Lit, later."}),
-        ],
-    )
-    await content_loader.load_content(parsed)
-
-    assert await resolve.room_look(GUILD_A, "EN", "lit", today=TODAY) == "Lit."
-
-
-async def test_thing_text_resolves_per_column(guild):
-    parsed = a_calendar(
-        a_drop(1, value="launch"),
-        things=[a_thing("spoon")],
-        thing_text=[
-            TextRow(
-                entity_id="spoon",
-                state="default",
-                since_drop=1,
-                text={"look": "A spoon.", "use": "You stir nothing."},
-            )
-        ],
-    )
-    await content_loader.load_content(parsed)
-
-    assert await resolve.thing_text(GUILD_A, "spoon", "look", today=TODAY) == "A spoon."
-    assert await resolve.thing_text(GUILD_A, "spoon", "use", today=TODAY) == "You stir nothing."
-
-
-async def test_a_blank_cell_resolves_to_nothing_so_a_default_can_apply(guild):
-    parsed = a_calendar(
-        a_drop(1, value="launch"),
-        things=[a_thing("spoon")],
-        thing_text=[
-            TextRow(entity_id="spoon", state="default", since_drop=1, text={"look": "A spoon."})
-        ],
-    )
-    await content_loader.load_content(parsed)
-
-    assert await resolve.thing_text(GUILD_A, "spoon", "take", today=TODAY) is None
-    fallback = await resolve.default_text("take.default")
-    assert fallback and "{name}" in fallback
-
-
-async def test_asking_for_a_column_that_does_not_exist_is_refused(guild):
-    await content_loader.load_content(a_calendar(a_drop(1, value="launch")))
-    with pytest.raises(ValueError):
-        await resolve.thing_text(GUILD_A, "spoon", "smell", today=TODAY)
-
-
-async def test_an_unknown_entity_resolves_to_nothing(guild):
-    await content_loader.load_content(a_calendar(a_drop(1, value="launch")))
-    assert await resolve.room_look(GUILD_A, "NOWHERE", today=TODAY) is None
-
-
-# --------------------------------------------------------------------------
-# Placement waits for the drop too
-# --------------------------------------------------------------------------
-
-
-async def test_a_thing_from_a_future_drop_is_not_placed(guild):
-    parsed = a_calendar(
-        a_drop(1, value="launch"),
-        a_drop(2, value=str(TOMORROW)),
-        things=[a_thing("spoon"), a_thing("lantern", since_drop=2)],
-    )
-    report = await content_loader.load_content(parsed)
-
-    assert report.waiting_on_drops == 2  # one per server
-    assert {row[2] for row in await contents(guild, GUILD_A)} == {"spoon"}
-
-
-async def test_it_lands_by_itself_once_the_drop_comes_due(guild, monkeypatch):
-    """No migration and no deploy: the next boot after the date places it."""
-    parsed = a_calendar(
-        a_drop(1, value="launch"),
-        a_drop(2, value=str(TOMORROW)),
-        things=[a_thing("spoon"), a_thing("lantern", since_drop=2)],
-    )
-    await content_loader.load_content(parsed)
-
-    monkeypatch.setattr(database, "pacific_today", lambda: TOMORROW)
-    report = await content_loader.load_content(parsed)
-
-    assert report.placed == 2
-    assert {row[2] for row in await contents(guild, GUILD_A)} == {"spoon", "lantern"}
-
-
-async def test_a_manual_drop_places_only_where_it_was_fired(guild):
-    parsed = a_calendar(
-        a_drop(1, value="launch"),
-        a_drop(2, trigger="manual"),
-        things=[a_thing("spoon"), a_thing("lantern", since_drop=2)],
-    )
-    await content_loader.load_content(parsed)
-    await resolve.record_arrival(GUILD_A, 2)
-    await content_loader.load_content(parsed)
-
-    assert {row[2] for row in await contents(guild, GUILD_A)} == {"spoon", "lantern"}
-    assert {row[2] for row in await contents(guild, GUILD_B)} == {"spoon"}
-
-
-async def test_visible_thing_ids_gates_on_arrival(guild):
-    parsed = a_calendar(
-        a_drop(1, value="launch"),
-        a_drop(2, value=str(TOMORROW)),
-        things=[a_thing("spoon"), a_thing("lantern", since_drop=2)],
-    )
-    await content_loader.load_content(parsed)
-
-    assert await resolve.visible_thing_ids(GUILD_A, today=TODAY) == {"spoon"}
-    assert await resolve.visible_thing_ids(GUILD_A, today=TOMORROW) == {"spoon", "lantern"}
-
-
-# --------------------------------------------------------------------------
-# The content we ship
-# --------------------------------------------------------------------------
-
-
-async def test_only_the_launch_drop_has_arrived(guild):
-    """Drop 1 is `launch`, so every server sees it from the first boot. Drop 2
-    is `manual` and holds the can opener: nobody has picked a date, so an
-    admin fires it when the content is ready and until then the cat food
-    cannot be opened."""
-    parsed = content_module.load_files()
-    await content_loader.load_content(parsed)
-
-    assert await resolve.arrived_drop_ids(GUILD_A) == {1}
-
-
-async def test_the_unarrived_drop_hides_exactly_its_own_content(guild):
-    parsed = content_module.load_files()
-    await content_loader.load_content(parsed)
-
-    visible = await resolve.visible_thing_ids(GUILD_A)
-    waiting = {t.thing_id for t in parsed.things if t.since_drop != 1}
-
-    assert waiting == {"can_opener", "can_opener_hook"}
-    assert visible == {t.thing_id for t in parsed.things} - waiting
-
-
-async def test_the_shipped_content_resolves_a_room(guild):
-    parsed = content_module.load_files()
-    await content_loader.load_content(parsed)
-
-    look = await resolve.room_look(GUILD_A, "EN")
-    assert look and "foyer" in look.lower()
-
-
-async def test_the_shipped_content_resolves_a_state_row(guild):
-    """The Entryway has a stairs_repaired description as well as a default."""
-    parsed = content_module.load_files()
-    await content_loader.load_content(parsed)
-
-    default = await resolve.room_look(GUILD_A, "EN")
-    repaired = await resolve.room_look(GUILD_A, "EN", "stairs_repaired")
-    assert repaired and repaired != default

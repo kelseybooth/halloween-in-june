@@ -196,14 +196,17 @@ def commands():
     return {c.name: c for c in bot.bot.tree.get_commands()}
 
 
-def test_there_are_twelve_commands():
-    """Ten were registered in one sync at the end of 2c. `/post-welcome`
-    opens the game and `/reset-haunted-house` wipes one server's, and both
-    are admin commands nobody runs twice in a day.
+def test_there_are_fourteen_commands():
+    """Ten were registered in one sync at the end of 2c, then
+    `/post-welcome` and `/reset-haunted-house`, and now `/start-game` and
+    `/advance-game`.
 
-    Changing this list costs an hour of propagation and stale signatures in
-    between, which is why the count is pinned rather than left to drift."""
-    assert len(commands()) == 12
+    The count is pinned rather than left to drift, though the reason is
+    about to change: Phase 3a registers a server's command set per guild
+    and per drop, so what matters will become which of these a player can
+    see rather than how many exist."""
+    assert len(commands()) == 14
+    assert {"start-game", "advance-game"} <= set(commands())
 
 
 def test_the_two_testing_tools_are_gone():

@@ -44,6 +44,16 @@ DROP_KEY = "current_drop"
 # What an unset pointer reads as. Not 0, which is a real drop.
 NO_GAME = None
 
+# The furthest `/advance-game` will take a server. `drops.tsv` defines drops
+# the content already waits on - every Release 1 row sits at drop 3 - but
+# defining a drop is not the same as having built it, and "the last defined
+# drop" would walk a live server into one with no commands and no content.
+#
+# A constant rather than a per-server setting: there is no reason for two
+# servers to disagree about which drops exist, and the test servers get
+# anywhere they like through `/qa-drop`. Raise it when drop 2 ships.
+LAST_PLAYABLE_DROP = 1
+
 
 class UnknownDrop(Exception):
     """An admin tried to fire a drop the content files do not define."""
@@ -89,6 +99,15 @@ async def defined_drop_ids() -> set[int]:
     async with session_factory() as session:
         rows = await session.execute(select(database.Drop.drop_id))
     return {row[0] for row in rows}
+
+
+async def drop_name(drop_id: int) -> str | None:
+    """What the files call a drop, for an admin about to open one."""
+    session_factory = database._require_session()
+    async with session_factory() as session:
+        return await session.scalar(
+            select(database.Drop.name).where(database.Drop.drop_id == drop_id)
+        )
 
 
 async def arrived_drop_ids(guild_id: int) -> set[int]:
