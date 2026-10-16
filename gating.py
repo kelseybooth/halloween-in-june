@@ -52,6 +52,21 @@ ADMIN_COMMANDS: dict[int, tuple[str, ...]] = {
 # server the bot was invited to and never set up sees nothing from it.
 NO_GAME_COMMANDS: tuple[str, ...] = ADMIN_COMMANDS[0]
 
+# The QA tools, registered only in the two test servers. Not in the
+# tables above because they do not belong to a drop: a test server has
+# them at every drop, and the live server has them at none - which is
+# the first and strongest of the three gates on them, because a command
+# that is not registered cannot be found by a curious member.
+QA_COMMANDS: tuple[str, ...] = (
+    "qa-drop",
+    "qa-reset-player",
+    "qa-relationship",
+    "qa-clock",
+    "qa-midnight",
+    "qa-cooldown",
+    "qa-inspect",
+)
+
 
 def _highest_at_or_below(table: dict[int, tuple[str, ...]], drop: int) -> tuple[str, ...]:
     keys = [k for k in table if k <= drop]
@@ -62,18 +77,25 @@ def _highest_at_or_below(table: dict[int, tuple[str, ...]], drop: int) -> tuple[
     return table[max(keys)]
 
 
-def commands_for(drop: int | None) -> set[str]:
+def commands_for(drop: int | None, *, qa: bool = False) -> set[str]:
     """Every command registered in a server sitting on this drop.
 
     `None` is a server whose game has not been started, which is not the
     same as drop 0: drop 0 is a channel with a cat in it, and `None` is a
     server where there is not yet anywhere for the cat to be.
+
+    `qa` adds the test tools, and is true for exactly two servers. They
+    are outside the drop tables on purpose - a test server has them at
+    every drop, including before the game starts, because resetting a
+    player is most useful when there is nothing to reset.
     """
     if drop is None:
-        return set(NO_GAME_COMMANDS)
-    return set(_highest_at_or_below(PLAYER_COMMANDS, drop)) | set(
-        _highest_at_or_below(ADMIN_COMMANDS, drop)
-    )
+        found = set(NO_GAME_COMMANDS)
+    else:
+        found = set(_highest_at_or_below(PLAYER_COMMANDS, drop)) | set(
+            _highest_at_or_below(ADMIN_COMMANDS, drop)
+        )
+    return found | set(QA_COMMANDS) if qa else found
 
 
 def player_commands_for(drop: int | None) -> set[str]:

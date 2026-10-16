@@ -199,18 +199,19 @@ def commands():
     return {c.name: c for c in bot.bot.tree.get_commands()}
 
 
-def test_there_are_fourteen_commands():
-    """Ten were registered in one sync at the end of 2c, then
-    then `/reset-haunted-house`, and now `/start-game` and
-    `/advance-game`. `/post-welcome` went the other way: V3 ships with no
-    welcome text, and the copy is parked in `defaults.tsv` under a key
-    nothing reads.
+def test_the_bot_defines_twenty_commands():
+    """Thirteen the game uses and seven QA tools.
 
-    The count is pinned rather than left to drift, though the reason is
-    about to change: Phase 3a registers a server's command set per guild
-    and per drop, so what matters will become which of these a player can
-    see rather than how many exist."""
-    assert len(commands()) == 13
+    **Defined is not registered.** Every one of these exists in the
+    tree; which of them a given server can see is decided per guild and
+    per drop by `gating`, and the seven QA ones reach two servers only.
+    The count is pinned here because a command appearing or disappearing
+    should be a decision rather than a diff nobody read.
+    """
+    import gating
+
+    assert len(commands()) == 20
+    assert set(gating.QA_COMMANDS) <= set(commands())
     assert {"start-game", "advance-game"} <= set(commands())
 
 

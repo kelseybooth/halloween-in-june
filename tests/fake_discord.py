@@ -195,9 +195,11 @@ class FakeMember:
     the player the award it was announcing.
     """
 
-    def __init__(self, user_id, *, dms_open=True, display_name=None):
+    def __init__(self, user_id, *, dms_open=True, display_name=None, roles=()):
         self.id = user_id
         self.mention = f"<@{user_id}>"
+        # Only the QA commands read these, and they read the name only.
+        self.roles = [SimpleNamespace(name=r) for r in roles]
         # What a public line prints. Never the mention: a display name has to
         # be able to contain something mention-shaped without pinging.
         self.display_name = display_name or f"Player {user_id}"
@@ -264,10 +266,19 @@ class FakeInteraction:
     most of what a command's behaviour actually is.
     """
 
-    def __init__(self, user_id, guild_id, *, guild=None, channel=None):
+    def __init__(
+        self, user_id, guild_id, *, guild=None, channel=None, roles=(), command=None
+    ):
         self.user = SimpleNamespace(
-            id=user_id, mention=f"<@{user_id}>", display_name=f"Player {user_id}"
+            id=user_id,
+            mention=f"<@{user_id}>",
+            display_name=f"Player {user_id}",
+            # The QA commands read role names and nothing else.
+            roles=[SimpleNamespace(name=r) for r in roles],
+            __str__=lambda: f"Player {user_id}",
         )
+        # The QA log line names the command it is recording.
+        self.command = SimpleNamespace(name=command or "unknown")
         self.guild_id = guild_id
         self.guild = guild
         # Where the command was typed. The four world verbs refuse

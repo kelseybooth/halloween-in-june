@@ -2505,6 +2505,100 @@ async def notice_order(guild_id: int, user_id: int) -> dict[str, int]:
     return {notice_id: row_id for notice_id, row_id in rows}
 
 
+async def clear_setting(guild_id: int, key: str) -> None:
+    """Remove one setting, so the next read falls back to its default."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        await session.execute(
+            ServerConfig.__table__.delete().where(
+                ServerConfig.guild_id == guild_id, ServerConfig.key == key
+            )
+        )
+        await session.commit()
+
+
+async def last_cat_interaction(guild_id: int, user_id: int) -> date | None:
+    """The last day this player touched the cat here, for `/qa-inspect`."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        return await session.scalar(
+            select(User.last_cat_interaction_date).where(
+                User.id == user_id, User.guild_id == guild_id
+            )
+        )
+
+
+async def forget_player(guild_id: int, user_id: int) -> dict[str, int]:
+    """Wipe one player from one server, and say what went.
+
+    **Including the hint rows**, which is the half that is easy to
+    forget and the half that matters: without them the hint ladder is
+    one-shot per tester per server, and the second run through the
+    tutorial is silent.
+
+    Scoped to tables that carry both a guild and a user. A server-wide
+    row is not this player's to delete - resetting one tester must not
+    un-repair the staircase for everybody.
+    """
+    cleared: dict[str, int] = {}
+    session_factory = _require_session()
+    async with session_factory() as session:
+        for table in reversed(Base.metadata.sorted_tables):
+            columns = table.c
+            if "guild_id" not in columns:
+                continue
+            who = next((c for c in ("user_id", "id") if c in columns), None)
+            if who is None or (who == "id" and table.name != "users"):
+                continue
+            result = await session.execute(
+                table.delete().where(
+                    columns.guild_id == guild_id, columns[who] == user_id
+                )
+            )
+            if result.rowcount:
+                cleared[table.name] = result.rowcount
+        await session.commit()
+    log.info("QA wiped player %s in guild %s: %s", user_id, guild_id, cleared)
+    return cleared
+
+
+async def set_relationship(guild_id: int, user_id: int, score: int) -> int:
+    """Put the meter at an exact value. For `/qa-relationship` only -
+    fifty and two hundred and fifty are days of honest play away."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        await session.execute(
+            update(User)
+            .where(User.id == user_id, User.guild_id == guild_id)
+            .values(relationship=score, updated_at=func.now())
+        )
+        await session.commit()
+    return score
+
+
+async def clear_cooldowns(guild_id: int, user_id: int) -> int:
+    """Forget every cooldown this player is inside.
+
+    The bed's twenty-four hours live in `thing_uses`; the ten-minute pet
+    window is a count of recent `pet_events`, so the events go too. The
+    lifetime pet count on the user row is left alone - it is progress,
+    not a cooldown, and a tester clearing a window should not lose their
+    march on two hundred.
+    """
+    session_factory = _require_session()
+    cleared = 0
+    async with session_factory() as session:
+        for table in (ThingUse.__table__, PetEvent.__table__):
+            result = await session.execute(
+                table.delete().where(
+                    table.c.guild_id == guild_id, table.c.user_id == user_id
+                )
+            )
+            cleared += result.rowcount or 0
+        await session.commit()
+    return cleared
+
+
 async def get_config_raw(guild_id: int, key: str) -> str | None:
     """One setting exactly as stored, or None if this server has never set it.
 
