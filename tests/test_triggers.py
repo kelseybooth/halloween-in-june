@@ -87,14 +87,20 @@ def test_every_achievement_in_the_file_has_a_trigger():
     assert achievements.registration_problems(parsed.achievement_ids) == []
 
 
-def test_all_thirty_five_are_registered():
-    assert len(achievements.registered_ids()) == 35
+def test_every_row_in_the_file_is_registered():
+    """Thirty-five from Release 1, and V3's seven. The count is pinned
+    against the file rather than written down twice, so adding a row and
+    forgetting the predicate fails here as well as at boot."""
+    parsed = content_module.load_files()
+
+    assert achievements.registered_ids() == set(parsed.achievement_ids)
 
 
 def test_registering_twice_is_a_no_op():
     """The bot's boot path and a test fixture can both call it."""
+    before = len(achievements.registered_ids())
     triggers.register_all()
-    assert len(achievements.registered_ids()) == 35
+    assert len(achievements.registered_ids()) == before
 
 
 def test_every_thing_a_trigger_names_exists_in_the_content():
@@ -429,6 +435,7 @@ async def test_group_achievements_are_scoped_to_one_server(playing, db):
 # --------------------------------------------------------------------------
 
 BLOCKED = [
+    # Waiting on cat crossing, the ghosts, the doorbell and the letter.
     "unsticking_the_situation",
     "return_to_sender",
     "it_takes_a_village",
@@ -436,6 +443,11 @@ BLOCKED = [
     "ghostbuster",
     "signed_sealed_delivered",
     "forwarding_address",
+    # Waiting on V3's own unbuilt drops: the cat toy at drop 2, feeding
+    # at drop 3. Registered for the same reason as the five above.
+    "persuasive",
+    "impressively_bad_luck",
+    "bowl_half_empty",
 ]
 
 
@@ -462,8 +474,11 @@ async def test_nothing_blocked_can_be_earned_by_any_use(playing):
     assert not (got & set(BLOCKED))
 
 
-def test_exactly_twenty_eight_are_earnable():
-    assert len(achievements.registered_ids()) - len(BLOCKED) == 28
+def test_what_can_actually_be_earned():
+    """Twenty-eight of Release 1's thirty-five, plus the four V3 adds that
+    have content behind them: making first contact, the two score
+    thresholds below 250, and fluffing the bed."""
+    assert len(achievements.registered_ids()) - len(BLOCKED) == 32
 
 
 # --------------------------------------------------------------------------
@@ -646,23 +661,44 @@ async def test_the_two_do_not_share_a_count(playing):
 
 async def test_cats_best_friend_at_a_perfect_relationship(playing):
     assert "cats_best_friend" in await earned(
-        a_context("on_pet", extra={"relationship": database.RELATIONSHIP_MAX})
+        a_context("on_relationship_change", extra={"relationship": database.PERFECT_RELATIONSHIP})
     )
 
 
 async def test_cats_best_friend_not_below_it(playing):
     assert "cats_best_friend" not in await earned(
-        a_context("on_pet", extra={"relationship": 99})
+        a_context("on_relationship_change", extra={"relationship": 99})
     )
 
 
 async def test_cats_best_friend_announces_once(playing):
     """True forever once true, which is the standing condition the idempotent
     award exists for."""
-    top = {"relationship": database.RELATIONSHIP_MAX}
-    assert "cats_best_friend" in await earned(a_context("on_pet", extra=top))
+    top = {"relationship": database.PERFECT_RELATIONSHIP}
+
+    first = await earned(a_context("on_relationship_change", extra=top))
+
+    # A hundred passes fifty on the way, so both land in one move.
+    assert {"cats_best_friend", "a_paw_in_the_door"} <= first
     for _ in range(5):
-        assert await earned(a_context("on_pet", extra=top)) == set()
+        assert await earned(a_context("on_relationship_change", extra=top)) == set()
+
+
+async def test_a_threshold_passed_without_petting_still_fires(playing):
+    """The reason these moved off `on_pet`. A player pushed past fifty by
+    a bed fluff would otherwise go unchecked until their next pet."""
+    assert "a_paw_in_the_door" in await earned(
+        a_context("on_relationship_change", extra={"relationship": 50})
+    )
+
+
+async def test_favorite_human_needs_a_meter_with_no_ceiling(playing):
+    assert "favorite_human" not in await earned(
+        a_context("on_relationship_change", extra={"relationship": 249})
+    )
+    assert "favorite_human" in await earned(
+        a_context("on_relationship_change", extra={"relationship": 250})
+    )
 
 
 async def test_passing_a_message_to_david(playing):

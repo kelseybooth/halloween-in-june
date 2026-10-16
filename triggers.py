@@ -84,8 +84,13 @@ BABY_BOTTLES = {"used_baby_bottle", "sanitized_baby_bottle"}
 BULK_BUYER_CANS = 25
 CATPROOF_BOTTLES = 5
 BURRITOS_EATEN = 10
+CAT_BED = "cat_bed"
 FRIENDLY_PETS = 200
-PERFECT_RELATIONSHIP = database.RELATIONSHIP_MAX
+
+# The three score thresholds, in the order a player meets them.
+PAW_IN_THE_DOOR = 50
+PERFECT_RELATIONSHIP = database.PERFECT_RELATIONSHIP  # 100
+FAVORITE_HUMAN = 250
 STRENGTH_IN_NUMBERS = 25
 MAKING_A_MESS = 200
 FELINE_COLLECTION_CANS = 100
@@ -389,16 +394,46 @@ async def trying_to_make_friends(context: Context) -> bool:
     return pets >= FRIENDLY_PETS
 
 
-async def cats_best_friend(context: Context) -> bool:
-    """A perfect relationship, which stays true forever once it is true.
+async def _score(context: Context) -> int:
+    """This player's relationship, from the event if it carried one.
 
-    The standing condition the idempotent award exists for: without it this
-    would re-announce on every `/pet` for the rest of October.
+    The three thresholds all read it, and all three are standing
+    conditions - true forever once true - which is what the idempotent
+    award exists for. Without it each would re-announce every time the
+    score moved for the rest of October.
     """
-    relationship = context.extra.get("relationship")
-    if relationship is None:
-        relationship = await database.get_relationship(context.user_id, context.guild_id)
-    return relationship >= PERFECT_RELATIONSHIP
+    score = context.extra.get("relationship")
+    if score is None:
+        score = await database.get_relationship(context.user_id, context.guild_id)
+    return score
+
+
+async def making_first_contact(context: Context) -> bool:
+    """The first pet that rolls friendly, and the spine of drop 0.
+
+    "First" needs no state: the award is idempotent, so this can be true
+    of every friendly pet for the rest of October and still land once.
+
+    Reads the roll rather than the score, because the score is the same
+    either way on a brand-new player - they start at nothing, and what
+    makes this a moment is that the cat let them.
+    """
+    return bool(context.extra.get("friendly"))
+
+
+async def a_paw_in_the_door(context: Context) -> bool:
+    """Fifty, and the first quest in the game."""
+    return await _score(context) >= PAW_IN_THE_DOOR
+
+
+async def cats_best_friend(context: Context) -> bool:
+    """A hundred: as fond of you as the game has a name for."""
+    return await _score(context) >= PERFECT_RELATIONSHIP
+
+
+async def favorite_human(context: Context) -> bool:
+    """Two hundred and fifty, which the meter has no ceiling for a reason."""
+    return await _score(context) >= FAVORITE_HUMAN
 
 
 async def passing_a_message_to_david(context: Context) -> bool:
@@ -453,13 +488,28 @@ def register_all() -> None:
     add("met_the_craving", "on_reaction", met_the_craving)
     add("forwarding_address", "on_use", _blocked("the letter"))
 
+    # Drop 0 and drop 1: the proof of concept's own four.
+    add("making_first_contact", "on_pet", making_first_contact)
+    add("fluffed_to_perfection", "on_use", _used(CAT_BED))
+    # Drop 2 and drop 3. Final copy, no content yet - registered for the
+    # same reason the letter and the doorbell are, so that building the
+    # toy is a registration change rather than a reopened phase.
+    add("persuasive", "on_use", _blocked("the cat toy"))
+    add("impressively_bad_luck", "on_use", _blocked("the cat toy"))
+    add("bowl_half_empty", "on_use", _blocked("feeding the cat"))
+
     # Secret
     add("a_little_bit_lost", "on_move", a_little_bit_lost)
     add("out_on_a_limb", "on_move", out_on_a_limb)
     add("bulk_buyer", "on_take", bulk_buyer)
     add("making_friends", "on_pet", making_friends)
     add("trying_to_make_friends", "on_pet", trying_to_make_friends)
-    add("cats_best_friend", "on_pet", cats_best_friend)
+    # The three thresholds, all on the hook that fires wherever the score
+    # moves rather than on `on_pet`. Reaching 50 by fluffing the bed is
+    # the case that proves the difference.
+    add("a_paw_in_the_door", "on_relationship_change", a_paw_in_the_door)
+    add("cats_best_friend", "on_relationship_change", cats_best_friend)
+    add("favorite_human", "on_relationship_change", favorite_human)
     add("signed_sealed_delivered", "on_use", _blocked("the doorbell"))
     add("brewing_trouble", "on_use", _on_date(on_october(1), {KEURIG}))
     add("trash_panda", "on_use", _on_date(on_october(1), {TRASH_CAN}))

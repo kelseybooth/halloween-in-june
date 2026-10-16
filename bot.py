@@ -135,7 +135,7 @@ def _debug_lines(reaction: Reaction, recent: int, relationship: int) -> str:
         "\n\n`[testing]`"
         f"\n`mood:` {mood} ({delta:+d}) - {reaction.chance}% friendly chance"
         f" after {recent} recent pet(s)"
-        f"\n`relationship:` {relationship} / {database.RELATIONSHIP_MAX}"
+        f"\n`relationship:` {relationship}"
     )
 
 
@@ -815,6 +815,40 @@ async def _announce_pet(interaction, relationship: int) -> None:
         await _post_quietly(channel, line)
 
 
+async def _move_the_meter(user_id: int, guild_id: int, delta: int) -> int:
+    """Touch the cat: stamp the day, then move the score.
+
+    Every way of touching the cat goes through here, which is the point.
+    The stamp is what the nightly drift reads, and it happens on the
+    attempt rather than on the result - the toy's first offer is a
+    guaranteed refusal and the bed refuses inside its window, and a
+    player who tried was not absent. Pass `delta=0` for an attempt that
+    moved nothing.
+    """
+    await database.touched_the_cat(user_id, guild_id, database.pacific_today())
+    if not delta:
+        return await database.get_relationship(user_id, guild_id)
+    return await database.adjust_relationship(user_id, guild_id, delta)
+
+
+async def _fire_relationship(interaction, user_id: int, guild_id: int, score: int) -> None:
+    """Let the three thresholds look, wherever the score just moved.
+
+    Separate from `_move_the_meter` because the hook wants an interaction
+    to answer privately and the move does not, and because it belongs
+    after the command has replied rather than in the middle of it.
+    """
+    await _fire(
+        achievements.Context(
+            guild_id=guild_id,
+            hook="on_relationship_change",
+            user_id=user_id,
+            extra={"relationship": score},
+        ),
+        interaction=interaction,
+    )
+
+
 @bot.tree.command(name="pet", description="Pet the cat.")
 @app_commands.guild_only()
 async def pet(interaction: discord.Interaction) -> None:
@@ -839,7 +873,7 @@ async def pet(interaction: discord.Interaction) -> None:
         result = await database.increment_pet_count(user.id, guild_id)
         reaction = choose_response(result.recent)
         delta = RELATIONSHIP_STEP if reaction.friendly else -RELATIONSHIP_STEP
-        relationship = await database.adjust_relationship(user.id, guild_id, delta)
+        relationship = await _move_the_meter(user.id, guild_id, delta)
     except SQLAlchemyError:
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
         return
@@ -874,10 +908,15 @@ async def pet(interaction: discord.Interaction) -> None:
             guild_id=interaction.guild_id,
             hook="on_pet",
             user_id=interaction.user.id,
-            extra={"total": result.total, "relationship": relationship},
+            extra={
+                "total": result.total,
+                "relationship": relationship,
+                "friendly": reaction.friendly,
+            },
         ),
         interaction=interaction,
     )
+    await _fire_relationship(interaction, user.id, guild_id, relationship)
 
 
 async def _reregister(interaction, guild, drop: int | None) -> str:

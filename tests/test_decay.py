@@ -23,13 +23,19 @@ async def make_player(db, user_id, guild_id, relationship, last_decay=None):
 
 
 async def petted_on(db, user_id, guild_id, day):
-    """Record a pet an hour into the given Pacific day."""
+    """Record a pet an hour into the given Pacific day, and stamp it.
+
+    The stamp is what the drift now reads. The pet row is written too,
+    because the achievements still count those - the two are separate
+    records of the same moment, and the drift asks the cheaper question.
+    """
     start, _ = db.pacific_day_bounds_utc(day)
     async with db._require_session()() as session:
         session.add(
             db.PetEvent(user_id=user_id, guild_id=guild_id, created_at=start + timedelta(hours=1))
         )
         await session.commit()
+    await db.touched_the_cat(user_id, guild_id, day)
 
 
 async def score(db, user_id, guild_id):
@@ -274,3 +280,45 @@ def test_bounds_are_naive_utc():
     """Stored timestamps are naive; an aware bound would raise on comparison."""
     start, end = database.pacific_day_bounds_utc(date(2026, 6, 10))
     assert start.tzinfo is None and end.tzinfo is None
+
+
+# --------------------------------------------------------------------------
+# Touching the cat is wider than petting it
+# --------------------------------------------------------------------------
+
+
+async def test_any_interaction_skips_the_drift(db):
+    """The widening. A player who spent the evening fluffing the bed and
+    offering the toy, and never petted, was there."""
+    await make_player(db, ALICE, GUILD_A, 50)
+    await db.touched_the_cat(ALICE, GUILD_A, YESTERDAY)
+
+    await db.apply_daily_decay(YESTERDAY)
+
+    assert await score(db, ALICE, GUILD_A) == 50
+
+
+async def test_a_failed_interaction_counts_too(db):
+    """Attempts, not successes: the toy's first offer is a guaranteed
+    refusal and the bed refuses inside its window. The drift exists to
+    notice absence, and a player who tried was not absent. Written as the
+    command layer writes it - the stamp happens whether or not the score
+    moved."""
+    await make_player(db, ALICE, GUILD_A, 50)
+    await db.touched_the_cat(ALICE, GUILD_A, YESTERDAY)
+    assert await score(db, ALICE, GUILD_A) == 50  # the attempt moved nothing
+
+    await db.apply_daily_decay(YESTERDAY)
+
+    assert await score(db, ALICE, GUILD_A) == 50
+
+
+async def test_touching_the_cat_in_one_server_does_not_excuse_another(db):
+    await make_player(db, ALICE, GUILD_A, 50)
+    await make_player(db, ALICE, GUILD_B, 50)
+    await db.touched_the_cat(ALICE, GUILD_A, YESTERDAY)
+
+    await db.apply_daily_decay(YESTERDAY)
+
+    assert await score(db, ALICE, GUILD_A) == 50
+    assert await score(db, ALICE, GUILD_B) == 40

@@ -154,11 +154,29 @@ async def test_friendly_and_standoffish_reactions_move_it_by_five(db):
     assert await db.adjust_relationship(ALICE, GUILD_A, -bot.RELATIONSHIP_STEP) == start
 
 
-async def test_relationship_clamps_at_the_ceiling(db):
+async def test_there_is_no_ceiling(db):
+    """*Favorite Human* asks for 250. A clamp at 100 would have made it
+    unreachable while looking like a balance number rather than a bug."""
     await db.increment_pet_count(ALICE, GUILD_A)
-    assert await db.adjust_relationship(ALICE, GUILD_A, 1000) == db.RELATIONSHIP_MAX
-    # Already at the ceiling: a further increase must not exceed it.
-    assert await db.adjust_relationship(ALICE, GUILD_A, 5) == db.RELATIONSHIP_MAX
+
+    assert await db.adjust_relationship(ALICE, GUILD_A, 1000) == 1000
+    assert await db.adjust_relationship(ALICE, GUILD_A, 5) == 1005
+
+
+async def test_the_floor_is_still_a_floor(db):
+    """Asymmetric on purpose: a cat that already wants nothing to do with
+    you cannot want less."""
+    await db.increment_pet_count(ALICE, GUILD_A)
+
+    assert await db.adjust_relationship(ALICE, GUILD_A, -5000) == db.RELATIONSHIP_MIN
+
+
+async def test_a_new_player_starts_at_nothing(db):
+    """The cat has no opinion of somebody it has never met, and every
+    point after this one was earned."""
+    await db.increment_pet_count(ALICE, GUILD_A)
+
+    assert await db.get_relationship(ALICE, GUILD_A) == 0
 
 
 async def test_relationship_clamps_at_the_floor(db):

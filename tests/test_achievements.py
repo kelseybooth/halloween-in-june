@@ -68,8 +68,9 @@ async def row_count(db, table):
 
 def test_the_shipped_file_parses():
     parsed = content_module.load_files()
-    assert len(parsed.achievements) == 35
-    assert len(parsed.achievement_ids) == 35
+    # Thirty-five from Release 1, seven added by V3.
+    assert len(parsed.achievements) == 42
+    assert len(parsed.achievement_ids) == 42
 
 
 def test_the_shipped_file_validates():
@@ -166,7 +167,7 @@ async def test_the_rows_reach_the_database(db):
 async def test_the_whole_shipped_file_loads(db):
     await content_loader.load_content(content_module.load_files())
 
-    assert await row_count(db, "achievements") == 35
+    assert await row_count(db, "achievements") == 42
 
 
 async def test_a_reload_replaces_the_rows(db):
@@ -178,7 +179,7 @@ async def test_a_reload_replaces_the_rows(db):
     parsed.achievements = [an_achievement("gourd_job", name="Squash Buckler")]
     await content_loader.load_content(parsed)
 
-    rows = await resolve.achievements(GUILD_A, today=TODAY)
+    rows = await resolve.achievements(GUILD_A)
     assert await row_count(db, "achievements") == 1
     assert rows["gourd_job"].name == "Squash Buckler"
 
@@ -222,59 +223,63 @@ async def test_a_fresh_load_does_clear_them(guild):
 
 
 async def test_an_unarrived_drop_does_not_exist_yet(guild):
-    parsed = a_calendar(a_drop(1, value="launch"), a_drop(2, value=str(TOMORROW)))
+    parsed = a_calendar(a_drop(1), a_drop(2))
     parsed.achievements = [
         an_achievement("gourd_job"),
         an_achievement("say_cheese", since_drop=2),
     ]
     await content_loader.load_content(parsed)
+    await resolve.set_current_drop(GUILD_A, 1)
 
-    rows = await resolve.achievements(GUILD_A, today=TODAY)
+    rows = await resolve.achievements(GUILD_A)
     assert set(rows) == {"gourd_job"}
 
 
 async def test_a_later_drop_supersedes_an_earlier_one(guild):
-    parsed = a_calendar(a_drop(1, value="launch"), a_drop(2, value=str(YESTERDAY)))
+    parsed = a_calendar(a_drop(1), a_drop(2))
     parsed.achievements = [
         an_achievement("gourd_job", name="Before"),
         an_achievement("gourd_job", since_drop=2, name="After"),
     ]
     await content_loader.load_content(parsed)
+    await resolve.set_current_drop(GUILD_A, 2)
 
-    rows = await resolve.achievements(GUILD_A, today=TODAY)
+    rows = await resolve.achievements(GUILD_A)
     assert rows["gourd_job"].name == "After"
 
 
 async def test_a_rewrite_that_has_not_arrived_is_ignored(guild):
-    parsed = a_calendar(a_drop(1, value="launch"), a_drop(2, value=str(TOMORROW)))
+    parsed = a_calendar(a_drop(1), a_drop(2))
     parsed.achievements = [
         an_achievement("gourd_job", name="Before"),
         an_achievement("gourd_job", since_drop=2, name="After"),
     ]
     await content_loader.load_content(parsed)
+    await resolve.set_current_drop(GUILD_A, 1)
 
-    rows = await resolve.achievements(GUILD_A, today=TODAY)
+    rows = await resolve.achievements(GUILD_A)
     assert rows["gourd_job"].name == "Before"
 
 
-async def test_highest_arrived_wins_not_highest(guild):
-    """An event drop can arrive while a lower-numbered dated one has not, so
-    the maximum is taken after arrival is filtered, never before."""
-    parsed = a_calendar(
-        a_drop(1, value="launch"),
-        a_drop(2, value=str(TOMORROW)),
-        a_drop(3, trigger="manual"),
-    )
+async def test_the_highest_at_or_below_the_pointer_wins(guild):
+    """This used to be `test_highest_arrived_wins_not_highest`, and it
+    tested something that can no longer happen: under the calendar an
+    event drop could arrive while a lower-numbered dated one had not, so
+    the set of arrived drops had holes in it and the maximum had to be
+    taken after filtering. The pointer cannot have holes. What is left
+    worth asserting is that a rewrite two drops back still loses to one
+    drop back."""
+    parsed = a_calendar(a_drop(1), a_drop(2), a_drop(3))
     parsed.achievements = [
         an_achievement("gourd_job", name="One"),
         an_achievement("gourd_job", since_drop=2, name="Two"),
         an_achievement("gourd_job", since_drop=3, name="Three"),
     ]
     await content_loader.load_content(parsed)
-    await resolve.record_arrival(GUILD_A, 3)
+    await resolve.set_current_drop(GUILD_A, 2)
 
-    rows = await resolve.achievements(GUILD_A, today=TODAY)
-    assert rows["gourd_job"].name == "Three"
+    rows = await resolve.achievements(GUILD_A)
+    assert rows["gourd_job"].name == "Two"
 
 
 async def test_resolution_carries_the_unlock_and_the_kind(guild):
@@ -284,7 +289,7 @@ async def test_resolution_carries_the_unlock_and_the_kind(guild):
     ]
     await content_loader.load_content(parsed)
 
-    row = (await resolve.achievements(GUILD_A, today=TODAY))["making_a_mess"]
+    row = (await resolve.achievements(GUILD_A))["making_a_mess"]
     assert (row.kind, row.unlock) == ("group", "Amassed 200 things.")
 
 

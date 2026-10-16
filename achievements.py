@@ -55,6 +55,12 @@ HOOKS = (
     "on_use",
     "on_move",
     "on_pet",
+    # Fired wherever the score is written, by any of the four ways to
+    # touch the cat. The three threshold achievements listen here rather
+    # than on `on_pet`, which was enough only while petting was the only
+    # lever: a player pushed past 50 by a bed fluff would have gone
+    # unchecked until their next pet, or forever.
+    "on_relationship_change",
     "on_reaction",
     "on_message",
     "on_midnight",
