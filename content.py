@@ -250,6 +250,13 @@ class Achievement:
     since_drop: int
     sort_order: int
     notes: str | None
+    # A public achievement with a visibility prerequisite *is* a quest.
+    # `offered` is whether a player is shown it before earning it,
+    # `prompt` is the prospective wording, and `requires` is the one
+    # achievement they must already hold for it to appear.
+    offered: bool = False
+    prompt: str | None = None
+    requires: str | None = None
 
 
 @dataclass(frozen=True)
@@ -531,6 +538,9 @@ def load_files(directory: Path | None = None) -> Content:
                 since_drop=_since_drop(row),
                 sort_order=_int(row.get("sort_order"), default=0) or 0,
                 notes=_text(row.get("notes")),
+                offered=_bool(row.get("offered")),
+                prompt=_text(row.get("prompt")),
+                requires=_text(row.get("requires")),
             )
         )
 
@@ -582,6 +592,7 @@ def validate(content: Content) -> list[str]:
     problems += _check_sources_are_named_in_prose(content, rooms)
     problems += _check_emoji_groups(content)
     problems += _check_achievements(content)
+    problems += _check_quests(content)
     problems += _check_art(content)
     problems += _check_consumables(content)
     return problems
@@ -1166,6 +1177,37 @@ def _check_consumables(content: Content) -> list[str]:
                 "transforms into or restocks it, so using it would destroy it "
                 "for good"
             )
+    return problems
+
+
+def _check_quests(content: Content) -> list[str]:
+    """The three columns that turn an achievement into a quest.
+
+    A quest the player cannot read is worse than no quest, and a `requires`
+    naming nothing is a quest that can never appear - neither raises at
+    runtime, which is exactly why they are caught here.
+    """
+    problems = []
+    known = {a.achievement_id for a in content.achievements}
+    for row in content.achievements:
+        if row.offered and not row.prompt:
+            problems.append(
+                f"achievement {row.achievement_id} is offered as a quest but "
+                "has no prompt, so it would appear in /stats as a blank line"
+            )
+        if row.prompt and row.prompt.rstrip().endswith("."):
+            problems.append(
+                f"achievement {row.achievement_id} has a prompt ending in a "
+                "full stop; the quest notice puts it at the end of its own "
+                "sentence and would double the stop"
+            )
+        if row.requires and row.requires not in known:
+            problems.append(
+                f"achievement {row.achievement_id} requires "
+                f"{row.requires!r}, which is not an achievement"
+            )
+        if row.requires == row.achievement_id:
+            problems.append(f"achievement {row.achievement_id} requires itself")
     return problems
 
 

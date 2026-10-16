@@ -279,6 +279,9 @@ class AchievementRow(NamedTuple):
     name: str
     unlock: str
     sort_order: int
+    offered: bool = False
+    prompt: str | None = None
+    requires: str | None = None
 
 
 async def achievements(guild_id: int) -> dict[str, AchievementRow]:
@@ -305,21 +308,66 @@ async def achievements(guild_id: int) -> dict[str, AchievementRow]:
                     database.Achievement.name,
                     database.Achievement.unlock,
                     database.Achievement.sort_order,
+                    database.Achievement.offered,
+                    database.Achievement.prompt,
+                    database.Achievement.requires,
                 )
             )
         ).all()
 
     best: dict[str, tuple[int, AchievementRow]] = {}
-    for achievement_id, since_drop, kind, name, unlock, sort_order in rows:
+    for row in rows:
+        achievement_id, since_drop = row[0], row[1]
         if since_drop not in arrived:
             continue
         if achievement_id in best and best[achievement_id][0] >= since_drop:
             continue
         best[achievement_id] = (
             since_drop,
-            AchievementRow(achievement_id, kind, name, unlock, sort_order),
+            AchievementRow(achievement_id, *row[2:]),
         )
     return {key: row for key, (_, row) in best.items()}
+
+
+async def open_quests(guild_id: int, user_id: int) -> list[AchievementRow]:
+    """Every quest this player can currently see, newest first.
+
+    **A public achievement with a visibility prerequisite is a quest.**
+    Four conditions, all of which have to hold: it is `offered`, its drop
+    has arrived here, this player holds what it `requires`, and they have
+    not earned it yet.
+
+    `requires` is single-valued on purpose. Every public quest is rooted
+    at *Making First Contact*, so one id is enough - and the moment one
+    needs two unrelated prerequisites this becomes a resolver, so the
+    tree stays rooted.
+
+    **Newest first**, because a player opens `/stats` just after being
+    told a new quest is available and should not have to read to the
+    bottom for it. "Newest" is the order they became visible, which is
+    what the notices table records; a quest the player has not been
+    notified of yet is newer than all of them and sorts above.
+    """
+    rows = await achievements(guild_id)
+    earned = set(await database.player_achievements_of(guild_id, user_id))
+    seen = await database.notice_order(guild_id, user_id)
+
+    quests = [
+        row
+        for row in rows.values()
+        if row.offered
+        and row.achievement_id not in earned
+        and (not row.requires or row.requires in earned)
+    ]
+    # Unseen first (they just appeared), then most recently seen.
+    return sorted(
+        quests,
+        key=lambda row: (
+            0 if row.achievement_id not in seen else 1,
+            -seen.get(row.achievement_id, 0),
+            row.achievement_id,
+        ),
+    )
 
 
 # --------------------------------------------------------------------------

@@ -2938,88 +2938,145 @@ async def admin_config(interaction: discord.Interaction, key: str, value: int) -
 # of October for exactly the players who played the most.
 EMBED_LIMIT = 4096
 
-# What each kind is called in /stats. `group` says "server" because that is
-# the fact a reader needs: nobody earned it, everybody has it.
-KIND_HEADINGS = {
-    "public": "Achievements",
-    "secret": "Secret achievements",
-    "group": "Server achievements",
-}
-KIND_ORDER = ("public", "secret", "group")
+# `/stats` used to group earned achievements under three headings and
+# order them by `sort_order`. V3 lists them newest first and ungrouped, so
+# `KIND_HEADINGS`, `KIND_ORDER` and the `NOTHING_YET` line are gone: the
+# empty state is a writer's string in `defaults.tsv` now, and the kind of
+# an achievement is no longer something the player is shown.
 
-NOTHING_YET = (
-    "Nothing here yet. Pet the cat, open a few doors, and come back - "
-    "the house notices more than it lets on."
-)
+
+# The flag the quest notice reads: has this player ever opened `/stats`.
+# Lives in the notices table with the hints, because "true once something
+# has happened, per player, per server" is the same shape.
+OPENED_STATS = "opened_stats"
+
+# What a quest looks like in the list. The prompt carries no terminal full
+# stop - every string that gets interpolated into the end of another one
+# punctuates nothing - so the line supplies its own.
+QUEST_LINE = "**{name}** - {prompt}"
 
 
 @bot.tree.command(name="stats", description="See what you've earned, and how the cat feels.")
 @app_commands.guild_only()
 async def stats(interaction: discord.Interaction) -> None:
-    """Everything this player has earned, privately.
+    """Everything this player has, privately. Three parts, in order.
 
     **Ephemeral, always.** It carries unlock descriptions, which are the
-    spoilers the public announcement deliberately withholds - posting them in
-    the channel would defeat keeping that announcement to a name.
+    spoilers the public announcement deliberately withholds - posting
+    them in the channel would defeat keeping that announcement to a name.
 
-    Release 1 shows your own stats only. Looking up another member is a later
-    release and changes what the command has to protect.
+    **The relationship, as a figure and a sentence.** The number stays
+    visible and unrounded: it is the only thing telling a player which
+    way they are moving, and the four bands beneath it are deliberately
+    wide enough that it has to.
+
+    **Open quests, only when there are any.** With three public quests in
+    the whole plan a player will spend long stretches with none, and a
+    standing "No open quests" reads as broken rather than as waiting. The
+    string for that exists and nothing reads it, in case testing
+    disagrees.
+
+    **Completed achievements, header always** - including when empty,
+    because its empty line is the only instruction anywhere in the game.
+    With no `/help` and no welcome text, hiding it would leave a first
+    `/stats` showing nothing but a number.
+
+    Opening it also marks every quest currently visible as seen, which is
+    what stops the notice telling a player about a quest they have just
+    read.
     """
     await interaction.response.defer(ephemeral=True)
     user, guild_id = interaction.user, interaction.guild_id
 
     try:
-        count = await database.get_pet_count(user.id, guild_id)
         relationship = await database.get_relationship(user.id, guild_id)
-        tally = await craving.tally(guild_id, user.id)
+        quests = await resolve.open_quests(guild_id, user.id)
         earned = await _earned_lines(guild_id, user.id)
+        await _mark_quests_seen(guild_id, user.id, quests)
     except SQLAlchemyError:
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
         return
 
-    embed = discord.Embed(
-        title=f"{user.display_name}'s stats",
-        description=_fit(earned) if earned else NOTHING_YET,
-    )
-    # Always shown, including on day one, so the empty state reads as an
-    # invitation rather than an error.
-    embed.add_field(name="Pets", value=str(count))
-    embed.add_field(name="Relationship", value=str(relationship))
-    # Here rather than with the achievement that rewards it, so the daily game
-    # outlives being rewarded once.
-    embed.add_field(name="Cravings found", value=str(tally))
+    body = [str(relationship), await _relationship_band(relationship), ""]
 
+    if quests:
+        body.append(f"**{await phrasing.default_say('stats.header.quests')}**")
+        body.extend(
+            QUEST_LINE.format(name=row.name, prompt=row.prompt) for row in quests
+        )
+        body.append("")
+
+    body.append(f"**{await phrasing.default_say('stats.header.achievements')}**")
+    body.extend(earned or [await phrasing.default_say("stats.achievements.empty")])
+
+    embed = discord.Embed(
+        title=f"{user.display_name}'s stats", description=_fit(body)
+    )
     await interaction.followup.send(embed=embed, ephemeral=True)
 
 
+async def _relationship_band(score: int) -> str:
+    """The sentence under the figure. Four bands, and zero is its own.
+
+    Zero is not "below zero rounded up": it is where everybody starts and
+    where the drift returns them, so it says the cat has no opinion
+    rather than that it is holding something against you.
+    """
+    if score >= database.PERFECT_RELATIONSHIP:
+        key = "stats.rel.strong"
+    elif score > 0:
+        key = "stats.rel.positive"
+    elif score < 0:
+        key = "stats.rel.negative"
+    else:
+        key = "stats.rel.zero"
+    return await phrasing.default_say(key) or ""
+
+
+async def _mark_quests_seen(guild_id: int, user_id: int, quests) -> None:
+    """Reading the list counts as being told about everything in it.
+
+    Both halves matter. The per-quest rows are what stop the notice
+    announcing a quest the player is looking at, and they are also the
+    order the list is drawn in next time. The `opened_stats` flag is the
+    other half of the condition that graduates the notice from "check
+    /stats" to naming the quest inline.
+    """
+    for row in quests:
+        await database.notice(guild_id, user_id, row.achievement_id)
+    await database.notice(guild_id, user_id, OPENED_STATS)
+
+
 async def _earned_lines(guild_id: int, user_id: int) -> list[str]:
-    """Every achievement this player has, as rendered lines, grouped by kind.
+    """Every achievement this player has, newest first.
 
     Nothing about achievements **not** yet earned: no count out of
-    thirty-five, no locked rows, no progress bars. A secret achievement's
+    forty-two, no locked rows, no progress bars. A secret achievement's
     existence is revealed by somebody earning it, not by this command.
 
-    A group achievement appears for every current member with nobody named as
-    the earner, because there is no earner - crediting whoever dropped the two
-    hundredth thing rewards arriving last at something everyone built.
+    **Newest first, and no longer grouped by kind.** `sort_order` used to
+    drive this and does not any more: a player opens `/stats` because
+    something just happened, and the thing that just happened should be
+    at the top. *Making First Contact* sits at the bottom forever, which
+    is right - it is the oldest thing they did.
+
+    A group achievement appears for every current member with nobody
+    named as the earner, because there is no earner. It is dated by when
+    the server earned it, so it sorts among a player's own.
+
+    Ties are broken on the id. Two achievements can land from one action
+    - carving a pumpkin on 15 October earns two - and in Postgres they
+    share a transaction timestamp, so without a tiebreak the same list
+    could render in two orders.
     """
     available = await resolve.achievements(guild_id)
     mine = await database.player_achievements_of(guild_id, user_id)
     ours = await database.server_achievements_of(guild_id)
-    held = set(mine) | set(ours)
+    when = {**ours, **mine}
 
-    lines = []
-    for kind in KIND_ORDER:
-        rows = sorted(
-            (row for key, row in available.items() if key in held and row.kind == kind),
-            key=lambda row: (row.sort_order, row.name),
-        )
-        if not rows:
-            continue
-        lines.append(f"**{KIND_HEADINGS[kind]}**")
-        lines.extend(f"**{row.name}** - {row.unlock}" for row in rows)
-        lines.append("")
-    return lines[:-1] if lines else []
+    rows = [(when[key], key, row) for key, row in available.items() if key in when]
+    rows.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    return [f"**{row.name}** - {row.unlock}" for _, _, row in rows]
 
 
 def _fit(lines: list[str]) -> str:

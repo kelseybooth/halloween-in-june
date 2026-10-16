@@ -287,6 +287,9 @@ def _rows_for(parsed: Content) -> dict[str, list[dict]]:
             {
                 "achievement_id": a.achievement_id,
                 "since_drop": a.since_drop,
+                "offered": a.offered,
+                "prompt": a.prompt,
+                "requires": a.requires,
                 "kind": a.kind,
                 "name": a.name,
                 "unlock": a.unlock,

@@ -790,6 +790,43 @@ class Achievement(Base):
     unlock: Mapped[str] = mapped_column(Text, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # A public achievement with a prerequisite is a quest: shown before it
+    # is earned, in the prospective wording, to the players who hold what
+    # it asks for.
+    offered: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    requires: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
+class PlayerNotice(Base):
+    """What this player has already been told, once per thing.
+
+    One table for three jobs, because they are the same shape and the
+    alternative is three tables of two columns: the hints they have seen,
+    the quests they have been notified about, and the flags that are
+    simply true once something has happened - `opened_stats` is one.
+
+    A handful of rows per player. `/qa-reset-player` must clear it, or
+    the hint ladder is one-shot per tester per server.
+
+    The autoincrementing id is load-bearing rather than decoration: it is
+    the order quests became visible, which is the order `/stats` lists
+    them in.
+    """
+
+    __tablename__ = "player_notices"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    notice_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    noticed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("guild_id", "user_id", "notice_id", name="uq_player_notice"),
+    )
 
 
 class PlayerAchievement(Base):
@@ -874,6 +911,9 @@ _LATER_COLUMNS: list[tuple[str, str, str]] = [
     ("users", "relationship", f"INTEGER NOT NULL DEFAULT {RELATIONSHIP_START}"),
     ("users", "last_decay_date", "DATE"),
     ("users", "last_cat_interaction_date", "DATE"),
+    ("achievements", "offered", "BOOLEAN NOT NULL DEFAULT FALSE"),
+    ("achievements", "prompt", "TEXT"),
+    ("achievements", "requires", "VARCHAR(64)"),
     ("things", "cohort", "VARCHAR(1)"),
     ("thing_types", "consumed_on_use", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ("thing_text", "move_depart", "TEXT"),
@@ -2314,6 +2354,76 @@ CONFIG_KEYS: dict[str, tuple[int, str]] = {
         "How many used baby bottles are scattered through the house each day.",
     ),
 }
+
+
+# --------------------------------------------------------------------------
+# What a player has already been told
+# --------------------------------------------------------------------------
+
+
+async def notice(guild_id: int, user_id: int, notice_id: str) -> bool:
+    """Record that this player has been told one thing. False if they had.
+
+    The return value is the whole point for a hint: it fires on the
+    transition, so a caller can say "if await notice(...)" and append the
+    line only the first time.
+    """
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    stmt = (
+        insert(PlayerNotice)
+        .values(guild_id=guild_id, user_id=user_id, notice_id=notice_id)
+        .on_conflict_do_nothing(
+            index_elements=[
+                PlayerNotice.guild_id,
+                PlayerNotice.user_id,
+                PlayerNotice.notice_id,
+            ]
+        )
+        .returning(PlayerNotice.id)
+    )
+    try:
+        async with session_factory() as session:
+            created = (await session.execute(stmt)).scalar_one_or_none()
+            await session.commit()
+            return created is not None
+    except SQLAlchemyError:
+        # Decoration on something that has already happened. Losing the
+        # row means a hint may be shown twice, which is better than
+        # failing the command that carried it.
+        log.exception("Could not record notice %s for %s", notice_id, user_id)
+        return False
+
+
+async def has_been_told(guild_id: int, user_id: int, notice_id: str) -> bool:
+    session_factory = _require_session()
+    async with session_factory() as session:
+        found = await session.scalar(
+            select(PlayerNotice.id).where(
+                PlayerNotice.guild_id == guild_id,
+                PlayerNotice.user_id == user_id,
+                PlayerNotice.notice_id == notice_id,
+            )
+        )
+    return found is not None
+
+
+async def notice_order(guild_id: int, user_id: int) -> dict[str, int]:
+    """Everything this player has been told, by the order it was told.
+
+    The id rather than the timestamp: two notices written in one
+    transaction share a `now()` in Postgres, and the order still has to
+    be total for `/stats` to render the same way twice.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(PlayerNotice.notice_id, PlayerNotice.id).where(
+                PlayerNotice.guild_id == guild_id,
+                PlayerNotice.user_id == user_id,
+            )
+        )
+    return {notice_id: row_id for notice_id, row_id in rows}
 
 
 async def get_config_raw(guild_id: int, key: str) -> str | None:
