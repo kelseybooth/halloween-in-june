@@ -25,6 +25,7 @@ import content_loader
 import craving
 import database
 import gating
+import hints
 import house_utils
 import phrasing
 import reach
@@ -924,6 +925,19 @@ async def pet(interaction: discord.Interaction) -> None:
     # same reason the words do. The first pet of all gets her instead - and
     # every pet in between gets nothing, because an image seen twice a minute
     # stops being a reward and becomes latency.
+    # The rail, under the blurb. `hint.something_new` is a candidate on
+    # any private cat message, which is how a player who was not in the
+    # channel when a drop opened still hears that something arrived.
+    message = hints.beneath(
+        message,
+        await hints.after(
+            guild_id,
+            user.id,
+            hints.FIRST_FRIENDLY if reaction.friendly else hints.FIRST_STANDOFFISH,
+            hints.SOMETHING_NEW,
+        ),
+    )
+
     art = ART_CROWDING if crowded else (ART_FIRST_PET if result.total == 1 else None)
     content_, embed = await _with_art(interaction.guild, message, art)
     await interaction.followup.send(content_, embed=embed, ephemeral=True)
@@ -1190,7 +1204,13 @@ async def _announce_drop(guild, drop_id: int) -> bool:
     if channel is None:
         log.warning("Guild %s has no channel to announce drop %s in", guild.id, drop_id)
         return False
-    await _post_quietly(channel, line)
+
+    # The drop's hint rides the announcement, and **sets nothing**. A
+    # channel post has no player attached, and marking everyone as told
+    # would kill the private fallback for exactly the people it exists
+    # for - whoever was not looking when it went up.
+    nudge = await hints.render(hints.SOMETHING_NEW.hint_id)
+    await _post_quietly(channel, hints.beneath(line, nudge))
     return True
 
 
@@ -1745,6 +1765,25 @@ async def enter(interaction: discord.Interaction) -> None:
     )
 
 
+class _InTheChannel:
+    """What `/use` needs of a game state, for a player who has no row.
+
+    `/enter` does not exist at the drops where the channel is the only
+    place there is, so nobody standing in it has a `player_game_state`.
+    The use path reads exactly one field off it, and inventing a row in
+    the database to carry that would be a player record for somebody who
+    has not played.
+    """
+
+    current_room = content.CHANNEL_ROOM
+
+
+# Things that are the cat, for the purpose of the nightly drift. Using
+# any of them counts as having turned up, whether or not it worked. The
+# toy and the food join this set when drops 2 and 3 build them.
+CAT_INTERACTIONS = frozenset({world.CAT_BED})
+
+
 @bot.tree.command(name="use", description="Attempt to use an object or exit.")
 @app_commands.guild_only()
 @app_commands.describe(thing="The object or exit to use.")
@@ -1770,18 +1809,26 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
     user, guild_id = interaction.user, interaction.guild_id
 
     try:
-        state = await database.get_game_state(user.id, guild_id)
-        if state is None:
-            await interaction.followup.send(
-                "You're not in the haunted house yet. Use `/enter` first.",
-                ephemeral=True,
-            )
-            return
+        # Standing in the channel, which is a room with no player rows in
+        # it. Checked before the game state for the same reason `/look`
+        # checks it there: at the drops where this is the only place
+        # there is, nobody has entered anything.
+        if await _in_the_channel(interaction):
+            await database.ensure_user_exists(user.id, guild_id)
+            state = _InTheChannel()
+        else:
+            state = await database.get_game_state(user.id, guild_id)
+            if state is None:
+                await interaction.followup.send(
+                    "You're not in the haunted house yet. Use `/enter` first.",
+                    ephemeral=True,
+                )
+                return
 
-        elsewhere = await _outside_the_house(interaction, state.current_room)
-        if elsewhere:
-            await interaction.followup.send(elsewhere, ephemeral=True)
-            return
+            elsewhere = await _outside_the_house(interaction, state.current_room)
+            if elsewhere:
+                await interaction.followup.send(elsewhere, ephemeral=True)
+                return
 
         found = await reach.find(guild_id, user.id, state.current_room, thing, reach.Scope.REACH)
 
@@ -1800,6 +1847,20 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
                 await phrasing.default_say(key, name=thing.strip()), ephemeral=True
             )
             return
+
+        # Reaching for the cat counts as turning up, whether or not it
+        # works. The bed refuses inside its window and the toy's first
+        # offer is a guaranteed refusal; the drift exists to notice
+        # absence, and a player who tried was not absent.
+        if found.thing_id in CAT_INTERACTIONS:
+            await database.touched_the_cat(
+                user.id, guild_id, database.pacific_today()
+            )
+        if found.thing_id == world.CAT_BED:
+            # Recorded on the attempt, like the stamp above: a player
+            # refused because they fluffed it this morning has still
+            # learnt what `/use` is, and does not need telling.
+            await hints.did(guild_id, user.id, hints.DID_USE_BED)
 
         row = await phrasing.thing_row(found.thing_id)
         if row is None:
@@ -1899,6 +1960,11 @@ async def _finish_use(interaction, state, found) -> None:
     if effect and effect.announce:
         reply = f"{reply}\n\n{effect.announce}" if reply else effect.announce
 
+    if found.thing_id == world.CAT_BED:
+        reply = hints.beneath(
+            reply, await hints.after(guild_id, user.id, hints.TRY_LOOK)
+        )
+
     await interaction.followup.send(reply, ephemeral=True)
 
     if effect and effect.public:
@@ -1914,6 +1980,12 @@ async def _finish_use(interaction, state, found) -> None:
         ),
         interaction=interaction,
     )
+
+    # A use that moved the meter is the case `on_relationship_change`
+    # exists for: reaching fifty by fluffing the bed has to be noticed
+    # without waiting for the player's next pet.
+    if effect and effect.relationship is not None:
+        await _fire_relationship(interaction, user.id, guild_id, effect.relationship)
 
 
 async def _fire(context, *, interaction=None, guild=None) -> None:
@@ -2347,8 +2419,16 @@ async def look(interaction: discord.Interaction, thing: str | None = None) -> No
         # there is. Checked before the game state for exactly that reason.
         if await _in_the_channel(interaction):
             if thing is None or not thing.strip():
+                await hints.did(guild_id, user.id, hints.DID_LOOK)
+                reply = await _look_in_the_channel(guild_id, user.id)
                 await interaction.followup.send(
-                    await _look_in_the_channel(guild_id, user.id), ephemeral=True
+                    hints.beneath(
+                        reply,
+                        await hints.after(
+                            guild_id, user.id, hints.LOOK_SPECIFIC
+                        ),
+                    ),
+                    ephemeral=True,
                 )
                 return
             await _look_at_one_thing(
@@ -2424,6 +2504,14 @@ async def _look_at_one_thing(
         return
 
     text, art = await _look_at(guild_id, user_id, room_id, found)
+
+    if found.thing_id == world.CAT_BED:
+        await hints.did(guild_id, user_id, hints.DID_LOOK)
+        await hints.did(guild_id, user_id, hints.DID_LOOK_BED)
+        text = hints.beneath(
+            text, await hints.after(guild_id, user_id, hints.TRY_USE)
+        )
+
     content_, embed = await _with_art(interaction.guild, text, art)
     await interaction.followup.send(content_, embed=embed, ephemeral=True)
 
@@ -2945,10 +3033,8 @@ EMBED_LIMIT = 4096
 # an achievement is no longer something the player is shown.
 
 
-# The flag the quest notice reads: has this player ever opened `/stats`.
-# Lives in the notices table with the hints, because "true once something
-# has happened, per player, per server" is the same shape.
-OPENED_STATS = "opened_stats"
+# The flag the quest notice reads, defined with the rail that reads it.
+OPENED_STATS = hints.OPENED_STATS
 
 # What a quest looks like in the list. The prompt carries no terminal full
 # stop - every string that gets interpolated into the end of another one
