@@ -932,14 +932,23 @@ async def pet(interaction: discord.Interaction) -> None:
     # The rail, under the blurb. `hint.something_new` is a candidate on
     # any private cat message, which is how a player who was not in the
     # channel when a drop opened still hears that something arrived.
+    # A friendly first pet earns *Making First Contact*, and its hint
+    # rides that announcement instead - see `HINT_FOR_ACHIEVEMENT`. A
+    # standoffish one earns nothing, so its hint has nowhere else to go.
+    #
+    # **One hint per action, not per message.** When an award is about
+    # to arrive with a hint on it, this reply offers none: two nudges
+    # across the three messages a first pet already sends is the noise
+    # the rail exists to avoid. Worked out by asking whether the award
+    # is still to come, because the hook that grants it runs after this.
+    held = await database.player_achievements_of(guild_id, user.id)
+    awarding = reaction.friendly and FIRST_CONTACT not in held
+    candidates = [] if reaction.friendly else [hints.FIRST_STANDOFFISH]
     message = hints.beneath(
         message,
-        await hints.after(
-            guild_id,
-            user.id,
-            hints.FIRST_FRIENDLY if reaction.friendly else hints.FIRST_STANDOFFISH,
-            hints.SOMETHING_NEW,
-        ),
+        None
+        if awarding
+        else await hints.after(guild_id, user.id, *candidates, hints.SOMETHING_NEW),
     )
 
     art = ART_CROWDING if crowded else (ART_FIRST_PET if result.total == 1 else None)
@@ -1537,6 +1546,16 @@ async def _initialize_error(
 #
 # The mapping lives here rather than in `art.tsv` for the same reason the
 # achievement conditions do: the file carries what a writer owns.
+# Which achievement's private message carries which hint. Keyed on the
+# achievement rather than fired from the action, because the sentence is
+# about the award: "you've gotten your first achievement" belongs under
+# the line announcing it, not under the pet that happened to earn it.
+#
+# Only one today, and only the friendly fork: a first standoffish pet
+# earns nothing, so its hint has no award to ride and stays on the pet.
+FIRST_CONTACT = "making_first_contact"
+HINT_FOR_ACHIEVEMENT = {FIRST_CONTACT: hints.FIRST_FRIENDLY}
+
 ART_FOR_ACHIEVEMENT = {
     "making_friends": "eunoia_content",
     "cats_best_friend": "eunoia_content",
@@ -2096,6 +2115,17 @@ async def _announce(award, *, interaction=None, guild=None) -> None:
     )
     if not private:
         return
+
+    # A hint that is about having earned something rides the message
+    # that says so, rather than the action that earned it. Attached the
+    # same way the art is, from a map keyed on the achievement, because
+    # it is the same kind of fact: this award carries this extra.
+    nudge = HINT_FOR_ACHIEVEMENT.get(award.achievement_id)
+    if nudge is not None:
+        private = hints.beneath(
+            private, await hints.after(guild.id, award.user_id, nudge, quests=False)
+        )
+
     content_, embed = await _with_art(guild, private, art)
     try:
         await interaction.followup.send(content_, embed=embed, ephemeral=True)

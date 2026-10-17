@@ -10,9 +10,9 @@ Every string the proof of concept needs, for review and editing. Twenty-three in
 
 **Hints are in the game's voice, not the cat's.** Every hint is *italicised* and prefixed with **Hint:**, so a player can see at a glance that the game is speaking rather than the cat changing character. The format is fixed across all six:
 
-> She allows it, briefly, and then moves out of reach.
+> You earned **Making First Contact**: The cat let you pet her. Don't let it go to your head.
 >
-> *Hint: This is your first achievement. Check /stats to see achievements and open quests.*
+> *Hint: You've gotten your first achievement. Check /stats to see achievements and open quests.*
 
 That resolves the voice problem without softening the instruction — which matters, because two playtesters did not know slash commands existed and clarity beats charm in a tutorial line. The label also makes hints skippable for anyone who does not need them.
 
@@ -80,7 +80,7 @@ Every hint renders as *Hint: \<text>* in italics. The strings below are the text
 
 | Key | Trigger | Text | Status |
 | --- | --- | --- | --- |
-| `hint.first_friendly` | first pet that rolls friendly — same message that awards *Making First Contact* | This is your first achievement. Check /stats to see achievements and open quests. | locked |
+| `hint.first_friendly` | the private **Making First Contact** message, not the pet that earned it — changed 16 October after QA | You've gotten your first achievement. Check /stats to see achievements and open quests. | locked |
 | `hint.first_standoffish` | first pet that rolls standoffish | Petting affects your relationship with the cat. Check /stats to view it. | locked |
 
 ### Drop 1

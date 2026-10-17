@@ -298,17 +298,93 @@ async def test_it_points_at_stats_rather_than_naming_the_quest(channel):
 
 
 async def test_the_graduated_line_exists_and_names_the_quest(channel):
-    """Unreachable through play, so driven directly - a string nothing
-    can reach is a string nobody has read."""
-    await database.award_player_achievement(GUILD_A, ALICE, "making_first_contact")
+    """Unreachable through play, and now demonstrably so.
+
+    The shipped files offer three quests in total, and graduating needs
+    three already told *plus* a fourth to announce - so a world with
+    four has to be built to read the string at all. That is a stronger
+    statement of "not reachable in 3a" than the work order's, and it is
+    why the string ships unexercised by anything but this.
+    """
+    from test_achievements import an_achievement
+    from test_loader import a_world
+
+    parsed = a_world()
+    parsed.achievements = [an_achievement("root")] + [
+        an_achievement(
+            f"q{n}", kind="public", offered=True,
+            prompt=f"Quest number {n}", requires="root", name=f"Quest {n}",
+        )
+        for n in range(4)
+    ]
+    await content_loader.load_content(parsed, allow_orphans=True)
+    await database.set_setting(GUILD_A, resolve.DROP_KEY, 1)
+    await database.award_player_achievement(GUILD_A, ALICE, "root")
     await database.notice(GUILD_A, ALICE, hints.OPENED_STATS)
-    for filler in ("a", "b", "c"):
-        await database.notice(GUILD_A, ALICE, filler)
+    for quest in ("q1", "q2", "q3"):
+        await database.notice(GUILD_A, ALICE, quest)
 
     line = await hints.quest_notice(GUILD_A, ALICE)
 
-    assert "A Paw in the Door" in line
-    assert "Attain a relationship of +50" in line
+    assert "Quest 0" in line
+    assert "Quest number 0" in line
+
+
+async def test_a_first_quest_points_at_stats_however_much_else_is_known(channel):
+    """**From QA.** A tester on their first quest was handed "Fluffed to
+    Perfection: Give the cat a cozy nap spot" instead of the screen that
+    would have explained it.
+
+    The told-you table holds hints, action markers and flags as well as
+    quests, so counting its rows reached three the moment somebody had
+    looked at the bed and opened `/stats`. It counts quests now.
+    """
+    await database.award_player_achievement(GUILD_A, ALICE, "making_first_contact")
+    await database.notice(GUILD_A, ALICE, hints.OPENED_STATS)
+    for busy in (hints.DID_LOOK, hints.DID_LOOK_BED, hints.DID_USE_BED,
+                 hints.LOOK_SPECIFIC.hint_id, hints.TRY_USE.hint_id):
+        await database.notice(GUILD_A, ALICE, busy)
+
+    line = await hints.quest_notice(GUILD_A, ALICE)
+
+    assert "Check /stats" in line
+    assert "A Paw in the Door" not in line
+
+
+async def test_one_hint_per_action_not_per_message(channel, monkeypatch):
+    """**From QA, the other half.** A first friendly pet sends three
+    messages; the hint belongs on exactly one of them. The pet reply
+    stays quiet when an award with a hint on it is about to arrive."""
+    _friendly(monkeypatch)
+    await resolve.set_current_drop(GUILD_A, 1)
+
+    reply = await pet(channel)
+
+    assert reply.count("*Hint:") == 1
+    assert "You've gotten your first achievement" in reply
+
+
+async def test_the_hint_rides_the_achievement_not_the_pet(channel, monkeypatch):
+    """Where the line sits, which is what QA asked to change: under the
+    message announcing the award, not under the pet that earned it."""
+    _friendly(monkeypatch)
+    interaction = await run(channel, bot.pet)
+
+    blurb, award = [t for t, _ in interaction.sent if t]
+
+    assert "pet her" in blurb and "*Hint:" not in blurb
+    assert "Making First Contact" in award
+    assert "You've gotten your first achievement" in award
+
+
+async def test_a_later_friendly_pet_can_still_carry_a_hint(channel, monkeypatch):
+    """The suppression is for the award that is coming, not for friendly
+    pets in general - otherwise a player who only ever rolls friendly
+    would never hear about anything."""
+    _friendly(monkeypatch)
+    await pet(channel)  # earns the achievement, spends its hint
+
+    assert "There is something new here" in await pet(channel)
 
 
 # --------------------------------------------------------------------------
