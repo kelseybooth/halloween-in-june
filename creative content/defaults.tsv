@@ -15,7 +15,7 @@ use_fail.absent	You don't see a {name} here.
 use_fail.unknown	That can't be used.
 use_fail.not_carried	You'd need to be holding the {name} for that.
 ambiguous.match	Which one do you mean: {options}?
-also_here.prefix	Also here: 
+also_here.prefix	Also here:
 also_here.entry_multiple	{name} x{n}
 also_here.separator	, 
 also_here.truncated	…and {more} more. The room is getting crowded.
@@ -62,4 +62,4 @@ hint.new_quest	A new quest is available. Check /stats.
 hint.new_quest.named	A new quest is available. {quest_name}: {quest_prompt}
 channel.look_prefix	Items here:
 channel.look_empty	Nothing here but the cat, and she was here already.
-drop.1.announce	The cat swats her paw and something slides a couple feet away...something that didn't appear to be here before now.
+drop.1.announce	The cat swats her paw and something slides a couple feet away... something that didn't appear to be here before now.

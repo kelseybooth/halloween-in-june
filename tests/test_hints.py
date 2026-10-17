@@ -504,3 +504,63 @@ def test_every_command_a_hint_declares_is_a_real_one(hint):
         everywhere |= set(names)
 
     assert set(hint.needs_commands) <= everywhere
+
+
+# --------------------------------------------------------------------------
+# A quest you have just finished is not news
+#
+# From QA: a tester used the cat bed and was told *Fluffed to Perfection*
+# was available - by the message that earned it.
+# --------------------------------------------------------------------------
+
+
+async def test_finishing_a_quest_does_not_announce_it(channel):
+    """The reported bug. The hooks run before the rail now, so by the
+    time the hint is composed the quest is earned rather than open.
+
+    Asserted on the use reply alone - the achievement message that
+    follows names the quest legitimately, and reading the whole
+    transcript would mistake that for the bug.
+    """
+    await database.award_player_achievement(GUILD_A, ALICE, "making_first_contact")
+
+    interaction = await run(channel, bot.use, "cat bed")
+    reply = [t for t, _ in interaction.sent if t][0]
+
+    assert "A new quest is available" not in reply
+    assert "Fluffed to Perfection" not in reply
+
+
+async def test_and_the_achievement_still_arrives_after_the_reply(channel):
+    """Awarding earlier must not reorder what the player reads."""
+    interaction = await run(channel, bot.use, "cat bed")
+    await database.award_player_achievement(GUILD_A, ALICE, "making_first_contact")
+
+    texts = [t for t, _ in interaction.sent if t]
+
+    assert "shake out the cushion" in texts[0]
+    assert any("Fluffed to Perfection" in t for t in texts[1:])
+
+
+async def test_a_quest_still_open_is_still_announced(channel):
+    """The other direction, so this is a fix rather than a mute."""
+    await database.award_player_achievement(GUILD_A, ALICE, "making_first_contact")
+    await look(channel)
+    await look(channel, "cat bed")
+
+    assert "A new quest is available" in await look(channel, "cat bed")
+
+
+async def test_crossing_fifty_by_petting_does_not_offer_what_it_earned(channel, monkeypatch):
+    """The same ordering, on the other hook. *A Paw in the Door* is a
+    quest, and the pet that reaches fifty earns it - so that pet must
+    not also advertise it."""
+    _friendly(monkeypatch)
+    await database.ensure_user_exists(ALICE, GUILD_A)
+    await database.award_player_achievement(GUILD_A, ALICE, "making_first_contact")
+    await database.set_relationship(GUILD_A, ALICE, 45)
+
+    reply = await pet(channel)
+
+    assert "A new quest is available" not in reply
+    assert "a_paw_in_the_door" in await database.player_achievements_of(GUILD_A, ALICE)

@@ -189,7 +189,7 @@ When drop 1 opens, the bed appears — and the only thing that says so is a priv
 
 **Settled: the drop is announced publicly, and `hint.something_new` rides the announcement.** The two become one moment in the channel:
 
-> The cat swats her paw and something slides a couple feet away...something that didn't appear to be here before now.
+> The cat swats her paw and something slides a couple feet away... something that didn't appear to be here before now.
 >
 > *Hint: There is something new here. Try /look.*
 
@@ -197,7 +197,7 @@ That is cheap, reaches everyone at once including people who were not going to t
 
 | Key | When | Text | Status |
 | --- | --- | --- | --- |
-| `drop.1.announce` | posted in the channel when drop 1 opens | The cat swats her paw and something slides a couple feet away...something that didn't appear to be here before now.&#32; | locked |
+| `drop.1.announce` | posted in the channel when drop 1 opens | The cat swats her paw and something slides a couple feet away... something that didn't appear to be here before now.&#32; | locked |
 
 **The pattern is now set: one announcement string per drop, each able to carry that drop's hint.** Drop 2 writes its own rather than inventing the shape again.
 
