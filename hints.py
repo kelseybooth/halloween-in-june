@@ -214,9 +214,7 @@ async def quest_notice(guild_id: int, user_id: int) -> str | None:
         return None
 
     newest = fresh[0]
-    graduated = len(told) >= GRADUATES_AT and await database.has_been_told(
-        guild_id, user_id, OPENED_STATS
-    )
+    graduated = await _graduated(guild_id, user_id, told)
     line = (
         await render(
             "hint.new_quest.named",
@@ -230,6 +228,30 @@ async def quest_notice(guild_id: int, user_id: int) -> str | None:
     for row in fresh:
         await database.notice(guild_id, user_id, row.achievement_id)
     return line
+
+
+async def _graduated(guild_id: int, user_id: int, told: dict[str, int]) -> bool:
+    """Whether this player has seen enough quests to be named one.
+
+    **Counts quests, not notices.** The told-you table holds hints,
+    action markers and flags as well as quests, so `len(told)` reached
+    three the moment a player had looked at the bed and opened
+    `/stats` - and a tester on their first quest was handed "Fluffed to
+    Perfection: Give the cat a cozy nap spot" instead of being pointed
+    at the screen that would explain it.
+
+    A quest is an achievement the files offer, so the count is the told
+    ids that are offered achievements and nothing else.
+    """
+    offered = {
+        row.achievement_id
+        for row in (await resolve.achievements(guild_id)).values()
+        if row.offered
+    }
+    attained = len(set(told) & offered)
+    return attained >= GRADUATES_AT and await database.has_been_told(
+        guild_id, user_id, OPENED_STATS
+    )
 
 
 async def after(

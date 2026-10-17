@@ -52,7 +52,7 @@ stats.header.quests	Open Quests
 stats.header.achievements	Completed Achievements
 stats.achievements.empty	No completed achievements. Try /pet.
 stats.quests.empty	No open quests
-hint.first_friendly	This is your first achievement. Check /stats to see achievements and open quests.
+hint.first_friendly	You've gotten your first achievement. Check /stats to see achievements and open quests.
 hint.first_standoffish	Petting affects your relationship with the cat. Check /stats to view it.
 hint.something_new	There is something new here. Try /look.
 hint.look_specific	Specific things can be looked at. Try /look cat bed.
