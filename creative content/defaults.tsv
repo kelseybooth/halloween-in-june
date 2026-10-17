@@ -37,11 +37,17 @@ pet.crowding	Maybe you should give the cat some space.
 achievement.private	You earned **{achievement}**: {description}
 achievement.public	{player} earned **{achievement}**
 achievement.public.group	{server} earned **{achievement}**: {description}
-stats.rel.zero	The cat doesn't seem to care about you.
-stats.rel.negative	She has not forgiven you for something.
-stats.rel.positive	She tolerates you, and occasionally more.
-stats.rel.strong	She would notice if you stopped coming.
-stats.pets	Pets: {count}
+stats.rel.unimpressed	The cat is thoroughly unimpressed.
+stats.rel.irritated	The cat is mildly irritated.
+stats.rel.undecided	The cat is still trying to decide how she feels about you.
+stats.rel.warming	The cat is warming up to you.
+stats.rel.may_stay	The cat has decided you may stay.
+stats.rel.likes	The cat genuinely likes you.
+stats.rel.claimed	The cat has claimed you as her human.
+stats.rel.adores	The cat adores you.
+stats.rel.anywhere	The cat would follow you anywhere.
+stats.relationship	Cat relationship strength: {score}
+stats.pets	Total pets: {count}
 stats.header.quests	Open Quests
 stats.header.achievements	Completed Achievements
 stats.achievements.empty	No completed achievements. Try /pet.

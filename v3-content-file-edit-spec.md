@@ -170,6 +170,13 @@ Copy exactly. The full deck with triggers and statuses is the **V3 POC copy deck
 
 **`/stats` relationship bands**
 
+> **Superseded 17 October.** These four were applied, shipped, and
+> replaced by nine after testing - four bands were wide enough that
+> *"She tolerates you"* covered a score of 1 and a score of 99. The
+> nine that replaced them, and the two new labelled lines, are in the
+> **V3 POC copy deck**, which is the live source. The table below is
+> kept as a record of what this spec asked for, not as copy to apply.
+
 | Key | Text |
 | --- | --- |
 | `stats.rel.zero` | The cat doesn't seem to care about you. |

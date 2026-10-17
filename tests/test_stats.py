@@ -97,35 +97,83 @@ def a_quest(achievement_id, prompt="Do the thing", requires=ROOT, **kwargs):
 # --------------------------------------------------------------------------
 
 
-async def test_the_figure_is_shown_unrounded(playing, halloween):
+async def test_the_figure_is_shown_unrounded_and_labelled(playing, halloween):
+    """A bare integer at the top of an embed does not say what it
+    counts."""
     await playing.adjust_relationship(ALICE, GUILD_A, 137)
 
-    assert "137" in body(await ask(guild=halloween))
+    assert "Cat relationship strength: 137" in body(await ask(guild=halloween))
 
 
-@pytest.mark.parametrize(
-    "score, phrase",
-    [
-        (0, "doesn't seem to care"),
-        (-30, "has not forgiven you"),
-        (30, "tolerates you"),
-        (100, "would notice if you stopped"),
-        (400, "would notice if you stopped"),
-    ],
-)
-async def test_the_four_bands(playing, halloween, score, phrase):
-    """Zero is its own band rather than "below zero rounded up": it is
-    where everybody starts and where the drift returns them."""
-    await playing.adjust_relationship(ALICE, GUILD_A, score)
+async def test_the_three_lines_read_as_the_writers_wrote_them(playing, halloween):
+    await playing.ensure_user_exists(ALICE, GUILD_A)
+    await playing.set_relationship(GUILD_A, ALICE, -5)
+    await playing.increment_pet_count(ALICE, GUILD_A)
 
-    assert phrase in body(await ask(guild=halloween))
+    reply = body(await ask(guild=halloween))
+
+    assert reply.startswith(
+        "Cat relationship strength: -5\n"
+        "The cat is still trying to decide how she feels about you.\n"
+        "Total pets: 1"
+    )
+
+
+# The writers' nine, as (lowest score in the band, highest, phrase).
+BANDS = [
+    (-100, -31, "thoroughly unimpressed"),
+    (-30, -6, "mildly irritated"),
+    (-5, 5, "still trying to decide"),
+    (6, 50, "warming up to you"),
+    (51, 100, "decided you may stay"),
+    (101, 150, "genuinely likes you"),
+    (151, 200, "claimed you as her human"),
+    (201, 300, "adores you"),
+    (301, 9999, "follow you anywhere"),
+]
+
+
+@pytest.mark.parametrize("low, high, phrase", BANDS, ids=[b[2] for b in BANDS])
+async def test_both_edges_of_every_band(playing, halloween, low, high, phrase):
+    """Both ends of each, because an off-by-one between two bands reads
+    as a plausible sentence and nothing else would catch it."""
+    for score in (low, high):
+        await playing.set_relationship(GUILD_A, ALICE, score)
+
+        assert phrase in body(await ask(guild=halloween)), score
+
+
+async def test_the_bands_leave_no_gap(playing, halloween):
+    """Every score from the floor to well past the top lands in one.
+
+    The meter has no ceiling, so the top band must have none either -
+    *Favorite Human* is at 250 and nothing stops a player going past
+    it."""
+    seen = set()
+    for score in list(range(-100, 320)) + [1000]:
+        await playing.set_relationship(GUILD_A, ALICE, score)
+        reply = body(await ask(guild=halloween))
+        matched = [p for _, _, p in BANDS if p in reply]
+        assert len(matched) == 1, (score, matched)
+        seen.add(matched[0])
+
+    assert len(seen) == len(BANDS)
+
+
+async def test_zero_is_not_a_band_of_its_own(playing, halloween):
+    """It used to be, saying the cat did not care. It now sits inside
+    *still trying to decide*, which is a better reading of where every
+    player starts and where the drift returns them."""
+    await playing.set_relationship(GUILD_A, ALICE, 0)
+
+    assert "still trying to decide" in body(await ask(guild=halloween))
 
 
 async def test_a_new_player_reads_as_zero_not_as_broken(playing, halloween):
     reply = body(await ask(guild=halloween))
 
-    assert reply.startswith("0")
-    assert "doesn't seem to care" in reply
+    assert reply.startswith("Cat relationship strength: 0")
+    assert "still trying to decide" in reply
 
 
 async def test_the_pet_count_is_here_because_there_is_nowhere_else(playing, halloween):
@@ -137,18 +185,18 @@ async def test_the_pet_count_is_here_because_there_is_nowhere_else(playing, hall
     for _ in range(3):
         await playing.increment_pet_count(ALICE, GUILD_A)
 
-    assert "Pets: 3" in body(await ask(guild=halloween))
+    assert "Total pets: 3" in body(await ask(guild=halloween))
 
 
 async def test_it_reads_zero_on_day_one(playing, halloween):
-    assert "Pets: 0" in body(await ask(guild=halloween))
+    assert "Total pets: 0" in body(await ask(guild=halloween))
 
 
 async def test_the_count_is_per_server(playing, db, halloween):
     await db.ensure_user_exists(ALICE, GUILD_B)
     await db.increment_pet_count(ALICE, GUILD_B)
 
-    assert "Pets: 0" in body(await ask(guild=halloween))
+    assert "Total pets: 0" in body(await ask(guild=halloween))
 
 
 # --------------------------------------------------------------------------

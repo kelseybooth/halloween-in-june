@@ -3263,9 +3263,11 @@ async def stats(interaction: discord.Interaction) -> None:
     them in the channel would defeat keeping that announcement to a name.
 
     **The relationship, as a figure and a sentence.** The number stays
-    visible and unrounded: it is the only thing telling a player which
-    way they are moving, and the four bands beneath it are deliberately
-    wide enough that it has to.
+    visible and unrounded, and is labelled: a bare integer at the top
+    of an embed does not say what it counts. The nine bands beneath it
+    are wide enough that the figure still has work to do - a player can
+    sit in one of them for days and only the number shows which way
+    they are going.
 
     **And the pet count, which is here because there is nowhere else.**
     2f took it out of `/pet` on the grounds that two hundred is better
@@ -3304,7 +3306,7 @@ async def stats(interaction: discord.Interaction) -> None:
         return
 
     body = [
-        str(relationship),
+        await phrasing.default_say("stats.relationship", score=relationship),
         await _relationship_band(relationship),
         await phrasing.default_say("stats.pets", count=pets),
         "",
@@ -3326,21 +3328,41 @@ async def stats(interaction: discord.Interaction) -> None:
     await interaction.followup.send(embed=embed, ephemeral=True)
 
 
-async def _relationship_band(score: int) -> str:
-    """The sentence under the figure. Four bands, and zero is its own.
+# What the cat thinks of you, by score. Nine bands, each given as the
+# lowest score that reaches it, in descending order so the first match
+# wins.
+#
+# They are contiguous and they cover the whole meter: the bottom band
+# runs to the floor at -100, and the top one has no ceiling because the
+# meter has none either. The three around zero are narrow because that
+# is where a new player spends their first week and where one pet is
+# meant to feel like something; the upper ones widen because by then a
+# player is measuring in days rather than pets.
+RELATIONSHIP_BANDS: tuple[tuple[int, str], ...] = (
+    (301, "stats.rel.anywhere"),
+    (201, "stats.rel.adores"),
+    (151, "stats.rel.claimed"),
+    (101, "stats.rel.likes"),
+    (51, "stats.rel.may_stay"),
+    (6, "stats.rel.warming"),
+    (-5, "stats.rel.undecided"),
+    (-30, "stats.rel.irritated"),
+    (database.RELATIONSHIP_MIN, "stats.rel.unimpressed"),
+)
 
-    Zero is not "below zero rounded up": it is where everybody starts and
-    where the drift returns them, so it says the cat has no opinion
-    rather than that it is holding something against you.
+
+async def _relationship_band(score: int) -> str:
+    """The sentence under the figure.
+
+    Zero has no band of its own any more: it sits inside *still trying
+    to decide how she feels about you*, which is a better reading of
+    where every player starts and where the drift returns them than a
+    sentence about not caring.
     """
-    if score >= database.PERFECT_RELATIONSHIP:
-        key = "stats.rel.strong"
-    elif score > 0:
-        key = "stats.rel.positive"
-    elif score < 0:
-        key = "stats.rel.negative"
-    else:
-        key = "stats.rel.zero"
+    key = next(
+        (key for floor, key in RELATIONSHIP_BANDS if score >= floor),
+        RELATIONSHIP_BANDS[-1][1],
+    )
     return await phrasing.default_say(key) or ""
 
 
