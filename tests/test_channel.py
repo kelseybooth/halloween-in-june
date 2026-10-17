@@ -52,12 +52,18 @@ async def look(channel, thing=None):
 
 
 async def test_the_bed_is_listed_once_its_drop_opens(channel):
+    """Asserted as the whole line, spacing included.
+
+    The old version checked for "Items here:" and "cat bed"
+    separately, and so passed happily against "Items here:cat bed" -
+    which is what drop 1 shipped. A label and its contents are one
+    rendered string and are worth asserting as one.
+    """
     await resolve.set_current_drop(GUILD_A, 1)
 
     interaction = await look(channel)
 
-    assert "Items here:" in interaction.reply
-    assert "cat bed" in interaction.reply
+    assert "Items here: cat bed" in interaction.reply
 
 
 async def test_a_fixture_is_listed_even_though_it_is_not_in_room_contents(channel):
@@ -75,7 +81,7 @@ async def test_a_fixture_is_listed_even_though_it_is_not_in_room_contents(channe
         )
     assert placed == 0
 
-    assert "cat bed" in (await look(channel)).reply
+    assert "Items here: cat bed" in (await look(channel)).reply
 
 
 async def test_the_cat_is_not_in_the_list(channel):

@@ -932,23 +932,11 @@ async def pet(interaction: discord.Interaction) -> None:
     # The rail, under the blurb. `hint.something_new` is a candidate on
     # any private cat message, which is how a player who was not in the
     # channel when a drop opened still hears that something arrived.
-    message = hints.beneath(
-        message,
-        await hints.after(
-            guild_id,
-            user.id,
-            hints.FIRST_FRIENDLY if reaction.friendly else hints.FIRST_STANDOFFISH,
-            hints.SOMETHING_NEW,
-        ),
-    )
-
-    art = ART_CROWDING if crowded else (ART_FIRST_PET if result.total == 1 else None)
-    content_, embed = await _with_art(interaction.guild, message, art)
-    await interaction.followup.send(content_, embed=embed, ephemeral=True)
-
-    await _announce_pet(interaction, reaction.friendly)
-
-    await _fire(
+    # The hooks run first and hold their announcements, so the rail
+    # below sees what this pet earned rather than the world as it was a
+    # moment before. The player still reads the blurb first - the held
+    # announcements go out underneath it.
+    earned = await _fire(
         achievements.Context(
             guild_id=interaction.guild_id,
             hook="on_pet",
@@ -960,8 +948,42 @@ async def pet(interaction: discord.Interaction) -> None:
             },
         ),
         interaction=interaction,
+        announce=False,
     )
-    await _fire_relationship(interaction, user.id, guild_id, relationship)
+    earned += await _fire(
+        achievements.Context(
+            guild_id=guild_id,
+            hook="on_relationship_change",
+            user_id=user.id,
+            extra={"relationship": relationship},
+        ),
+        interaction=interaction,
+        announce=False,
+    )
+
+    # A friendly first pet earns *Making First Contact*, and its hint
+    # rides that announcement instead - see `HINT_FOR_ACHIEVEMENT`. A
+    # standoffish one earns nothing, so its hint has nowhere else to go.
+    #
+    # **One hint per action, not per message.** An award arriving with
+    # a hint on it takes this reply's turn: two nudges across the three
+    # messages a first pet already sends is the noise the rail exists
+    # to avoid.
+    carried = any(a.achievement_id in HINT_FOR_ACHIEVEMENT for a in earned)
+    candidates = [] if reaction.friendly else [hints.FIRST_STANDOFFISH]
+    message = hints.beneath(
+        message,
+        None
+        if carried
+        else await hints.after(guild_id, user.id, *candidates, hints.SOMETHING_NEW),
+    )
+
+    art = ART_CROWDING if crowded else (ART_FIRST_PET if result.total == 1 else None)
+    content_, embed = await _with_art(interaction.guild, message, art)
+    await interaction.followup.send(content_, embed=embed, ephemeral=True)
+
+    await _announce_pet(interaction, reaction.friendly)
+    await _announce_all(earned, interaction=interaction)
 
 
 async def _reregister(interaction, guild, drop: int | None) -> str:
@@ -1537,6 +1559,16 @@ async def _initialize_error(
 #
 # The mapping lives here rather than in `art.tsv` for the same reason the
 # achievement conditions do: the file carries what a writer owns.
+# Which achievement's private message carries which hint. Keyed on the
+# achievement rather than fired from the action, because the sentence is
+# about the award: "you've gotten your first achievement" belongs under
+# the line announcing it, not under the pet that happened to earn it.
+#
+# Only one today, and only the friendly fork: a first standoffish pet
+# earns nothing, so its hint has no award to ride and stays on the pet.
+FIRST_CONTACT = "making_first_contact"
+HINT_FOR_ACHIEVEMENT = {FIRST_CONTACT: hints.FIRST_FRIENDLY}
+
 ART_FOR_ACHIEVEMENT = {
     "making_friends": "eunoia_content",
     "cats_best_friend": "eunoia_content",
@@ -1790,7 +1822,7 @@ class _InTheChannel:
 CAT_INTERACTIONS = frozenset({world.CAT_BED})
 
 
-@bot.tree.command(name="use", description="Attempt to use an object or exit.")
+@bot.tree.command(name="use", description="Attempt to use an object.")
 @app_commands.guild_only()
 @app_commands.describe(thing="The object or exit to use.")
 async def use(interaction: discord.Interaction, thing: str) -> None:
@@ -1966,17 +1998,12 @@ async def _finish_use(interaction, state, found) -> None:
     if effect and effect.announce:
         reply = f"{reply}\n\n{effect.announce}" if reply else effect.announce
 
-    if found.thing_id == world.CAT_BED:
-        reply = hints.beneath(
-            reply, await hints.after(guild_id, user.id, hints.TRY_LOOK)
-        )
-
-    await interaction.followup.send(reply, ephemeral=True)
-
-    if effect and effect.public:
-        await _post_in_room(interaction, state.current_room, reply)
-
-    await _fire(
+    # Awarded before the rail reads anything, announced after the reply
+    # goes out. A tester who used the cat bed was told *Fluffed to
+    # Perfection* was available by the very message that earned it,
+    # because the hint was composed while the award was still a moment
+    # away.
+    earned = await _fire(
         achievements.Context(
             guild_id=guild_id,
             hook="on_use",
@@ -1985,16 +2012,40 @@ async def _finish_use(interaction, state, found) -> None:
             room_id=state.current_room,
         ),
         interaction=interaction,
+        announce=False,
     )
 
     # A use that moved the meter is the case `on_relationship_change`
     # exists for: reaching fifty by fluffing the bed has to be noticed
     # without waiting for the player's next pet.
     if effect and effect.relationship is not None:
-        await _fire_relationship(interaction, user.id, guild_id, effect.relationship)
+        earned += await _fire(
+            achievements.Context(
+                guild_id=guild_id,
+                hook="on_relationship_change",
+                user_id=user.id,
+                extra={"relationship": effect.relationship},
+            ),
+            interaction=interaction,
+            announce=False,
+        )
+
+    if found.thing_id == world.CAT_BED:
+        carried = any(a.achievement_id in HINT_FOR_ACHIEVEMENT for a in earned)
+        reply = hints.beneath(
+            reply,
+            None if carried else await hints.after(guild_id, user.id, hints.TRY_LOOK),
+        )
+
+    await interaction.followup.send(reply, ephemeral=True)
+
+    if effect and effect.public:
+        await _post_in_room(interaction, state.current_room, reply)
+
+    await _announce_all(earned, interaction=interaction)
 
 
-async def _fire(context, *, interaction=None, guild=None) -> None:
+async def _fire(context, *, interaction=None, guild=None, announce=True) -> list:
     """Run a hook, award what passed, and announce what this call created.
 
     One function for all nine hooks, so an achievement cannot be awarded in
@@ -2005,6 +2056,15 @@ async def _fire(context, *, interaction=None, guild=None) -> None:
     nothing raises: a player who loses an achievement to a Discord hiccup can
     earn it next time, and a player whose `/take` returns an error has lost
     the thing.
+
+    **`announce=False` awards now and announces later**, and the caller
+    takes the returned list to `_announce_all` once its own reply has
+    gone out. That exists because the hint rail reads what a player has
+    earned: a tester who used the cat bed was told a quest was
+    available by the very message that completed it, because the reply
+    was composed before the award landed. Awarding first and announcing
+    second keeps what the player sees in the same order while letting
+    the rail see the truth.
     """
     try:
         # Give the context this server's clock unless the caller pinned
@@ -2018,8 +2078,16 @@ async def _fire(context, *, interaction=None, guild=None) -> None:
         earned = await achievements.fire(context)
     except Exception:
         log.exception("Achievement hook %s failed", context.hook)
-        return
+        return []
 
+    if announce:
+        await _announce_all(earned, interaction=interaction, guild=guild)
+        return []
+    return earned
+
+
+async def _announce_all(earned, *, interaction=None, guild=None) -> None:
+    """Announce a held-back list, in the order it was earned."""
     for award in earned:
         await _announce(award, interaction=interaction, guild=guild)
 
@@ -2096,6 +2164,17 @@ async def _announce(award, *, interaction=None, guild=None) -> None:
     )
     if not private:
         return
+
+    # A hint that is about having earned something rides the message
+    # that says so, rather than the action that earned it. Attached the
+    # same way the art is, from a map keyed on the achievement, because
+    # it is the same kind of fact: this award carries this extra.
+    nudge = HINT_FOR_ACHIEVEMENT.get(award.achievement_id)
+    if nudge is not None:
+        private = hints.beneath(
+            private, await hints.after(guild.id, award.user_id, nudge, quests=False)
+        )
+
     content_, embed = await _with_art(guild, private, art)
     try:
         await interaction.followup.send(content_, embed=embed, ephemeral=True)
