@@ -26,24 +26,36 @@ That resolves the voice problem without softening the instruction — which matt
 
 **Both, in: the raw figure and a sentence interpreting it.** The number says which way the player is moving — a pet landing shows as five points — and the sentence says what the number *means*, which a bare integer never can. They are doing different jobs, so they go together.
 
-Four bands, no bar. The sentence sits under the figure.
+**Nine bands, revised 17 October after testing.** The sentence sits under the figure, and both lines are labelled - a bare integer at the top of an embed does not say what it counts.
 
-The three signed bands are deliberately wide, which is the price of having voice at all: *"She tolerates you"* is true at 1 and at 99. That is fine as long as the figure is beside it carrying the precision — which it now is.
+> Cat relationship strength: -5
+> The cat is still trying to decide how she feels about you.
+> Total pets: 1
 
-| Key | When | Text | Status |
+| Key | Score | Text | Status |
 | --- | --- | --- | --- |
-| `stats.rel.zero` | score is exactly 0 | The cat doesn't seem to care about you. | **locked** |
-| `stats.rel.negative` | score below 0 | She has not forgiven you for something. | locked |
-| `stats.rel.positive` | score above 0 | She tolerates you, and occasionally more. | locked |
-| `stats.rel.strong` | score 100 or more | She would notice if you stopped coming. | locked |
+| `stats.rel.unimpressed` | -100 to -31 | The cat is thoroughly unimpressed. | **locked** |
+| `stats.rel.irritated` | -30 to -6 | The cat is mildly irritated. | **locked** |
+| `stats.rel.undecided` | -5 to 5 | The cat is still trying to decide how she feels about you. | **locked** |
+| `stats.rel.warming` | 6 to 50 | The cat is warming up to you. | **locked** |
+| `stats.rel.may_stay` | 51 to 100 | The cat has decided you may stay. | **locked** |
+| `stats.rel.likes` | 101 to 150 | The cat genuinely likes you. | **locked** |
+| `stats.rel.claimed` | 151 to 200 | The cat has claimed you as her human. | **locked** |
+| `stats.rel.adores` | 201 to 300 | The cat adores you. | **locked** |
+| `stats.rel.anywhere` | 301 and up | The cat would follow you anywhere. | **locked** |
 
-**The voiced set, adopted.** These three are now the copy in the table above. They match the voice of the zero line, where the plain versions read like a status bar.
+| Key | Text | Status |
+| --- | --- | --- |
+| `stats.relationship` | Cat relationship strength: {score} | **locked** |
+| `stats.pets` | Total pets: {count} | **locked** |
 
-- negative — *She has not forgiven you for something.*
-- positive — *She tolerates you, and occasionally more.*
-- 100+ — *She would notice if you stopped coming.*
+**What the nine fixed.** The four bands they replace were wide enough to be unhelpful: *"She tolerates you"* was true at 1 and at 99, which is most of a month's play in one sentence. The three narrow bands around zero are where a new player spends their first week, and where a single pet should feel like it moved something; the upper ones widen again because by then a player is measuring in days.
 
-**One consequence of having both.** The voiced lines say less about *direction* than the plain ones did — a player working out what moves the number gets no help from *"She tolerates you"*. The raw figure above them is what carries that now, which is why the figure stays beside it rather than behind it. Keep it visible and unrounded: the sentence says what the number means, the number says which way it is going, and neither can do the other's job.
+**Zero is no longer its own band.** It said the cat did not care about you, which is a hard sentence to read on your first `/stats` - and it is where the drift returns everybody, so it was not only for new players. It sits inside *still trying to decide* now.
+
+**The figure still earns its place.** A player can sit in one band for days, and only the number shows which way they are going. It stays visible and unrounded: the sentence says what the number means, the number says where it is heading, and neither does the other's job.
+
+**The top band has no ceiling** because the meter has none - *Favorite Human* is at 250 and nothing stops a player going past it.
 
 ---
 
