@@ -103,7 +103,7 @@ async def craving_for(guild_id: int, day: date | None = None, *, rng=random) -> 
     Drawn on first use rather than on a schedule, so a server that nobody
     touches costs nothing and a server that wakes at noon still gets a day.
     """
-    day = day or database.pacific_today()
+    day = day or await database.server_today(guild_id)
     session_factory = database._require_session()
     insert = database._upsert_statement()
 
@@ -144,7 +144,7 @@ async def craving_for(guild_id: int, day: date | None = None, *, rng=random) -> 
 
 
 async def already_found(guild_id: int, day: date | None = None) -> bool:
-    day = day or database.pacific_today()
+    day = day or await database.server_today(guild_id)
     session_factory = database._require_session()
     async with session_factory() as session:
         return (
@@ -170,7 +170,7 @@ async def _mark_found(guild_id: int, user_id: int, day: date) -> bool:
                 database.CravingDay.day == day,
                 database.CravingDay.found_by.is_(None),
             )
-            .values(found_by=user_id, found_at=database._utcnow())
+            .values(found_by=user_id, found_at=await database.server_now(guild_id))
         )
         await session.commit()
         return bool(result.rowcount)
@@ -237,7 +237,7 @@ async def judge(
     reaction is copying rather than solving - and that is not a gap to close.
     The tally measures taking part.
     """
-    day = day or database.pacific_today()
+    day = day or await database.server_today(guild_id)
     craving = await craving_for(guild_id, day)
     if craving is None:
         return Guess(verdict=WRONG, craving="")

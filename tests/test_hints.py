@@ -339,3 +339,92 @@ def _friendly(monkeypatch):
 def _standoffish(monkeypatch):
     reaction = bot.Reaction(bot.STANDOFFISH_RESPONSES[0], False, 0)
     monkeypatch.setattr(bot, "choose_response", lambda *a, **k: reaction)
+
+
+# --------------------------------------------------------------------------
+# Never advise something the player cannot do yet
+#
+# From QA on drop 0: a tester was told "There is something new here. Try
+# /look" when there was nothing new and `/look` was not in their menu.
+# --------------------------------------------------------------------------
+
+
+async def test_drop_zero_never_hears_about_something_new(channel, monkeypatch):
+    """The reported bug. At drop 0 there is a cat and nothing else, and
+    `/look` is not registered."""
+    _standoffish(monkeypatch)
+    await resolve.set_current_drop(GUILD_A, 0)
+
+    first = await pet(channel)
+    second = await pet(channel)
+
+    assert "There is something new here" not in first + second
+
+
+async def test_and_hears_about_it_the_moment_drop_one_opens(channel, monkeypatch):
+    """The other half. Without it this passes just as well against a
+    rail that never fires the hint at all."""
+    _standoffish(monkeypatch)
+    await resolve.set_current_drop(GUILD_A, 0)
+    await pet(channel)  # spends the pet hint at drop 0
+
+    await resolve.set_current_drop(GUILD_A, 1)
+
+    assert "There is something new here" in await pet(channel)
+
+
+async def test_being_too_early_does_not_spend_the_hint(channel, monkeypatch):
+    """"Not yet" and "already said" are both silence at the time, and
+    only one of them may be permanent."""
+    _standoffish(monkeypatch)
+    await resolve.set_current_drop(GUILD_A, 0)
+    await pet(channel)
+
+    assert not await database.has_been_told(
+        GUILD_A, ALICE, hints.SOMETHING_NEW.hint_id
+    )
+
+
+async def test_a_hint_naming_the_bed_waits_for_the_bed(channel):
+    """Checked against the thing rather than the drop, so a server QA
+    has moved by hand cannot be told to look at something absent."""
+    await resolve.set_current_drop(GUILD_A, 0)
+
+    assert not await hints.reachable(GUILD_A, hints.LOOK_SPECIFIC)
+
+    await resolve.set_current_drop(GUILD_A, 1)
+
+    assert await hints.reachable(GUILD_A, hints.LOOK_SPECIFIC)
+
+
+@pytest.mark.parametrize("hint", hints.ALL, ids=lambda h: h.hint_id)
+def test_every_command_a_hint_names_is_declared(hint):
+    """**The regression test that generalises the bug.**
+
+    Reads the writer's string for anything shaped like a command and
+    insists the hint declares it, so the next hint to say "Try /take"
+    cannot reach a player who has no `/take`. The declaration is what
+    the rail gates on; this is what keeps the declaration honest.
+    """
+    import re
+
+    defaults = content_module.load_files().defaults
+    named = set(re.findall(r"/([a-z-]+)", defaults[hint.hint_id]))
+
+    assert named <= set(hint.needs_commands), (
+        f"{hint.hint_id} says {sorted(named)} but declares "
+        f"{sorted(hint.needs_commands)}"
+    )
+
+
+@pytest.mark.parametrize("hint", hints.ALL, ids=lambda h: h.hint_id)
+def test_every_command_a_hint_declares_is_a_real_one(hint):
+    """A typo in a declaration would gate the hint off forever, which is
+    the quiet failure rather than the loud one."""
+    import gating
+
+    everywhere = set()
+    for names in gating.PLAYER_COMMANDS.values():
+        everywhere |= set(names)
+
+    assert set(hint.needs_commands) <= everywhere

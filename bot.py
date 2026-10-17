@@ -5,6 +5,7 @@ Slash commands:
   /stats  - show your pet total
 """
 
+import dataclasses
 import logging
 import os
 import random
@@ -28,6 +29,7 @@ import gating
 import hints
 import house_utils
 import phrasing
+import qa
 import reach
 import resolve
 import restocking
@@ -291,7 +293,7 @@ async def register_commands_for(guild, drop: int | None = None, tree=None) -> se
     tree = tree if tree is not None else bot.tree
     if drop is None:
         drop = await resolve.current_drop(guild.id)
-    wanted = gating.commands_for(drop)
+    wanted = gating.commands_for(drop, qa=qa.is_test_guild(guild.id))
 
     missing = wanted - set(_DEFINED)
     if missing:
@@ -832,7 +834,7 @@ async def _announce_pet(interaction, friendly: bool) -> None:
 
     which = _public_pet_line(
         interaction.guild_id, interaction.user.id, getattr(channel, "id", 0),
-        database._utcnow(),
+        await database.server_now(interaction.guild_id),
     )
     if which is None:
         return
@@ -857,7 +859,9 @@ async def _move_the_meter(user_id: int, guild_id: int, delta: int) -> int:
     player who tried was not absent. Pass `delta=0` for an attempt that
     moved nothing.
     """
-    await database.touched_the_cat(user_id, guild_id, database.pacific_today())
+    await database.touched_the_cat(
+        user_id, guild_id, await database.server_today(guild_id)
+    )
     if not delta:
         return await database.get_relationship(user_id, guild_id)
     return await database.adjust_relationship(user_id, guild_id, delta)
@@ -1060,6 +1064,7 @@ async def start_game(
         )
         return
 
+    await qa.clear_forced(guild.id)
     log.info(
         "AUDIT %s (%s) started the game in guild %s, channel %s, at drop %s",
         interaction.user,
@@ -1154,6 +1159,7 @@ async def advance_game(interaction: discord.Interaction, confirm: bool = False) 
         )
         return
 
+    await qa.clear_forced(guild.id)
     log.info(
         "AUDIT %s (%s) advanced guild %s from drop %s to drop %s",
         interaction.user,
@@ -1854,7 +1860,7 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
         # absence, and a player who tried was not absent.
         if found.thing_id in CAT_INTERACTIONS:
             await database.touched_the_cat(
-                user.id, guild_id, database.pacific_today()
+                user.id, guild_id, await database.server_today(guild_id)
             )
         if found.thing_id == world.CAT_BED:
             # Recorded on the attempt, like the stamp above: a player
@@ -2001,6 +2007,14 @@ async def _fire(context, *, interaction=None, guild=None) -> None:
     the thing.
     """
     try:
+        # Give the context this server's clock unless the caller pinned
+        # one. The date-gated achievements read `context.when`, and a
+        # test server a week ahead has to be able to reach 31 October
+        # without waiting for it.
+        if context.now is None:
+            context = dataclasses.replace(
+                context, now=await database.server_now(context.guild_id)
+            )
         earned = await achievements.fire(context)
     except Exception:
         log.exception("Achievement hook %s failed", context.hook)
@@ -2231,7 +2245,7 @@ async def _use_with_cooldown(interaction, state, found, row) -> None:
 
     previous = await database.last_used(user.id, guild_id, found.thing_id)
     if previous is not None:
-        elapsed = database._utcnow() - previous
+        elapsed = await database.server_now(guild_id) - previous
         if elapsed < window:
             await interaction.followup.send(
                 await phrasing.say(
@@ -3040,6 +3054,203 @@ OPENED_STATS = hints.OPENED_STATS
 # stop - every string that gets interpolated into the end of another one
 # punctuates nothing - so the line supplies its own.
 QUEST_LINE = "**{name}** - {prompt}"
+
+
+# --------------------------------------------------------------------------
+# QA
+#
+# Registered only in the two test servers, gated to the QA role on top of
+# that, every call ephemeral and logged. See `qa.py` for why all three.
+# --------------------------------------------------------------------------
+
+
+@bot.tree.command(name="qa-drop", description="(QA) Jump this server to any drop.")
+@app_commands.guild_only()
+@app_commands.describe(drop="Which drop to sit on. Forwards or back.")
+async def qa_drop(interaction: discord.Interaction, drop: int) -> None:
+    """Anywhere, in either direction - the one way back on a test server.
+
+    `/advance-game` goes one forward and confirms; this is what the
+    rules are relaxed for, and the relaxation is why a forced drop is
+    recorded and flagged in `/qa-inspect`.
+    """
+    if await qa.refuse(interaction):
+        return
+    await interaction.response.defer(ephemeral=True, thinking=True)
+
+    was = await resolve.current_drop(interaction.guild_id)
+    try:
+        await resolve.set_current_drop(interaction.guild_id, drop)
+    except resolve.UnknownDrop as exc:
+        await interaction.followup.send(str(exc), ephemeral=True)
+        return
+
+    await qa.mark_forced(interaction.guild_id, drop)
+    await content_loader.place_arrived(interaction.guild_id)
+    await _reregister(interaction, interaction.guild, drop)
+    await qa.record(interaction, f"drop {was} -> {drop}")
+    await interaction.followup.send(
+        f"Drop {was} -> **{drop}**, and the command set with it. "
+        f"`/qa-inspect` will say this server was forced.",
+        ephemeral=True,
+    )
+
+
+@bot.tree.command(
+    name="qa-reset-player", description="(QA) Wipe one player's state in this server."
+)
+@app_commands.guild_only()
+@app_commands.describe(member="Whose progress to erase.")
+async def qa_reset_player(
+    interaction: discord.Interaction, member: discord.Member
+) -> None:
+    """One player, back to never having been here.
+
+    **Including the hint rows.** Without them the hint ladder is
+    one-shot per tester per server, and the second run through the
+    tutorial is silent - which is exactly the thing a tester is usually
+    trying to look at twice.
+    """
+    if await qa.refuse(interaction):
+        return
+    await interaction.response.defer(ephemeral=True, thinking=True)
+
+    cleared = await database.forget_player(interaction.guild_id, member.id)
+    await qa.record(interaction, f"reset {member.id}: {cleared or 'nothing to clear'}")
+    await interaction.followup.send(
+        f"**{member.display_name}** has never been here.\n"
+        + (
+            "\n".join(f"- `{name}` {n}" for name, n in sorted(cleared.items()))
+            or "- nothing to clear"
+        ),
+        ephemeral=True,
+    )
+
+
+@bot.tree.command(
+    name="qa-relationship", description="(QA) Set a player's relationship score."
+)
+@app_commands.guild_only()
+@app_commands.describe(member="Whose meter to set.", score="The exact value.")
+async def qa_relationship(
+    interaction: discord.Interaction, member: discord.Member, score: int
+) -> None:
+    """Fifty and two hundred and fifty are days of honest play away."""
+    if await qa.refuse(interaction):
+        return
+    await interaction.response.defer(ephemeral=True, thinking=True)
+
+    await database.ensure_user_exists(member.id, interaction.guild_id)
+    was = await database.get_relationship(member.id, interaction.guild_id)
+    await database.set_relationship(interaction.guild_id, member.id, score)
+    await qa.record(interaction, f"{member.id} relationship {was} -> {score}")
+
+    # The thresholds listen on the score moving, and a score moved by
+    # hand is still moved: setting somebody to 250 should hand them
+    # *Favorite Human* rather than wait for their next pet.
+    await _fire_relationship(interaction, member.id, interaction.guild_id, score)
+    await interaction.followup.send(
+        f"**{member.display_name}**: {was} -> **{score}**.", ephemeral=True
+    )
+
+
+@bot.tree.command(name="qa-clock", description="(QA) Shift this server's clock.")
+@app_commands.guild_only()
+@app_commands.describe(days="Days ahead. 0 puts the server back on the real clock.")
+async def qa_clock(interaction: discord.Interaction, days: int) -> None:
+    """Move every dated behaviour at once.
+
+    The drift, the bed's cooldown, the ten-minute pet window and the
+    date-gated achievements all read one clock, which is what makes a
+    single number worth having.
+    """
+    if await qa.refuse(interaction):
+        return
+    await interaction.response.defer(ephemeral=True, thinking=True)
+
+    if days:
+        await database.set_setting(interaction.guild_id, database.CLOCK_KEY, days)
+    else:
+        await database.clear_setting(interaction.guild_id, database.CLOCK_KEY)
+
+    today = await database.server_today(interaction.guild_id)
+    await qa.record(interaction, f"clock {days:+d} days, today is {today}")
+    await interaction.followup.send(
+        f"This server now thinks it is **{today}**"
+        + ("." if days else ", which is the real date."),
+        ephemeral=True,
+    )
+
+
+@bot.tree.command(name="qa-midnight", description="(QA) Run the nightly drift now.")
+@app_commands.guild_only()
+async def qa_midnight(interaction: discord.Interaction) -> None:
+    """Settle every night this server owes, without waiting for one."""
+    if await qa.refuse(interaction):
+        return
+    await interaction.response.defer(ephemeral=True, thinking=True)
+
+    changes = await database.run_pending_decay()
+    mine = [c for c in changes if c.guild_id == interaction.guild_id]
+    await qa.record(interaction, f"midnight: {len(mine)} player(s) drifted")
+    await interaction.followup.send(
+        "\n".join(
+            [f"Settled {len(mine)} player(s) here."]
+            + [f"- `{c.user_id}` {c.before} -> {c.after} on {c.day}" for c in mine[:10]]
+        ),
+        ephemeral=True,
+    )
+
+
+@bot.tree.command(
+    name="qa-cooldown", description="(QA) Clear a player's cooldowns and windows."
+)
+@app_commands.guild_only()
+@app_commands.describe(member="Whose cooldowns to forget.")
+async def qa_cooldown(
+    interaction: discord.Interaction, member: discord.Member
+) -> None:
+    """The bed's twenty-four hours and the ten-minute pet window.
+
+    The lifetime pet count is left alone: it is progress rather than a
+    cooldown, and clearing a window should not cost a tester their
+    march on two hundred.
+    """
+    if await qa.refuse(interaction):
+        return
+    await interaction.response.defer(ephemeral=True, thinking=True)
+
+    cleared = await database.clear_cooldowns(interaction.guild_id, member.id)
+    forget_public_pets()
+    await qa.record(interaction, f"cleared {cleared} cooldown row(s) for {member.id}")
+    await interaction.followup.send(
+        f"**{member.display_name}** is off cooldown: {cleared} row(s) cleared, "
+        "and the public pet windows are empty.",
+        ephemeral=True,
+    )
+
+
+@bot.tree.command(name="qa-inspect", description="(QA) Dump a player's state.")
+@app_commands.guild_only()
+@app_commands.describe(member="Whose state to read.")
+async def qa_inspect(
+    interaction: discord.Interaction, member: discord.Member
+) -> None:
+    """Everything about one player, and whether this server is where it
+    looks like it is.
+
+    The forced-drop line is the reason this exists: without it somebody
+    spends an afternoon debugging a server that is simply not where
+    they think it is.
+    """
+    if await qa.refuse(interaction):
+        return
+    await interaction.response.defer(ephemeral=True, thinking=True)
+
+    lines = await qa.describe(interaction.guild_id, member.id)
+    await interaction.followup.send(
+        f"**{member.display_name}**\n" + "\n".join(lines), ephemeral=True
+    )
 
 
 @bot.tree.command(name="stats", description="See what you've earned, and how the cat feels.")

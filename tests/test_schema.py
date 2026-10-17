@@ -11,7 +11,7 @@ start sharing one.
 from datetime import datetime
 
 import pytest
-from sqlalchemy import inspect, select, text
+from sqlalchemy import inspect, select, text, update
 
 from conftest import ALICE, BOB, GUILD_A, GUILD_B
 
@@ -265,6 +265,51 @@ async def test_running_the_migration_twice_is_a_no_op(db):
         await db._add_missing_columns(conn)
         await db._add_missing_columns(conn)
     assert await columns_of(db, "pet_events") == before
+
+
+async def test_the_miss_streak_is_there_and_starts_at_nothing(db):
+    """Nothing writes it until the cat toy arrives at drop 2, so this is
+    what stops an unused column quietly going missing in between.
+
+    It is here rather than in a key-value store because the question
+    section 12 asked - whether V3's per-player counters want a table of
+    their own - came out the other way: four of the five already lived
+    on `thing_uses`, and this is the fifth.
+    """
+    assert "miss_streak" in await columns_of(db, "thing_uses")
+
+    await db.record_use(ALICE, GUILD_A, "lumber")
+
+    async with db._require_session()() as session:
+        streak = await session.scalar(
+            select(db.ThingUse.miss_streak).where(
+                db.ThingUse.user_id == ALICE, db.ThingUse.thing_id == "lumber"
+            )
+        )
+    assert streak == 0
+
+
+async def test_an_ordinary_use_does_not_touch_the_streak(db):
+    """The toy will set it and reset it; everything else must leave it
+    alone, or a success on one thing would clear a streak on another."""
+    await db.record_use(ALICE, GUILD_A, "cat_toy")
+    async with db._require_session()() as session:
+        await session.execute(
+            update(db.ThingUse)
+            .where(db.ThingUse.user_id == ALICE, db.ThingUse.thing_id == "cat_toy")
+            .values(miss_streak=3)
+        )
+        await session.commit()
+
+    await db.record_use(ALICE, GUILD_A, "cat_toy")
+
+    async with db._require_session()() as session:
+        streak = await session.scalar(
+            select(db.ThingUse.miss_streak).where(
+                db.ThingUse.user_id == ALICE, db.ThingUse.thing_id == "cat_toy"
+            )
+        )
+    assert streak == 3
 
 
 async def test_the_guard_against_pre_multi_server_databases_still_stands(db):
