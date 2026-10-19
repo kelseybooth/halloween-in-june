@@ -20,13 +20,12 @@ N", and a list of additions makes that a calculation.
 
 from __future__ import annotations
 
-# What players get. Drop 2 is absent on purpose - it adds `/take` and
-# `/inventory` when the cat toy is built, and until then a server that QA
-# has jumped to drop 2 correctly sees drop 1's verbs, because drop 1's
-# verbs are all there is anything to use.
+# What players get.
 PLAYER_COMMANDS: dict[int, tuple[str, ...]] = {
     0: ("pet", "stats"),
     1: ("pet", "stats", "look", "use"),
+    # Drop 2 is the toys, and the drop that teaches carrying things.
+    2: ("pet", "stats", "look", "use", "take", "drop", "inventory"),
     # The house. Not part of the proof of concept, and defined anyway: the
     # content files put every Release 1 row at drop 3, so a test server
     # sent there with drop 1's four verbs would be a nine-room house

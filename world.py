@@ -19,7 +19,9 @@ find them.
 from __future__ import annotations
 
 import logging
+import random
 from dataclasses import dataclass, field
+from datetime import timedelta
 
 import database
 import states
@@ -35,6 +37,25 @@ LUMBER = "lumber"
 # wrong and the one the cat visibly enjoys.
 CAT_BED = "cat_bed"
 BED_FLUFF = 15
+
+# The toys. A class, never a list of ids: the cap, the ramp and three
+# achievements all count toys by type, so a thirteenth toy stays a row
+# in a spreadsheet rather than an engine change.
+TOY = "toy"
+
+# What a successful play is worth, and how the odds of one climb. The
+# ramp is a count of refusals since the last success, so the chance runs
+# 0, 25, 50, 75, 100 per cent - the first offer always fails and the
+# fifth always lands, which is why four refusals running is the rarest
+# thing *Impressively Bad Luck* can ask for and five is impossible.
+TOY_PLAY = 10
+RAMP_STEP = 25
+PLAY_COOLDOWN = timedelta(minutes=10)
+
+
+def play_chance(ramp: int) -> int:
+    """Percentage chance that this attempt lands, from the ramp."""
+    return min(100, max(0, RAMP_STEP * ramp))
 PLANKS_SETTING = "planks_required"
 STAIRS_REPAIRED = "stairs_repaired"
 
@@ -179,6 +200,40 @@ async def after_use(
         return await _fluff_the_bed(guild_id, user_id)
 
     return None
+
+
+async def play_with(guild_id: int, user_id: int, now, rng=None) -> Effect:
+    """Offer a toy, and see whether the cat is in the mood.
+
+    **Not keyed on which toy.** Every row with `type = toy` behaves
+    identically; the ramp, the cooldown and the award all belong to the
+    player. That is what keeps the eleven toys still in the bank a
+    content change rather than an engine one.
+
+    A success pays `TOY_PLAY`, resets the ramp and starts the cooldown.
+    A refusal advances the ramp one rung and starts nothing, so the next
+    offer is likelier - which is the whole mechanic, and the reason the
+    refusal copy promises nothing while leaving the retry open.
+    """
+    ramp, _ = await database.play_state(guild_id, user_id)
+    # Resolved at call time, not bound as a default: a default argument
+    # captures this module's `random` when the function is defined, so
+    # patching `world.random` would leave the default pointing at the
+    # original and the roll would quietly stay real.
+    roll = (rng or random).random()
+    succeeded = roll * 100 < play_chance(ramp)
+
+    landed = await database.record_play(
+        guild_id,
+        user_id,
+        succeeded=succeeded,
+        cooldown_until=now + PLAY_COOLDOWN if succeeded else None,
+    )
+    if not succeeded:
+        return Effect(tokens={"ramp": landed}, public=False)
+
+    score = await database.adjust_relationship(user_id, guild_id, TOY_PLAY)
+    return Effect(tokens={"ramp": 0}, public=True, relationship=score)
 
 
 async def _fluff_the_bed(guild_id: int, user_id: int) -> Effect:

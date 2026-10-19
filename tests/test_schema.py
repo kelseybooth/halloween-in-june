@@ -267,49 +267,28 @@ async def test_running_the_migration_twice_is_a_no_op(db):
     assert await columns_of(db, "pet_events") == before
 
 
-async def test_the_miss_streak_is_there_and_starts_at_nothing(db):
-    """Nothing writes it until the cat toy arrives at drop 2, so this is
-    what stops an unused column quietly going missing in between.
-
-    It is here rather than in a key-value store because the question
-    section 12 asked - whether V3's per-player counters want a table of
-    their own - came out the other way: four of the five already lived
-    on `thing_uses`, and this is the fifth.
+async def test_the_play_ramp_lives_on_the_player(db):
+    """**It moved.** It was `thing_uses.miss_streak`, keyed per (player,
+    thing), on the reading that a ramp belonged to the toy. 3b settles
+    that it is the cat's willingness to play with *you* - so carrying a
+    second toy must not hand out a second fresh ramp, and a per-thing
+    column would have done exactly that. Nothing ever wrote the old one,
+    so the move cost nothing.
     """
-    assert "miss_streak" in await columns_of(db, "thing_uses")
+    columns = await columns_of(db, "users")
 
-    await db.record_use(ALICE, GUILD_A, "lumber")
-
-    async with db._require_session()() as session:
-        streak = await session.scalar(
-            select(db.ThingUse.miss_streak).where(
-                db.ThingUse.user_id == ALICE, db.ThingUse.thing_id == "lumber"
-            )
-        )
-    assert streak == 0
+    assert {"toy_ramp", "toy_cooldown_until"} <= columns
+    assert "miss_streak" not in await columns_of(db, "thing_uses")
 
 
-async def test_an_ordinary_use_does_not_touch_the_streak(db):
-    """The toy will set it and reset it; everything else must leave it
-    alone, or a success on one thing would clear a streak on another."""
-    await db.record_use(ALICE, GUILD_A, "cat_toy")
-    async with db._require_session()() as session:
-        await session.execute(
-            update(db.ThingUse)
-            .where(db.ThingUse.user_id == ALICE, db.ThingUse.thing_id == "cat_toy")
-            .values(miss_streak=3)
-        )
-        await session.commit()
+async def test_a_new_player_starts_at_the_bottom_of_the_ramp(db):
+    """Zero is a guaranteed refusal, which is the intended first
+    experience of the toy."""
+    await db.ensure_user_exists(ALICE, GUILD_A)
 
-    await db.record_use(ALICE, GUILD_A, "cat_toy")
+    ramp, until = await db.play_state(GUILD_A, ALICE)
 
-    async with db._require_session()() as session:
-        streak = await session.scalar(
-            select(db.ThingUse.miss_streak).where(
-                db.ThingUse.user_id == ALICE, db.ThingUse.thing_id == "cat_toy"
-            )
-        )
-    assert streak == 3
+    assert (ramp, until) == (0, None)
 
 
 async def test_the_guard_against_pre_multi_server_databases_still_stands(db):

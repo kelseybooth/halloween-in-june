@@ -79,10 +79,15 @@ def test_an_admin_can_always_reach_the_three_that_matter():
 
 
 def test_a_drop_with_no_entry_uses_the_one_below_it():
-    """Drop 2 adds `/take` when the toy is built. Until then a server QA
-    has jumped there sees drop 1's verbs, because drop 1's verbs are all
-    there is anything to use."""
-    assert gating.commands_for(2) == gating.commands_for(1)
+    """Drop 2 has its own entry now that the toys are built. Nothing
+    sits between 2 and 3, so a server QA has jumped to a drop with no
+    table of its own still sees the highest set at or below it."""
+    # Drop 2 has its own entry now, so the fallback has to be shown on a
+    # drop that genuinely has none. Four and five are the house filling
+    # in, and they add no verbs.
+    assert 4 not in gating.PLAYER_COMMANDS
+    assert gating.commands_for(4) == gating.commands_for(3)
+    assert gating.commands_for(2) != gating.commands_for(1)
 
 
 def test_every_name_in_the_table_is_a_command_that_exists():

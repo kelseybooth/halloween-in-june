@@ -510,7 +510,7 @@ async def test_the_shipped_content_loads(two_servers):
     assert report.content_rows["restocks"] == 4  # the toy channel row joined them
 
 
-async def test_the_shipped_content_places_five_things_per_server(two_servers):
+async def test_the_shipped_content_places_seven_things_per_server(two_servers):
     """Five physical copies across five things.
 
     The work order said six. The gourmet can became a source on 27 September so
@@ -522,8 +522,8 @@ async def test_the_shipped_content_places_five_things_per_server(two_servers):
     await content_loader.load_content(parsed)
 
     placed = await contents(two_servers, GUILD_A)
-    assert len(placed) == 5
-    assert sum(row[3] for row in placed) == 5
+    assert len(placed) == 7  # five, and drop 2's two toys
+    assert sum(row[3] for row in placed) == 7
 
 
 async def test_the_shipped_content_respects_containment(two_servers):

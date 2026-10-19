@@ -440,7 +440,31 @@ async def _score(context: Context) -> int:
     return score
 
 
+# Four refusals running. The fifth attempt is at 100%, so five in a row
+# has probability exactly zero and four is the rarest thing that can be
+# asked for - 0.75 x 0.5 x 0.25, or 9.4%.
+BAD_LUCK_RAMP = 4
+
 TIRELESS_PLAYS = 25
+
+
+async def persuasive(context: Context) -> bool:
+    """The first toy play that works."""
+    return bool(context.extra.get("played"))
+
+
+async def impressively_bad_luck(context: Context) -> bool:
+    """Four refusals in a row.
+
+    **The ramp already is the consecutive-refusal count**, so this needs
+    no counter of its own: it starts at zero, advances only on a failed
+    attempt, and resets on a success. Attempts inside the cooldown
+    advance nothing, so they cannot contribute - which is the right
+    behaviour and falls out rather than needing a rule.
+    """
+    if context.extra.get("played"):
+        return False
+    return (context.extra.get("ramp") or 0) >= BAD_LUCK_RAMP
 
 
 async def tireless(context: Context) -> bool:
@@ -546,8 +570,8 @@ def register_all() -> None:
     # Drop 2 and drop 3. Final copy, no content yet - registered for the
     # same reason the letter and the doorbell are, so that building the
     # toy is a registration change rather than a reopened phase.
-    add("persuasive", "on_use", _blocked("the cat toy"))
-    add("impressively_bad_luck", "on_use", _blocked("the cat toy"))
+    add("persuasive", "on_use", persuasive)
+    add("impressively_bad_luck", "on_use", impressively_bad_luck)
     add("bowl_half_empty", "on_use", _blocked("feeding the cat"))
 
     # Secret

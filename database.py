@@ -264,6 +264,25 @@ class User(Base):
     # branches in the decay query, and the reason it is a date rather than
     # a count is that the drift only ever asks "was this player here".
     last_cat_interaction_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    # How willing the cat is to play with this player right now, as the
+    # number of refusals since their last success. The chance of a
+    # successful play is 25 percentage points per rung - 0, 25, 50, 75,
+    # 100 - so the fifth attempt always lands and a run of five refusals
+    # is impossible.
+    #
+    # **Per player and per server, not per toy.** It means her
+    # willingness to play with *you*; the toys are interchangeable keys.
+    # Keyed per toy, carrying a second one would hand out a second fresh
+    # ramp and a way around the cooldown.
+    toy_ramp: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # When this player may next play. Minutes rather than the hours
+    # `use_cooldown_hours` deals in, and hers rather than the toy's, for
+    # the same reason the ramp is.
+    toy_cooldown_until: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -724,14 +743,18 @@ class ServerConfig(Base):
 class ThingUse(Base):
     """One row per (player, thing): when they last used it, and how often.
 
-    Four jobs in one table, which is why V3's per-player counters landed
-    here rather than in a key-value store. `last_used_at` answers the
-    48-hour lumber cooldown and the bed's 24; counting distinct rows for
-    a thing answers "{n} of {total} repairs done", which the staircase
-    needs by distinct player; `use_count` answers "do this N times"
-    achievements, of which ten frozen burritos is the first and feeding
-    the cat twenty-five times is the next; and `miss_streak` answers the
-    one shape the other three cannot.
+    Three jobs in one table. `last_used_at` answers the 48-hour lumber
+    cooldown and the bed's 24; counting distinct rows for a thing answers
+    "{n} of {total} repairs done", which the staircase needs by distinct
+    player; and `use_count` answers "do this N times" achievements - ten
+    frozen burritos, and now twenty-five toy plays, where the rows count
+    *which* toys and the sum counts *how many* plays.
+
+    A `miss_streak` column lived here briefly, for the toy's play ramp.
+    It was the wrong home and nothing ever wrote it: 3b settles that the
+    ramp is the cat's willingness to play with *you*, not with one toy,
+    so it is a column on the player row and toys are interchangeable
+    keys. Carrying a second toy must not hand out a second fresh ramp.
     """
 
     __tablename__ = "thing_uses"
@@ -741,21 +764,6 @@ class ThingUse(Base):
     thing_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     last_used_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     use_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    # Refusals in a row since the last success, for a use that can fail
-    # on a roll rather than on a rule.
-    #
-    # **Nothing writes this yet.** The cat toy at drop 2 is the first use
-    # with odds: its ramp runs 0, 25, 50, 75, 100 per cent, resets on a
-    # success, and does not advance during the cooldown - so it is
-    # neither `use_count`, which counts uses rather than misses and never
-    # resets, nor `last_used_at`. *Impressively Bad Luck* reads it at
-    # four.
-    #
-    # Added ahead of the toy because the question it settles was asked
-    # now: section 12 of the Phase 3a work order asked whether the next
-    # five per-player values should become a key-value table, and four of
-    # the five turned out to live here already. This is the fifth.
-    miss_streak: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class ServerRestock(Base):
@@ -1012,7 +1020,8 @@ _LATER_COLUMNS: list[tuple[str, str, str]] = [
     ("pet_events", "relationship_at_pet", "INTEGER NOT NULL DEFAULT 0"),
     ("room_contents", "container_id", "VARCHAR(64) NOT NULL DEFAULT ''"),
     ("thing_uses", "use_count", "INTEGER NOT NULL DEFAULT 0"),
-    ("thing_uses", "miss_streak", "INTEGER NOT NULL DEFAULT 0"),
+    ("users", "toy_ramp", "INTEGER NOT NULL DEFAULT 0"),
+    ("users", "toy_cooldown_until", "TIMESTAMP"),
 ]
 
 
@@ -2531,6 +2540,88 @@ async def notice_order(guild_id: int, user_id: int) -> dict[str, int]:
             )
         )
     return {notice_id: row_id for notice_id, row_id in rows}
+
+
+async def play_state(guild_id: int, user_id: int) -> tuple[int, datetime | None]:
+    """This player's ramp, and when their cooldown lifts."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        row = (
+            await session.execute(
+                select(User.toy_ramp, User.toy_cooldown_until).where(
+                    User.id == user_id, User.guild_id == guild_id
+                )
+            )
+        ).first()
+    return (row[0], row[1]) if row else (0, None)
+
+
+async def record_play(
+    guild_id: int, user_id: int, *, succeeded: bool, cooldown_until: datetime | None
+) -> int:
+    """Move the ramp after an attempt, and return where it landed.
+
+    A success resets it to zero and starts the cooldown; a refusal
+    advances it one rung and starts nothing. An attempt made *inside*
+    the cooldown never reaches here - it advances nothing, which is what
+    stops a player banking four refusals and converting the moment it
+    lifts.
+    """
+    ramp = 0 if succeeded else await _bump_ramp(guild_id, user_id)
+    session_factory = _require_session()
+    async with session_factory() as session:
+        values = {"toy_ramp": ramp, "updated_at": func.now()}
+        if succeeded:
+            values["toy_cooldown_until"] = cooldown_until
+        await session.execute(
+            update(User)
+            .where(User.id == user_id, User.guild_id == guild_id)
+            .values(**values)
+        )
+        await session.commit()
+    return ramp
+
+
+async def _bump_ramp(guild_id: int, user_id: int) -> int:
+    current, _ = await play_state(guild_id, user_id)
+    return current + 1
+
+
+async def clear_play_state(guild_id: int, user_id: int) -> None:
+    """Forget the ramp and the cooldown. For `/qa-cooldown`."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        await session.execute(
+            update(User)
+            .where(User.id == user_id, User.guild_id == guild_id)
+            .values(toy_ramp=0, toy_cooldown_until=None)
+        )
+        await session.commit()
+
+
+async def present_of_type(guild_id: int, room_id: str, kind: str) -> list[str]:
+    """Names of things of one kind actually lying in a room, in order.
+
+    Reads `room_contents` rather than a thing's home room: a toy's home
+    is the channel, but whether one is *there* changes as players take
+    them, and the hint that names one has to name one that is present.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(ThingType.name)
+            .select_from(RoomContents)
+            .join(ThingType, ThingType.thing_id == RoomContents.thing_id)
+            .where(
+                RoomContents.guild_id == guild_id,
+                RoomContents.room_id == room_id,
+                RoomContents.count > 0,
+                ThingType.type == kind,
+                ThingType.takeable.is_(True),
+            )
+            .order_by(ThingType.sort_order, ThingType.thing_id)
+        )
+    return [row[0] for row in rows]
 
 
 async def toy_plays(guild_id: int, user_id: int) -> int:
