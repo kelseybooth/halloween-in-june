@@ -64,6 +64,10 @@ QA_COMMANDS: tuple[str, ...] = (
     "qa-midnight",
     "qa-cooldown",
     "qa-inspect",
+    # Drop 2: the ramp is the mechanic, and twenty-five successful
+    # plays is four hours of cooldowns without a way to set it.
+    "qa-state",
+    "qa-spawn",
 )
 
 

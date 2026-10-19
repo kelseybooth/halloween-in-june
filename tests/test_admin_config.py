@@ -199,8 +199,8 @@ def commands():
     return {c.name: c for c in bot.bot.tree.get_commands()}
 
 
-def test_the_bot_defines_twenty_commands():
-    """Thirteen the game uses and seven QA tools.
+def test_the_bot_defines_twenty_two_commands():
+    """Thirteen the game uses and nine QA tools.
 
     **Defined is not registered.** Every one of these exists in the
     tree; which of them a given server can see is decided per guild and
@@ -210,7 +210,7 @@ def test_the_bot_defines_twenty_commands():
     """
     import gating
 
-    assert len(commands()) == 20
+    assert len(commands()) == 22
     assert set(gating.QA_COMMANDS) <= set(commands())
     assert {"start-game", "advance-game"} <= set(commands())
 

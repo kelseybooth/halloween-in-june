@@ -394,3 +394,75 @@ async def test_it_leaves_other_players_alone(testing):
     await bot.qa_reset_player.callback(qa_call(guild, "qa-reset-player"), member(guild))
 
     assert await database.get_relationship(ALICE, TEST_GUILD) == 70
+
+
+# --------------------------------------------------------------------------
+# Drop 2: the ramp, and a way to put a toy on the floor
+# --------------------------------------------------------------------------
+
+
+async def test_the_ramp_can_be_set_directly(testing):
+    """The argument for a generic state command: 4 makes the next
+    attempt certain, 0 replays the guaranteed first refusal, and 4
+    followed by a failure is *Impressively Bad Luck* in one call."""
+    _, guild, _, _ = testing
+
+    await bot.qa_state.callback(qa_call(guild, "qa-state"), member(guild), 4)
+
+    assert (await database.play_state(TEST_GUILD, BOB))[0] == 4
+
+
+async def test_a_negative_ramp_is_refused(testing):
+    _, guild, _, _ = testing
+    interaction = qa_call(guild, "qa-state")
+
+    await bot.qa_state.callback(interaction, member(guild), -1)
+
+    assert "does not go below zero" in interaction.reply
+
+
+async def test_clearing_cooldowns_resets_the_ramp(testing):
+    """Or the next attempt is at whatever percentage the last run left
+    behind, which is the sort of thing that wastes an afternoon."""
+    _, guild, _, _ = testing
+    await bot.qa_state.callback(qa_call(guild, "qa-state"), member(guild), 3)
+
+    await bot.qa_cooldown.callback(qa_call(guild, "qa-cooldown"), member(guild))
+
+    ramp, until = await database.play_state(TEST_GUILD, BOB)
+    assert (ramp, until) == (0, None)
+
+
+async def test_a_toy_can_be_spawned(testing):
+    _, guild, _, _ = testing
+    interaction = qa_call(guild, "qa-spawn")
+
+    await bot.qa_spawn.callback(interaction, "feather wand")
+
+    import content as content_module
+
+    present = await database.present_of_type(
+        TEST_GUILD, content_module.CHANNEL_ROOM, "toy"
+    )
+    assert "feather wand" in present
+
+
+async def test_spawning_something_that_does_not_exist_is_refused(testing):
+    _, guild, _, _ = testing
+    interaction = qa_call(guild, "qa-spawn")
+
+    await bot.qa_spawn.callback(interaction, "jetpack")
+
+    assert "no thing called" in interaction.reply
+
+
+async def test_resetting_a_player_clears_the_play_state(testing):
+    """The ramp and the cooldown live on the player row, so they go
+    with it - but it is worth asserting rather than assuming, because
+    a tester whose ramp survived a reset would see the wrong odds."""
+    _, guild, _, _ = testing
+    await bot.qa_state.callback(qa_call(guild, "qa-state"), member(guild), 3)
+
+    await bot.qa_reset_player.callback(qa_call(guild, "qa-reset-player"), member(guild))
+
+    assert (await database.play_state(TEST_GUILD, BOB))[0] == 0

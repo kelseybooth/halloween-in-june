@@ -23,7 +23,9 @@ import random
 from dataclasses import dataclass, field
 from datetime import timedelta
 
+import content as content_module
 import database
+import resolve
 import states
 
 log = logging.getLogger(__name__)
@@ -37,6 +39,13 @@ LUMBER = "lumber"
 # wrong and the one the cat visibly enjoys.
 CAT_BED = "cat_bed"
 BED_FLUFF = 15
+
+# What the bed has given this player, recorded once and never again.
+# The flag is the whole detection: "their first fluff in drop 2" rather
+# than "their first fluff ever", which every drop 1 tester has already
+# spent - and drop 1 testers are exactly who is on the server when drop
+# 2 opens.
+BED_STASH = "bed_stash_given"
 
 # The toys. A class, never a list of ids: the cap, the ramp and three
 # achievements all count toys by type, so a thirteenth toy stays a row
@@ -200,6 +209,39 @@ async def after_use(
         return await _fluff_the_bed(guild_id, user_id)
 
     return None
+
+
+async def dislodge_from_bed(guild_id: int, user_id: int, rng=None) -> str | None:
+    """Shake a toy out of the cat bed, the first time this player can.
+
+    It fills the hole drop 2 opened: without it the channel holds toys
+    and nothing else, and a player who plays one into its cooldown has
+    nothing left to reach for.
+
+    **Onto the floor, not into the bag.** That teaches `/take`, which is
+    the drop's whole lesson - fluff the bed, something falls out, pick
+    it up. It is public, so the next person along can take it instead,
+    and it needs no new placement code.
+
+    **Bounded by construction**: one object per player, ever, so it
+    cannot silt the channel however many players a server has. And
+    exempt from the restock cap by not going through the scheduler -
+    a player who was given a third toy has a third toy.
+    """
+    if await database.has_been_told(guild_id, user_id, BED_STASH):
+        return None
+    arrived = await resolve.arrived_drop_ids(guild_id)
+    pool = await database.ids_of_type(TOY, arrived)
+    if not pool:
+        # No toys here yet, so there is nothing in the bed to find. The
+        # flag stays unset: this player gets theirs when drop 2 opens.
+        return None
+
+    thing_id = (rng or random).choice(pool)
+    await database.place_in_room(guild_id, content_module.CHANNEL_ROOM, thing_id, 1)
+    await database.notice(guild_id, user_id, BED_STASH)
+    log.info("The bed gave %s to %s in guild %s", thing_id, user_id, guild_id)
+    return thing_id
 
 
 async def play_with(guild_id: int, user_id: int, now, rng=None) -> Effect:

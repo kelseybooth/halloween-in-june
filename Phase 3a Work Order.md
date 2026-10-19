@@ -180,6 +180,19 @@ One bed, in the channel, present from the moment drop 1 opens. **Usable, not tak
 
 The toy's ramp counter and cooldown, and the feed counter, arrive with drop 2 and drop 3. Three new per-player values here, five by drop 3 — worth deciding now whether this stays as columns on the player row or becomes a small per-player key-value table, because the answer changes once more fields arrive.
 
+> **Superseded 19 October for the ramp only.** The note below put the
+> toy's ramp on `thing_uses.miss_streak`, keyed per (player, thing),
+> because that was where a per-thing counter belonged. The Phase 3b
+> work order settles that the ramp is the cat's willingness to play
+> with *you* rather than with one toy - so it is `users.toy_ramp`
+> beside `users.toy_cooldown_until`, and `miss_streak` is gone. Keyed
+> per thing, carrying a second toy would have handed out a second
+> fresh ramp and a way around the cooldown.
+>
+> The conclusion it was reaching is unchanged and now has one more
+> example: columns, not a key-value table. Two more columns on the
+> player row, which is where a fact about the player belongs.
+
 **Settled 16 October: columns, not a key-value table.** Building drops 0 and 1 answered four of the five without anybody choosing: the bed's fluff date evaporated with the rolling cooldown, and the toy's cooldown and the feed count are both already `thing_uses`, which exists for per-(player, thing) cooldowns and counts. Only the toy's ramp needed somewhere new, because it resets on a success and `use_count` never goes down — it is `thing_uses.miss_streak`, added now though nothing writes it until drop 2.
 
 The full reasoning, and the rule for whoever adds the next one, is in the drop unlock schedule under section 12's heading.

@@ -396,6 +396,15 @@ Already fully specified in Phase 2e, including the four custom departure and arr
 
 **The meter change touches more than the meter.** Starting at 0 inverts the two petting-achievement boundaries, retires the Story Bible's "a perfect relationship is 100", changes the `/stats` display from a bar to a tier, makes the decay function the real balance lever, and sends the 2f pet blurbs back for a voice pass. None of it is expensive; all of it is easy to miss. The Achievement Trigger Spec in particular carries a dated decision whose stated rationale is now false, so it needs editing rather than merely re-reading.
 
+> **Settled and built since this was written; left here as the
+> reasoning that led there.** Four of the five below turned out to have
+> homes already - the bed's fluff date in `thing_uses.last_used_at`
+> once the cooldown stayed rolling, the toy's cooldown in the same
+> column, the feed count in `use_count`, and the cat-interaction date
+> on the player row. The fifth, the toy ramp, is `users.toy_ramp`.
+> Columns, not a key-value table; the full reasoning is in the Phase 3a
+> work order under section 12.
+
 **Five new pieces of per-player state now, and none is a boolean:** the toy ramp counter, the toy cooldown expiry, the last bed fluff, the last cat-interaction date, and the feed count. That is past the point where "a few columns on the player row" is obviously right — three was proportionate, five is the shape of a small per-player key-value table, and a sixth is coming the moment anything else is counted. Worth deciding now rather than after the fifth column is added.
 
 **The original three, for reference:** the toy ramp counter, the toy cooldown expiry, and the last bed fluff. The existing per-player states (`library_found`, `drawer_unjammed`) are flags, and the Functional Spec deliberately declined a `player_thing_seen` table. Three columns on the player row is the proportionate answer; a general per-player key-value store is not needed yet, but is what this becomes if a fourth and fifth arrive.

@@ -1956,6 +1956,11 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
         # unusable - the cat bed, which nobody can pocket, and the
         # Amazon box in drop 3, whose whole easter egg is `/use` on a
         # thing you were never meant to carry.
+        if row.type == world.TOY:
+            # Offering a toy counts as having learnt `/use`, whether or
+            # not she plays and whether or not they were holding it.
+            await hints.did(guild_id, user.id, hints.DID_USE_TOY)
+
         if row.takeable and found.where is not reach.Where.CARRIED:
             await interaction.followup.send(
                 await phrasing.default_say("use_fail.not_carried", name=found.name),
@@ -2072,11 +2077,21 @@ async def _finish_use(interaction, state, found) -> None:
         )
 
     if found.thing_id == world.CAT_BED:
+        # A successful fluff shakes something out of the bed, once per
+        # player ever. The yield is what gives drop 2 something to
+        # reach for when the toy is on its cooldown.
+        dislodged = None
+        if effect is not None and effect.relationship is not None:
+            dislodged = await world.dislodge_from_bed(guild_id, user.id)
+
         carried = any(a.achievement_id in HINT_FOR_ACHIEVEMENT for a in earned)
+        nudge = hints.BED_YIELD if dislodged else hints.TRY_LOOK
         reply = hints.beneath(
             reply,
-            None if carried else await hints.after(guild_id, user.id, hints.TRY_LOOK),
+            None if carried else await hints.after(guild_id, user.id, nudge),
         )
+        if dislodged:
+            await _announce_bed_yield(interaction)
 
     await interaction.followup.send(reply, ephemeral=True)
 
@@ -2400,6 +2415,24 @@ async def _play_with_toy(interaction, state, found) -> None:
     await _announce_all(earned, interaction=interaction)
 
 
+async def _announce_bed_yield(interaction) -> None:
+    """The bed's one public line.
+
+    The work order has it *replacing* the ordinary public fluff post.
+    There is nothing to replace: `/use` on a thing is private except
+    the staircase plank, so the fluff has never had a public line and
+    this is the bed's only one.
+    """
+    channel = interaction.channel
+    if channel is None or not hasattr(channel, "send"):
+        return
+    line = await phrasing.default_say(
+        "bed_yield.public", player=interaction.user.display_name
+    )
+    if line:
+        await _post_quietly(channel, line)
+
+
 async def _a_play_refusal(name: str) -> str:
     """One of the twelve, picked uniformly.
 
@@ -2682,8 +2715,14 @@ async def look(interaction: discord.Interaction, thing: str | None = None) -> No
                 await interaction.followup.send(
                     hints.beneath(
                         reply,
+                        # **The newest drop's hint wins.** A player who
+                        # never looked at the bed is eligible for both
+                        # on their first `/look`, and only one line
+                        # goes per message - so it points at the thing
+                        # they have not seen. The bed's is not lost; it
+                        # fires on their next look if still unmet.
                         await hints.after(
-                            guild_id, user.id, hints.LOOK_SPECIFIC
+                            guild_id, user.id, hints.LOOK_TOY, hints.LOOK_SPECIFIC
                         ),
                     ),
                     ephemeral=True,
@@ -2763,11 +2802,22 @@ async def _look_at_one_thing(
 
     text, art = await _look_at(guild_id, user_id, room_id, found)
 
+    row = await phrasing.thing_row(found.thing_id)
     if found.thing_id == world.CAT_BED:
         await hints.did(guild_id, user_id, hints.DID_LOOK)
         await hints.did(guild_id, user_id, hints.DID_LOOK_BED)
         text = hints.beneath(
             text, await hints.after(guild_id, user_id, hints.TRY_USE)
+        )
+    elif row is not None and row.type == world.TOY:
+        # **The verb, not the verb and a noun.** A player who looked at
+        # a crinkle ball has learned what looking at a toy is, so the
+        # rail must not go on telling them to look at a feather wand.
+        await hints.did(guild_id, user_id, hints.DID_LOOK)
+        await hints.did(guild_id, user_id, hints.DID_LOOK_TOY)
+        text = hints.beneath(
+            text,
+            await hints.after(guild_id, user_id, hints.TAKE_TOY, name=found.name),
         )
 
     content_, embed = await _with_art(interaction.guild, text, art)
@@ -3067,12 +3117,25 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
 
         taken_row = await phrasing.thing_row(taken)
         name = taken_row.name if taken_row else found.name
-        await interaction.followup.send(
+        reply = (
             await phrasing.say(
                 guild_id, taken, "take", fallback="take.default", name=name
             )
-            or f"You take the {name}.",
+            or f"You take the {name}."
         )
+
+        # `{name}` here is **the toy they just picked up**, not whichever
+        # is lying in the channel: they are holding it, and naming a
+        # different one would be nonsense.
+        if taken_row is not None and taken_row.type == world.TOY:
+            await hints.did(guild_id, user.id, hints.DID_LOOK_TOY)
+            await hints.did(guild_id, user.id, hints.DID_TAKE_TOY)
+            reply = hints.beneath(
+                reply,
+                await hints.after(guild_id, user.id, hints.USE_TOY, name=name),
+            )
+
+        await interaction.followup.send(reply)
 
         # `source_id` is what separates gardening from scavenging: taking herbs
         # from the herb garden earns Green Thumb, picking up a herbs somebody
@@ -3475,11 +3538,95 @@ async def qa_cooldown(
     await interaction.response.defer(ephemeral=True, thinking=True)
 
     cleared = await database.clear_cooldowns(interaction.guild_id, member.id)
+    # The toy's cooldown and ramp are on the player row rather than in
+    # `thing_uses`, so they need clearing by name - and the ramp goes
+    # with the cooldown, or the next attempt is at whatever percentage
+    # the last run left behind.
+    await database.clear_play_state(interaction.guild_id, member.id)
     forget_public_pets()
     await qa.record(interaction, f"cleared {cleared} cooldown row(s) for {member.id}")
     await interaction.followup.send(
         f"**{member.display_name}** is off cooldown: {cleared} row(s) cleared, "
-        "and the public pet windows are empty.",
+        "the play ramp is back to zero, and the public windows are empty.",
+        ephemeral=True,
+    )
+
+
+@bot.tree.command(name="qa-state", description="(QA) Set a player's play ramp.")
+@app_commands.guild_only()
+@app_commands.describe(
+    member="Whose ramp to set.",
+    ramp="Refusals since their last success. 4 makes the next attempt certain.",
+)
+async def qa_state(
+    interaction: discord.Interaction, member: discord.Member, ramp: int
+) -> None:
+    """Put the ramp where you need it, without playing to get there.
+
+    This is the argument for a generic state command rather than a
+    fixed list of flags: 4 makes the next attempt a guaranteed success,
+    0 replays the guaranteed first refusal, and 4 followed by a failure
+    is *Impressively Bad Luck* in one call. The whole mechanic, without
+    farming it.
+    """
+    if await qa.refuse(interaction):
+        return
+    await interaction.response.defer(ephemeral=True, thinking=True)
+
+    if ramp < 0:
+        await interaction.followup.send(
+            "The ramp counts refusals, so it does not go below zero.",
+            ephemeral=True,
+        )
+        return
+
+    await database.ensure_user_exists(member.id, interaction.guild_id)
+    await database.set_play_ramp(interaction.guild_id, member.id, ramp)
+    await qa.record(interaction, f"{member.id} ramp -> {ramp}")
+    await interaction.followup.send(
+        f"**{member.display_name}**'s ramp is {ramp}: the next attempt lands "
+        f"{world.play_chance(ramp)}% of the time.",
+        ephemeral=True,
+    )
+
+
+@bot.tree.command(name="qa-spawn", description="(QA) Put a thing in the channel.")
+@app_commands.guild_only()
+@app_commands.describe(thing="Which thing to place, by id or by name.")
+async def qa_spawn(interaction: discord.Interaction, thing: str) -> None:
+    """Place something without waiting for a restock window.
+
+    It earns its place this release: the toys arrive on a schedule, and
+    a tester who has just taken both would otherwise wait for the next
+    occurrence to test anything that needs one on the floor.
+    """
+    if await qa.refuse(interaction):
+        return
+    await interaction.response.defer(ephemeral=True, thinking=True)
+
+    wanted = thing.strip().lower()
+    rows = content.load().things_by_id
+    match = next(
+        (
+            row
+            for row in rows.values()
+            if row.thing_id.lower() == wanted or row.name.lower() == wanted
+        ),
+        None,
+    )
+    if match is None:
+        await interaction.followup.send(
+            f"There is no thing called `{thing.strip()}`.", ephemeral=True
+        )
+        return
+
+    await database.place_in_room(
+        interaction.guild_id, content.CHANNEL_ROOM, match.thing_id, 1
+    )
+    await qa.record(interaction, f"spawned {match.thing_id} in the channel")
+    await interaction.followup.send(
+        f"One **{match.name}** is in the channel. It is exempt from the "
+        f"restock cap, like anything a player puts down.",
         ephemeral=True,
     )
 

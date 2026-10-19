@@ -691,6 +691,16 @@ class RoomContents(Base):
     )
     thing_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # When this stack was last added to - by the scheduler, by a player
+    # putting something down, or by the bed giving something up.
+    #
+    # **Nothing reads it yet.** It is the prerequisite for the toy
+    # drain, which is what stops the channel deadlocking once there is
+    # more than one toy: without a placement time there is no telling a
+    # toy that arrived an hour ago from one nobody has wanted for a
+    # week. One column and one write site now, and it cannot be
+    # backfilled for things already lying in a channel.
+    placed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class PlayerState(Base):
@@ -1022,6 +1032,7 @@ _LATER_COLUMNS: list[tuple[str, str, str]] = [
     ("thing_uses", "use_count", "INTEGER NOT NULL DEFAULT 0"),
     ("users", "toy_ramp", "INTEGER NOT NULL DEFAULT 0"),
     ("users", "toy_cooldown_until", "TIMESTAMP"),
+    ("room_contents", "placed_at", "TIMESTAMP"),
 ]
 
 
@@ -1951,6 +1962,7 @@ def _add_to_room(
             container_id=container_id,
             thing_id=thing_id,
             count=delta,
+            placed_at=_utcnow(),
         )
         .on_conflict_do_update(
             index_elements=[
@@ -1959,7 +1971,7 @@ def _add_to_room(
                 RoomContents.container_id,
                 RoomContents.thing_id,
             ],
-            set_={"count": RoomContents.count + delta},
+            set_={"count": RoomContents.count + delta, "placed_at": _utcnow()},
         )
     )
 
@@ -2587,6 +2599,18 @@ async def _bump_ramp(guild_id: int, user_id: int) -> int:
     return current + 1
 
 
+async def set_play_ramp(guild_id: int, user_id: int, ramp: int) -> None:
+    """Put the ramp at an exact rung. For `/qa-state` only."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        await session.execute(
+            update(User)
+            .where(User.id == user_id, User.guild_id == guild_id)
+            .values(toy_ramp=ramp)
+        )
+        await session.commit()
+
+
 async def clear_play_state(guild_id: int, user_id: int) -> None:
     """Forget the ramp and the cooldown. For `/qa-cooldown`."""
     session_factory = _require_session()
@@ -2597,6 +2621,61 @@ async def clear_play_state(guild_id: int, user_id: int) -> None:
             .values(toy_ramp=0, toy_cooldown_until=None)
         )
         await session.commit()
+
+
+async def place_in_room(guild_id: int, room_id: str, thing_id: str, amount: int) -> None:
+    """Put something loose on a room's floor, from outside the scheduler.
+
+    The bed stash uses it. Deliberately not routed through the restock
+    path: the cap governs the scheduler, and a thing the game hands a
+    player directly is not the scheduler's to tidy away.
+    """
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    async with session_factory() as session:
+        await session.execute(
+            _add_to_room(insert, guild_id, room_id, LOOSE_IN_ROOM, thing_id, amount)
+        )
+        await session.commit()
+
+
+async def count_of_type(guild_id: int, room_id: str, kind: str) -> int:
+    """How many things of one kind are lying in a room.
+
+    **Counted across the class, not per row.** The rule is *keep two
+    toys in the channel*, not *keep two of each toy*: per row, drop 2's
+    two toys would already allow four, and the thirteen already written
+    would allow twenty-six and turn `Items here:` into a wall of nouns.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        total = await session.scalar(
+            select(func.sum(RoomContents.count))
+            .select_from(RoomContents)
+            .join(ThingType, ThingType.thing_id == RoomContents.thing_id)
+            .where(
+                RoomContents.guild_id == guild_id,
+                RoomContents.room_id == room_id,
+                ThingType.type == kind,
+            )
+        )
+    return int(total or 0)
+
+
+async def ids_of_type(kind: str, arrived: set[int]) -> list[str]:
+    """Every thing of one kind whose drop has arrived, in a stable order.
+
+    The pool a class selector draws from. Ordered so a seeded draw gives
+    the same answer twice, which is what makes a restock reproducible.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(ThingType.thing_id, ThingType.since_drop)
+            .where(ThingType.type == kind)
+            .order_by(ThingType.sort_order, ThingType.thing_id)
+        )
+    return [thing_id for thing_id, since_drop in rows if since_drop in arrived]
 
 
 async def present_of_type(guild_id: int, room_id: str, kind: str) -> list[str]:

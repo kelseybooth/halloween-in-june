@@ -403,3 +403,103 @@ async def test_the_three_verbs_arrive_with_the_drop(channel):
 
     assert not ({"take", "drop", "inventory"} & gating.commands_for(1))
     assert {"take", "drop", "inventory"} <= gating.commands_for(2)
+
+
+# --------------------------------------------------------------------------
+# The hint ladder
+#
+# Four rungs chained so each one's completion is the next one's
+# precondition - which is what keeps the drop 0 invariant true: a player
+# who skips ahead is never told to do a thing they have already done.
+# --------------------------------------------------------------------------
+
+
+async def look(channel, thing=None, who=ALICE):
+    return said(await run(channel, bot.look, thing, who=who))
+
+
+async def test_the_first_look_points_at_a_toy(channel):
+    assert "Try /look" in the_hint(await look(channel))
+
+
+async def test_looking_at_a_toy_points_at_take(channel):
+    await look(channel)
+
+    assert "Try /take" in the_hint(await look(channel, "feather wand"))
+
+
+async def test_taking_one_points_at_use(channel):
+    await look(channel)
+    await look(channel, "feather wand")
+
+    assert "Try /use" in the_hint(await take(channel))
+
+
+async def test_the_rung_names_the_toy_just_taken(channel):
+    """`{name}` here is the one they are holding, not whichever is
+    lying in the channel - naming a different one would be nonsense."""
+    await look(channel)
+    await look(channel, "crinkle ball")
+
+    assert "crinkle ball" in the_hint(await take(channel, "crinkle ball"))
+
+
+def the_hint(reply: str) -> str:
+    """Just the hint line. The rest of the reply names things too - the
+    channel listing names both toys - so an assertion about what a hint
+    points at has to read the hint."""
+    for line in reply.splitlines():
+        if line.startswith("*Hint:"):
+            return line
+    return ""
+
+
+async def test_no_rung_names_a_toy_that_is_not_there(channel):
+    """Both toys draw against the same two slots, so a hint naming one
+    by name could point at a toy nobody can see - and the player's
+    first guided action would come back `take_fail.absent`."""
+    line = the_hint(await look(channel))
+    named = [n for n in ("feather wand", "crinkle ball") if n in line]
+
+    assert len(named) == 1
+    assert named[0] in await look(channel)  # still there to be taken
+
+
+async def test_a_player_who_skips_ahead_is_not_told_to_catch_up(channel):
+    """The invariant. Taking a toy without ever looking at one retires
+    both the toy-looking rungs.
+
+    Drop 1's bed hint is not retired by this and should not be: it is a
+    different lesson about a different object, and the player has not
+    looked at the bed."""
+    await take(channel)
+
+    line = the_hint(await look(channel))
+    assert "feather wand" not in line and "crinkle ball" not in line
+
+
+async def test_each_rung_fires_once(channel):
+    """The toy rung is spent. Drop 1's bed hint takes the next turn,
+    which is the rail working rather than repeating itself."""
+    first = the_hint(await look(channel))
+    assert "feather wand" in first or "crinkle ball" in first
+
+    second = the_hint(await look(channel))
+
+    assert "feather wand" not in second and "crinkle ball" not in second
+
+
+async def test_being_told_to_pick_it_up_is_its_own_rung(channel):
+    reply = await play(channel)  # not holding it
+
+    assert "You need to hold it to use it" in reply
+
+
+async def test_the_newest_drops_hint_wins_on_a_first_look(channel):
+    """A player who never looked at the bed is eligible for drop 1's
+    hint and drop 2's on the same `/look`. The newer one points at
+    content they have not seen."""
+    line = the_hint(await look(channel))
+
+    assert "cat bed" not in line
+    assert "Try /look" in line
