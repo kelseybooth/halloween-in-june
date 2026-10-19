@@ -299,11 +299,11 @@ async def run_for_guild(
     # A container a restock row names is a real destination even when nothing
     # is statically inside it - the row is what declares it.
     for restock in rows:
-        if restock.placement == "container" and restock.container:
-            if restock.container not in container_rooms:
-                room = await _room_of(restock.container)
+        if restock.placement == "container" and restock.destination:
+            if restock.destination not in container_rooms:
+                room = await _room_of(restock.destination)
                 if room:
-                    container_rooms[restock.container] = room
+                    container_rooms[restock.destination] = room
 
     for restock in rows:
         last = progress.get(restock.restock_id)
@@ -366,16 +366,16 @@ def _destination(restock, slots, container_rooms, rng) -> tuple[str, str] | None
     A `random` row draws a fresh slot for every occurrence rather than once for
     the day, so eight bottles scatter rather than arriving in a heap.
     """
-    if restock.placement == "container" and restock.container:
-        room = container_rooms.get(restock.container)
+    if restock.placement == "container" and restock.destination:
+        room = container_rooms.get(restock.destination)
         if room is None:
             log.warning(
                 "Restock %s names container %r, which is in no room; skipping",
                 restock.restock_id,
-                restock.container,
+                restock.destination,
             )
             return None
-        return room, restock.container
+        return room, restock.destination
     return rng.choice(slots)
 
 

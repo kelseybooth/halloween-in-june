@@ -1027,7 +1027,7 @@ async def test_using_one_you_are_not_holding_says_so(real_house):
 
     reply = (await use(thing="herbs", guild=guild)).reply
 
-    assert "holding" in reply
+    assert "pick it up first" in reply
     assert await db.carried_of(ALICE, GUILD_A, "herbs") == 0
 
 

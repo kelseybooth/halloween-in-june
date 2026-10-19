@@ -32,7 +32,8 @@ def a_restock(restock_id=1, **overrides):
         restock_id=restock_id,
         thing_id="bottle",
         placement="random",
-        container=None,
+        destination=None,
+        max_present=None,
         amount=1,
         times_per_day=1,
         first_day=1,
@@ -188,7 +189,7 @@ def test_a_seed_is_stable_across_processes():
 async def test_a_container_row_always_lands_in_its_container(server):
     await content_loader.load_content(
         a_world(
-            a_restock(placement="container", container="box", thing_id="jar", amount=4),
+            a_restock(placement="container", destination="box", thing_id="jar", amount=4),
             things=[
                 a_thing("box", name="box", type="fixture", takeable=False),
                 a_thing("jar", name="jar", room_id=None, quantity=0),
@@ -208,7 +209,7 @@ async def test_a_container_row_always_lands_in_its_container(server):
 async def test_the_container_row_adds_its_full_amount(server):
     await content_loader.load_content(
         a_world(
-            a_restock(placement="container", container="box", thing_id="jar", amount=4),
+            a_restock(placement="container", destination="box", thing_id="jar", amount=4),
             things=[
                 a_thing("box", name="box", type="fixture", takeable=False),
                 a_thing("jar", name="jar", room_id=None, quantity=0),
@@ -294,7 +295,7 @@ async def test_stock_is_incremented_not_assigned(server):
     """A restock tops up what is there rather than resetting it."""
     await content_loader.load_content(
         a_world(
-            a_restock(placement="container", container="box", thing_id="jar", amount=2),
+            a_restock(placement="container", destination="box", thing_id="jar", amount=2),
             things=[
                 a_thing("box", name="box", type="fixture", takeable=False),
                 a_thing("jar", name="jar", room_id=None, quantity=0),

@@ -284,6 +284,9 @@ async def test_everything_capped_is_capped_at_one(house):
         "skeleton_key": 1,
         "carving_tools": 1,
         "can_opener": 1,
+        # Both toys, so one player cannot hold the channel's whole supply.
+        "feather_wand": 1,
+        "crinkle_ball": 1,
     }
 
 

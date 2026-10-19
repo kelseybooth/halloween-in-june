@@ -613,8 +613,16 @@ class Restock(Base):
     restock_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
     thing_id: Mapped[str] = mapped_column(String(64), nullable=False)
     placement: Mapped[str] = mapped_column(String(16), nullable=False)
-    container: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # What `placement` points at: a container id, a room id, or nothing
+    # when the row scatters at random. Called `container` until drop 2,
+    # which is when a restock first targeted a room and the old name
+    # stopped being true.
+    destination: Mapped[str | None] = mapped_column(String(64), nullable=True)
     amount: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # How many of this thing's class may be present before the scheduler
+    # stops topping up. Null means no cap, which is every row but the
+    # toys: the others top up by rate alone.
+    max_present: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Separate occurrences, not one delivery of `amount` - eight bottles a day is
     # eight arrivals at eight independently drawn times.
     times_per_day: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
@@ -2523,6 +2531,31 @@ async def notice_order(guild_id: int, user_id: int) -> dict[str, int]:
             )
         )
     return {notice_id: row_id for notice_id, row_id in rows}
+
+
+async def toy_plays(guild_id: int, user_id: int) -> int:
+    """How many times this player has successfully played with any toy.
+
+    A sum of `use_count` rather than a count of rows: `thing_uses` holds
+    one row per (player, thing) and counts the uses on it, so the rows
+    answer *how many toys* and the sum answers *how many plays*. The
+    three collection achievements want both - 25 plays here, 5 and 13
+    distinct toys later - and both come off this one table without a
+    history table or a counter of their own.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        total = await session.scalar(
+            select(func.sum(ThingUse.use_count))
+            .select_from(ThingUse)
+            .join(ThingType, ThingType.thing_id == ThingUse.thing_id)
+            .where(
+                ThingUse.guild_id == guild_id,
+                ThingUse.user_id == user_id,
+                ThingType.type == "toy",
+            )
+        )
+    return int(total or 0)
 
 
 async def clear_setting(guild_id: int, key: str) -> None:

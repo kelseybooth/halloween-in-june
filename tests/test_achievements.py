@@ -69,8 +69,8 @@ async def row_count(db, table):
 def test_the_shipped_file_parses():
     parsed = content_module.load_files()
     # Thirty-five from Release 1, seven added by V3.
-    assert len(parsed.achievements) == 42
-    assert len(parsed.achievement_ids) == 42
+    assert len(parsed.achievements) == 43
+    assert len(parsed.achievement_ids) == 43
 
 
 def test_the_shipped_file_validates():
@@ -167,7 +167,7 @@ async def test_the_rows_reach_the_database(db):
 async def test_the_whole_shipped_file_loads(db):
     await content_loader.load_content(content_module.load_files())
 
-    assert await row_count(db, "achievements") == 42
+    assert await row_count(db, "achievements") == 43
 
 
 async def test_a_reload_replaces_the_rows(db):

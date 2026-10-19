@@ -475,10 +475,10 @@ async def test_nothing_blocked_can_be_earned_by_any_use(playing):
 
 
 def test_what_can_actually_be_earned():
-    """Twenty-eight of Release 1's thirty-five, plus the four V3 adds that
-    have content behind them: making first contact, the two score
-    thresholds below 250, and fluffing the bed."""
-    assert len(achievements.registered_ids()) - len(BLOCKED) == 32
+    """Twenty-eight of Release 1's thirty-five, plus the five V3 adds
+    that have content behind them: making first contact, the two score
+    thresholds below 250, fluffing the bed, and Tireless."""
+    assert len(achievements.registered_ids()) - len(BLOCKED) == 33
 
 
 # --------------------------------------------------------------------------

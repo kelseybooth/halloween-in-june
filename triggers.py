@@ -440,6 +440,25 @@ async def _score(context: Context) -> int:
     return score
 
 
+TIRELESS_PLAYS = 25
+
+
+async def tireless(context: Context) -> bool:
+    """Twenty-five successful plays, any toy, cumulative.
+
+    Successes rather than attempts: at 3.2 attempts per success that is
+    about eighty attempts of honest play, and counting attempts would
+    reward the spamming the ramp and the crowding penalty exist to
+    discourage.
+
+    "Twenty-five or more and not held", never "exactly the
+    twenty-fifth" - the same shape as the two-hundred-pet fork, and for
+    the same reason: a check that can only fire on one exact play is
+    lost for good if that play races or the bot is down for it.
+    """
+    return await database.toy_plays(context.guild_id, context.user_id) >= TIRELESS_PLAYS
+
+
 async def making_first_contact(context: Context) -> bool:
     """The first pet that rolls friendly, and the spine of drop 0.
 
@@ -523,6 +542,7 @@ def register_all() -> None:
     # Drop 0 and drop 1: the proof of concept's own four.
     add("making_first_contact", "on_pet", making_first_contact)
     add("fluffed_to_perfection", "on_use", _used(CAT_BED))
+    add("tireless", "on_use", tireless)
     # Drop 2 and drop 3. Final copy, no content yet - registered for the
     # same reason the letter and the doorbell are, so that building the
     # toy is a registration change rather than a reopened phase.

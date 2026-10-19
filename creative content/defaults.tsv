@@ -13,7 +13,7 @@ use_fail.default	Nothing happens. Maybe somewhere else in the house.
 use_fail.cooldown	You've done that recently. Try the {name} again in {time}.
 use_fail.absent	You don't see a {name} here.
 use_fail.unknown	That can't be used.
-use_fail.not_carried	You'd need to be holding the {name} for that.
+use_fail.not_carried	The {name} is right there. You would have to pick it up first.
 ambiguous.match	Which one do you mean: {options}?
 also_here.prefix	Also here:
 also_here.entry_multiple	{name} x{n}
@@ -63,3 +63,21 @@ hint.new_quest.named	A new quest is available. {quest_name}: {quest_prompt}
 channel.look_prefix	Items here:
 channel.look_empty	Nothing here but the cat, and she was here already.
 drop.1.announce	The cat swats her paw and something slides a couple feet away... something that didn't appear to be here before now.
+use_fail.toy.1	The cat looks at the {name}. She looks at you.
+use_fail.toy.2	You have the cat's attention for most of a second. The {name} does not hold it.
+use_fail.toy.3	One of the cat's ears turns toward the {name}. The rest of her declines to follow.
+use_fail.toy.4	The cat watches the {name}.
+use_fail.toy.5	The cat's tail moves once. You could choose to read this as interest, if you were hopeful.
+use_fail.toy.6	The cat blinks at the {name}, then at the middle distance, where something more interesting is apparently happening.
+use_fail.toy.7	The cat lies down, but keeps one eye on the {name}.
+use_fail.toy.8	The cat sits up and watches you. She does not get up.
+use_fail.toy.9	The cat sniffs the {name} once and settles back down.
+use_fail.toy.10	The cat crosses half the room, stops short of the {name}, and sits.
+use_fail.toy.11	The cat puts one paw on the {name} and leaves it there.
+use_fail.toy.12	The cat's pupils go wide at the {name}. Nothing else about her moves.
+hint.look_toy	You can look at this new item. Try /look {name}.
+hint.take_toy	This toy can be picked up. Try /take {name}.
+hint.use_toy	Give this toy a shake. Try /use {name}.
+hint.hold_to_use	You need to hold it to use it. Try picking it up with /take {name}.
+hint.bed_yield	You dislodged something from the bed. Check /look to see what appeared.
+bed_yield.public	As {player} fluffs the cat bed, something falls out.
