@@ -1,5 +1,7 @@
 # Drop unlock schedule
 
+*Refreshed 19 October from `drop-unlock-schedule.md`, the version delivered with the Phase 3a work order. The table, the mechanics and the achievement copy are current. The notes for drops 1 and 2, further down, still predate the bed-and-toy swap and are marked where they start.*
+
 A drop-by-drop view of what exists for players at each stage. Everything here is a proposal except drop 0, which follows the shape already agreed: cat only, `/pet` and `/stats` and `/help`, no rooms.
 
 **Recalibrated to carry the cat-relationship drops.** Cat toys and cat beds now occupy drops 1 and 2, and everything from the house onward shifts by two. The pre-house phase is no longer a holding pattern before the real game — it is a relationship with one character, built over three drops, which is a better use of the week than waiting.
@@ -17,7 +19,7 @@ Two rules the schedule is built on:
 
 | Drop | Description | Commands unlocked | Things revealed | Rooms revealed | Help sections | Intention |
 | --- | --- | --- | --- | --- | --- | --- |
-| **0** | **The Cat.** A Halloween channel with a cat in it. No house, no rooms, no mention of either. | Player: `/pet`, `/stats`, `/help`<br>Admin: `/start-game <channel>`, `/advance-game`, `/admin_config` | Eunoia only. The daily craving **is not built** and drop 0 ships without it; it belongs here when it exists. | None | What this is · Petting · Your stats | Teach that slash commands exist, across a surface of three. Make the first achievement unmissable. Establish the cat as the voice of the game. |
+| **0** | **The Cat.** A Halloween channel with a cat in it. No house, no rooms, no mention of either. | Player: `/pet`, `/stats`, `/help` · Admin: `/start-game <channel>`, `/advance-game`, `/admin_config` | Eunoia only. The daily craving **is not built** and drop 0 ships without it; it belongs here when it exists. | None | What this is · Petting · Your stats | Teach that slash commands exist, across a surface of three. Make the first achievement unmissable. Establish the cat as the voice of the game. |
 | **1** | **A Place to Sleep.** A cat bed appears in the channel. | Player: `/look`, `/use` | `cat_bed` — one, shared, usable but not takeable | The channel itself becomes lookable | — | Teach two verbs on one object that always obeys, in a place with nothing else to confuse it. Give the relationship a second lever, and a reason to come back tomorrow. |
 | **2** | **Something to Play With.** Toys start arriving, and then things nobody in this channel owns. The cat is not easily impressed. | Player: `/take`, `/inventory` | `cat_toy`, maintained at two in the channel; then the household trickle: knit bootie, wooden rattle, photograph, brass key | None | — | Teach carrying things, on an object worth carrying. Seed the existence of a house without naming it — a baby's bootie and a brass key raise a question drop 3 answers. |
 | **3** | **The Door.** The cat leads players to a house and into one room. One quest, tightly scoped. | Player: `/enter`, `/look`, `/go`, `/take` | Entryway subset only: coat rack, the salmon cat-food stash behind it, front door, ceiling | Entryway (partial prose) | Looking · Moving · Taking · The house | First room, one quest, highest possible reward-to-action ratio. Teach that descriptions hide findable things. |
@@ -197,7 +199,7 @@ The three-band description in the audit is a verbose way of writing that. Inside
 
 **The only residual is the rate, and it is mild.** A first toy success at +10 does vanish after one idle day, because losing 10 from 10 is zero. But a player petting unhurriedly gains about +9 a day, so an idle day costs roughly what an active day earns — and critically, **any single interaction cancels the day's drift entirely**. One pet protects the whole balance. That is forgiving enough that it needs no change.
 
-**2. Zero now has a line.** Settled: at exactly zero, `/stats` reads *"The cat doesn't seem to care about you."* Four bands in total — that line at zero, *negative* below, *positive* above, *very strong* at 100 or more. Worth noting it is the first thing every player will read about the relationship, and it is doing real work: it frames the climb as earning indifference away rather than as filling a bar.
+**3. Zero now has a line.** Settled: at exactly zero, `/stats` reads *"The cat doesn't seem to care about you."* Four bands in total — that line at zero, *negative* below, *positive* above, *very strong* at 100 or more. Worth noting it is the first thing every player will read about the relationship, and it is doing real work: it frames the climb as earning indifference away rather than as filling a bar.
 
 #### Making Friends and Trying to Make Friends — settled, and the change is to what gets counted
 
@@ -207,7 +209,7 @@ The three-band description in the audit is a verbose way of writing that. Inside
 
 **What does change is the counting**, and it is a genuine spec change:
 
-| | As built | As settled |
+|  | As built | As settled |
 | --- | --- | --- |
 | Counter | Two. Pets where the score was positive; pets where it was zero or below | **One.** Total pets |
 | Threshold | 200 *qualifying* pets for each | 200 pets, full stop |
@@ -238,8 +240,8 @@ The new shape is better. It reads as a single journey with two possible endings 
 
 | Source | Gain | Reaching 100 from zero |
 | --- | --- | --- |
-| Petting | +3 expected per pet when unhurried, negative past four in ten minutes | ~33 unhurried pets, spread out |
-| Toy | +10 per success, ~3.2 attempts each | 10 successes — **90 minutes minimum**, the floor being nine 10-minute cooldowns |
+| Petting | +3 expected per pet when unhurried, negative past four in ten minutes | \~33 unhurried pets, spread out |
+| Toy | +10 per success, \~3.2 attempts each | 10 successes — **90 minutes minimum**, the floor being nine 10-minute cooldowns |
 | Bed | +15 per day | **7 days** |
 | All three | — | A few days of showing up, which is the window drops 1 and 2 are meant to fill |
 
@@ -310,6 +312,8 @@ That is worth protecting. The moment one quest needs two unrelated prerequisites
 ---
 
 ## Notes per drop
+
+> **The notes for drops 1 and 2 below predate the bed-and-toy swap.** The table above is current: drop 1 is the cat bed, drop 2 is the toys. The two sections that follow still read as though the toy came first, and their headings match the old order. For drop 2 the authority is now the **Phase 3b Work Order** and the **Drop 2 copy deck — toys**; treat these notes as the reasoning that led there, not as the spec.
 
 ### Drop 0 — The Cat
 
@@ -392,25 +396,9 @@ Already fully specified in Phase 2e, including the four custom departure and arr
 
 **The meter change touches more than the meter.** Starting at 0 inverts the two petting-achievement boundaries, retires the Story Bible's "a perfect relationship is 100", changes the `/stats` display from a bar to a tier, makes the decay function the real balance lever, and sends the 2f pet blurbs back for a voice pass. None of it is expensive; all of it is easy to miss. The Achievement Trigger Spec in particular carries a dated decision whose stated rationale is now false, so it needs editing rather than merely re-reading.
 
-**Settled 16 October: no key-value table. One new column, on `thing_uses`.**
+**Five new pieces of per-player state now, and none is a boolean:** the toy ramp counter, the toy cooldown expiry, the last bed fluff, the last cat-interaction date, and the feed count. That is past the point where "a few columns on the player row" is obviously right — three was proportionate, five is the shape of a small per-player key-value table, and a sixth is coming the moment anything else is counted. Worth deciding now rather than after the fifth column is added.
 
-This section used to argue that five new per-player values was the shape of a small per-player key-value store. It counted five: the toy ramp counter, the toy cooldown expiry, the last bed fluff, the last cat-interaction date, and the feed count. Building drops 0 and 1 settled four of them without anybody deciding anything, so the count the argument rests on is now one.
-
-| Value | Where it lives |
-| --- | --- |
-| Last bed fluff | Nowhere. The bed's cooldown is rolling hours, so `thing_uses.last_used_at` already answers it |
-| Toy cooldown expiry | The same column, with `use_cooldown_hours` from the content files |
-| Feed count | `thing_uses.use_count`, which exists for "do this N times" achievements |
-| Last cat-interaction date | One column on the player row, where it belongs: it is a fact about the player rather than about a thing |
-| **Toy ramp counter** | **`thing_uses.miss_streak`, added 16 October** |
-
-The ramp is the only one that needed anywhere new, and only because it resets. `use_count` counts uses rather than misses and never goes down, and the ramp does both — so it is refusals in a row since the last success, per player per thing, which is exactly what `thing_uses` is keyed on.
-
-**The rule this leaves behind,** for whoever adds the next one: a fact about the player goes on the player row; a fact about a (player, thing) goes in `thing_uses`; "has this player been told X" goes in `player_notices`, which is already a key-value table and is the one place the shape fits — open-ended keys, and every row meaning the same thing.
-
-**Why not the key-value store after all.** The migration cost that usually drives the decision is already solved here: adding a column is one line in `_LATER_COLUMNS` and it lands on every database at the next boot. What a key-value store would cost is real — every value becomes a string parsed at each read, a mistyped key reads as zero rather than failing, and the nightly drift trades an indexed column on a row it already has for a join per player per night. The deciding argument is narrower than any of those: this codebase derives its safety net from the schema. The reset works out which tables are one server's by looking for a `guild_id`; `test_schema.py` asserts the content and world-state split table by table. A bag of keys is invisible to all of it.
-
-Revisit if drops 4 and 5 bring three more per-thing counters of genuinely different shapes. Not before — the last time this was estimated the number was five and the answer was one.
+**The original three, for reference:** the toy ramp counter, the toy cooldown expiry, and the last bed fluff. The existing per-player states (`library_found`, `drawer_unjammed`) are flags, and the Functional Spec deliberately declined a `player_thing_seen` table. Three columns on the player row is the proportionate answer; a general per-player key-value store is not needed yet, but is what this becomes if a fourth and fifth arrive.
 
 **The drop numbering collides with the content files.** `achievements.tsv` has `since_drop = 1` on all 35 rows, and `drops.tsv` has a single launch row. If launch is drop 0, either the files renumber or drop 0 maps to `since_drop = 1` and this table is off by one against the data. Going from six drops to eight makes settling it more urgent, not less.
 
@@ -423,6 +411,8 @@ Revisit if drops 4 and 5 bring three more per-thing counters of genuinely differ
 ---
 
 ## Open questions
+
+> **Four of the questions below have since been settled, and one line in the closed list is superseded.** Settled: **1** — bed in drop 1, toy in drop 2, and the bed is a fixture; **2** — *Impressively Bad Luck* is four refusals running, at 9.4%; **6** — the ramp resets on success and cooldown attempts do not advance it; **7** — the bed is a shared fixture and never enters a bag. In the closed list, *"toys and beds are inventory items maintained at two in the channel"* now applies to toys only. The **Phase 3b Work Order** carries the current version of all of these.
 
 **Closed since the last revision:** existing test-server rows will be reset, so the start-value change carries no migration; the drift's middle band was never a problem and that finding is withdrawn; the nightly drift skips any day with a cat interaction, widened from petting alone; `/stats` at zero reads *"The cat doesn't seem to care about you"*, with a specified empty state for both headers; the quest-available notice rides the first private cat message after a quest becomes visible; the crowding nudge moves to the first 0% pet; `/advance-game` is the command name; toys and beds are inventory items maintained at two in the channel; `/look` in the channel prints *"Items here"* and no room description; `/help` is deferred; *Impressively Bad Luck* is in; the consecutive-days achievement is out.
 
