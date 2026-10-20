@@ -94,13 +94,28 @@ VISIBILITY_GATES = {LOOKED_AT_BED}
 # mentions; `toy` is an object the cat plays with, and is its own type
 # because the restock cap, the play ramp and three achievements all count
 # toys as a class rather than by name.
-THING_TYPES = {"object", "fixture", "exit", "source", "toy", "scenery"}
+THING_TYPES = {"object", "fixture", "exit", "source", "toy", "scenery", "terrain"}
 
 # Scenery is the outdoors: things that exist so `/look` works on what the
 # prose points at, and that can never be picked up or used. A class
 # rather than a list of ids, so the loader's checks and any later
 # outdoor set join it without naming rows.
 SCENERY = "scenery"
+
+# Terrain is scenery that nobody built: ground, weather, the marks left
+# in mud. It behaves as scenery in every respect but one - the refusal
+# when a player tries to take it. `take_fail.fixture` reads "the {name}
+# isn't yours to carry off," which is right for a thing somebody owns
+# and nonsense for fog, so terrain falls to `take_fail.terrain` instead.
+#
+# **A type rather than a list of ids** because the split recurs: the
+# Courtyard and the oak want the same line, and `take_fail.exit` is
+# already chosen off `type` in exactly this way. Everywhere else in the
+# engine, test `SCENERY_TYPES` and not `SCENERY` - a bare comparison
+# against one of them is how terrain silently stops being outdoors.
+TERRAIN = "terrain"
+
+SCENERY_TYPES = frozenset({SCENERY, TERRAIN})
 
 # Toys are carried and dropped like any other object.
 CARRIABLE_TYPES = {"object", "toy"}
@@ -1389,43 +1404,67 @@ def _check_visibility_gates(content: Content) -> list[str]:
 
 
 def _check_scenery_aliases_are_unique(content: Content) -> list[str]:
-    """A scenery word must mean nothing else anywhere in the table.
+    """A scenery word must mean one thing anywhere a player could stand.
 
     Stricter than `_check_aliases`, and only for scenery. That check is
     scoped to one room because a player is only ever standing in one, and
     the house leans on it: `doorway` names twelve different exits, `cat
     food` nine rows, and every one of those is deliberate.
 
-    **Scenery cannot have that latitude, for two reasons.** The bag
-    travels, so a word that is also a carriable thing is ambiguous the
-    moment anyone walks outdoors holding one - that is how `wire` on the
-    fence would have collided with the copper wire the day drop 3 let a
-    player carry it into the channel. And the channel is the first
-    outdoors of several: drop 3 brings an outdoor Entryway, drop 5 a
-    Courtyard, and the field may one day hold Christmas trees, at which
-    point `tree` means two things in one view. A duplicate resolves to
-    whichever row sorts first and logs nothing.
+    **Scenery cannot have quite that latitude, for two reasons.** The bag
+    travels, so a word that is also something a player can pick up is
+    ambiguous the moment anyone walks outdoors holding one - that is how
+    `wire` on the fence would have collided with the copper wire the day
+    drop 3 let a player carry it into the channel. And the channel is
+    the first outdoors of several: drop 3 brings an outdoor Entryway,
+    drop 5 a Courtyard, and the field may one day hold Christmas trees,
+    at which point `tree` means two things in one view. A duplicate
+    resolves to whichever row sorts first and logs nothing.
 
-    Scoped to scenery rather than applied to the whole table because the
-    whole table shares 87 words today, almost all of them on purpose.
-    Widening this is a content sweep, not a loader change.
+    **But those two reasons name a scope, and it is not the whole
+    table.** This check first read "must mean nothing else anywhere",
+    which is wider than either argument supports and wider than the
+    house can bear: the stand's `shelves` collide with the Library's,
+    the Sewing Room's and the Nursery's, its `bin` with the Kitchen
+    trash can, its `board` with the bulletin board - every one of them a
+    fixture bolted to a room the channel has no view of, and `/look` is
+    scoped to the room the player is in. Enforcing it there would have
+    cost the stand its shelves to protect against a confusion no player
+    could have.
+
+    So the scope is what can actually share a view: things that can be
+    carried into the room, and things already in it. `wire` still fails
+    on the carriable copper wire; a Christmas tree in the field would
+    still fail on anything else outdoors with it.
     """
-    claimed: dict[str, set[str]] = {}
+    # Only two kinds of row can turn up beside a piece of scenery: one a
+    # player carried in, and one that lives there.
+    travellers: dict[str, set[str]] = {}
+    residents: dict[str, dict[str, set[str]]] = {}
     for thing in content.things:
         for name in thing.names:
-            claimed.setdefault(name.lower(), set()).add(thing.thing_id)
+            word = name.lower()
+            if thing.takeable:
+                travellers.setdefault(word, set()).add(thing.thing_id)
+            if thing.room_id:
+                residents.setdefault(thing.room_id, {}).setdefault(
+                    word, set()
+                ).add(thing.thing_id)
 
     problems = []
     for thing in content.things:
-        if thing.type != SCENERY:
+        if thing.type not in SCENERY_TYPES:
             continue
+        here = residents.get(thing.room_id, {})
         for name in thing.names:
-            others = sorted(claimed.get(name.lower(), set()) - {thing.thing_id})
+            word = name.lower()
+            clash = (travellers.get(word, set()) | here.get(word, set()))
+            others = sorted(clash - {thing.thing_id})
             if others:
                 problems.append(
-                    f"scenery {thing.thing_id} answers to {name.lower()!r}, and "
-                    f"so does {', '.join(others)}; a scenery word has to mean "
-                    "one thing everywhere, because the bag travels"
+                    f"scenery {thing.thing_id} answers to {word!r}, and so "
+                    f"does {', '.join(others)}; a scenery word has to mean "
+                    "one thing in any view it can appear in"
                 )
     return problems
 
@@ -1534,7 +1573,7 @@ def _check_scenery_is_named_in_prose(content: Content) -> list[str]:
 
     problems = []
     for thing in content.things:
-        if thing.type != SCENERY or not thing.room_id:
+        if thing.type not in SCENERY_TYPES or not thing.room_id:
             continue
         here = bolded.get(thing.room_id, set())
         if not any(name.lower() in here for name in thing.names):

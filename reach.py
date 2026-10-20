@@ -281,7 +281,7 @@ async def _gather(
                     # does that today, and the reply would be identical anyway.
                     candidate.copies[Where.SOURCE] = (1, contained_in or None)
                     candidate.source_id = thing_id
-            elif kind in ("fixture", "exit", content.SCENERY):
+            elif kind in {"fixture", "exit"} | content.SCENERY_TYPES:
                 # Scenery resolves exactly as a fixture does: no stock row,
                 # never takeable, always there. It is listed here rather
                 # than left to fall through because falling through is

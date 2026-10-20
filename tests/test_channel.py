@@ -146,7 +146,7 @@ async def test_the_description_sits_above_the_list(channel):
 
     reply = (await look(channel)).reply
 
-    assert reply.startswith("A dirt **road** runs through the **fog**")
+    assert reply.startswith("A derelict produce **stand** sits at the edge")
     assert reply.index("Also here:") > reply.index("**road**")
 
 
