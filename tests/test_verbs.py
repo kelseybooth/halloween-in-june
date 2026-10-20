@@ -64,10 +64,35 @@ async def test_taking_puts_it_in_the_bag(house):
     assert "spoon" in interaction.reply
 
 
-async def test_taking_is_public(house):
-    """The room is shared, so the others need to see the last of something go."""
-    await content_loader.load_content(a_house(a_thing("spoon")))
-    assert (await take()).was_private is False
+async def test_taking_is_announced_in_the_room(house):
+    """The room is shared, so the others need to see the last of
+    something go.
+
+    **It used to be the reply itself that was public**, and every
+    written `take` string is second person - "You pocket the spice
+    jar" - because it was written for the person who typed the
+    command. The room was being told that *it* had picked something up.
+    The flavour is now private and the room gets a line naming who.
+    """
+    await content_loader.load_content(a_house(a_thing("spoon", name="spoon")))
+
+    interaction = await take()
+    posted = " ".join(interaction.channel.posted)
+
+    assert interaction.was_private is True
+    assert "picks up the spoon" in posted
+    assert "You" not in posted
+
+
+async def test_the_deferral_is_private_like_every_reply_under_it(house):
+    """A public deferral leaves a public "thinking" placeholder that
+    only a public followup resolves. Every `/take` reply is private
+    now - the refusals always were - so a public one would hang."""
+    await content_loader.load_content(a_house(a_thing("spoon", name="spoon")))
+
+    interaction = await take()
+
+    assert interaction.defer_kwargs.get("ephemeral") is True
 
 
 async def test_the_reply_uses_the_things_own_take_text(house):

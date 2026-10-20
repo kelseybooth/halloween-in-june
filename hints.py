@@ -54,6 +54,12 @@ DID_LOOK_TOY = "did.look_toy"
 DID_TAKE_TOY = "did.take_toy"
 DID_USE_TOY = "did.use_toy"
 
+# Carrying, which drop 2 also teaches. Both are the verb alone for the
+# same reason the toy markers are: a player who has opened their bag
+# once knows what `/inventory` is, whatever was in it.
+DID_INVENTORY = "did.inventory"
+DID_DROP = "did.drop"
+
 # The flag `/stats` sets, half of the condition that graduates the quest
 # notice from pointing at `/stats` to naming the quest inline.
 OPENED_STATS = "opened_stats"
@@ -165,6 +171,24 @@ HOLD_TO_USE = Hint(
 # channel to be true - the fluff has just put one there.
 BED_YIELD = Hint("hint.bed_yield", recommends=DID_LOOK, needs_commands=("look",))
 
+# The two carrying rungs. Neither needs a toy in the channel: the first
+# fires on a toy the player is already holding, and the second names
+# whatever is in their bag.
+CHECK_INVENTORY = Hint(
+    "hint.check_inventory",
+    recommends=DID_INVENTORY,
+    needs_commands=("inventory",),
+)
+# `{name}` is the first thing in their bag, passed in by the caller.
+# Naming something they are holding is the point: "like /drop feather
+# wand" is a command they can retype, where "/drop <thing>" is a syntax
+# lesson.
+DROP_SOMETHING = Hint(
+    "hint.drop_something",
+    recommends=DID_DROP,
+    needs_commands=("drop",),
+)
+
 ALL = (
     FIRST_FRIENDLY,
     FIRST_STANDOFFISH,
@@ -177,6 +201,8 @@ ALL = (
     USE_TOY,
     HOLD_TO_USE,
     BED_YIELD,
+    CHECK_INVENTORY,
+    DROP_SOMETHING,
 )
 
 # Which hints a given action can make unnecessary, worked out once.
@@ -260,12 +286,15 @@ async def pick(
         if not await reachable(guild_id, hint):
             continue
         tokens = {}
-        if hint.needs_a_toy:
+        if name:
+            # Whatever the caller is talking about: the toy just picked
+            # up, or the first thing in the bag. It wins over the
+            # lookup below, which cannot know either.
+            tokens["name"] = name
+        elif hint.needs_a_toy:
             # Filled now rather than at the drop: the rungs that teach
-            # looking and taking name whichever toy is in the channel,
-            # and `/use`'s names the one just picked up - which the
-            # caller passes in and which wins over this.
-            tokens["name"] = name or await a_takeable_toy(guild_id) or "toy"
+            # looking and taking name whichever toy is in the channel.
+            tokens["name"] = await a_takeable_toy(guild_id) or "toy"
         if not await database.notice(guild_id, user_id, hint.hint_id):
             continue
         return await render(hint.hint_id, **tokens)

@@ -289,6 +289,20 @@ class FakeInteraction:
         self.sent: list[tuple[str | None, dict]] = []
         self.response = FakeResponse(self)
         self.followup = FakeFollowup(self)
+        # Set when a handler withdraws the deferred placeholder because
+        # its whole output went to the channel instead.
+        self.withdrawn = False
+
+    async def delete_original_response(self) -> None:
+        """Take back the ephemeral "thinking" message.
+
+        Real handlers call this when a public line replaces a private
+        one, so that the player is not left looking at a spinner.
+        Recorded rather than ignored, because "said nothing privately"
+        and "left a spinner up" are different outcomes and only one of
+        them is correct.
+        """
+        self.withdrawn = True
 
     @property
     def reply(self) -> str:

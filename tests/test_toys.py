@@ -62,6 +62,17 @@ def said(interaction) -> str:
     return "\n".join(t for t, _ in interaction.sent if t)
 
 
+def posted(channel) -> str:
+    """Everything the channel has seen, joined.
+
+    A successful play is **public and nothing else** now, so the text a
+    player reads for the best moment in the drop lives here rather than
+    in `said`. The two used to carry the same sentence.
+    """
+    _, _, halloween = channel
+    return "\n".join(halloween.posted)
+
+
 async def take(channel, thing="feather wand", who=ALICE):
     return said(await run(channel, bot.take, thing, who=who))
 
@@ -81,7 +92,8 @@ async def a_success(channel, monkeypatch, thing="feather wand", who=ALICE):
     always(monkeypatch, succeed=False)
     await play(channel, thing, who=who)
     always(monkeypatch, succeed=True)
-    return await play(channel, thing, who=who)
+    await play(channel, thing, who=who)
+    return posted(channel)
 
 
 def always(monkeypatch, *, succeed):
@@ -208,10 +220,12 @@ async def test_a_fixture_is_never_carry_checked(channel, monkeypatch):
     """**The check is keyed on `takeable`, not on `/use`.** Written as a
     property of the verb it would make every fixture permanently
     unusable - starting with the cat bed, which nobody can pocket."""
-    reply = said(await run(channel, bot.use, "cat bed"))
+    reply = said(await run(channel, bot.use, "cat bed")) + posted(channel)
 
     assert "pick it up first" not in reply
-    assert "shake out the cushion" in reply
+    # Either half will do: a fluff that dislodges something now says so
+    # publicly and says nothing privately at all.
+    assert "shake out the cushion" in reply or "something falls out" in reply
 
 
 # --------------------------------------------------------------------------
@@ -253,15 +267,47 @@ async def test_the_success_line_is_the_toys_own(channel, monkeypatch):
 
 
 async def test_the_success_is_public_and_the_refusal_is_not(channel, monkeypatch):
+    """And the success is public *only*.
+
+    It used to be both, so the player who had just coaxed the cat into
+    playing read the same sentence twice - once in their own reply and
+    once in the channel directly below it.
+    """
     _, _, halloween = channel
     always(monkeypatch, succeed=False)
     await take(channel)
-    await play(channel)
-    assert halloween.posted == []
+    refusal = said(await run(channel, bot.use, "feather wand"))
 
-    await a_success(channel, monkeypatch)
+    assert refusal
+    assert not any(WAND_SUCCESS in line for line in halloween.posted)
+
+    always(monkeypatch, succeed=True)
+    success = await run(channel, bot.use, "feather wand")
 
     assert any(WAND_SUCCESS in line for line in halloween.posted)
+    assert WAND_SUCCESS not in said(success)
+    assert success.withdrawn, "the spinner has to be taken back"
+
+
+async def test_a_success_still_speaks_when_the_channel_is_rate_limited(
+    channel, monkeypatch
+):
+    """**The private line is the fallback, not the default.**
+
+    Deleting it outright would mean a success that says nothing
+    anywhere once the public budget is spent - which reads as the cat
+    ignoring you, the one thing a success must never look like.
+    """
+    await take(channel)
+    always(monkeypatch, succeed=False)
+    await play(channel)
+    monkeypatch.setattr(bot, "_public_play_line", lambda *a, **k: None)
+    always(monkeypatch, succeed=True)
+
+    interaction = await run(channel, bot.use, "feather wand")
+
+    assert WAND_SUCCESS in said(interaction)
+    assert not interaction.withdrawn
 
 
 # --------------------------------------------------------------------------
