@@ -2010,6 +2010,26 @@ async def _finish_use(interaction, state, found) -> None:
         refusal = await phrasing.say(
             guild_id, found.thing_id, "use_fail", state=current, name=found.name
         )
+        if not refusal:
+            # **`use.default` assumes something in your hands** - "you
+            # turn the {name} over in your hands" is nonsense on a fence
+            # or a ditch, and `/use` is one of only two verbs drop 1
+            # has, so every scenery noun is one command away from it.
+            #
+            # **Scenery only, not every `takeable = no` row**, though
+            # the argument reads as though it should cover the stove
+            # too. Widening it changes shipped drop-3 behaviour: a house
+            # fixture with a blank `use` cell falls through to
+            # `use.default` *and counts as a use*, which is a contract
+            # two tests in `test_verbs.py` pin on purpose because use
+            # counts feed achievements. Scenery is new, so confining the
+            # refusal to it changes nothing that already works. Widening
+            # it is this condition and those two tests, together.
+            row_here = await phrasing.thing_row(found.thing_id)
+            if row_here is not None and row_here.type == content.SCENERY:
+                refusal = await phrasing.default_say(
+                    "use_fail.fixture", name=found.name
+                )
         if refusal:
             await interaction.followup.send(refusal, ephemeral=True)
             return
@@ -2804,8 +2824,28 @@ async def _look_at_one_thing(
 
     row = await phrasing.thing_row(found.thing_id)
     if found.thing_id == world.CAT_BED:
+        # Read *before* the action is recorded: the notice fires on the
+        # transition, and `hints.did` is what closes it.
+        first_time = not await database.has_been_told(
+            guild_id, user_id, hints.DID_LOOK_BED
+        )
         await hints.did(guild_id, user_id, hints.DID_LOOK)
         await hints.did(guild_id, user_id, hints.DID_LOOK_BED)
+        if first_time:
+            # **Not a hint**: italic, no label, and it writes nothing to
+            # the told-you table. The row the ladder already wrote for
+            # this look is what stops it firing twice.
+            #
+            # It tells them to look again rather than reprinting the
+            # channel: the fuller description arrives on their next
+            # `/look`, which is the point of saying something moved.
+            #
+            # Above the hint, because it reports what happened and the
+            # hint recommends what to do next. The rail owns the last
+            # line of a message everywhere else and keeps it here.
+            thinned = await phrasing.default_say("channel.fog_thins")
+            if thinned:
+                text = f"{text}\n\n*{thinned}*"
         text = hints.beneath(
             text, await hints.after(guild_id, user_id, hints.TRY_USE)
         )
@@ -2899,14 +2939,36 @@ async def _in_the_channel(interaction) -> bool:
     )
 
 
-async def _look_in_the_channel(guild_id: int, user_id: int) -> str:
-    """What is in the channel, as a list. There is no description.
+async def _unlocked_for(guild_id: int, user_id: int) -> frozenset[str]:
+    """Which gated fragments this player can see.
 
-    **The channel has no prose, and that is the answer rather than a gap.**
-    A `room_text` row for it is a load error. In the house the division of
-    labour is that the writer's prose names the scenery and the `Also here:`
-    line carries what is loose; here there is no prose to do the first half,
-    so the list does both and names fixtures too.
+    **One lookup against a table that already exists.** The hint ladder
+    records each player's first `/look cat bed` because that is what
+    retires `hint.look_specific`; the same row is what thins the fog.
+    No new table, no new column, and emphatically not the general
+    per-player `present_when`, which is a design programme parked in
+    V3.2 and would have cost a staged paragraph the same as the whole
+    onboarding corridor.
+    """
+    if await database.has_been_told(guild_id, user_id, hints.DID_LOOK_BED):
+        return frozenset({content.LOOKED_AT_BED})
+    return frozenset()
+
+
+async def _look_in_the_channel(guild_id: int, user_id: int) -> str:
+    """The channel: its description, then what is lying in it.
+
+    **It used to have no prose, and that was the answer rather than a
+    gap** - a `room_text` row for it was a load error. Playtesters
+    found drop 1 empty for exactly that reason: `/look` got them
+    excited and then offered one noun. The channel now reads like the
+    room-like row it always was, which retires the special case rather
+    than adding one.
+
+    The list still names fixtures, which is the one way it differs from
+    `Also here:` in the house: scenery is bolded in the prose rather
+    than listed, and the bolding is what tells a player which nouns are
+    lookable.
 
     **The cat is not in it.** Her row is `room_id = ALL` rather than the
     channel's, so she falls out of this query for free - which is the
@@ -2916,13 +2978,42 @@ async def _look_in_the_channel(guild_id: int, user_id: int) -> str:
     have.
     """
     held = await states.in_force(guild_id, user_id)
+    description = await resolve.room_look(
+        guild_id,
+        content.CHANNEL_ROOM,
+        await _current_state(guild_id, user_id),
+        await _unlocked_for(guild_id, user_id),
+    )
+    # Two sources, because they answer two different questions. The
+    # fixtures come from the content table, which is the only thing that
+    # can name something with no presence row - the cat bed never enters
+    # `room_contents`. Everything carriable comes from `room_contents`,
+    # because a toy that has been picked up is *gone*, and a list built
+    # from home rooms went on naming it: the wand stayed on the line
+    # after the take, which reads as an endless supply and had testers
+    # taking it twice.
     entries = [
         (name, 1)
         for name, gate in await resolve.things_in_room(guild_id, content.CHANNEL_ROOM)
         if states.passes(gate, held)
     ]
-    line = await phrasing.listing(entries, prefix_key="channel.look_prefix")
-    return line or await phrasing.default_say("channel.look_empty")
+    entries += await database.loose_here(
+        guild_id, content.CHANNEL_ROOM, held_states=held
+    )
+    line = await phrasing.listing(
+        entries,
+        # The house's prefix, now that the channel has prose above it.
+        # `channel.look_prefix` existed to rename `Also here:` to `Items
+        # here:` back when the list was the entire output and "also"
+        # referred to nothing. With a description over it the word is
+        # true again, and a player who walks into the house next drop
+        # meets a line they have already read.
+        prefix_key="also_here.prefix",
+        budget=phrasing.MESSAGE_LIMIT - len(description or "") - 2,
+    )
+    if description and line:
+        return f"{description}\n\n{line}"
+    return description or line or await phrasing.default_say("channel.look_empty")
 
 
 async def _look_at(

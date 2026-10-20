@@ -60,7 +60,6 @@ hint.try_use	Things can be used, too. Try /use cat bed.
 hint.try_look	Things can be looked at, too. Try /look cat bed.
 hint.new_quest	A new quest is available. Check /stats.
 hint.new_quest.named	A new quest is available. {quest_name}: {quest_prompt}
-channel.look_prefix	Items here:
 channel.look_empty	Nothing here but the cat, and she was here already.
 drop.1.announce	The cat swats her paw and something slides a couple feet away... something that didn't appear to be here before now.
 use_fail.toy.1	The cat looks at the {name}. She looks at you.
@@ -81,3 +80,5 @@ hint.use_toy	Give this toy a shake. Try /use {name}.
 hint.hold_to_use	You need to hold it to use it. Try picking it up with /take {name}.
 hint.bed_yield	You dislodged something from the bed. Check /look to see what appeared.
 bed_yield.public	As {player} fluffs the cat bed, something falls out.
+use_fail.fixture	There is nothing to do with the {name} but look at it.
+channel.fog_thins	When you look up from the bed, the fog has thinned slightly.

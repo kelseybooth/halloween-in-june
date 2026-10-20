@@ -181,6 +181,32 @@ async def test_the_room_descriptions_swap(house):
     assert await resolve.room_look(GUILD_A, "UH", "stairs_repaired") != before_uh
 
 
+async def test_a_room_with_no_row_for_your_state_reads_its_default(house):
+    """**The fallback, which fragmenting room text nearly cost.**
+
+    A player holds a state the room was never written for - someone who
+    unlocked the cabinet standing in the Dining Room, say - and the
+    room must still read as itself. The first fragment implementation
+    compared each row against the one state and kept no fallback, so
+    every such room came back `None` and rendered as "You see a room."
+    The Living Room went blank the moment anybody opened the cabinet.
+    """
+    plain = await resolve.room_look(GUILD_A, "DI")
+
+    assert plain
+    assert await resolve.room_look(GUILD_A, "DI", "stairs_repaired") == plain
+    assert await resolve.room_look(GUILD_A, "DI", "cabinet_unlocked") == plain
+
+
+async def test_a_room_written_for_your_state_still_wins(house):
+    """The other half: the fallback must not swallow the specific row."""
+    await states.set_server_state(GUILD_A, "stairs_repaired")
+
+    assert await resolve.room_look(GUILD_A, "EN", "stairs_repaired") != (
+        await resolve.room_look(GUILD_A, "EN")
+    )
+
+
 async def test_the_staircase_is_per_server(db):
     for guild in (GUILD_A, GUILD_B):
         await enter(db, ALICE, guild)

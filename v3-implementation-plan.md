@@ -99,6 +99,8 @@ The list has emptied out. Taking them in order of how they closed:
 
 Plus two that the spec can simply state a default for: what fills *"Items here:"* when the channel is empty, and whether the toy ramp resets after a success with cooldown attempts not advancing it (recommended yes and no).
 
+> **Closed by the drop 1 channel scenery patch.** The channel now has a description above its list, so an empty list is no longer a bare dangling header and the answer is *nothing* — the header is omitted when there is nothing under it. The `Items here:` override went with it: with prose above it, `Also here:` is true again and the channel reads like the nine rooms. The ramp question was settled in 3b as recommended.
+
 ### Three things the five achievements add to the build
 
 **An `on_relationship_change` hook.** Three achievements are now score thresholds — 50, 100 and 250 — and four actions write the score. *Cat's Best Friend* listens on `on_pet`, which was enough when petting was the only lever; a player pushed to 50 by a bed fluff would go unchecked. Fire the thresholds wherever the score is written.

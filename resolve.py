@@ -29,6 +29,7 @@ from typing import NamedTuple, Sequence
 
 from sqlalchemy import select
 
+import content
 import database
 
 log = logging.getLogger(__name__)
@@ -158,9 +159,36 @@ def _best(rows, arrived: set[int], state, column: str) -> str | None:
 
 
 async def room_look(
-    guild_id: int, room_id: str, state: str = DEFAULT_STATE
+    guild_id: int,
+    room_id: str,
+    state: str = DEFAULT_STATE,
+    unlocked: frozenset[str] = frozenset(),
 ) -> str | None:
-    """The description of a room as this server currently sees it."""
+    """The description of a room as this player currently sees it.
+
+    Assembled from fragments **in fragment order, never in arrival
+    order**. Nine rooms have one fragment each and read exactly as they
+    always did; the channel has six, three of which are gated on what
+    this player has done.
+
+    That ordering is the load-bearing part. The branches are fragment 2
+    and unlock in the second stage, so they have to slot back into
+    second position in the paragraph rather than being appended after
+    the tire tracks - which is what an implementation that collects
+    unlocked fragments as it finds them would do.
+
+    `unlocked` is what this player has satisfied, passed in rather than
+    looked up, so this stays a content resolver and the hint rail stays
+    the only thing that knows what a hint id means.
+
+    **State selection is `_best`'s, run once per fragment**: the
+    player's states in priority order, then `default`, and the highest
+    arrived drop within whichever state wins. The first version of this
+    compared against one state and dropped the fallback, which turned
+    every room a player held a state for into "You see a room." - the
+    Living Room went blank the moment somebody unlocked the cabinet.
+    Fragments changed how many answers there are, not how one is found.
+    """
     arrived = await arrived_drop_ids(guild_id)
     session_factory = database._require_session()
     async with session_factory() as session:
@@ -169,17 +197,45 @@ async def room_look(
                 select(
                     database.RoomText.state,
                     database.RoomText.since_drop,
+                    database.RoomText.fragment,
+                    database.RoomText.visible_when,
                     database.RoomText.look,
                 ).where(database.RoomText.room_id == room_id)
             )
         ).all()
 
-    return _best(
-        [{"state": r[0], "since_drop": r[1], "look": r[2]} for r in rows],
-        arrived,
-        state,
-        "look",
-    )
+    # `_best`'s rule, applied once per fragment: the player's states in
+    # priority order, then `default`, and within a state the highest
+    # arrived drop. Running it per fragment rather than per room is what
+    # lets a later drop rewrite one sentence of the channel, or one
+    # sentence of a room in one state, without restating the rest.
+    wanted = (state,) if isinstance(state, str) else tuple(state)
+    ordered = [*dict.fromkeys((*wanted, DEFAULT_STATE))]
+
+    found: dict[int, dict[str, tuple[int, str | None, str]]] = {}
+    for row_state, since_drop, fragment, visible_when, look in rows:
+        if since_drop not in arrived or not look:
+            continue
+        slot = found.setdefault(fragment, {})
+        if row_state in slot and slot[row_state][0] >= since_drop:
+            continue
+        slot[row_state] = (since_drop, visible_when, look)
+
+    parts = []
+    for fragment in sorted(found):
+        slot = found[fragment]
+        for candidate in ordered:
+            if candidate not in slot:
+                continue
+            _, visible_when, look = slot[candidate]
+            # The gate is read *after* the state has been chosen, so a
+            # fragment this player cannot see stays unseen rather than
+            # falling through to some other state's version of itself.
+            if not visible_when or visible_when in unlocked:
+                parts.append(look)
+            break
+
+    return " ".join(parts) if parts else None
 
 
 async def thing_text(
@@ -270,11 +326,30 @@ async def things_in_room(guild_id: int, room_id: str) -> list[tuple[str, str | N
     from `loose_here`: that one reads `room_contents` and so sees only the
     finite objects that were placed. In the house the difference does not
     matter, because a room's prose names its own scenery - the stove, the
-    mirror, the bulletin board. The channel has no prose, so its list is
-    the only thing that can name anything.
+    mirror, the bulletin board. The channel used to have no prose, so its
+    list was the only thing that could name anything.
 
     Exits are left out: a door is not an item in the room, and the channel
     has none anyway.
+
+    **Scenery is left out too, now that the channel has prose.** It is the
+    same division of labour the house has always had: the description names
+    the road and the fence in bold, and the list carries what is loose. A
+    list that opened "Also here: a road, a fog, a ditch, a cat bed" would
+    bury the one noun on it that a player can actually do anything with,
+    which is the opposite of what the scenery was added for. The loader
+    enforces the other half - a scenery row the prose never bolds is a
+    load error, because nothing else would ever name it.
+
+    **And so is anything carriable, which was a live bug.** This reads
+    `thing_types.room_id` - a thing's *home* in the content files, not
+    where it is now - so a toy listed from here is listed forever. Drop 1
+    hid it, because the cat bed is a fixture and a fixture has no presence
+    row to read; drop 2 put two takeable toys in the same room and the
+    list went on naming a wand that had been picked up, which reads as an
+    endless supply. Presence is `room_contents`, and `loose_here` is the
+    function that reads it. What is left here is exactly the set with no
+    presence rows to read: fixtures and sources.
     """
     arrived = await arrived_drop_ids(guild_id)
     session_factory = database._require_session()
@@ -294,7 +369,8 @@ async def things_in_room(guild_id: int, room_id: str) -> list[tuple[str, str | N
     return [
         (name, gate)
         for name, gate, since_drop, kind in rows
-        if since_drop in arrived and kind != "exit"
+        if since_drop in arrived
+        and kind not in ({"exit", content.SCENERY} | content.CARRIABLE_TYPES)
     ]
 
 

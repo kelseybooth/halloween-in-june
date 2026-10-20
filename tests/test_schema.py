@@ -258,6 +258,91 @@ async def test_an_older_database_gains_the_new_tables_and_columns(tmp_path, monk
         await database.close_db()
 
 
+async def test_a_narrow_room_text_is_rebuilt_rather_than_altered(tmp_path, monkeypatch):
+    """The drop 2 failure, caught before it shipped a second time.
+
+    `fragment` joined `room_text`'s primary key, and neither backend can
+    widen a primary key with `ALTER TABLE`. Added to the usual list the
+    column would have appeared, the schema would have looked current,
+    and the first content load would have died on six channel rows all
+    reading (CH, default, 1) - after which the startup loader keeps
+    serving the last good content and the release looks like it never
+    shipped. That is exactly how drop 2 was lost.
+
+    So the fix is a rebuild, and this drives the real upgrade: an
+    existing database with the three-column key, booted, then loaded.
+    """
+    url = f"sqlite+aiosqlite:///{(tmp_path / 'narrow.db').as_posix()}"
+    monkeypatch.setenv("DATABASE_URL", url)
+    monkeypatch.delenv("RAILWAY_ENVIRONMENT", raising=False)
+
+    database._engine = None
+    database._session_factory = None
+    await database.init_db()
+
+    # Put room_text back the way it shipped: three key columns, no
+    # fragment, and a row in it to prove the rebuild is not what makes
+    # the load work.
+    async with database._engine.begin() as conn:
+        await conn.execute(text("DROP TABLE room_text"))
+        await conn.execute(
+            text(
+                "CREATE TABLE room_text ("
+                "room_id VARCHAR(8) NOT NULL, state VARCHAR(64) NOT NULL, "
+                "since_drop INTEGER NOT NULL, look TEXT, "
+                "PRIMARY KEY (room_id, state, since_drop))"
+            )
+        )
+        await conn.execute(
+            text(
+                "INSERT INTO room_text (room_id, state, since_drop, look) "
+                "VALUES ('EN', 'default', 0, 'stale')"
+            )
+        )
+    await database.close_db()
+
+    database._engine = None
+    database._session_factory = None
+    await database.init_db()
+    try:
+        assert "fragment" in await columns_of(database, "room_text")
+
+        # The load is the real assertion: six rows for one room, one
+        # state and one drop is precisely what the old key forbade.
+        import content as content_module
+        import content_loader
+
+        report = await content_loader.load_content(content_module.load_files())
+
+        assert report.content_rows["room_text"] > 0
+
+        async with database._require_session()() as session:
+            fragments = await session.scalar(
+                text(
+                    "SELECT count(*) FROM room_text WHERE room_id = :room "
+                    "AND state = 'default' AND since_drop = 1"
+                ),
+                {"room": content_module.CHANNEL_ROOM},
+            )
+        assert fragments == 6, "the six channel fragments are the whole point"
+    finally:
+        await database.close_db()
+
+
+async def test_fragment_is_not_in_the_alter_list(tmp_path):
+    """A negative requirement, and the one worth checking at review.
+
+    Putting it back would be silent: the column would exist, the
+    rebuild would never fire because the rebuild only looks at the key,
+    and the failure would wait for whichever room gets a second
+    fragment next.
+    """
+    assert not any(
+        table == "room_text" and column == "fragment"
+        for table, column, _ in database._LATER_COLUMNS
+    )
+
+
 async def test_running_the_migration_twice_is_a_no_op(db):
     """Startup runs it every boot, so it has to be safe to repeat."""
     before = await columns_of(db, "pet_events")

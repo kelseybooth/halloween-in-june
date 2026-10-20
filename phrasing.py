@@ -132,8 +132,8 @@ async def listing(
     prefix = await resolve.default_text(prefix_key) or ""
     # One space between the label and the list, supplied here rather
     # than by a trailing space in the file. `also_here.prefix` carried
-    # one for a year and `channel.look_prefix` did not, which is how
-    # drop 1 shipped "Items here:cat bed" - an invisible character
+    # one for a year and the channel's own override did not, which is
+    # how drop 1 shipped "Items here:cat bed" - an invisible character
     # nobody can see in a spreadsheet should not be load-bearing.
     if prefix:
         prefix = prefix.rstrip() + " "

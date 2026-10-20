@@ -539,13 +539,37 @@ class ThingType(Base):
 
 
 class RoomText(Base):
-    """A room's description for one state, at one drop."""
+    """A room's description for one state, at one drop - in fragments.
+
+    Most rooms are one fragment and read exactly as they always did. The
+    channel is six, because its description arrives in two stages: three
+    sentences for a player who has just turned up, and six once they
+    have looked at the cat bed.
+
+    **Order follows `fragment`, never arrival.** An unlocked fragment
+    slots into its numbered place in the paragraph rather than being
+    appended, which is what puts the branches back in second position
+    when they appear rather than after the tire tracks.
+    """
 
     __tablename__ = "room_text"
 
     room_id: Mapped[str] = mapped_column(String(8), primary_key=True)
     state: Mapped[str] = mapped_column(String(64), primary_key=True)
     since_drop: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # Which sentence of the paragraph this is. One row per room is the
+    # ordinary case and sorts first at 0; the channel numbers its six.
+    fragment: Mapped[int] = mapped_column(Integer, primary_key=True, default=0)
+    # What this player must have done to see it. Null means everybody,
+    # which is every fragment but three.
+    #
+    # **Deliberately an enum with one member**, not a condition
+    # language: the only value is `looked_at_bed`, and it is answered by
+    # one lookup in the table the hint rail already keeps. The general
+    # per-player `present_when` is a separate design, parked in V3.2,
+    # and reaching for it here would have cost a staged paragraph the
+    # same as the whole onboarding corridor.
+    visible_when: Mapped[str | None] = mapped_column(String(32), nullable=True)
     look: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
@@ -1047,7 +1071,53 @@ _LATER_COLUMNS: list[tuple[str, str, str]] = [
     # world while the files on disk had drop 2 in them.
     ("restocks", "destination", "VARCHAR(64)"),
     ("restocks", "max_present", "INTEGER"),
+    ("room_text", "visible_when", "VARCHAR(32)"),
 ]
+
+# `room_text.fragment` is deliberately *not* in that list. It joined the
+# primary key, and `ALTER TABLE ADD COLUMN` cannot widen one - the column
+# would appear, the table would look migrated, and the first load would
+# still die on six channel rows sharing (CH, default, 1). See
+# `_rebuild_room_text_if_narrow`. `visible_when` stays, because it is an
+# ordinary nullable column and the list is where one belongs.
+
+
+async def _rebuild_room_text_if_narrow(conn) -> None:
+    """Drop `room_text` when its primary key predates `fragment`.
+
+    **The one migration in this file that is a rebuild rather than an
+    ALTER**, because `fragment` joined the primary key and neither
+    backend can widen one in place. Left as an ADD COLUMN it would be
+    the drop 2 failure exactly: the column appears, the schema looks
+    current, and the content load dies at startup on six channel rows
+    that all read (CH, default, 1) - after which
+    `load_content_at_startup` keeps serving the last good content and
+    the release looks like it never shipped.
+
+    **Dropping it is safe in a way dropping any other table would not
+    be.** `room_text` is content, not world state: it carries no
+    guild_id, nothing mutates it at runtime, and `_replace_content`
+    already deletes and rewrites every row of it on every boot. The
+    rebuild throws away rows that were about to be thrown away.
+
+    Runs before `create_all`, which then creates it with the four-column
+    key. A database that already has that key is untouched, so this is a
+    no-op from the second boot onward and on every fresh install.
+    """
+
+    def _narrow(sync_conn) -> bool:
+        insp = inspect(sync_conn)
+        if "room_text" not in insp.get_table_names():
+            return False
+        key = insp.get_pk_constraint("room_text").get("constrained_columns") or []
+        return "fragment" not in key
+
+    if await conn.run_sync(_narrow):
+        await conn.execute(text("DROP TABLE room_text"))
+        log.warning(
+            "Schema upgrade: rebuilt room_text for the fragment key. Its rows "
+            "are rewritten from the content files on this same boot."
+        )
 
 
 async def _add_missing_columns(conn) -> None:
@@ -1232,6 +1302,7 @@ async def init_db() -> None:
     try:
         async with _engine.begin() as conn:
             await _reject_pre_guild_schema(conn)
+            await _rebuild_room_text_if_narrow(conn)
             await conn.run_sync(Base.metadata.create_all)
             await _add_missing_columns(conn)
     except StartupError:
@@ -2659,7 +2730,7 @@ async def count_of_type(guild_id: int, room_id: str, kind: str) -> int:
     **Counted across the class, not per row.** The rule is *keep two
     toys in the channel*, not *keep two of each toy*: per row, drop 2's
     two toys would already allow four, and the thirteen already written
-    would allow twenty-six and turn `Items here:` into a wall of nouns.
+    would allow twenty-six and turn `Also here:` into a wall of nouns.
     """
     session_factory = _require_session()
     async with session_factory() as session:

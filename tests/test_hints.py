@@ -400,7 +400,7 @@ async def test_a_broken_rail_still_delivers_the_reply(channel, monkeypatch):
 
     reply = await look(channel)
 
-    assert "Items here:" in reply
+    assert "Also here:" in reply
     assert "*Hint:" not in reply
 
 
