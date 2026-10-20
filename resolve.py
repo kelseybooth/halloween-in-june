@@ -51,8 +51,14 @@ NO_GAME = None
 #
 # A constant rather than a per-server setting: there is no reason for two
 # servers to disagree about which drops exist, and the test servers get
-# anywhere they like through `/qa-drop`. Raise it when drop 2 ships.
-LAST_PLAYABLE_DROP = 1
+# anywhere they like through `/qa-drop`.
+#
+# **Raise it in the release that builds the next drop, in the same
+# commit.** Drop 2 shipped with this still reading 1, so `/advance-game`
+# refused to reach the drop that had just been built and the only way
+# in was `/qa-drop` on a test server. `test_every_built_drop_is
+# _reachable` is what stops that happening again.
+LAST_PLAYABLE_DROP = 2
 
 
 class UnknownDrop(Exception):

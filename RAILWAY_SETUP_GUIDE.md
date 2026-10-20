@@ -173,6 +173,42 @@ the house early costs nothing — but it does mean whoever enters first sets
 the schedule. Worth not testing `/enter` on the live server before you mean
 to open.
 
+## The QA commands, and why you cannot see them working
+
+The seven `/qa-*` commands sit behind **three** gates. All three have to
+be open, and only one of them announces itself when it is not.
+
+**1. The server has to be one of the two test servers.** Their ids are
+written down in `qa.py`, not configured - a config row is one
+`/admin_config` away from pointing at the live server. If a server is
+not on that list the commands are never registered there, so they do
+not appear in the slash menu at all.
+
+**2. You have to hold a role named `qa`.** Create it in Server Settings
+and give it to yourself; it needs no permissions, the name is the whole
+check, and it is matched case-insensitively. **Administrators are not
+exempt** - the role is cheap to grant, and moving a server's drop
+should be a deliberate act rather than something an admin can do by
+reflex.
+
+This is the gate that costs an afternoon, because the commands are
+*visible* without the role and refuse quietly when you run them:
+
+> `/qa-drop` needs the **qa** role.
+
+If a QA command seems to do nothing - the drop does not move, a spawned
+thing never appears, `/look` shows what it showed before - read the
+reply. It is ephemeral and easy to skim past.
+
+**3. A `#qa-log` channel, optional.** Every QA call writes one line
+naming who ran it and what changed. Without the channel the line still
+goes to the Railway log, so the audit trail loses its convenience
+rather than the command failing.
+
+`/qa-inspect <member>` is the fastest way to find out where a server
+actually is: it prints the drop, whether that drop was **forced**, the
+clock offset, the player's score and what they have been told.
+
 ## Starting a test run over
 
 **`/reset-haunted-house`**, run in the server you want wiped. It takes the
