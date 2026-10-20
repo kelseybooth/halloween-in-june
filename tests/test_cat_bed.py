@@ -402,9 +402,69 @@ async def test_the_yield_is_announced_in_the_channel(channel):
     assert any("something falls out" in line for line in halloween.posted)
 
 
-async def test_and_carries_the_hint_that_points_at_look(channel):
+async def test_and_says_nothing_privately_at_all(channel):
+    """**The public line is the whole event.**
+
+    It used to be both: the channel said something fell out while the
+    player's own reply said the same thing a second time and then told
+    them to go and look. The one line now carries both halves - what
+    fell out, and the cat taking the bed anyway - so there is nothing
+    left for a private copy to add.
+    """
+    _, _, halloween = channel
     await at_drop_two(channel)
 
     interaction = await fluff(channel)
 
+    assert any("something falls out" in line for line in halloween.posted)
+    assert "You dislodged something from the bed" not in replies(interaction)
+    assert interaction.withdrawn, "the spinner has to be taken back"
+
+
+async def test_the_public_line_says_the_cat_takes_the_bed_anyway(channel):
+    """The beat the private fluff text used to carry, moved rather than
+    dropped: the point of the bed is that she settles into it."""
+    _, _, halloween = channel
+    await at_drop_two(channel)
+
+    await fluff(channel)
+
+    assert any("leaps into the bed and curls up" in line for line in halloween.posted)
+
+
+async def test_a_fluff_that_yields_nothing_still_replies_privately(channel):
+    """Only the *yield* goes public. An ordinary fluff is unchanged, and
+    still carries its own rung."""
+    await at_drop_two(channel)
+    await fluff(channel)  # the one yield this player ever gets
+    await database.clear_cooldowns(GUILD_A, ALICE)
+
+    interaction = await fluff(channel)
+
+    assert "shake out the cushion" in replies(interaction)
+    assert not interaction.withdrawn
+
+
+async def test_the_look_rung_survives_a_public_line_that_never_went_out(
+    channel, monkeypatch
+):
+    """The fallback path, and the reason the rung is not spent when the
+    public line *does* go out: a yield that said nothing anywhere would
+    be a fluff that appeared to do nothing at all.
+
+    Driven by emptying the string, which is the reachable version of
+    this - `/use cat bed` is refused outside the announcement channel,
+    so the channel is always there to post to.
+    """
+    original = bot.phrasing.default_say
+
+    async def blank_the_public_line(key, **tokens):
+        return "" if key == "bed_yield.public" else await original(key, **tokens)
+
+    await at_drop_two(channel)
+    monkeypatch.setattr(bot.phrasing, "default_say", blank_the_public_line)
+
+    interaction = await fluff(channel)
+
     assert "You dislodged something from the bed" in replies(interaction)
+    assert not interaction.withdrawn

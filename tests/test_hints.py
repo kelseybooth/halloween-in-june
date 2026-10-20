@@ -564,3 +564,105 @@ async def test_crossing_fifty_by_petting_does_not_offer_what_it_earned(channel, 
 
     assert "A new quest is available" not in reply
     assert "a_paw_in_the_door" in await database.player_achievements_of(GUILD_A, ALICE)
+
+
+# --------------------------------------------------------------------------
+# Drop 2's carrying rungs: /inventory and /drop
+# --------------------------------------------------------------------------
+
+
+async def at_drop_two(channel):
+    await resolve.set_current_drop(GUILD_A, 2)
+    await content_loader.load_content(content_module.load_files())
+    for toy in ("feather_wand", "crinkle_ball"):
+        await database.place_in_room(
+            GUILD_A, content_module.CHANNEL_ROOM, toy, 1
+        )
+
+
+async def take(channel, thing="feather wand", who=ALICE):
+    return said(await run(channel, bot.take, thing, who=who))
+
+
+async def inventory(channel, who=ALICE):
+    return said(await run(channel, bot.inventory, who=who))
+
+
+async def test_picking_up_a_toy_teaches_the_bag(channel):
+    """The rung the drop was missing: a player who has just acquired
+    their first object has nowhere to see that they are holding it."""
+    await at_drop_two(channel)
+
+    assert "check what you're carrying with /inventory" in await take(channel)
+
+
+async def test_it_does_not_displace_the_use_rung(channel):
+    """**Its own message rather than a second line on the reply.**
+
+    The rail allows one hint per message because two stacked read as a
+    tutorial - but `/use` is the only rung `/take` can offer, so
+    queueing this one behind it would hold it until the player happened
+    to take a second toy. Both arrive, in two messages.
+    """
+    await at_drop_two(channel)
+
+    reply = await take(channel)
+
+    assert "Give this toy a shake. Try /use feather wand." in reply
+    assert "check what you're carrying with /inventory" in reply
+
+
+async def test_the_bag_rung_fires_once(channel):
+    await at_drop_two(channel)
+    await take(channel)
+
+    assert "check what you're carrying" not in await take(channel, "crinkle ball")
+
+
+async def test_opening_the_bag_first_retires_it(channel):
+    """The invariant: never recommend an action already taken. A player
+    who found `/inventory` by themselves is not told about it."""
+    await at_drop_two(channel)
+    await inventory(channel)
+
+    assert "check what you're carrying" not in await take(channel)
+
+
+async def test_the_bag_names_what_to_put_down(channel):
+    """`/drop feather wand` is a command they can retype. `/drop
+    <thing>` is a syntax lesson."""
+    await at_drop_two(channel)
+    await take(channel)
+
+    reply = await inventory(channel)
+
+    assert "you can use /drop, like /drop feather wand" in reply
+
+
+async def test_an_empty_bag_is_not_told_to_drop_anything(channel):
+    """The hint names an item, and there is nothing to name."""
+    await at_drop_two(channel)
+
+    assert "/drop" not in await inventory(channel)
+
+
+async def test_dropping_first_retires_the_drop_rung(channel):
+    await at_drop_two(channel)
+    await take(channel)
+    await run(channel, bot.drop, "feather wand")
+    await take(channel, "crinkle ball")
+
+    assert "you can use /drop" not in await inventory(channel)
+
+
+async def test_neither_rung_fires_before_drop_two(channel):
+    """`/inventory` and `/drop` are drop 2's. A hint naming a command
+    that is not in the player's slash menu is the bug the rail's
+    `needs_commands` exists to prevent."""
+    assert await hints.reachable(GUILD_A, hints.CHECK_INVENTORY) is False
+    assert await hints.reachable(GUILD_A, hints.DROP_SOMETHING) is False
+
+    await at_drop_two(channel)
+
+    assert await hints.reachable(GUILD_A, hints.CHECK_INVENTORY) is True
+    assert await hints.reachable(GUILD_A, hints.DROP_SOMETHING) is True

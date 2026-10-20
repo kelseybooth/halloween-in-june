@@ -64,6 +64,11 @@ def image_of(interaction, which: int = -1) -> str | None:
     so "the last thing sent" stopped meaning "the reply to the pet" on
     four pets in five.
     """
+    if not interaction.sent:
+        # `/take` and `/drop` say their one line to the room and send
+        # the player nothing, so there is no embed to carry an image -
+        # which is the answer these tests are looking for.
+        return None
     embed = interaction.sent[which][1].get("embed")
     if embed is None or not embed.image:
         return None

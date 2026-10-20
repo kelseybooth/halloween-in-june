@@ -695,7 +695,8 @@ async def test_a_raising_predicate_does_not_fail_the_command(playing, halloween)
     interaction = FakeInteraction(ALICE, GUILD_A, guild=halloween)
     await bot.take.callback(interaction, "herbs")
 
-    assert "handful of herbs" in interaction.sent[0][0]
+    # `/take` says its line to the room, so that is where to read it.
+    assert any("handful of herbs" in line for line in interaction.channel.posted)
     assert await database.carried_of(ALICE, GUILD_A, "herbs") == 1
 
 

@@ -48,7 +48,7 @@ def test_the_shipped_content_parses():
     c = content.load_files()
     assert len(c.rooms) == 10  # nine rooms and the channel
     assert len(c.things) == 158  # ...and drop 1's ten scenery
-    assert len(c.defaults) == 83  # two added, the channel prefix retired
+    assert len(c.defaults) == 85  # the two carrying hints in, take.public back out
     assert len(c.drops) == 4      # 0 and 1 are built; 2 and 3 are named
     assert len(c.restocks) == 4  # the toy channel row joined them
 

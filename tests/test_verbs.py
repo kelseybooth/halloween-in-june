@@ -39,6 +39,19 @@ async def drop(user_id=ALICE, guild_id=GUILD_A, thing="spoon"):
     return interaction
 
 
+def heard(interaction) -> str:
+    """What the room was told, plus anything said privately.
+
+    `/take` and `/drop` say one third-person line and say it to the
+    room, so most of what these tests assert on is no longer in
+    `interaction.reply`. Refusals and hints are still private, so both
+    halves are joined and the tests read whichever applies.
+    """
+    posted = list(getattr(interaction.channel, "posted", []))
+    private = [t for t, _ in interaction.sent if t]
+    return " ".join(posted + private)
+
+
 async def bag(user_id=ALICE, guild_id=GUILD_A):
     return dict(await database.get_carried(user_id, guild_id))
 
@@ -61,13 +74,38 @@ async def test_taking_puts_it_in_the_bag(house):
     interaction = await take()
 
     assert await bag() == {"spoon": 1}
-    assert "spoon" in interaction.reply
+    assert "spoon" in heard(interaction)
 
 
-async def test_taking_is_public(house):
-    """The room is shared, so the others need to see the last of something go."""
-    await content_loader.load_content(a_house(a_thing("spoon")))
-    assert (await take()).was_private is False
+async def test_taking_is_announced_in_the_room(house):
+    """The room is shared, so the others need to see the last of
+    something go.
+
+    **It used to be the reply itself that was public**, and every
+    written `take` string is second person - "You pocket the spice
+    jar" - because it was written for the person who typed the
+    command. The room was being told that *it* had picked something up.
+    The flavour is now private and the room gets a line naming who.
+    """
+    await content_loader.load_content(a_house(a_thing("spoon", name="spoon")))
+
+    interaction = await take()
+    posted = " ".join(interaction.channel.posted)
+
+    assert "picks up the spoon" in posted
+    assert "You" not in posted
+    assert interaction.withdrawn, "nothing private follows, so the spinner goes"
+
+
+async def test_the_deferral_is_private_like_every_reply_under_it(house):
+    """A public deferral leaves a public "thinking" placeholder that
+    only a public followup resolves. Every `/take` reply is private
+    now - the refusals always were - so a public one would hang."""
+    await content_loader.load_content(a_house(a_thing("spoon", name="spoon")))
+
+    interaction = await take()
+
+    assert interaction.defer_kwargs.get("ephemeral") is True
 
 
 async def test_the_reply_uses_the_things_own_take_text(house):
@@ -79,19 +117,21 @@ async def test_the_reply_uses_the_things_own_take_text(house):
                     entity_id="spoon",
                     state="default",
                     since_drop=1,
-                    text={"look": "A spoon.", "take": "You pocket it, guiltily."},
+                    text={"look": "A spoon.", "take": "{player} pockets it, guiltily."},
                 )
             ],
         )
     )
-    assert "guiltily" in (await take()).reply
+    assert "guiltily" in heard(await take())
 
 
 async def test_a_blank_take_cell_falls_through_to_the_house_default(house):
     """Most things have no take text, and that is the intended shape."""
     await content_loader.load_content(a_house(a_thing("spoon", name="spoon")))
 
-    assert (await take()).reply == "You pick up the spoon and tuck it into your bag."
+    assert heard(await take()) == (
+        "Player 100000000000000001 picks up the spoon and tucks it into their bag."
+    )
 
 
 async def test_taking_from_a_source_hands_over_what_it_yields(house):
@@ -130,14 +170,17 @@ async def test_the_source_reply_uses_the_yielded_objects_text(house):
                     yields="can", takeable=False),
             thing_text=[
                 TextRow(entity_id="can", state="default", since_drop=1,
-                        text={"look": "A tin.", "take": "You take a tin from the crate."}),
+                        text={"look": "A tin.",
+                              "take": "{player} takes a tin from the crate."}),
                 TextRow(entity_id="crate", state="default", since_drop=1,
                         text={"look": "A crate."}),
             ],
         )
     )
 
-    assert "You take a tin from the crate." == (await take(thing="beans")).reply
+    assert heard(await take(thing="beans")) == (
+        "Player 100000000000000001 takes a tin from the crate."
+    )
 
 
 async def test_taking_the_only_copy_empties_the_room_for_everyone(house):
@@ -282,20 +325,28 @@ async def test_dropping_puts_it_back_in_the_room(house):
 
     interaction = await drop()
     assert await bag() == {}
-    assert "spoon" in interaction.reply
+    assert "spoon" in heard(interaction)
 
 
-async def test_dropping_is_public(house):
-    await content_loader.load_content(a_house(a_thing("spoon")))
+async def test_dropping_is_announced_in_the_room(house):
+    """Putting something down is the half of carrying the room most
+    needs to see: it is how a thing becomes available to anybody else."""
+    await content_loader.load_content(a_house(a_thing("spoon", name="spoon")))
     await take()
-    assert (await drop()).was_private is False
+
+    interaction = await drop()
+    posted = " ".join(interaction.channel.posted)
+
+    assert "sets the spoon down" in posted
+    assert "You" not in posted
+    assert interaction.withdrawn
 
 
 async def test_a_blank_drop_cell_falls_through_to_the_default(house):
     await content_loader.load_content(a_house(a_thing("spoon", name="spoon")))
     await take()
 
-    assert (await drop()).reply == "You set the spoon down."
+    assert heard(await drop()) == "Player 100000000000000001 sets the spoon down."
 
 
 async def test_dropping_what_you_do_not_have(house):
@@ -389,7 +440,7 @@ async def test_taking_the_nachos_from_the_kitchen(house):
 
     interaction = await take(thing="nachos")
     assert "nacho" in (await bag()).popitem()[0].lower()
-    assert interaction.reply
+    assert heard(interaction)
 
 
 async def test_the_gourmet_tin_is_capped_at_one(house):
@@ -826,7 +877,7 @@ async def test_a_world_verb_works_in_a_room_thread(house, verb, arg):
     await content_loader.load_content(a_house(a_thing("spoon")))
 
     # Threads are named after the room, not its id.
-    reply = (await command(verb(), arg, a_room_thread("Entryway"))).reply
+    reply = heard(await command(verb(), arg, a_room_thread("Entryway")))
 
     assert "only works inside the house" not in reply
 

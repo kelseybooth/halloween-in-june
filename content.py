@@ -631,6 +631,7 @@ def validate(content: Content) -> list[str]:
     problems += _check_scenery_is_named_in_prose(content)
     problems += _check_scenery_aliases_are_unique(content)
     problems += _check_visibility_gates(content)
+    problems += _check_public_lines_name_the_player(content)
     problems += _check_emoji_groups(content)
     problems += _check_achievements(content)
     problems += _check_quests(content)
@@ -1329,6 +1330,39 @@ def _bolded_in(text: str) -> list[str]:
     return [
         phrase.strip().strip(".,;:!?'\"").lower()
         for phrase in _BOLDED.findall(text or "")
+    ]
+
+
+# The verbs whose success line is posted to the room rather than sent to
+# the player who typed it. Both are read by everybody present, so both
+# have to name whoever acted.
+PUBLIC_VERBS = ("take", "drop")
+
+
+def _check_public_lines_name_the_player(content: Content) -> list[str]:
+    """A `take` or `drop` string must say who did it.
+
+    **These two are the only texts in the game with an audience other
+    than the person who typed the command**, and for a release they did
+    not know it: every one was written in the second person - "You
+    pocket the spice jar" - and posted to the room, which told everyone
+    present that *they* had picked something up.
+
+    All thirty-two were rewritten. This is what stops the thirty-third
+    arriving in the old voice, which is the easy mistake to make: every
+    other text in these files is second person and correct to be.
+
+    Checked on `{player}` rather than on the absence of "you", because
+    the token is the thing that makes the line true for its audience,
+    and a writer who has used it has understood who is reading.
+    """
+    return [
+        f"{row.entity_id} has a {verb} text with no {{player}} in it: "
+        f"{verb} lines are posted to the room, so they name who acted "
+        "rather than addressing them as 'you'"
+        for row in content.thing_text
+        for verb in PUBLIC_VERBS
+        if row.text.get(verb) and "{player}" not in row.text[verb]
     ]
 
 

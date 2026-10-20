@@ -2096,6 +2096,7 @@ async def _finish_use(interaction, state, found) -> None:
             announce=False,
         )
 
+    privately = True
     if found.thing_id == world.CAT_BED:
         # A successful fluff shakes something out of the bed, once per
         # player ever. The yield is what gives drop 2 something to
@@ -2104,16 +2105,30 @@ async def _finish_use(interaction, state, found) -> None:
         if effect is not None and effect.relationship is not None:
             dislodged = await world.dislodge_from_bed(guild_id, user.id)
 
-        carried = any(a.achievement_id in HINT_FOR_ACHIEVEMENT for a in earned)
-        nudge = hints.BED_YIELD if dislodged else hints.TRY_LOOK
-        reply = hints.beneath(
-            reply,
-            None if carried else await hints.after(guild_id, user.id, nudge),
-        )
-        if dislodged:
-            await _announce_bed_yield(interaction)
+        if dislodged and await _announce_bed_yield(interaction):
+            # **The public line is the whole event now.** It says both
+            # halves - something fell out, and the cat took the bed
+            # anyway - so the private fluff text underneath it was the
+            # same beat told twice.
+            #
+            # The `BED_YIELD` rung is deliberately *not* spent here. It
+            # rides a private message, there is no longer one to ride,
+            # and burning it would retire a nudge nobody read. The
+            # public line already says something fell out, which is
+            # what the hint was for.
+            privately = False
+        else:
+            carried = any(a.achievement_id in HINT_FOR_ACHIEVEMENT for a in earned)
+            nudge = hints.BED_YIELD if dislodged else hints.TRY_LOOK
+            reply = hints.beneath(
+                reply,
+                None if carried else await hints.after(guild_id, user.id, nudge),
+            )
 
-    await interaction.followup.send(reply, ephemeral=True)
+    if privately:
+        await interaction.followup.send(reply, ephemeral=True)
+    else:
+        await _dismiss(interaction)
 
     if effect and effect.public:
         await _post_in_room(interaction, state.current_room, reply)
@@ -2400,14 +2415,21 @@ async def _play_with_toy(interaction, state, found) -> None:
     else:
         reply = await _a_play_refusal(found.name)
 
-    await interaction.followup.send(reply, ephemeral=True)
-
     # The best moment in the drop, and the only thing that makes other
     # players visible to each other in a phase with no rooms. Refusals
     # stay private: at 3.2 attempts per success the channel would be a
     # wall of a cat declining to move.
-    if succeeded:
-        await _announce_play(interaction, reply)
+    #
+    # **A success is public and nothing else.** It used to be both, and
+    # the player who had just played with the cat read the same
+    # sentence twice - once in the spinner and once in the channel
+    # underneath it. The private copy is kept only for the case where
+    # the public one did not go out, because the rate limit can still
+    # swallow it and a silent success reads as being ignored.
+    if succeeded and await _announce_play(interaction, reply):
+        await _dismiss(interaction)
+    else:
+        await interaction.followup.send(reply, ephemeral=True)
 
     earned = await _fire(
         achievements.Context(
@@ -2435,22 +2457,88 @@ async def _play_with_toy(interaction, state, found) -> None:
     await _announce_all(earned, interaction=interaction)
 
 
-async def _announce_bed_yield(interaction) -> None:
-    """The bed's one public line.
+async def _dismiss(interaction) -> None:
+    """Take back the ephemeral "thinking" placeholder.
+
+    **Needed whenever a public line replaces a private one.** Every
+    world verb defers with `thinking=True`, which puts a spinner in
+    front of the player that only a followup clears. Simply not sending
+    one leaves them looking at it until Discord gives up and says the
+    application did not respond - so an action whose whole output is
+    public has to withdraw the placeholder rather than ignore it.
+    """
+    try:
+        await interaction.delete_original_response()
+    except discord.HTTPException:
+        # The reply is already out in the channel; a placeholder that
+        # outlives it is untidy, not broken.
+        log.warning("Could not withdraw the deferred reply", exc_info=True)
+
+
+async def _say_in_the_room(interaction, line: str, nudges=()) -> None:
+    """Post what happened where the room can read it, and nudge privately.
+
+    **`/take` and `/drop` say one sentence, to everybody.** They used to
+    post their whole reply publicly while every written string was
+    second person - "You pocket the spice jar" - so the room was told
+    that *it* had picked something up. The strings are third person
+    now and name the player, which makes one public line correct for
+    the player and the room at once. There is no private copy to drift
+    from it.
+
+    Hints are the exception and stay private: they are advice to one
+    player about what to type next, and the rest of the room neither
+    needs them nor should be told how far along somebody else is.
+
+    No rate limit on the line. Unlike petting there is a finite amount
+    to pick up and put down, so the room cannot be flooded by somebody
+    enjoying themselves.
+    """
+    channel = interaction.channel
+    posted = False
+    if channel is not None and hasattr(channel, "send") and line:
+        await _post_quietly(channel, line)
+        posted = True
+
+    if posted:
+        # Nothing private follows, so the deferred placeholder has to be
+        # withdrawn or the player is left watching a spinner.
+        await _dismiss(interaction)
+    else:
+        # The room could not be reached. Better the player reads their
+        # own name in an ephemeral reply than that the verb appears to
+        # have done nothing.
+        await interaction.followup.send(line, ephemeral=True)
+
+    for nudge in nudges:
+        if nudge:
+            await interaction.followup.send(nudge, ephemeral=True)
+
+
+async def _announce_bed_yield(interaction) -> bool:
+    """The bed's one public line. True if it actually went out.
 
     The work order has it *replacing* the ordinary public fluff post.
     There is nothing to replace: `/use` on a thing is private except
     the staircase plank, so the fluff has never had a public line and
     this is the bed's only one.
+
+    **The caller needs to know whether it posted**, because the private
+    fluff text is now suppressed in favour of it. A yield that says
+    nothing publicly *and* nothing privately is a fluff that appears to
+    have done nothing at all, which is worse than the duplication this
+    replaced.
     """
     channel = interaction.channel
     if channel is None or not hasattr(channel, "send"):
-        return
+        return False
     line = await phrasing.default_say(
         "bed_yield.public", player=interaction.user.display_name
     )
-    if line:
-        await _post_quietly(channel, line)
+    if not line:
+        return False
+    await _post_quietly(channel, line)
+    return True
 
 
 async def _a_play_refusal(name: str) -> str:
@@ -2466,24 +2554,31 @@ async def _a_play_refusal(name: str) -> str:
     return phrasing.fill(random.choice(texts), name=name)
 
 
-async def _announce_play(interaction, line: str) -> None:
-    """The public half of a successful play.
+async def _announce_play(interaction, line: str) -> bool:
+    """The public half of a successful play. True if it went out.
 
     Its own rate-limit budget rather than the pet line's, so a player
     who has just spent their petting allowance still gets a line for
     the rarer and better event. In practice it will almost never bite:
     the ten-minute cooldown already caps successes at about three per
     half hour.
+
+    **It is now the only half**, which is why the caller is told
+    whether it posted. The rate limit can still swallow it, and a
+    success that says nothing anywhere would read as the cat ignoring
+    you - the one thing a success must never look like.
     """
     channel = interaction.channel
     if channel is None or not hasattr(channel, "send"):
-        return
+        return False
     which = _public_play_line(
         interaction.guild_id, interaction.user.id, getattr(channel, "id", 0),
         await database.server_now(interaction.guild_id),
     )
-    if which is not None:
-        await _post_quietly(channel, line)
+    if which is None:
+        return False
+    await _post_quietly(channel, line)
+    return True
 
 
 async def _hold_to_use_hint(interaction, found) -> None:
@@ -3095,6 +3190,11 @@ async def inventory(interaction: discord.Interaction) -> None:
         await interaction.followup.send(INVENTORY_ERROR_MESSAGE, ephemeral=True)
         return
 
+    # Recorded whether or not the bag has anything in it: the lesson is
+    # what `/inventory` is, and a player who has opened an empty bag has
+    # had it. This retires `hint.check_inventory`.
+    await hints.did(interaction.guild_id, interaction.user.id, hints.DID_INVENTORY)
+
     if not items:
         await interaction.followup.send(
             await phrasing.default_say("inventory.empty"), ephemeral=True
@@ -3104,9 +3204,23 @@ async def inventory(interaction: discord.Interaction) -> None:
     # The same rendering as a room listing, so a bag of ten herbs reads the way
     # ten herbs on the floor read. Truncation applies here too: nothing caps how
     # much a player can carry.
-    await interaction.followup.send(
-        await phrasing.listing(items, prefix_key="inventory.prefix"), ephemeral=True
+    reply = await phrasing.listing(items, prefix_key="inventory.prefix")
+
+    # **Only with something in the bag**, because the hint names one:
+    # "like /drop feather wand" is a command they can retype, and there
+    # is nothing to put in it when the bag is empty. `items` is already
+    # in the order the listing prints, so the example is the first thing
+    # they can see.
+    reply = hints.beneath(
+        reply,
+        await hints.after(
+            interaction.guild_id,
+            interaction.user.id,
+            hints.DROP_SOMETHING,
+            name=items[0][0],
+        ),
     )
+    await interaction.followup.send(reply, ephemeral=True)
 
 
 # --------------------------------------------------------------------------
@@ -3156,8 +3270,14 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
     Scoped to the room, never the bag. A player carrying chicken beside the
     salmon cupboard who types `/take cat food` gets the salmon, and is not asked
     a question they could not answer.
+
+    **Deferred privately**, because every reply below it is private now -
+    the refusals always were, and the success became so when the room
+    got its own third-person line. A public deferral leaves a public
+    "thinking" placeholder that only a public followup can resolve, so
+    the old mix quietly left one hanging after every refusal.
     """
-    await interaction.response.defer(thinking=True)
+    await interaction.response.defer(ephemeral=True, thinking=True)
     user, guild_id = interaction.user, interaction.guild_id
 
     try:
@@ -3210,23 +3330,39 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
         name = taken_row.name if taken_row else found.name
         reply = (
             await phrasing.say(
-                guild_id, taken, "take", fallback="take.default", name=name
+                guild_id, taken, "take", fallback="take.default",
+                name=name, player=user.display_name,
             )
-            or f"You take the {name}."
+            or f"{user.display_name} takes the {name}."
         )
 
         # `{name}` here is **the toy they just picked up**, not whichever
         # is lying in the channel: they are holding it, and naming a
         # different one would be nonsense.
+        nudges = []
         if taken_row is not None and taken_row.type == world.TOY:
             await hints.did(guild_id, user.id, hints.DID_LOOK_TOY)
             await hints.did(guild_id, user.id, hints.DID_TAKE_TOY)
-            reply = hints.beneath(
-                reply,
-                await hints.after(guild_id, user.id, hints.USE_TOY, name=name),
+            nudges.append(
+                await hints.after(guild_id, user.id, hints.USE_TOY, name=name)
+            )
+            # **A second message rather than a second line.** The rail
+            # allows one hint per message because two stacked read as a
+            # tutorial - but picking up your first object *is* the
+            # tutorial moment for carrying, and `/use` is the only rung
+            # `/take` can offer, so queueing this one behind it would
+            # hold it until the player happened to take a second toy.
+            nudges.append(
+                await hints.after(
+                    guild_id, user.id, hints.CHECK_INVENTORY, quests=False
+                )
             )
 
-        await interaction.followup.send(reply)
+        # **The line is public and nothing else.** Every written take
+        # string is third person and names the player, so there is one
+        # sentence and the room is its audience - the player reads it
+        # there like everybody else.
+        await _say_in_the_room(interaction, reply, nudges)
 
         # `source_id` is what separates gardening from scavenging: taking herbs
         # from the herb garden earns Green Thumb, picking up a herbs somebody
@@ -3297,8 +3433,14 @@ async def _cannot_take(
 @app_commands.guild_only()
 @app_commands.describe(thing="What to put down.")
 async def drop(interaction: discord.Interaction, thing: str) -> None:
-    """Drop one copy of something you are carrying, loose in the room."""
-    await interaction.response.defer(thinking=True)
+    """Drop one copy of something you are carrying, loose in the room.
+
+    **Deferred privately**, like `/take` and for the same reason: every
+    reply below it is private, and a public deferral leaves a public
+    "thinking" placeholder that only a public followup resolves. The
+    one public thing `/drop` says goes to the room directly.
+    """
+    await interaction.response.defer(ephemeral=True, thinking=True)
     user, guild_id = interaction.user, interaction.guild_id
 
     try:
@@ -3345,11 +3487,22 @@ async def drop(interaction: discord.Interaction, thing: str) -> None:
             )
             return
 
-        await interaction.followup.send(
+        # Retires `hint.drop_something`. Recorded here rather than
+        # inferred from an empty bag, because putting one of three
+        # things down is just as much having learnt the verb.
+        await hints.did(guild_id, user.id, hints.DID_DROP)
+
+        # The same shape as `/take`: one third-person line, to the room.
+        # Putting something down is the half of carrying the room most
+        # needs to see - it is how a thing becomes available to anybody
+        # else - so it would be the stranger of the two to keep quiet.
+        await _say_in_the_room(
+            interaction,
             await phrasing.say(
-                guild_id, found.thing_id, "drop", fallback="drop.default", name=found.name
+                guild_id, found.thing_id, "drop", fallback="drop.default",
+                name=found.name, player=user.display_name,
             )
-            or f"You set the {found.name} down.",
+            or f"{user.display_name} sets the {found.name} down.",
         )
 
         await _fire(
