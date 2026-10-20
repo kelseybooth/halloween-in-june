@@ -2475,22 +2475,44 @@ async def _dismiss(interaction) -> None:
         log.warning("Could not withdraw the deferred reply", exc_info=True)
 
 
-async def _announce_take(interaction, name: str) -> None:
-    """Tell the room who picked what up.
+async def _say_in_the_room(interaction, line: str, nudges=()) -> None:
+    """Post what happened where the room can read it, and nudge privately.
 
-    Third person and plain, because the player already has the written
-    line and this one exists for everybody else. No rate limit: unlike
-    petting there is a finite amount to pick up, so the channel cannot
-    be flooded by somebody enjoying themselves.
+    **`/take` and `/drop` say one sentence, to everybody.** They used to
+    post their whole reply publicly while every written string was
+    second person - "You pocket the spice jar" - so the room was told
+    that *it* had picked something up. The strings are third person
+    now and name the player, which makes one public line correct for
+    the player and the room at once. There is no private copy to drift
+    from it.
+
+    Hints are the exception and stay private: they are advice to one
+    player about what to type next, and the rest of the room neither
+    needs them nor should be told how far along somebody else is.
+
+    No rate limit on the line. Unlike petting there is a finite amount
+    to pick up and put down, so the room cannot be flooded by somebody
+    enjoying themselves.
     """
     channel = interaction.channel
-    if channel is None or not hasattr(channel, "send"):
-        return
-    line = await phrasing.default_say(
-        "take.public", player=interaction.user.display_name, name=name
-    )
-    if line:
+    posted = False
+    if channel is not None and hasattr(channel, "send") and line:
         await _post_quietly(channel, line)
+        posted = True
+
+    if posted:
+        # Nothing private follows, so the deferred placeholder has to be
+        # withdrawn or the player is left watching a spinner.
+        await _dismiss(interaction)
+    else:
+        # The room could not be reached. Better the player reads their
+        # own name in an ephemeral reply than that the verb appears to
+        # have done nothing.
+        await interaction.followup.send(line, ephemeral=True)
+
+    for nudge in nudges:
+        if nudge:
+            await interaction.followup.send(nudge, ephemeral=True)
 
 
 async def _announce_bed_yield(interaction) -> bool:
@@ -3308,45 +3330,39 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
         name = taken_row.name if taken_row else found.name
         reply = (
             await phrasing.say(
-                guild_id, taken, "take", fallback="take.default", name=name
+                guild_id, taken, "take", fallback="take.default",
+                name=name, player=user.display_name,
             )
-            or f"You take the {name}."
+            or f"{user.display_name} takes the {name}."
         )
 
         # `{name}` here is **the toy they just picked up**, not whichever
         # is lying in the channel: they are holding it, and naming a
         # different one would be nonsense.
-        carrying_hint = None
+        nudges = []
         if taken_row is not None and taken_row.type == world.TOY:
             await hints.did(guild_id, user.id, hints.DID_LOOK_TOY)
             await hints.did(guild_id, user.id, hints.DID_TAKE_TOY)
-            reply = hints.beneath(
-                reply,
-                await hints.after(guild_id, user.id, hints.USE_TOY, name=name),
+            nudges.append(
+                await hints.after(guild_id, user.id, hints.USE_TOY, name=name)
             )
-            # **Its own message, not stacked under the one above.** The
-            # rail allows one line per message because two read as a
-            # tutorial rather than a nudge - but picking up your first
-            # object *is* the tutorial moment for carrying, and `/use`
-            # is the only rung `/take` can offer, so queueing this one
-            # behind it would hold it until the player happened to take
-            # a second toy. `_hold_to_use_hint` already sends a rung as
-            # a message of its own; this is the same shape.
-            carrying_hint = await hints.after(
-                guild_id, user.id, hints.CHECK_INVENTORY, quests=False
+            # **A second message rather than a second line.** The rail
+            # allows one hint per message because two stacked read as a
+            # tutorial - but picking up your first object *is* the
+            # tutorial moment for carrying, and `/use` is the only rung
+            # `/take` can offer, so queueing this one behind it would
+            # hold it until the player happened to take a second toy.
+            nudges.append(
+                await hints.after(
+                    guild_id, user.id, hints.CHECK_INVENTORY, quests=False
+                )
             )
 
-        # **Two messages, because they have two audiences.** Every
-        # written `take` string is second person - "You pocket the spice
-        # jar", "You cut a handful of herbs" - because it was written
-        # for the person who typed the command. Posting it to the room
-        # told everybody else that *they* had picked something up. The
-        # flavour now goes to the player and the room gets a line that
-        # names them.
-        await interaction.followup.send(reply, ephemeral=True)
-        if carrying_hint:
-            await interaction.followup.send(carrying_hint, ephemeral=True)
-        await _announce_take(interaction, name)
+        # **The line is public and nothing else.** Every written take
+        # string is third person and names the player, so there is one
+        # sentence and the room is its audience - the player reads it
+        # there like everybody else.
+        await _say_in_the_room(interaction, reply, nudges)
 
         # `source_id` is what separates gardening from scavenging: taking herbs
         # from the herb garden earns Green Thumb, picking up a herbs somebody
@@ -3417,8 +3433,14 @@ async def _cannot_take(
 @app_commands.guild_only()
 @app_commands.describe(thing="What to put down.")
 async def drop(interaction: discord.Interaction, thing: str) -> None:
-    """Drop one copy of something you are carrying, loose in the room."""
-    await interaction.response.defer(thinking=True)
+    """Drop one copy of something you are carrying, loose in the room.
+
+    **Deferred privately**, like `/take` and for the same reason: every
+    reply below it is private, and a public deferral leaves a public
+    "thinking" placeholder that only a public followup resolves. The
+    one public thing `/drop` says goes to the room directly.
+    """
+    await interaction.response.defer(ephemeral=True, thinking=True)
     user, guild_id = interaction.user, interaction.guild_id
 
     try:
@@ -3470,11 +3492,17 @@ async def drop(interaction: discord.Interaction, thing: str) -> None:
         # things down is just as much having learnt the verb.
         await hints.did(guild_id, user.id, hints.DID_DROP)
 
-        await interaction.followup.send(
+        # The same shape as `/take`: one third-person line, to the room.
+        # Putting something down is the half of carrying the room most
+        # needs to see - it is how a thing becomes available to anybody
+        # else - so it would be the stranger of the two to keep quiet.
+        await _say_in_the_room(
+            interaction,
             await phrasing.say(
-                guild_id, found.thing_id, "drop", fallback="drop.default", name=found.name
+                guild_id, found.thing_id, "drop", fallback="drop.default",
+                name=found.name, player=user.display_name,
             )
-            or f"You set the {found.name} down.",
+            or f"{user.display_name} sets the {found.name} down.",
         )
 
         await _fire(

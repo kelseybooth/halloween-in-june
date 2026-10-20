@@ -416,6 +416,21 @@ def test_unbolding_a_scenery_noun_fails():
     assert any("scenery ruts is bolded nowhere" in p for p in _broken(mangle))
 
 
+def test_a_second_person_take_line_fails():
+    """`/take` and `/drop` are the only texts in the game with an
+    audience other than the person who typed the command, and for a
+    release they did not know it. All thirty-two were rewritten; this
+    is what stops the thirty-third arriving in the old voice."""
+
+    def mangle(parsed):
+        for row in parsed.thing_text:
+            if row.text.get("take"):
+                row.text["take"] = "You pocket it, guiltily."
+                return
+
+    assert any("posted to the room" in p for p in _broken(mangle))
+
+
 def test_a_misspelled_gate_fails():
     """The enum has one member, which is exactly why this is checked. A
     typo in that one word raises nothing: the fragment loads, the gate
