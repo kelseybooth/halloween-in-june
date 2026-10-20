@@ -47,8 +47,8 @@ def problems_matching(c, fragment):
 def test_the_shipped_content_parses():
     c = content.load_files()
     assert len(c.rooms) == 10  # nine rooms and the channel
-    assert len(c.things) == 148  # the cat bed, and drop 2's two toys
-    assert len(c.defaults) == 82  # V3 added forty-four strings
+    assert len(c.things) == 158  # ...and drop 1's ten scenery
+    assert len(c.defaults) == 83  # two added, the channel prefix retired
     assert len(c.drops) == 4      # 0 and 1 are built; 2 and 3 are named
     assert len(c.restocks) == 4  # the toy channel row joined them
 

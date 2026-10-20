@@ -250,6 +250,8 @@ def _rows_for(parsed: Content) -> dict[str, list[dict]]:
                 "room_id": r.entity_id,
                 "state": r.state,
                 "since_drop": r.since_drop,
+                "fragment": r.fragment,
+                "visible_when": r.visible_when,
                 "look": r.text.get("look"),
             }
             for r in parsed.room_text

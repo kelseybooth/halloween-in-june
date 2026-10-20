@@ -24,6 +24,13 @@ from content import Content, Drop, Room, TextRow
 
 CAT = "eunoia"
 BED = "cat_bed"
+# Drop 1's channel scenery: ten nouns the description points at. Listed
+# rather than derived from the files, so adding an eleventh is a visible
+# edit here instead of a set that silently agrees with itself.
+SCENERY = frozenset({
+    "road", "fog", "branches", "fence", "ruts",
+    "ditch", "leaves", "wasp_nest", "field", "tire_tracks",
+})
 
 
 @pytest.fixture
@@ -127,10 +134,17 @@ async def test_drop_zero_is_the_cat_and_nothing_else(started):
     assert await resolve.visible_thing_ids(GUILD_A) == {CAT}
 
 
-async def test_drop_one_adds_the_bed_and_still_no_house(started):
+async def test_drop_one_adds_the_bed_and_the_scenery_and_still_no_house(started):
+    """The bed is the mechanic and the scenery is the scene.
+
+    Drop 1 shipped with the bed alone, and playtesters reported it as
+    empty - `/look` got them excited and offered one noun. The ten
+    scenery rows are the fix, and they belong in this inventory because
+    this is the test that says what a drop *is*.
+    """
     await resolve.set_current_drop(GUILD_A, 1)
 
-    assert await resolve.visible_thing_ids(GUILD_A) == {CAT, BED}
+    assert await resolve.visible_thing_ids(GUILD_A) == {CAT, BED} | SCENERY
 
 
 async def test_the_house_waits_for_its_own_drop(started):
@@ -332,7 +346,7 @@ async def test_two_servers_sit_on_different_drops(started):
     await resolve.set_current_drop(GUILD_B, 1)
 
     assert await resolve.visible_thing_ids(GUILD_A) == {CAT}
-    assert await resolve.visible_thing_ids(GUILD_B) == {CAT, BED}
+    assert await resolve.visible_thing_ids(GUILD_B) == {CAT, BED} | SCENERY
 
 
 async def test_advancing_one_leaves_the_other_where_it_was(started):

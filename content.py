@@ -14,6 +14,7 @@ whole set is known good - a half-loaded house is worse than a stale one.
 from __future__ import annotations
 
 import csv
+import re
 import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -82,13 +83,24 @@ RESTOCK_PLACEMENTS = {"container", "room", "random"}
 # thirteenth toy needs no restock change.
 CLASS_PREFIX = "type:"
 
+# What a player must have done for a fragment to be visible to them.
+# One member on purpose - see `RoomText.visible_when`.
+LOOKED_AT_BED = "looked_at_bed"
+VISIBILITY_GATES = {LOOKED_AT_BED}
+
 # The five kinds of thing. `exit` moves a player; `source` is an
 # inexhaustible supply that yields objects; `object` can be carried;
 # `fixture` is scenery that exists so `/look` works on anything the prose
 # mentions; `toy` is an object the cat plays with, and is its own type
 # because the restock cap, the play ramp and three achievements all count
 # toys as a class rather than by name.
-THING_TYPES = {"object", "fixture", "exit", "source", "toy"}
+THING_TYPES = {"object", "fixture", "exit", "source", "toy", "scenery"}
+
+# Scenery is the outdoors: things that exist so `/look` works on what the
+# prose points at, and that can never be picked up or used. A class
+# rather than a list of ids, so the loader's checks and any later
+# outdoor set join it without naming rows.
+SCENERY = "scenery"
 
 # Toys are carried and dropped like any other object.
 CARRIABLE_TYPES = {"object", "toy"}
@@ -281,6 +293,12 @@ class TextRow:
     state: str
     since_drop: int
     text: dict[str, str]
+    # Which sentence of a room's paragraph this is, and what a player
+    # must have done to see it. Both are the channel's two-stage
+    # description; every other row in the game is fragment 0 with no
+    # gate and reads exactly as it did.
+    fragment: int = 0
+    visible_when: str | None = None
 
 
 @dataclass
@@ -433,6 +451,8 @@ def _text_rows(path: Path, id_column: str, columns: tuple[str, ...]) -> list[Tex
                 state=_text(row.get("state")) or "default",
                 since_drop=_since_drop(row),
                 text={c: row[c].strip() for c in columns if _text(row.get(c))},
+                fragment=_int(row.get("fragment"), default=0) or 0,
+                visible_when=_text(row.get("visible_when")),
             )
         )
     return out
@@ -607,6 +627,10 @@ def validate(content: Content) -> list[str]:
     problems += _check_drop_references(content)
     problems += _check_restocks(content, things, rooms)
     problems += _check_sources_are_named_in_prose(content, rooms)
+    problems += _check_bolded_nouns_resolve(content)
+    problems += _check_scenery_is_named_in_prose(content)
+    problems += _check_scenery_aliases_are_unique(content)
+    problems += _check_visibility_gates(content)
     problems += _check_emoji_groups(content)
     problems += _check_achievements(content)
     problems += _check_quests(content)
@@ -637,12 +661,13 @@ def _check_duplicates(content: Content) -> list[str]:
                         ("thing_text", content.thing_text)):
         seen = set()
         for row in rows:
-            key = (row.entity_id, row.state, row.since_drop)
+            key = (row.entity_id, row.state, row.since_drop, row.fragment)
             if key in seen:
                 problems.append(
                     f"{label} has two rows for {row.entity_id} in state "
-                    f"{row.state!r} at drop {row.since_drop}; the database "
-                    "keeps one row per entity, state and drop"
+                    f"{row.state!r} at drop {row.since_drop}, fragment "
+                    f"{row.fragment}; the database keeps one row per "
+                    "entity, state, drop and fragment"
                 )
             seen.add(key)
     return problems
@@ -793,14 +818,6 @@ def _check_text_coverage(
                 continue
             by_entity.setdefault(row.entity_id, set()).add(row.state)
         for entity_id in known:
-            # The channel has no description on purpose, which is what settles
-            # the question of what it says: nothing.
-            if label == "room" and entity_id == CHANNEL_ROOM:
-                if entity_id in by_entity:
-                    problems.append(
-                        f"room {CHANNEL_ROOM} is the channel and must have no text row"
-                    )
-                continue
             states = by_entity.get(entity_id)
             if not states:
                 problems.append(f"{label} {entity_id} has no text row")
@@ -1292,6 +1309,206 @@ def _check_art(content: Content) -> list[str]:
         if not row.alt:
             problems.append(f"art {row.art_id} has no alt text")
 
+    return problems
+
+
+# A bolded noun in the prose is a promise that `/look` will answer to it.
+# Nothing else in the house is bolded - the writers use italics for
+# emphasis - so this pattern can be read as "the writer pointed at
+# something" rather than guessed at.
+_BOLDED = re.compile(r"\*\*(.+?)\*\*")
+
+
+def _bolded_in(text: str) -> list[str]:
+    """Every phrase the writer bolded, lowercased and tidied.
+
+    Trailing punctuation is stripped because a sentence can end on a
+    bolded noun - `**fence**.` is the fence, and a check that said
+    otherwise would teach the writers to avoid bolding at a full stop.
+    """
+    return [
+        phrase.strip().strip(".,;:!?'\"").lower()
+        for phrase in _BOLDED.findall(text or "")
+    ]
+
+
+def _check_visibility_gates(content: Content) -> list[str]:
+    """`visible_when` must name a gate the engine actually answers.
+
+    **The enum has one member, which is exactly why this check exists.**
+    A typo in that one word does not raise anything: the fragment loads,
+    the gate never matches, and the sentence is invisible to every
+    player forever. Nothing logs it and no test that does not know the
+    text would notice.
+
+    The second member, whenever somebody needs one, is a line in
+    `VISIBILITY_GATES` and a branch in `bot._unlocked_for`. Adding it in
+    one place and not the other fails here.
+    """
+    return [
+        f"room text for {row.entity_id} fragment {row.fragment} is gated on "
+        f"{row.visible_when!r}, which is not a visibility gate; the gates are "
+        f"{', '.join(sorted(VISIBILITY_GATES))}"
+        for row in content.room_text
+        if row.visible_when and row.visible_when not in VISIBILITY_GATES
+    ]
+
+
+def _check_scenery_aliases_are_unique(content: Content) -> list[str]:
+    """A scenery word must mean nothing else anywhere in the table.
+
+    Stricter than `_check_aliases`, and only for scenery. That check is
+    scoped to one room because a player is only ever standing in one, and
+    the house leans on it: `doorway` names twelve different exits, `cat
+    food` nine rows, and every one of those is deliberate.
+
+    **Scenery cannot have that latitude, for two reasons.** The bag
+    travels, so a word that is also a carriable thing is ambiguous the
+    moment anyone walks outdoors holding one - that is how `wire` on the
+    fence would have collided with the copper wire the day drop 3 let a
+    player carry it into the channel. And the channel is the first
+    outdoors of several: drop 3 brings an outdoor Entryway, drop 5 a
+    Courtyard, and the field may one day hold Christmas trees, at which
+    point `tree` means two things in one view. A duplicate resolves to
+    whichever row sorts first and logs nothing.
+
+    Scoped to scenery rather than applied to the whole table because the
+    whole table shares 87 words today, almost all of them on purpose.
+    Widening this is a content sweep, not a loader change.
+    """
+    claimed: dict[str, set[str]] = {}
+    for thing in content.things:
+        for name in thing.names:
+            claimed.setdefault(name.lower(), set()).add(thing.thing_id)
+
+    problems = []
+    for thing in content.things:
+        if thing.type != SCENERY:
+            continue
+        for name in thing.names:
+            others = sorted(claimed.get(name.lower(), set()) - {thing.thing_id})
+            if others:
+                problems.append(
+                    f"scenery {thing.thing_id} answers to {name.lower()!r}, and "
+                    f"so does {', '.join(others)}; a scenery word has to mean "
+                    "one thing everywhere, because the bag travels"
+                )
+    return problems
+
+
+def _check_bolded_nouns_resolve(content: Content) -> list[str]:
+    """Every bolded noun must be a thing a player in that room can look at.
+
+    **This is the half of the scenery contract the player feels.** Bolding
+    is the only signal that a noun is lookable - there is no list of
+    scenery and no `/examine` index - so a bolded word that resolves to
+    nothing is worse than plain text: it advertises a thing, the player
+    types it, and the house says there is no such thing. A typo in an
+    alias does it, and so does deleting a row whose name is still in
+    somebody else's prose.
+
+    The drop is checked as well as the room. A drop-1 fragment that bolds
+    a thing arriving at drop 2 reads as a dead word for everyone until
+    the drop lands, which is the same failure arriving on a timer.
+    """
+    # room -> word -> the earliest drop at which something here answers to it
+    arrives: dict[str, dict[str, int]] = {}
+    for thing in content.things:
+        if not thing.room_id:
+            continue
+        here = arrives.setdefault(thing.room_id, {})
+        for name in thing.names:
+            word = name.lower()
+            here[word] = min(here.get(word, thing.since_drop), thing.since_drop)
+
+    things = content.things_by_id
+    problems = []
+
+    def complain(where: str, room_id: str, drop: int, text: str) -> None:
+        here = arrives.get(room_id, {})
+        for phrase in _bolded_in(text):
+            if phrase not in here:
+                problems.append(
+                    f"{where} bolds {phrase!r}, which names nothing in room "
+                    f"{room_id}; a player who types it is told the house has "
+                    "no such thing"
+                )
+            elif here[phrase] > drop:
+                problems.append(
+                    f"{where} bolds {phrase!r} at drop {drop}, but nothing "
+                    f"answers to it in room {room_id} until drop "
+                    f"{here[phrase]}"
+                )
+
+    for row in content.room_text:
+        complain(
+            f"room {row.entity_id} fragment {row.fragment}",
+            row.entity_id,
+            row.since_drop,
+            row.text.get("look", ""),
+        )
+
+    for row in content.thing_text:
+        thing = things.get(row.entity_id)
+        # A carried object's prose has no room to be read in, so there is
+        # no scope to check it against. In practice nothing portable is
+        # bolded; if that changes it wants its own rule, not this one
+        # quietly passing everything.
+        if thing is None or not thing.room_id:
+            continue
+        for field_name in ("look", "use"):
+            complain(
+                f"{row.entity_id} {field_name} text",
+                thing.room_id,
+                row.since_drop,
+                row.text.get(field_name, ""),
+            )
+    return problems
+
+
+def _check_scenery_is_named_in_prose(content: Content) -> list[str]:
+    """Scenery is never listed, so the prose that reveals it has to bold it.
+
+    The same argument as `_check_sources_are_named_in_prose`, one type
+    along. Scenery was added so that `/look` answers to what the
+    description points at, and `things_in_room` leaves it out of the
+    item list for exactly that reason - a channel listing "a road, a
+    fog, a ditch, a cat bed" buries the one noun worth typing. Which
+    leaves bolding as the only way a player learns the ditch is there.
+    An unbolded scenery row is not merely unpolished: it is a row no
+    player will ever reach.
+
+    It may be bolded by its room, or by another thing in the same room -
+    the ditch and the ruts are named by the road's own description, the
+    wasp nest by the branches. That is the intended shape: a few nouns
+    in the paragraph, each opening onto two or three more.
+    """
+    bolded: dict[str, set[str]] = {}
+    things = content.things_by_id
+
+    for row in content.room_text:
+        bolded.setdefault(row.entity_id, set()).update(
+            _bolded_in(row.text.get("look", ""))
+        )
+    for row in content.thing_text:
+        thing = things.get(row.entity_id)
+        if thing is None or not thing.room_id:
+            continue
+        here = bolded.setdefault(thing.room_id, set())
+        for field_name in ("look", "use"):
+            here.update(_bolded_in(row.text.get(field_name, "")))
+
+    problems = []
+    for thing in content.things:
+        if thing.type != SCENERY or not thing.room_id:
+            continue
+        here = bolded.get(thing.room_id, set())
+        if not any(name.lower() in here for name in thing.names):
+            problems.append(
+                f"scenery {thing.thing_id} is bolded nowhere in room "
+                f"{thing.room_id}; scenery is never listed, so no player "
+                "could learn it is there"
+            )
     return problems
 
 
