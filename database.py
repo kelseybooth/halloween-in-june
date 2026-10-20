@@ -1033,6 +1033,20 @@ _LATER_COLUMNS: list[tuple[str, str, str]] = [
     ("users", "toy_ramp", "INTEGER NOT NULL DEFAULT 0"),
     ("users", "toy_cooldown_until", "TIMESTAMP"),
     ("room_contents", "placed_at", "TIMESTAMP"),
+    # Drop 2 renamed `restocks.container` to `destination` and added
+    # `max_present`. A rename is two steps for a live database: the new
+    # column is added here, and the old one is left orphaned and
+    # nullable rather than dropped, because dropping a column is the
+    # one migration that cannot be undone by rolling back the code.
+    #
+    # **This list is why drop 2 looked like it had not shipped.** Both
+    # were missing, so every boot tried to write `destination` into a
+    # table that had no such column, the content load failed, and
+    # `load_content_at_startup` did exactly what it promises - kept
+    # serving the last good content. The bot ran happily on drop 1's
+    # world while the files on disk had drop 2 in them.
+    ("restocks", "destination", "VARCHAR(64)"),
+    ("restocks", "max_present", "INTEGER"),
 ]
 
 

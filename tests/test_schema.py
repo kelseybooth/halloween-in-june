@@ -405,3 +405,73 @@ async def test_it_crosses_servers(house):
 async def test_it_does_nothing_before_content_is_loaded(db):
     """It needs room_types to translate against, so it runs after the load."""
     assert await db.migrate_room_names_to_ids() == (0, 0)
+
+
+# --------------------------------------------------------------------------
+# Upgrading a database that already has the old shape
+#
+# From testing: drop 2 appeared not to have shipped at all. The files had
+# it, the code had it, and the bot served drop 1's world - because
+# `restocks.container` had been renamed to `destination` in the model and
+# never added to the ALTER list, so every boot failed to write the
+# content and `load_content_at_startup` kept the last good load. Exactly
+# as documented, and invisible.
+# --------------------------------------------------------------------------
+
+
+async def test_a_renamed_column_reaches_a_database_that_predates_it(
+    tmp_path, monkeypatch
+):
+    """The regression, as the real upgrade: a live `restocks` table in
+    its pre-drop-2 shape, then a boot."""
+    url = f"sqlite+aiosqlite:///{(tmp_path / 'old.db').as_posix()}"
+    monkeypatch.setenv("DATABASE_URL", url)
+    monkeypatch.delenv("RAILWAY_ENVIRONMENT", raising=False)
+
+    database._engine = None
+    database._session_factory = None
+    await database.init_db()
+    async with database._engine.begin() as conn:
+        await conn.execute(text("ALTER TABLE restocks DROP COLUMN destination"))
+        await conn.execute(text("ALTER TABLE restocks DROP COLUMN max_present"))
+        await conn.execute(text("ALTER TABLE restocks ADD COLUMN container VARCHAR(64)"))
+    await database.close_db()
+
+    database._engine = None
+    database._session_factory = None
+    await database.init_db()
+    try:
+        columns = await columns_of(database, "restocks")
+        assert {"destination", "max_present"} <= columns
+
+        # And the content it could not write before now writes.
+        import content as content_module
+        import content_loader
+
+        report = await content_loader.load_content(content_module.load_files())
+        assert report.content_rows["restocks"] > 0
+    finally:
+        await database.close_db()
+
+
+def test_the_alter_list_names_real_columns():
+    """Every entry in `_LATER_COLUMNS` has to exist on its model.
+
+    This is the half of the problem that *is* checkable. A fully
+    general "every model column survives an upgrade" test is not: the
+    ALTER list is only responsible for columns added after a table was
+    first created, and nothing in the schema records which those are -
+    a test that drops everything and asks what comes back fails on the
+    whole original schema, and one driven from the list itself is
+    circular, which is how drop 2's missing entry went unnoticed.
+
+    So this catches a stale or mistyped entry, the regression above
+    catches the rename that actually broke, and the rule for the gap
+    between them is written down: **a column added to a model goes in
+    this list in the same commit, and a rename is an add plus an
+    orphan.**
+    """
+    for table, column, _ in database._LATER_COLUMNS:
+        model = database.Base.metadata.tables.get(table)
+        assert model is not None, f"{table} is not a table"
+        assert column in model.c, f"{table}.{column} is not on the model"

@@ -237,13 +237,19 @@ async def test_confirming_opens_it(started):
 
 
 async def test_it_moves_exactly_one_drop(started):
+    """Written against the ceiling rather than against a number, so
+    building the next drop does not silently turn this into a test of
+    nothing."""
     await start(started)
 
-    await advance(started)
-    second = await advance(started)
+    for _ in range(resolve.LAST_PLAYABLE_DROP):
+        await advance(started)
+    assert await resolve.current_drop(GUILD_A) == resolve.LAST_PLAYABLE_DROP
 
-    assert await resolve.current_drop(GUILD_A) == 1
-    assert "last one built" in second.reply
+    past_the_end = await advance(started)
+
+    assert await resolve.current_drop(GUILD_A) == resolve.LAST_PLAYABLE_DROP
+    assert "last one built" in past_the_end.reply
 
 
 async def test_the_bed_arrives_with_its_drop(started):
@@ -407,9 +413,60 @@ async def test_advancing_registers_drop_ones(started):
 async def test_a_refused_advance_registers_nothing(started):
     *_, registrations = started
     await start(started)
-    await advance(started)
+    for _ in range(resolve.LAST_PLAYABLE_DROP):
+        await advance(started)
     before = len(registrations)
 
-    await advance(started)  # drop 1 is the last one built
+    await advance(started)  # past the last drop that is built
 
     assert len(registrations) == before
+
+
+# --------------------------------------------------------------------------
+# The ceiling has to follow the content
+#
+# From testing: drop 2 shipped with `LAST_PLAYABLE_DROP` still at 1, so
+# `/advance-game` refused to reach the drop that had just been built.
+# Everything looked exactly like drop 1, which is what it still was.
+# --------------------------------------------------------------------------
+
+
+async def test_every_built_drop_is_reachable_by_advancing(started):
+    """Walk a server up from nothing, the way an admin does.
+
+    The guard against a ceiling left behind: this walks to
+    `LAST_PLAYABLE_DROP` and then asserts the content of the last drop
+    is genuinely there, so a release that builds a drop without raising
+    the ceiling fails here rather than in a playtest.
+    """
+    await start(started)
+
+    for _ in range(resolve.LAST_PLAYABLE_DROP):
+        await advance(started)
+
+    assert await resolve.current_drop(GUILD_A) == resolve.LAST_PLAYABLE_DROP
+
+
+async def test_the_ceiling_reaches_the_toys(started):
+    """Drop 2's content is built, so an admin must be able to open it
+    without QA tools."""
+    await start(started)
+    for _ in range(resolve.LAST_PLAYABLE_DROP):
+        await advance(started)
+
+    visible = await resolve.visible_thing_ids(GUILD_A)
+
+    assert {"feather_wand", "crinkle_ball"} <= visible
+
+
+async def test_advancing_past_the_built_drops_still_refuses(started):
+    """The ceiling is still a ceiling: drop 3 is the house, and it is
+    not built."""
+    await start(started)
+    for _ in range(resolve.LAST_PLAYABLE_DROP):
+        await advance(started)
+
+    interaction = await advance(started)
+
+    assert await resolve.current_drop(GUILD_A) == resolve.LAST_PLAYABLE_DROP
+    assert "last one built" in interaction.reply
