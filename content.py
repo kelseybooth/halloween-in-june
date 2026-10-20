@@ -69,14 +69,29 @@ KNOWN_DROP_EVENTS: set[str] = set()
 # plate drawable without failing anything.
 DISHWARE_SUBGROUP = "dishware"
 
-# Where a restock puts what it adds. `container` names one; `random` draws a slot
-# from every room and every container at equal probability.
-RESTOCK_PLACEMENTS = {"container", "random"}
+# Where a restock puts what it adds. `container` names one; `room` names one
+# room; `random` draws a slot from every room and every container at equal
+# probability. The column that names the target is `destination` - it was
+# `container` until drop 2, and stopped being accurate the moment a restock
+# could target a room.
+RESTOCK_PLACEMENTS = {"container", "room", "random"}
 
-# The four kinds of thing. `exit` moves a player; `source` is an inexhaustible
-# supply that yields objects; `object` can be carried; `fixture` is scenery that
-# exists so `/look` works on anything the prose mentions.
-THING_TYPES = {"object", "fixture", "exit", "source"}
+# A restock's `thing_id` may name a class rather than a thing: `type:toy`
+# means draw uniformly among the things of that type that are eligible to
+# be placed. One row then keeps the channel stocked with any toy, and a
+# thirteenth toy needs no restock change.
+CLASS_PREFIX = "type:"
+
+# The five kinds of thing. `exit` moves a player; `source` is an
+# inexhaustible supply that yields objects; `object` can be carried;
+# `fixture` is scenery that exists so `/look` works on anything the prose
+# mentions; `toy` is an object the cat plays with, and is its own type
+# because the restock cap, the play ramp and three achievements all count
+# toys as a class rather than by name.
+THING_TYPES = {"object", "fixture", "exit", "source", "toy"}
+
+# Toys are carried and dropped like any other object.
+CARRIABLE_TYPES = {"object", "toy"}
 
 # A room_id every server has, used by things that exist everywhere (the Alexa).
 EVERYWHERE = "ALL"
@@ -191,7 +206,8 @@ class Restock:
     restock_id: int
     thing_id: str
     placement: str
-    container: str | None
+    destination: str | None
+    max_present: int | None
     amount: int
     times_per_day: int
     first_day: int
@@ -498,7 +514,8 @@ def load_files(directory: Path | None = None) -> Content:
                 restock_id=_int(row.get("restock_id"), default=0) or 0,
                 thing_id=row["thing_id"].strip(),
                 placement=(_text(row.get("placement")) or "").lower(),
-                container=_text(row.get("container")),
+                destination=_text(row.get("destination")),
+                max_present=_int(row.get("max_present")),
                 amount=_int(row.get("amount"), default=1) or 1,
                 times_per_day=_int(row.get("times_per_day"), default=1) or 1,
                 first_day=_int(row.get("first_day"), default=1) or 1,
@@ -588,7 +605,7 @@ def validate(content: Content) -> list[str]:
     problems += _check_states(content, things)
     problems += _check_drops(content)
     problems += _check_drop_references(content)
-    problems += _check_restocks(content, things)
+    problems += _check_restocks(content, things, rooms)
     problems += _check_sources_are_named_in_prose(content, rooms)
     problems += _check_emoji_groups(content)
     problems += _check_achievements(content)
@@ -721,9 +738,17 @@ def _check_aliases(content: Content) -> list[str]:
     room just used at them and being told the house has no such thing.
     Asking is the better answer and `ambiguous.match` already exists to ask.
 
-    An exit sharing a word with an *object* is still an error. That is the
-    case that is almost always a slip rather than a choice, and the resolution
-    ladder would answer it by scope rather than by asking.
+    **Toys are excluded from each other** on the same grounds, from drop 2.
+    The feather wand and the crinkle ball both answer to `toy` and `cat
+    toy` deliberately: a player told only that there is a toy in the
+    channel will type exactly that, and both rows have to be reachable by
+    it. Asking which is the right answer, and it is the first time the
+    ambiguity prompt fires on something a player carries.
+
+    An exit or a toy sharing a word with an *object* is still an error.
+    That is the case that is almost always a slip rather than a choice,
+    and the resolution ladder would answer it by scope rather than by
+    asking.
     """
     things = content.things_by_id
     problems = []
@@ -737,7 +762,13 @@ def _check_aliases(content: Content) -> list[str]:
         distinct = sorted(set(owners))
         if len(distinct) <= 1:
             continue
-        if all(things[key].type == "exit" for key in distinct if key in things):
+        kinds = {things[key].type for key in distinct if key in things}
+        # Exits may share a word with each other, and so may toys. Both
+        # are cases where sharing is the point rather than a slip: a room
+        # can honestly hold two doorways, and the channel holds two toys
+        # that a player who was told "there is a toy" will both reach for
+        # by typing `toy`. `ambiguous.match` exists to ask which.
+        if kinds <= {"exit"} or kinds <= {"toy"}:
             continue
         problems.append(
             f"in room {room_id}, {name!r} could mean any of {', '.join(distinct)}"
@@ -964,7 +995,9 @@ def _check_drop_references(content: Content) -> list[str]:
     return problems
 
 
-def _check_restocks(content: Content, things: dict[str, Thing]) -> list[str]:
+def _check_restocks(
+    content: Content, things: dict[str, Thing], rooms: dict[str, Room]
+) -> list[str]:
     """A schedule must name a real thing and a reachable place to put it."""
     problems = []
     seen = set()
@@ -974,7 +1007,19 @@ def _check_restocks(content: Content, things: dict[str, Thing]) -> list[str]:
             problems.append(f"duplicate restock_id {restock.restock_id}")
         seen.add(restock.restock_id)
 
-        if restock.thing_id not in things:
+        if restock.thing_id.startswith(CLASS_PREFIX):
+            # A class selector: draw uniformly among the things of that
+            # type. Checked against the vocabulary rather than the id list,
+            # and against there being anything to draw - a selector with an
+            # empty pool is a schedule that silently places nothing.
+            wanted = restock.thing_id[len(CLASS_PREFIX):]
+            if wanted not in THING_TYPES:
+                problems.append(
+                    f"{label} draws from {wanted!r}, which is not a kind of thing"
+                )
+            elif not any(t.type == wanted for t in content.things):
+                problems.append(f"{label} draws from {wanted!r}, of which there are none")
+        elif restock.thing_id not in things:
             problems.append(f"{label} restocks {restock.thing_id!r}, which is not a thing")
 
         if restock.placement not in RESTOCK_PLACEMENTS:
@@ -983,16 +1028,23 @@ def _check_restocks(content: Content, things: dict[str, Thing]) -> list[str]:
                 f"expected one of {', '.join(sorted(RESTOCK_PLACEMENTS))}"
             )
         elif restock.placement == "container":
-            if not restock.container:
+            if not restock.destination:
                 problems.append(f"{label} places into a container but names none")
-            elif restock.container not in things:
+            elif restock.destination not in things:
                 problems.append(
-                    f"{label} places into {restock.container!r}, which is not a thing"
+                    f"{label} places into {restock.destination!r}, which is not a thing"
                 )
-        elif restock.container:
+        elif restock.placement == "room":
+            if not restock.destination:
+                problems.append(f"{label} places into a room but names none")
+            elif restock.destination not in rooms:
+                problems.append(
+                    f"{label} places into {restock.destination!r}, which is not a room"
+                )
+        elif restock.destination:
             problems.append(
-                f"{label} scatters at random but also names container "
-                f"{restock.container!r}; leave that cell empty"
+                f"{label} scatters at random but also names destination "
+                f"{restock.destination!r}; leave that cell empty"
             )
 
         for field_name in ("amount", "times_per_day", "every_n_days", "first_day"):

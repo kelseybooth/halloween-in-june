@@ -145,3 +145,5 @@ NH	nursery door	nursery door|hallway|door|out|sage door|green door|doorway|hall 
 cake_box	cake box	cake box|white box|bakery box|caramel apple cake|cake	fixture	KI	1	no	yes	0										3	136	
 cat_food_stash_gourmet	cans of gourmet cat food	gourmet cans|two cans|gourmet wet food|gourmet wet cat food|gourmet food|gourmet|gourmet cat food|good cat food|fancy cat food|gold cans	source	KI	1	no	yes	0						cat_food_gourmet		cake_box		3	137	
 cat_bed	cat bed	cat bed|bed|cushion|cat cushion	fixture	CH	1	no	no										24	1	138	
+feather_wand	feather wand	wand|feather|feathers|feather toy|cat toy|toy	toy	CH	1	yes	yes	1	1									2	148	
+crinkle_ball	crinkle ball	ball|foil ball|crinkle|crinkle toy|cat toy|toy	toy	CH	1	yes	yes	1	1									2	158	

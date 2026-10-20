@@ -98,6 +98,11 @@ async def default_say(key: str, **tokens) -> str:
     return fill(await resolve.default_text(key), **tokens)
 
 
+async def defaults_matching(prefix: str) -> list[str]:
+    """Every house string under one key prefix, unfilled."""
+    return await resolve.defaults_matching(prefix)
+
+
 # --------------------------------------------------------------------------
 # Listings
 # --------------------------------------------------------------------------

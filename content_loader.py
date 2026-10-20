@@ -303,7 +303,8 @@ def _rows_for(parsed: Content) -> dict[str, list[dict]]:
                 "restock_id": r.restock_id,
                 "thing_id": r.thing_id,
                 "placement": r.placement,
-                "container": r.container,
+                "destination": r.destination,
+                "max_present": r.max_present,
                 "amount": r.amount,
                 "times_per_day": r.times_per_day,
                 "first_day": r.first_day,
@@ -322,17 +323,18 @@ def _rows_for(parsed: Content) -> dict[str, list[dict]]:
 def things_to_place(parsed: Content) -> list[tuple[str, str, str, int, int]]:
     """(room_id, container_id, thing_id, count, since_drop) for placeable things.
 
-    Only finite objects. A source is inexhaustible and is not stock, a fixture is
-    scenery, and an exit is a door - none of them move, so none belong in
-    room_contents. Anything roomless starts nowhere: it arrives when a source
-    yields it, something transforms into it, or a restock scatters it.
+    Only things a player can carry - objects and toys. A source is
+    inexhaustible and is not stock, a fixture is scenery, and an exit is a
+    door; none of them move, so none belong in room_contents. Anything
+    roomless starts nowhere: it arrives when a source yields it, something
+    transforms into it, or a restock scatters it.
 
     `since_drop` rides along because whether a thing may be placed *yet* depends
     on the server, not on the file - see _arrived_drops.
     """
     placements = []
     for thing in parsed.things:
-        if thing.type != "object" or not thing.room_id:
+        if thing.type not in content_module.CARRIABLE_TYPES or not thing.room_id:
             continue
         if thing.quantity in (None, 0):
             continue

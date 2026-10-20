@@ -205,7 +205,7 @@ async def test_the_content_is_still_loaded(two_games):
     await reset(two_games)
 
     assert len(await resolve.all_rooms()) == 10  # nine rooms and the channel
-    assert len(await resolve.achievements(GUILD_A)) == 42
+    assert len(await resolve.achievements(GUILD_A)) == 43
 
 
 async def test_the_art_is_kept_by_default(two_games):

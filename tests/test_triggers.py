@@ -443,10 +443,8 @@ BLOCKED = [
     "ghostbuster",
     "signed_sealed_delivered",
     "forwarding_address",
-    # Waiting on V3's own unbuilt drops: the cat toy at drop 2, feeding
-    # at drop 3. Registered for the same reason as the five above.
-    "persuasive",
-    "impressively_bad_luck",
+    # Waiting on feeding, which drop 3 builds. The two toy ones left
+    # this list when drop 2 gave them something to fire on.
     "bowl_half_empty",
 ]
 
@@ -475,10 +473,11 @@ async def test_nothing_blocked_can_be_earned_by_any_use(playing):
 
 
 def test_what_can_actually_be_earned():
-    """Twenty-eight of Release 1's thirty-five, plus the four V3 adds that
-    have content behind them: making first contact, the two score
-    thresholds below 250, and fluffing the bed."""
-    assert len(achievements.registered_ids()) - len(BLOCKED) == 32
+    """Twenty-eight of Release 1's thirty-five, plus the seven V3 adds
+    that have content behind them: making first contact, the two score
+    thresholds below 250, fluffing the bed, Tireless, and drop 2's two
+    toy achievements."""
+    assert len(achievements.registered_ids()) - len(BLOCKED) == 35
 
 
 # --------------------------------------------------------------------------

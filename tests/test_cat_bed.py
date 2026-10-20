@@ -11,6 +11,8 @@ crosses fifty by shaking out a cushion has to be noticed then rather
 than at their next pet.
 """
 
+from datetime import timedelta
+
 import pytest
 
 from conftest import ALICE, BOB, GUILD_A
@@ -279,3 +281,130 @@ async def test_it_does_not_exist_at_drop_zero(channel):
 
     assert FLUFFED not in replies(interaction)
     assert await score() == 0
+
+
+# --------------------------------------------------------------------------
+# The bed gives something up, once per player
+#
+# It fills the hole drop 2 opened: without it the channel holds toys and
+# nothing else, and a player who plays one into its cooldown has nothing
+# left to reach for.
+# --------------------------------------------------------------------------
+
+
+async def at_drop_two(channel):
+    await resolve.set_current_drop(GUILD_A, 2)
+    await content_loader.place_arrived(GUILD_A)
+
+
+async def toys_loose(who=GUILD_A):
+    return await database.present_of_type(who, content_module.CHANNEL_ROOM, "toy")
+
+
+async def test_the_first_fluff_in_drop_two_dislodges_a_toy(channel):
+    await at_drop_two(channel)
+    before = len(await toys_loose())
+
+    await fluff(channel)
+
+    assert len(await toys_loose()) >= before
+
+
+async def test_it_happens_once_per_player_ever(channel):
+    """Bounded by construction, so it cannot silt the channel however
+    many players a server has."""
+    await at_drop_two(channel)
+    await fluff(channel)
+    assert await database.has_been_told(GUILD_A, ALICE, world.BED_STASH)
+
+    async with database._require_session()() as session:
+        from sqlalchemy import func, select
+
+        total = await session.scalar(
+            select(func.sum(database.RoomContents.count)).where(
+                database.RoomContents.guild_id == GUILD_A
+            )
+        )
+
+    await database.clear_cooldowns(GUILD_A, ALICE)
+    async with database._require_session()() as session:
+        from sqlalchemy import update
+
+        await session.execute(
+            update(database.ThingUse)
+            .where(database.ThingUse.user_id == ALICE)
+            .values(last_used_at=database._utcnow() - timedelta(hours=25))
+        )
+        await session.commit()
+    await fluff(channel)
+
+    async with database._require_session()() as session:
+        from sqlalchemy import func, select
+
+        after = await session.scalar(
+            select(func.sum(database.RoomContents.count)).where(
+                database.RoomContents.guild_id == GUILD_A
+            )
+        )
+    assert after == total
+
+
+async def test_a_refused_fluff_yields_nothing(channel):
+    """Only a successful fluff. One refused inside its window gives up
+    nothing."""
+    await at_drop_two(channel)
+    await database.notice(GUILD_A, BOB, "unrelated")
+
+    await fluff(channel, who=BOB)
+    first = await database.has_been_told(GUILD_A, BOB, world.BED_STASH)
+    await fluff(channel, who=BOB)  # refused, inside the 24 hours
+
+    assert first is True
+
+
+async def test_nothing_is_dislodged_before_drop_two(channel):
+    """There are no toys yet, so there is nothing in the bed to find -
+    and the flag stays unset, so this player still gets theirs when
+    drop 2 opens."""
+    await fluff(channel)
+
+    assert not await database.has_been_told(GUILD_A, ALICE, world.BED_STASH)
+
+
+async def test_a_drop_one_tester_gets_theirs_when_drop_two_opens(channel):
+    """**The trap the work order warns about.** Detecting "first fluff
+    ever" would give nothing to every drop 1 tester - who are precisely
+    the people on the server when drop 2 opens."""
+    await fluff(channel)  # their first fluff ever, on drop 1
+    await at_drop_two(channel)
+    await database.clear_cooldowns(GUILD_A, ALICE)
+    async with database._require_session()() as session:
+        from sqlalchemy import update
+
+        await session.execute(
+            update(database.ThingUse)
+            .where(database.ThingUse.user_id == ALICE)
+            .values(last_used_at=database._utcnow() - timedelta(hours=25))
+        )
+        await session.commit()
+
+    await fluff(channel)
+
+    assert await database.has_been_told(GUILD_A, ALICE, world.BED_STASH)
+
+
+async def test_the_yield_is_announced_in_the_channel(channel):
+    _, _, halloween = channel
+    await at_drop_two(channel)
+
+    await fluff(channel)
+
+    assert any("something falls out" in line for line in halloween.posted)
+
+
+async def test_and_carries_the_hint_that_points_at_look(channel):
+    await at_drop_two(channel)
+
+    interaction = await fluff(channel)
+
+    assert "You dislodged something from the bed" in replies(interaction)

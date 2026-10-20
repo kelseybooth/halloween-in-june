@@ -41,3 +41,4 @@ fluffed_to_perfection	public	Fluffed to Perfection	You fluffed the cat's bed to 
 persuasive	public	Persuasive	Tempted the cat into playing with a toy.	2	230	yes	Play with the cat	making_first_contact	Drop 2. Final copy, no content yet.
 impressively_bad_luck	secret	Impressively Bad Luck	The cat ignored your attempts to play four times in a row.	2	240				Drop 2. Four, not five: the ramp ends at 100%, so five refusals have probability zero. Four is 9.4%.
 bowl_half_empty	secret	Bowl Half Empty	You fed the cat 25 times and she's still waiting for dinner. Keep going.	3	250				Drop 3. Final copy, no content yet.
+tireless	secret	Tireless	The cat has agreed to play with you twenty-five times.	2	260				Drop 2. Twenty-five successful toy plays, cumulative, any toy. Counted from thing_uses rather than from a counter of its own.

@@ -32,7 +32,9 @@ from datetime import date, datetime, time, timedelta
 
 from sqlalchemy import select
 
+import content as content_module
 import database
+import resolve
 
 log = logging.getLogger(__name__)
 
@@ -278,6 +280,11 @@ async def run_for_guild(
     if start_day is None:
         return report
 
+    # Which drops this server has reached, for the class draw: a
+    # selector must never hand out a toy from a drop that has not
+    # opened here.
+    arrived = await resolve.arrived_drop_ids(guild_id)
+
     session_factory = database._require_session()
 
     async with session_factory() as session:
@@ -299,11 +306,11 @@ async def run_for_guild(
     # A container a restock row names is a real destination even when nothing
     # is statically inside it - the row is what declares it.
     for restock in rows:
-        if restock.placement == "container" and restock.container:
-            if restock.container not in container_rooms:
-                room = await _room_of(restock.container)
+        if restock.placement == "container" and restock.destination:
+            if restock.destination not in container_rooms:
+                room = await _room_of(restock.destination)
                 if room:
-                    container_rooms[restock.container] = room
+                    container_rooms[restock.destination] = room
 
     for restock in rows:
         last = progress.get(restock.restock_id)
@@ -339,9 +346,25 @@ async def run_for_guild(
             if landing is None:
                 break
             room_id, container_id = landing
-            await _place(guild_id, room_id, container_id, restock.thing_id, restock.amount)
+
+            thing_id = await _what_to_place(restock, arrived, rng)
+            if thing_id is None:
+                # A class with nothing arrived in it yet. Not an error -
+                # the toys' row is live from drop 2 and the schedule
+                # simply has nothing to draw until then.
+                continue
+
+            if not await _room_for_more(guild_id, room_id, restock):
+                # **Fill toward the cap, never past it.** A better rule
+                # than a rate: a quiet server keeps two sitting there
+                # and a busy one keeps getting fresh ones. The occurrence
+                # is spent either way, so a full channel does not bank
+                # placements and dump them when somebody takes one.
+                continue
+
+            await _place(guild_id, room_id, container_id, thing_id, restock.amount)
             report.placed.append(
-                (guild_id, room_id, container_id, restock.thing_id, restock.amount)
+                (guild_id, room_id, container_id, thing_id, restock.amount)
             )
 
         await _record_progress(guild_id, restock.restock_id, max(due))
@@ -352,6 +375,57 @@ async def run_for_guild(
             "Restock placed %d thing(s) in guild %s", report.count, guild_id
         )
     return report
+
+
+async def _what_to_place(restock, arrived: set[int], rng) -> str | None:
+    """Which thing this occurrence places.
+
+    Usually the row's own `thing_id`. A row whose `thing_id` is a class
+    selector - `type:toy` - draws uniformly among the things of that
+    type whose drop has arrived, so one row keeps the channel stocked
+    with either toy and a thirteenth needs no restock change.
+
+    Drawn per occurrence rather than per day, like the scatter slots, so
+    four toys in a day are four separate coin flips.
+    """
+    if not restock.thing_id.startswith(content_module.CLASS_PREFIX):
+        return restock.thing_id
+    kind = restock.thing_id[len(content_module.CLASS_PREFIX):]
+    pool = await database.ids_of_type(kind, arrived)
+    return rng.choice(pool) if pool else None
+
+
+async def _room_for_more(guild_id: int, room_id: str, restock) -> bool:
+    """Whether the cap leaves room for one more.
+
+    **The cap counts the class, not the row.** The rule is *keep two
+    toys in the channel*, and with thirteen toy rows written a per-row
+    reading would allow twenty-six.
+
+    **It is read from `server_config`, not from the row**, so a server
+    can be retuned without a deploy and two rows drawing from the same
+    class cannot disagree about the limit. The row's `max_present` is
+    the seed for that setting and the fallback if it is unset.
+
+    **Player placement is exempt**, and gets that for free by not
+    coming through here: `/drop` and the bed stash write straight to
+    the room. The cap governs the scheduler, not the world - somebody
+    who puts a third toy down has put a third toy there, and nothing
+    should tidy it away.
+    """
+    if restock.max_present is None:
+        return True
+    kind = (
+        restock.thing_id[len(content_module.CLASS_PREFIX):]
+        if restock.thing_id.startswith(content_module.CLASS_PREFIX)
+        else None
+    )
+    if kind is None:
+        return True
+    cap = restock.max_present
+    if restock.config_key:
+        cap = await database.get_setting(guild_id, restock.config_key) or cap
+    return await database.count_of_type(guild_id, room_id, kind) < cap
 
 
 def _destination(restock, slots, container_rooms, rng) -> tuple[str, str] | None:
@@ -366,16 +440,21 @@ def _destination(restock, slots, container_rooms, rng) -> tuple[str, str] | None
     A `random` row draws a fresh slot for every occurrence rather than once for
     the day, so eight bottles scatter rather than arriving in a heap.
     """
-    if restock.placement == "container" and restock.container:
-        room = container_rooms.get(restock.container)
+    if restock.placement == "container" and restock.destination:
+        room = container_rooms.get(restock.destination)
         if room is None:
             log.warning(
                 "Restock %s names container %r, which is in no room; skipping",
                 restock.restock_id,
-                restock.container,
+                restock.destination,
             )
             return None
-        return room, restock.container
+        return room, restock.destination
+    if restock.placement == "room" and restock.destination:
+        # One named room, loose on its floor. The channel is the only
+        # one today, and the reason this placement exists: neither
+        # `container` nor `random` can say "into that room".
+        return restock.destination, database.LOOSE_IN_ROOM
     return rng.choice(slots)
 
 

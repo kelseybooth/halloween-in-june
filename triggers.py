@@ -440,6 +440,49 @@ async def _score(context: Context) -> int:
     return score
 
 
+# Four refusals running. The fifth attempt is at 100%, so five in a row
+# has probability exactly zero and four is the rarest thing that can be
+# asked for - 0.75 x 0.5 x 0.25, or 9.4%.
+BAD_LUCK_RAMP = 4
+
+TIRELESS_PLAYS = 25
+
+
+async def persuasive(context: Context) -> bool:
+    """The first toy play that works."""
+    return bool(context.extra.get("played"))
+
+
+async def impressively_bad_luck(context: Context) -> bool:
+    """Four refusals in a row.
+
+    **The ramp already is the consecutive-refusal count**, so this needs
+    no counter of its own: it starts at zero, advances only on a failed
+    attempt, and resets on a success. Attempts inside the cooldown
+    advance nothing, so they cannot contribute - which is the right
+    behaviour and falls out rather than needing a rule.
+    """
+    if context.extra.get("played"):
+        return False
+    return (context.extra.get("ramp") or 0) >= BAD_LUCK_RAMP
+
+
+async def tireless(context: Context) -> bool:
+    """Twenty-five successful plays, any toy, cumulative.
+
+    Successes rather than attempts: at 3.2 attempts per success that is
+    about eighty attempts of honest play, and counting attempts would
+    reward the spamming the ramp and the crowding penalty exist to
+    discourage.
+
+    "Twenty-five or more and not held", never "exactly the
+    twenty-fifth" - the same shape as the two-hundred-pet fork, and for
+    the same reason: a check that can only fire on one exact play is
+    lost for good if that play races or the bot is down for it.
+    """
+    return await database.toy_plays(context.guild_id, context.user_id) >= TIRELESS_PLAYS
+
+
 async def making_first_contact(context: Context) -> bool:
     """The first pet that rolls friendly, and the spine of drop 0.
 
@@ -523,11 +566,12 @@ def register_all() -> None:
     # Drop 0 and drop 1: the proof of concept's own four.
     add("making_first_contact", "on_pet", making_first_contact)
     add("fluffed_to_perfection", "on_use", _used(CAT_BED))
+    add("tireless", "on_use", tireless)
     # Drop 2 and drop 3. Final copy, no content yet - registered for the
     # same reason the letter and the doorbell are, so that building the
     # toy is a registration change rather than a reopened phase.
-    add("persuasive", "on_use", _blocked("the cat toy"))
-    add("impressively_bad_luck", "on_use", _blocked("the cat toy"))
+    add("persuasive", "on_use", persuasive)
+    add("impressively_bad_luck", "on_use", impressively_bad_luck)
     add("bowl_half_empty", "on_use", _blocked("feeding the cat"))
 
     # Secret

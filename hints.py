@@ -45,6 +45,15 @@ DID_LOOK = "did.look"
 DID_LOOK_BED = "did.look_cat_bed"
 DID_USE_BED = "did.use_cat_bed"
 
+# Drop 2's actions count **the verb, not the verb and a noun**. Two toys
+# draw against the same two channel slots, so a player who looked at a
+# crinkle ball has learned what looking at a toy is and must not be told
+# to look at a feather wand. Recording `did.look_toy` rather than
+# `did.look_feather_wand` is what makes that true for free.
+DID_LOOK_TOY = "did.look_toy"
+DID_TAKE_TOY = "did.take_toy"
+DID_USE_TOY = "did.use_toy"
+
 # The flag `/stats` sets, half of the condition that graduates the quest
 # notice from pointing at `/stats` to naming the quest inline.
 OPENED_STATS = "opened_stats"
@@ -82,9 +91,15 @@ class Hint:
     recommends: str | None = None
     needs_commands: tuple[str, ...] = ()
     needs_thing: str | None = None
+    # A hint about toys cannot name one: the two draw against the same
+    # two channel slots, so a hint naming a wand can point at a ball.
+    # This asks instead for *a* takeable toy to exist here, and the
+    # text's `{name}` is filled from whichever one is present.
+    needs_a_toy: bool = False
 
 
 CAT_BED = "cat_bed"
+TOY = "toy"
 
 FIRST_FRIENDLY = Hint("hint.first_friendly", needs_commands=("stats",))
 FIRST_STANDOFFISH = Hint("hint.first_standoffish", needs_commands=("stats",))
@@ -116,7 +131,53 @@ TRY_LOOK = Hint(
     needs_thing=CAT_BED,
 )
 
-ALL = (FIRST_FRIENDLY, FIRST_STANDOFFISH, SOMETHING_NEW, LOOK_SPECIFIC, TRY_USE, TRY_LOOK)
+# Drop 2. Four rungs that teach looking, taking and using on a toy, and
+# one that fires on being told to pick it up first.
+#
+# **None of them names a toy**, for the reason in `needs_a_toy`. Their
+# order in `ALL` is not the ladder - the ladder is each rung's
+# `recommends` being the next one's precondition, so a player who skips
+# ahead is never told to do something they have already done.
+LOOK_TOY = Hint(
+    "hint.look_toy",
+    recommends=DID_LOOK_TOY,
+    needs_commands=("look",),
+    needs_a_toy=True,
+)
+TAKE_TOY = Hint(
+    "hint.take_toy",
+    recommends=DID_TAKE_TOY,
+    needs_commands=("take",),
+    needs_a_toy=True,
+)
+USE_TOY = Hint(
+    "hint.use_toy",
+    recommends=DID_USE_TOY,
+    needs_commands=("use",),
+    needs_a_toy=True,
+)
+HOLD_TO_USE = Hint(
+    "hint.hold_to_use",
+    needs_commands=("take",),
+    needs_a_toy=True,
+)
+# Fires on the fluff that dislodges something, so it needs no toy in the
+# channel to be true - the fluff has just put one there.
+BED_YIELD = Hint("hint.bed_yield", recommends=DID_LOOK, needs_commands=("look",))
+
+ALL = (
+    FIRST_FRIENDLY,
+    FIRST_STANDOFFISH,
+    SOMETHING_NEW,
+    LOOK_SPECIFIC,
+    TRY_USE,
+    TRY_LOOK,
+    LOOK_TOY,
+    TAKE_TOY,
+    USE_TOY,
+    HOLD_TO_USE,
+    BED_YIELD,
+)
 
 # Which hints a given action can make unnecessary, worked out once.
 _RETIRED_BY: dict[str, tuple[str, ...]] = {
@@ -153,10 +214,33 @@ async def reachable(guild_id: int, hint: Hint) -> bool:
     if hint.needs_thing:
         if hint.needs_thing not in await resolve.visible_thing_ids(guild_id):
             return False
+    if hint.needs_a_toy and await a_takeable_toy(guild_id) is None:
+        return False
     return True
 
 
-async def pick(guild_id: int, user_id: int, *candidates: Hint) -> str | None:
+async def a_takeable_toy(guild_id: int) -> str | None:
+    """The name of a takeable toy in the channel, or None if there is none.
+
+    **Takeable only.** These rungs teach looking, taking and using on
+    something you pick up, and the Amazon box is a fixture: offering it
+    as the subject of *Try /take* would refuse with `take_fail.fixture`,
+    and looking at it must not count as having learnt the lesson.
+
+    Resolved when the hint fires rather than when the drop opens,
+    because which toy is in the channel changes as players take them.
+    """
+    import content as content_module
+
+    present = await database.present_of_type(
+        guild_id, content_module.CHANNEL_ROOM, TOY
+    )
+    return present[0] if present else None
+
+
+async def pick(
+    guild_id: int, user_id: int, *candidates: Hint, name: str | None = None
+) -> str | None:
     """The one hint to append to this message, or None to stay quiet.
 
     Candidates are offered in priority order and the first eligible one
@@ -175,9 +259,16 @@ async def pick(guild_id: int, user_id: int, *candidates: Hint) -> str | None:
             continue
         if not await reachable(guild_id, hint):
             continue
+        tokens = {}
+        if hint.needs_a_toy:
+            # Filled now rather than at the drop: the rungs that teach
+            # looking and taking name whichever toy is in the channel,
+            # and `/use`'s names the one just picked up - which the
+            # caller passes in and which wins over this.
+            tokens["name"] = name or await a_takeable_toy(guild_id) or "toy"
         if not await database.notice(guild_id, user_id, hint.hint_id):
             continue
-        return await render(hint.hint_id)
+        return await render(hint.hint_id, **tokens)
     return None
 
 
@@ -255,7 +346,11 @@ async def _graduated(guild_id: int, user_id: int, told: dict[str, int]) -> bool:
 
 
 async def after(
-    guild_id: int, user_id: int, *candidates: Hint, quests: bool = True
+    guild_id: int,
+    user_id: int,
+    *candidates: Hint,
+    quests: bool = True,
+    name: str | None = None,
 ) -> str | None:
     """The whole rail for one message: a hint, or a quest notice, or
     nothing.
@@ -265,7 +360,7 @@ async def after(
     would be the same sentence twice in a row.
     """
     try:
-        line = await pick(guild_id, user_id, *candidates)
+        line = await pick(guild_id, user_id, *candidates, name=name)
         if line is None and quests:
             line = await quest_notice(guild_id, user_id)
         return line

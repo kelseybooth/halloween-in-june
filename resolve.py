@@ -219,6 +219,27 @@ async def default_text(key: str) -> str | None:
         )
 
 
+async def defaults_matching(prefix: str) -> list[str]:
+    """Every house string whose key starts with this, in key order.
+
+    One string per key rather than variants inside one cell: the
+    writers review these decks as tables and `|` is the column
+    delimiter, so a pipe-separated list would be split in two by the
+    first edit. Adding a thirteenth refusal is a row.
+
+    Sorted by key so a numbering gap is visible rather than silently
+    making the pick uneven.
+    """
+    session_factory = database._require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(database.DefaultText.text_value)
+            .where(database.DefaultText.key.startswith(prefix))
+            .order_by(database.DefaultText.key)
+        )
+    return [row[0] for row in rows if row[0]]
+
+
 async def visible_thing_ids(guild_id: int) -> set[str]:
     """Things whose drop has arrived on this server.
 

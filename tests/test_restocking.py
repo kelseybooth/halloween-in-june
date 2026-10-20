@@ -22,6 +22,7 @@ from conftest import ALICE, GUILD_A, GUILD_B
 import content as content_module
 import content_loader
 import database
+import resolve
 import restocking
 from content import Content, Drop, Restock, Room, TextRow
 from test_loader import a_thing, contents
@@ -32,7 +33,8 @@ def a_restock(restock_id=1, **overrides):
         restock_id=restock_id,
         thing_id="bottle",
         placement="random",
-        container=None,
+        destination=None,
+        max_present=None,
         amount=1,
         times_per_day=1,
         first_day=1,
@@ -188,7 +190,7 @@ def test_a_seed_is_stable_across_processes():
 async def test_a_container_row_always_lands_in_its_container(server):
     await content_loader.load_content(
         a_world(
-            a_restock(placement="container", container="box", thing_id="jar", amount=4),
+            a_restock(placement="container", destination="box", thing_id="jar", amount=4),
             things=[
                 a_thing("box", name="box", type="fixture", takeable=False),
                 a_thing("jar", name="jar", room_id=None, quantity=0),
@@ -208,7 +210,7 @@ async def test_a_container_row_always_lands_in_its_container(server):
 async def test_the_container_row_adds_its_full_amount(server):
     await content_loader.load_content(
         a_world(
-            a_restock(placement="container", container="box", thing_id="jar", amount=4),
+            a_restock(placement="container", destination="box", thing_id="jar", amount=4),
             things=[
                 a_thing("box", name="box", type="fixture", takeable=False),
                 a_thing("jar", name="jar", room_id=None, quantity=0),
@@ -294,7 +296,7 @@ async def test_stock_is_incremented_not_assigned(server):
     """A restock tops up what is there rather than resetting it."""
     await content_loader.load_content(
         a_world(
-            a_restock(placement="container", container="box", thing_id="jar", amount=2),
+            a_restock(placement="container", destination="box", thing_id="jar", amount=2),
             things=[
                 a_thing("box", name="box", type="fixture", takeable=False),
                 a_thing("jar", name="jar", room_id=None, quantity=0),
@@ -531,3 +533,191 @@ async def test_the_box_is_empty_until_day_two(server):
 
     report = await restocking.run_for_guild(GUILD_A)
     assert not [row for row in report.placed if row[3] == "spice_jar"]
+
+
+# --------------------------------------------------------------------------
+# A class selector, and a cap counted across the class
+#
+# Drop 2's toys. One row keeps the channel stocked with either toy, and
+# the cap is "two toys here" rather than "two of each" - with thirteen
+# toy rows written, the per-row reading would allow twenty-six.
+# --------------------------------------------------------------------------
+
+CHANNEL = "CH"
+
+
+def a_toy_world(*restocks, **kwargs):
+    """Two toys and a channel, with a room row the loader will accept."""
+    parsed = a_world(
+        *restocks,
+        things=[
+            a_thing("wand", name="wand", room_id=None, quantity=0, type="toy"),
+            a_thing("ball", name="ball", room_id=None, quantity=0, type="toy"),
+        ],
+    )
+    parsed.rooms.append(
+        Room(room_id=CHANNEL, name="the channel", sort_order=9, open_at_launch=False)
+    )
+    return parsed
+
+
+def a_toy_restock(**overrides):
+    return a_restock(
+        thing_id="type:toy",
+        placement="room",
+        destination=CHANNEL,
+        max_present=2,
+        times_per_day=4,
+        **overrides,
+    )
+
+
+async def toys_in_the_channel(db):
+    return await db.count_of_type(GUILD_A, CHANNEL, "toy")
+
+
+async def a_toy_lying_there() -> str:
+    """The id of a toy actually in the channel.
+
+    The draw is uniform over the class, so which toy turned up is not
+    knowable in advance - only that one did.
+    """
+    from sqlalchemy import select
+
+    async with database._require_session()() as session:
+        return await session.scalar(
+            select(database.RoomContents.thing_id).where(
+                database.RoomContents.guild_id == GUILD_A,
+                database.RoomContents.room_id == CHANNEL,
+                database.RoomContents.count > 0,
+            )
+        )
+
+
+async def test_a_class_selector_draws_from_the_type(server):
+    await content_loader.load_content(a_toy_world(a_toy_restock()), allow_orphans=True)
+    await started()
+
+    await restocking.run_for_guild(GUILD_A, now=end_of_day())
+
+    assert await toys_in_the_channel(server) == 2
+
+
+async def test_the_cap_counts_the_class_not_the_row(server):
+    """Four occurrences a day against a cap of two. Per row this would
+    allow two of each and put four toys in the channel."""
+    await content_loader.load_content(a_toy_world(a_toy_restock()), allow_orphans=True)
+    await started()
+
+    await restocking.run_for_guild(GUILD_A, now=end_of_day())
+
+    assert await toys_in_the_channel(server) == 2
+
+
+async def test_it_fills_back_toward_the_cap(server):
+    """A better rule than a rate: a quiet server keeps two sitting
+    there and a busy one keeps getting fresh ones."""
+    await content_loader.load_content(a_toy_world(a_toy_restock()), allow_orphans=True)
+    await started()
+    await restocking.run_for_guild(GUILD_A, now=end_of_day())
+    await database.take_from_room(
+        ALICE, GUILD_A, CHANNEL, "", await a_toy_lying_there()
+    )
+
+    await restocking.run_for_guild(GUILD_A, now=end_of_day(1))
+
+    assert await toys_in_the_channel(server) == 2
+
+
+async def test_a_full_channel_banks_nothing(server):
+    """The occurrence is spent whether or not it places, so a day of
+    refusals does not dump four toys the moment somebody takes one."""
+    await content_loader.load_content(a_toy_world(a_toy_restock()), allow_orphans=True)
+    await started()
+    await restocking.run_for_guild(GUILD_A, now=end_of_day())
+
+    await database.take_from_room(
+        ALICE, GUILD_A, CHANNEL, "", await a_toy_lying_there()
+    )
+    await restocking.run_for_guild(GUILD_A, now=end_of_day())
+
+    assert await toys_in_the_channel(server) <= 2
+
+
+async def test_the_cap_can_be_retuned_without_a_deploy(server):
+    """Read from `server_config`, not from the row, so two rows drawing
+    from one class cannot disagree about the limit."""
+    await content_loader.load_content(
+        a_toy_world(a_toy_restock(config_key="toys_present")), allow_orphans=True
+    )
+    await started()
+    await database.set_setting(GUILD_A, "toys_present", 1)
+
+    await restocking.run_for_guild(GUILD_A, now=end_of_day())
+
+    assert await toys_in_the_channel(server) == 1
+
+
+async def test_a_player_may_put_down_more_than_the_cap(server):
+    """The cap governs the scheduler, not the world.
+
+    The real sequence: the channel is full, somebody takes one, the
+    scheduler refills it, and then they put theirs back. Three toys,
+    and nothing should tidy one away - they put it there.
+    """
+    await content_loader.load_content(a_toy_world(a_toy_restock()), allow_orphans=True)
+    await started()
+    await restocking.run_for_guild(GUILD_A, now=end_of_day())
+
+    # **Whichever toy is there**, not a named one: the class draw is
+    # uniform, so a test that names one fails on the runs where two of
+    # the other turned up. This one failed exactly that way, in the
+    # full suite and never alone.
+    mine = await a_toy_lying_there()
+    await database.take_from_room(ALICE, GUILD_A, CHANNEL, "", mine)
+    await restocking.run_for_guild(GUILD_A, now=end_of_day(1))
+    assert await toys_in_the_channel(server) == 2
+
+    await database.drop_into_room(ALICE, GUILD_A, CHANNEL, mine)
+
+    assert await toys_in_the_channel(server) == 3
+
+
+async def test_a_toy_whose_drop_has_not_arrived_is_not_drawn(server):
+    """A selector must never hand out content from a drop this server
+    has not reached."""
+    parsed = a_toy_world(a_toy_restock())
+    parsed.things[1] = a_thing(
+        "ball", name="ball", room_id=None, quantity=0, type="toy", since_drop=2
+    )
+    parsed.drops.append(
+        Drop(drop_id=2, trigger="manual", date=None, event=None, name="Toys", notes=None)
+    )
+    await content_loader.load_content(parsed, allow_orphans=True)
+    await started()
+    # The fixture opens the house; this server has only reached drop 1.
+    await resolve.set_current_drop(GUILD_A, 1)
+
+    await restocking.run_for_guild(GUILD_A, now=end_of_day())
+
+    placed = await database.present_of_type(GUILD_A, CHANNEL, "toy")
+    assert "ball" not in placed
+
+
+async def test_placing_stamps_when_it_landed(server):
+    """`placed_at` reads nothing today and cannot be backfilled later:
+    it is what will tell a toy nobody has wanted for a week from one
+    that arrived an hour ago."""
+    await content_loader.load_content(a_toy_world(a_toy_restock()), allow_orphans=True)
+    await started()
+
+    await restocking.run_for_guild(GUILD_A, now=end_of_day())
+
+    async with database._require_session()() as session:
+        stamped = await session.scalar(
+            select(database.RoomContents.placed_at).where(
+                database.RoomContents.guild_id == GUILD_A,
+                database.RoomContents.room_id == CHANNEL,
+            )
+        )
+    assert stamped is not None
