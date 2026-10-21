@@ -51,25 +51,30 @@ async def look(channel, thing=None):
 # --------------------------------------------------------------------------
 
 
-async def test_the_bed_is_listed_once_its_drop_opens(channel):
-    """Asserted as the whole line, spacing included.
+async def test_drop_one_is_prose_with_no_list_at_all(channel):
+    """**The rule the house has always followed, restored here.**
 
-    The old version checked for "Also here:" and "cat bed"
-    separately, and so passed happily against "Also here:cat bed" -
-    which is what drop 1 shipped. A label and its contents are one
-    rendered string and are worth asserting as one.
+    `Also here:` carries finite takeables and nothing else, and the
+    prose names everything else - so a noun is on the line or in a
+    sentence, never both. The channel strayed from that only because it
+    had no prose to name anything with. It has prose now, the bed is
+    named inside the stand it sits in, and drop 1 has nothing loose in
+    it, so the whole reply is the description.
     """
     await resolve.set_current_drop(GUILD_A, 1)
 
-    interaction = await look(channel)
+    reply = (await look(channel)).reply
 
-    assert "Also here: cat bed" in interaction.reply
+    assert reply.startswith("A derelict farm **stand**")
+    assert "Also here:" not in reply
 
 
-async def test_a_fixture_is_listed_even_though_it_is_not_in_room_contents(channel):
-    """The difference from `Also here:`, and the reason the channel needs
-    its own renderer: `loose_here` reads `room_contents`, which fixtures
-    never enter."""
+async def test_a_fixture_is_never_listed(channel):
+    """A fixture has no presence row - `loose_here` reads
+    `room_contents`, which the cat bed never enters - and that is now
+    the whole answer rather than a reason to read a second table. The
+    loader enforces the other half: a fixture no prose names is a load
+    error, because nothing else would ever reveal it."""
     await resolve.set_current_drop(GUILD_A, 1)
     async with database._require_session()() as session:
         from sqlalchemy import func, select
@@ -81,7 +86,7 @@ async def test_a_fixture_is_listed_even_though_it_is_not_in_room_contents(channe
         )
     assert placed == 0
 
-    assert "Also here: cat bed" in (await look(channel)).reply
+    assert "Also here:" not in (await look(channel)).reply
 
 
 async def test_a_taken_toy_leaves_the_list(channel):
@@ -102,18 +107,19 @@ async def test_a_taken_toy_leaves_the_list(channel):
     for toy in ("feather_wand", "crinkle_ball"):
         await database.place_in_room(GUILD_A, content_module.CHANNEL_ROOM, toy, 1)
 
-    assert "Also here: cat bed, feather wand, crinkle ball" in (await look(channel)).reply
+    assert "Also here: feather wand, crinkle ball" in (await look(channel)).reply
 
     taking = FakeInteraction(ALICE, GUILD_A, guild=guild, channel=halloween)
     await bot.take.callback(taking, "feather wand")
 
-    assert "Also here: cat bed, crinkle ball" in (await look(channel)).reply
+    assert "Also here: crinkle ball" in (await look(channel)).reply
 
 
-async def test_the_fixture_outlives_the_toys(channel):
-    """The other half of the same split: taking everything loose must not
-    empty the line, because the bed is not in `room_contents` to be
-    taken."""
+async def test_taking_the_last_loose_thing_leaves_prose_alone(channel):
+    """The other half of the same split. The line goes away entirely
+    rather than shrinking to the cat bed, because the bed was never on
+    it - and the description is still standing underneath, which is why
+    an empty list is not an empty room."""
     _, guild, halloween = channel
     await resolve.set_current_drop(GUILD_A, 2)
     await database.place_in_room(
@@ -123,7 +129,10 @@ async def test_the_fixture_outlives_the_toys(channel):
     taking = FakeInteraction(ALICE, GUILD_A, guild=guild, channel=halloween)
     await bot.take.callback(taking, "feather wand")
 
-    assert "Also here: cat bed" in (await look(channel)).reply
+    reply = (await look(channel)).reply
+
+    assert "Also here:" not in reply
+    assert "**stand**" in reply
 
 
 async def test_the_cat_is_not_in_the_list(channel):
@@ -146,25 +155,29 @@ async def test_the_description_sits_above_the_list(channel):
 
     reply = (await look(channel)).reply
 
-    assert reply.startswith("A derelict produce **stand** sits at the edge")
-    assert reply.index("Also here:") > reply.index("**road**")
+    assert reply.startswith("A derelict farm **stand** with a sound tin roof")
+    assert "Also here:" not in reply
 
 
-async def test_the_scenery_is_not_in_the_list(channel):
+async def test_nothing_fixed_reaches_the_list(channel):
     """Bolded in the prose, absent from the list.
 
-    The same division of labour the house has: the description names
-    what is fixed, the list carries what is loose. A list reading
-    "a road, a fog, a ditch, a cat bed" would bury the one noun on it a
-    player can do anything with."""
-    await resolve.set_current_drop(GUILD_A, 1)
+    Asserted at drop 2, because that is the first drop where there is a
+    list to be absent from. A line reading "a road, a fog, a ditch, a
+    cat bed, a feather wand" would bury the one noun on it a player can
+    do anything with."""
+    await resolve.set_current_drop(GUILD_A, 2)
+    await database.place_in_room(
+        GUILD_A, content_module.CHANNEL_ROOM, "feather_wand", 1
+    )
 
     reply = (await look(channel)).reply
     listed = reply.split("Also here:")[1]
 
     assert "**road**" in reply
-    assert "road" not in listed
-    assert "cat bed" in listed
+    for fixed in ("road", "fog", "stand", "fence", "cat bed"):
+        assert fixed not in listed, fixed
+    assert "feather wand" in listed
 
 
 async def test_before_the_bed_there_is_nothing_to_list(channel):

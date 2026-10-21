@@ -181,12 +181,17 @@ async def test_the_cooldown_lets_go_after_a_day(channel):
 
 
 async def test_it_is_never_consumed(channel):
-    """The bed on the last day of October is the same bed."""
+    """The bed on the last day of October is the same bed.
+
+    Read off the content table rather than off `/look`, which stopped
+    naming fixtures when the list went back to carrying only what is
+    loose. The bed surviving a fluff is a fact about the row, not about
+    the rendering."""
     db, _, _ = channel
 
     await fluff(channel)
 
-    assert await resolve.things_in_room(GUILD_A, content_module.CHANNEL_ROOM)
+    assert BED in await resolve.visible_thing_ids(GUILD_A)
 
 
 async def test_it_is_not_takeable(channel):

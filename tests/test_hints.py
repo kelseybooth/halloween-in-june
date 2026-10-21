@@ -400,7 +400,9 @@ async def test_a_broken_rail_still_delivers_the_reply(channel, monkeypatch):
 
     reply = await look(channel)
 
-    assert "Also here:" in reply
+    # The description, which is what the channel's reply is at drop 1
+    # now that the list carries only loose things and there are none.
+    assert "**stand**" in reply
     assert "*Hint:" not in reply
 
 

@@ -2,7 +2,7 @@
 
 *Copy deck for the Halloween channel's `/look` description and the detail nested under it. It supersedes section 5 of the POC copy deck, which was written when the channel had no description at all. Conventions are the ones already settled in the other two decks and are not restated here.*
 
-**Superseded in part, 20 October.** Playtesters found the cat bed odd at a bare roadside, so the player now stands in a derelict roadside produce stand with the bed in a corner of it. Four nouns are added, the opening fragment is rewritten, two fragments are new, the fragment keys renumber to decades, and `cat_bed.look` takes a clause about the corner. **The copy and rows for all of that live in section 8 of the Drop 1 channel scenery work order** — work from there for the opener, and from this deck for everything outward of the stand, which is unchanged.
+**Superseded in part, 20 October.** Playtesters found the cat bed odd at a bare roadside, so the player now stands in a derelict roadside farm stand with the bed in a corner of it. Four nouns are added, the opening fragment is rewritten, two fragments are new, the fragment keys renumber to decades, and `cat_bed.look` takes a clause about the corner. **The copy and rows for all of that live in section 8 of the Drop 1 channel scenery work order** — work from there for the opener, and from this deck for everything outward of the stand, which is unchanged.
 
 ## Why this exists
 
@@ -56,9 +56,8 @@ Three short sentences in three fragments, with the item list under them. Printed
 
 | Key | Text | Notes |
 | --- | --- | --- |
-| `channel.look.10` | A derelict produce **stand** sits at the edge of a dirt **road**, open along the side that faces it and roofed in tin. Past the opening the road runs pale and rutted into the **fog**, and dusk is closing in. | Three targets. Rewritten 20 October for the roadside stand. The dusk clause still fixes the scene permanently, so no fragment ever needs a daytime variant, and *past the opening* places the viewpoint inside the stand without resorting to "you are" |
-| `channel.look.20` | Empty **shelves** line the back, and a hand-lettered **sign** over them still offers sweet corn, blueberries, brown eggs, in paint gone the color of the wood behind it. | New, 20 October. Two targets, one of them named by alias — sign resolves to shelves, which is the case the bolding check has to cover |
-| `channel.look.50` | Along one shoulder a **fence** sags, four strands of wire on posts leaning in whatever direction they settled. | The gate clause lives in the fence's own text rather than here, to keep this fragment one sentence |
+| `channel.look.10` | Dusk is closing in on a rutted dirt **road**, surrounded by thick **fog**. A derelict, tin-roofed farm **stand** sits at the edge of the road, with a **cat bed** tucked next to the counter. | Final wording, 21 October. Four targets, the cat bed among them — naming the bed here is what takes it out of `Items here:`, so drop 1's `/look` is pure prose and the list first appears in drop 2 for the toys. The dusk clause still fixes the scene permanently |
+| `channel.look.50` | Behind it a **fence** sags, four strands of wire on posts leaning crookedly. | The gate clause lives in the fence's own text rather than here, to keep this fragment one sentence |
 | `channel.look.80` | The air smells of cold and wet earth. | Atmosphere. No target — see the trap test |
 
 Then, unchanged in shape: `Items here:` and the cat bed.
@@ -77,10 +76,10 @@ One string per noun. Each one names the nouns on the level below it, which is th
 | `ruts.look` | Dried hard, and deep enough to turn an ankle. They have been here through several wet seasons, which is how they got that deep. | — |
 | `ditch.look` | Shallow, choked with leaves a week past their color and gone to brown mush, with a thin trickle of water somewhere underneath that you can hear and cannot see. | — |
 | `fog.look` | It lies low and even, the way it does when the ground is still warm and the air above it is not. It completely obscures the road about thirty feet out, and it is thickest on the far side, where it keeps a shape it does not explain. | — |
-| `branches.look` | They come out over the road from both sides and nearly touch above the middle of it. The **leaves** still on them are scarlet and orange and thinning, enough gone that the branches show through. Higher, where two limbs cross, a grey papery **wasp nest** hangs, about the size of a football. | leaves, wasp nest |
+| `branches.look` | They come out over the road from both sides and nearly touch above the middle of it. The **leaves** still on them are scarlet and orange and thinning, enough gone that the branches show through. Higher, where two limbs cross, a gray papery **wasp nest** hangs, about the size of a football. | leaves, wasp nest |
 | `leaves.look` | Scarlet and orange, a few still stubbornly green near the trunk, and bright enough to be startling this close to dark. There are fewer of them than there were. Now and then one lets go and takes a long time to reach the road. | — |
-| `wasp_nest.look` | Grey and layered, built out of something like chewed paper, torn open on one side by a bird or by weather. Whatever lived in it is finished for the year. It is also a good twenty feet up. | — |
-| `fence.look` | Four strands of wire on posts that have mostly given up, sagging between them in long shallow curves. It runs as far as the fog lets you follow it, and there is no gate in any of that. Past it the ground opens into a **field**. | field |
+| `wasp_nest.look` | Gray and layered, built out of something like chewed paper, torn open on one side by a bird or by weather. Whatever lived in it is finished for the year. It is also a good twenty feet up. | — |
+| `fence.look` | Four strands of wire on posts that have mostly given up, sagging between them in long shallow curves. There is no gate in sight. Past the fence, the ground opens into a **field**. | field |
 | `field.look` | Flat, open, and giving up nothing. Whatever is grown there is not being grown now. | — |
 
 **Three of these are doing work beyond description.** `fog.look` carries the only hint that anything is across the road, which is why it matters that fog is one of the two nouns bolded in the first fragment. `wasp_nest.look` ends on its own refusal, so the player never needs to be told no. And `field.look` is written to stay true if that field is ever a Christmas tree farm — same fence, same fog, one new fragment behind it.
@@ -127,6 +126,10 @@ TSV cells rather than strings, so they do not change the count in the summary. `
 ## Settled: `cat_bed.look`
 
 The locked string reads *"A round cushion in dark green corduroy, flattened in the middle where something has slept. This is the sort of bed that looks plumpable."* It was written when the channel was nowhere. Three options were drafted. Option 1, lightly edited, is the one.
+
+**Final, 21 October**, after the move to the farm stand — this supersedes the options below:
+
+> A round cushion in dark green corduroy, flattened in the middle where something has slept, sitting beside the counter on a clean rectangle of boards where a cooler used to stand. This is the sort of bed that looks plumpable.
 
 **Two things any rewrite has to keep.** *Plumpable* is the only nudge toward `/use` anywhere in the prose — the hint rail is the other, and the string should not lean on it alone. And *where something has slept* has to stay coy: the cat is an easter egg, so the bed may imply an occupant and must never name one.
 
@@ -183,8 +186,8 @@ See-through, agricultural, derelict. Keeps `field.look` and leaves the Christmas
 
 | Key | Text |
 | --- | --- |
-| `channel.look.3` | Along one shoulder a **fence** of grey weathered board stands six feet high, the boards set edge to edge, too tall to look over. One of them has warped away from its neighbor. |
-| `fence.look` | Cedar gone grey, six feet of it, nailed to rails on the far side so the posts do not show. Somebody built this to be looked at from the other side. Where one board has warped there is a **gap** about the width of two fingers. |
+| `channel.look.3` | Along one shoulder a **fence** of gray weathered board stands six feet high, the boards set edge to edge, too tall to look over. One of them has warped away from its neighbor. |
+| `fence.look` | Cedar gone gray, six feet of it, nailed to rails on the far side so the posts do not show. Somebody built this to be looked at from the other side. Where one board has warped there is a **gap** about the width of two fingers. |
 | `gap.look` | Not much. A pale vertical strip of whatever is back there — bare ground, and past that the fog again. About as informative as a keyhole. |
 
 **The noun count holds:** `field` is gone, because you cannot see a field through a solid fence, and **gap** replaces it. That is a straight swap and arguably an upgrade — looking *through* something is a better small discovery than looking *at* an empty field, and *built to be looked at from the other side* is the most unsettling clause in either draft.
@@ -198,8 +201,8 @@ Wire stays on the field side, unchanged. The board fence moves **across the road
 | Key | Text |
 | --- | --- |
 | `channel.look.3` | Unchanged from option A — the sagging wire on the near shoulder. |
-| `channel.look.4` | Across the road stands a **board fence**, six feet of weathered grey, with the fog thick behind it. One board has warped away from its neighbor. |
-| `board_fence.look` | Cedar gone grey, nailed to rails on the far side so the posts do not show. Somebody built this to be looked at from the other side. Where one board has warped there is a **gap** about the width of two fingers. |
+| `channel.look.4` | Across the road stands a **board fence**, six feet of weathered gray, with the fog thick behind it. One board has warped away from its neighbor. |
+| `board_fence.look` | Cedar gone gray, nailed to rails on the far side so the posts do not show. Somebody built this to be looked at from the other side. Where one board has warped there is a **gap** about the width of two fingers. |
 | `gap.look` | Not much. A pale vertical strip, and fog. About as informative as a keyhole. |
 
 **What this buys.** Twelve targets instead of eleven. The field and its seasonal slot survive. The fog gets something concrete to hide behind, which is more ominous than fog alone — a thing deliberately screened rather than merely distant. And **the gap becomes a staged device for free**: the same knothole gives up a little more each drop as the fog lifts, which is one string per drop and no new mechanism.
@@ -226,16 +229,15 @@ Triggered by the player's first `/look cat bed`, which is the one event the hint
 
 | Key | Text | Notes |
 | --- | --- | --- |
-| `channel.look.30` | A plank **bin** by the wall is labeled FIREWOOD in the same hand, a few gray splinters still in the bottom of it. A coin **slot** is cut into the counter, and below it a patch of pale, unweathered wood shows where the cash box it fed was unbolted and carried off. | New, 20 October. In stage 2 so the stand's interior details arrive after the player has crouched to the bed, keeping stage 1 to five short sentences. Both nouns named by alias |
-| `channel.look.40` | **Branches** reach out over the road from both sides, far enough up that they almost meet in the middle, and what leaves they have left are scarlet and orange, and they rustle softly. | The only fragment that points upward, and the way in to the two best nested nouns. Moved here from stage 1. Renumbered from `channel.look.2` to `channel.look.40` on 20 October, which keeps it fourth in the paragraph — after the stand's two fragments — rather than tacked on the end |
-| `channel.look.60` | Across the road the fog holds its shape around something tall and unlit, too square to be trees. | Still no noun. *Too square to be trees* says house without spending it |
-| `channel.look.70` | **Tire tracks** show in the dried mud of the shoulder — one set, turning off the road toward the other side and stopping where the fog does. Nothing has come back out over them. | The one new target. It does the job the mailbox would have done — evidence of an owner — without being a thing anyone can open |
+| `channel.look.40` | **Branches** reach out over the road from both sides, far enough up that they almost meet in the middle. | The only fragment that points upward, and the way in to the two best nested nouns. Moved here from stage 1. Renumbered from `channel.look.2` to `channel.look.40` on 20 October, which keeps it fourth in the paragraph — after the stand's two fragments — rather than tacked on the end |
+| `channel.look.60` | Across the road the fog obscures something tall and unlit, too square to be trees. | Still no noun. *Too square to be trees* says house without spending it |
+| `channel.look.70` | **Tire tracks** show in the dried mud of the shoulder. | The one new target. It does the job the mailbox would have done — evidence of an owner — without being a thing anyone can open. Cut back on 21 October; tire\_tracks.look stays as it is |
 
 And one line, once, appended to the reply to that first `/look cat bed`:
 
 | Key | Text | Notes |
 | --- | --- | --- |
-| `channel.fog_thins` | *When you straighten up from the bed, the fog has thinned, and you take in more of where you are.* | **Reworded 20 October.** Stage 2 now opens on the firewood bin and the coin slot, which are three feet away under a roof and were never hidden by weather; the notice had to report taking the place in, not the fog alone. Private, italic, **no `Hint:` prefix** — it is not instructional. This is a new formatting case; the nearest precedent is `bed_yield.public`, which is a public non-hint line |
+| `channel.fog_thins` | *When you look up from the bed, the fog has thinned slightly.* | Private, italic, **no `Hint:` prefix** — it is not instructional. This is a new formatting case; the nearest precedent is `bed_yield.public`, which is a public non-hint line |
 
 **This is why the change is announced here and not in the description.** A fragment reading *"the fog has drawn back"* is true once and a lie every time after. The description says what is there; the notice says what moved. Anyone adding a later reveal should copy that split.
 

@@ -211,7 +211,7 @@ Nothing about `visible_when`, the hints-table read, `look_prefix`, the channel-a
 
 ### Why a stand rather than a shelter
 
-The structure has to explain its own roof and its own open side, or it is just scenery with a player standing in it. A derelict produce stand explains both: the front is open because customers walked up to it, and the roof is good because produce needed keeping dry. It also sits **on the shoulder, outside the fence**, which is where the player already is — so `channel.look` fragments 3, 4 and 5 keep their geography exactly. A gazebo or any garden structure would put the player behind the sagging wire and make *across the road* point the wrong way.
+The structure has to explain its own roof and its own open side, or it is just scenery with a player standing in it. A derelict farm stand explains both: the front is open because customers walked up to it, and the roof is good because produce needed keeping dry. It also sits **on the shoulder, outside the fence**, which is where the player already is — so `channel.look` fragments 3, 4 and 5 keep their geography exactly. A gazebo or any garden structure would put the player behind the sagging wire and make *across the road* point the wrong way.
 
 It survives the earlier decision to drop the farm, and the distinction matters enough to record: what was rejected was a *stocked* farm — laden apple trees, a truck of pumpkins, a cornfield — which promised interaction it would not deliver. A stripped stand promises the opposite, and telling the player the farm is over is the thing that makes the farm safe to mention at all. It also leaves the Christmas tree farm option open rather than closing it.
 
@@ -232,7 +232,7 @@ The `fragment` column goes to decades so that every future insert is free. This 
 | `channel.look.5` | `channel.look.70` | 2 | tire tracks |
 | `channel.look.6` | `channel.look.80` | 1 | the scent |
 
-**The reading sweep is deliberate:** where you are, then the back wall, then the rest of the inside, then out and up, then the shoulder, then across the road, then the ground, then the smell closing the paragraph. Stage 1 reads 10, 20, 50, 80 — five sentences, still short. `channel.fog_thins` was **reworded 20 October** and now reads *When you straighten up from the bed, the fog has thinned, and you take in more of where you are.* Fragment 30 is two objects an arm's length away under a roof, and weather was never what hid them; the notice reports taking the place in rather than the fog alone.
+**The reading sweep is deliberate:** where you are, then the back wall, then the rest of the inside, then out and up, then the shoulder, then across the road, then the ground, then the smell closing the paragraph. Stage 1 reads 10, 20, 50, 80 — five sentences, still short. `channel.fog_thins` is unchanged.
 
 ### `things.tsv` — four new rows
 
@@ -240,7 +240,7 @@ Same column defaults as section 1: `type = scenery` · `room_id = CH` · `quanti
 
 | `thing_id` | `name` | Named in |
 | --- | --- | --- |
-| `stand` | produce stand | fragment 10, stage 1 |
+| `stand` | farm stand | fragment 10, stage 1 |
 | `shelves` | shelves | fragment 20, stage 1 |
 | `firewood_bin` | firewood bin | fragment 30, stage 2 |
 | `coin_slot` | coin slot | fragment 30, stage 2 |
@@ -253,7 +253,7 @@ All four at `state = default`, `since_drop` 1.
 
 | Key | Text |
 | --- | --- |
-| `stand.look` | Bare planks gone silver with weather, a tin roof that still holds, and a waist-high counter worn pale along the edge where people leaned to pay. Nobody has stocked it in a long time, and nobody has pulled it down either. |
+| `stand.look` | The derelict farm stand is open towards the road and roofed in tin. Empty **shelves** line the back, and a hand-lettered **sign** over them still offers sweet corn, blueberries and brown eggs in paint gone the color of the wood behind it. A plank **bin** by the wall is labeled FIREWOOD in the same hand. A **coin slot** is cut into the counter, next to a space where a sign indicates an egg cooler used to be. A **cat bed** sits in place of the cooler. |
 | `shelves.look` | Four shelves of unfinished board along the back wall, swept almost clean, a little chaff and dried stem left in the corners. The sign above them lists what they used to hold, in letters faded to the same color as the wood. |
 | `firewood_bin.look` | A plank bin, gray inside and out, FIREWOOD stenciled on the front in the same hand as the sign. A few splinters are left in the bottom, too light now to burn well, and a drift of bark dust under them. |
 | `coin_slot.look` | A slot the width of a folded bill, cut through the counter and worn smooth on the underside. Looking from below, you see a rectangle of pale wood the size of a shoebox, four bolt holes at the corners, and no box. Whatever was collected here was collected a while ago. |
@@ -276,7 +276,7 @@ blueberries
 
 The bed moves into the corner where the cooler stood. Built on the chosen text as it read on 19 October:
 
-> A round cushion in dark green corduroy, flattened in the middle where something has slept, sitting in the corner on a clean rectangle of boards where a cooler used to stand. It has not been here long. This is the sort of bed that looks plumpable.
+> A round cushion in dark green corduroy, flattened in the middle where something has slept, sitting beside the counter on a clean rectangle of boards where a cooler used to stand. This is the sort of bed that looks plumpable.
 
 **Apply the clause, not the paragraph.** The copy deck has been edited since, so take whatever `cat_bed.look` now reads and add the corner to it, keeping *plumpable* and *where something has slept*, both of which the deck records as load-bearing.
 
@@ -286,7 +286,7 @@ The bed moves into the corner where the cooler stood. Built on the chosen text a
 
 | `thing_id` | `aliases` |
 | --- | --- |
-| `stand` | produce stand\|farm stand\|farmstand\|roadside stand\|fruit stand\|vegetable stand\|stall\|counter\|roof\|tin roof\|planks |
+| `stand` | produce stand\|farmstand\|roadside stand\|fruit stand\|vegetable stand\|stall\|counter\|roof\|tin roof\|planks |
 | `shelves` | shelf\|sign\|board\|produce\|sweet corn\|corn\|blueberries\|blueberry\|eggs\|brown eggs |
 | `firewood_bin` | bin\|plank bin\|wood bin\|woodbin\|firewood\|wood\|splits |
 | `coin_slot` | slot\|coin slot\|cash box\|cashbox\|money box\|honor box\|honesty box\|box\|cash\|money |
@@ -322,15 +322,13 @@ Recorded so nobody adds it back later.
 
 **That is exactly why the wasp nest held out.** Its current `take_fail` — *"It is twenty feet up and full of whatever a wasp colony leaves behind. You decide against it"* — opens with a fact and then hands the decision back. The deck also notes that `wasp_nest.look` ends on its own refusal "so the player never needs to be told no." **The playtest is the evidence that this does not work:** a no embedded in a description does not read as a no, it reads as a description of a challenge. The explicit refusal has to carry the whole weight, and it has to be complete — answering every follow-up the player already had in mind, so there is nothing left to try. That is why the nest gets the longest string in the scene. A short refusal invites a second attempt; a complete one ends the conversation.
 
-**Overruled, and shipped overruled.** The argument above is sound and lost to the joke: the string in the table is the two-sentence version opening *"That seems unwise,"* and that is what is in the files. The reasoning is left standing rather than deleted, because the next person to look at this refusal should see both the case against it and the fact that it was heard. What is *not* negotiable is the last paragraph of the parked section: the no stays grounded in twenty feet of air, so the day the nest is on the ground the game is not a liar. A test pins that much.
-
 | `thing_id` | `take_fail` | `use_fail` |
 | --- | --- | --- |
 | `wasp_nest` | That seems unwise. It is twenty feet up and full of whatever a wasp colony leaves behind. | You are twenty feet below it and it has been dead since the first frost. Looking at it is the whole of it. |
 | `stand` | It is a building, in the loosest sense of the word, and it is staying where it is. | You stand at the counter a moment, like a customer. Nothing is for sale, and there is nobody to sell it. |
 | `shelves` | Four boards and a dozen nails, and whoever put them up meant them to stay. | You run a hand along a shelf. Chaff, dust, and a long time since anything sat here. |
-| `firewood_bin` | The bin is bolted down, and what is left in it is rotten splinters — grey, light as balsa, no use for burning or for anything else. | You reach into the bin for a splinter, but it crumbles in your fingers. |
-| `coin_slot` | The slot is a hole in a plank. The box it fed is four bolt holes and a clean rectangle, and whatever went through it is long gone. | You put a finger in the slot, which is exactly as rewarding as it sounds. There is nothing behind it any more. |
+| `firewood_bin` | The bin is bolted down, and what is left in it is rotten splinters — gray, light as balsa, no use for burning or for anything else. | You reach into the bin for a splinter, but it crumbles in your fingers. |
+| `coin_slot` | The slot is a hole in a plank. The box it fed is four bolt holes and a clean rectangle, and whatever went through it is long gone. | You put a finger in the slot, which is exactly as rewarding as it sounds. There is nothing behind it anymore. |
 | `branches` | They are attached to trees. Good luck with that. | They are out of reach by a comfortable margin. Whatever is going on up there is going on without you. |
 | `leaves` | The ones worth having are still on the branches, well over your head. The ones on the ground are brown and stuck down. | You stand and listen for a moment to the sound of rustling leaves. |
 | `fence` | Four strands of wire and a line of posts, most of a field long. You are not carrying that anywhere. | You test a strand and it gives more than it should, which is what happens to wire nobody tightens. It is still a fence. |
@@ -351,6 +349,76 @@ It covers `road`, `fog`, `ruts`, `ditch`, `field` and `tire_tracks` in one line,
 
 **The firewood forecloses a later use, on purpose.** Rotten wood is no use for burning, which is what stops a player carrying splits around looking for a fireplace. If any later drop wants firewood as a real item, this string is the thing that has to change first.
 
-**The bin and the counter are in the same scene as something out of reach.** Testers who want the nest will try standing on things. No string should acknowledge that, and the shipped refusal names only the height and what is inside, which mentions no method at all. The longer draft that answered knocking it down — *it would come down in pieces* — went out with the rest of that version.
+**The bin and the counter are in the same scene as something out of reach.** Testers who want the nest will try standing on things. No string should acknowledge that, and the nest's refusal is written to foreclose the whole category rather than name a method — *it would come down in pieces* answers knocking it down without ever mentioning throwing anything.
 
 **The fence refusal must not hint at a future.** The field behind it is reserved content, so *it is still a fence* is doing deliberate work: a sagging wire fence invites crossing, `/go` arrives in drop 3, and anything warmer than a flat close would read as a promise.
+
+## 9. Playtest round 2 — 21 October
+
+### The channel look is too long, and the cut is cheaper than it looks
+
+**Taking a noun out of the room text does not delete it.** It nests one level down. `branches.look` already names the leaves and the wasp nest, and neither has ever been a target in the paragraph itself. The same move retires fragments 20 and 30 outright: once `stand.look` names the shelves, the sign, the bin and the slot, all four rows stay reachable, bolded inside the stand's own description instead of in the paragraph every player reads on every `/look`.
+
+**Which is the right direction for length.** The room text is read by everybody every time; a noun's `look` is read once, by someone who went looking. Moving words from the first into the second is not a cut at all, it is a relocation — the only kind that costs no content.
+
+**The proposed set, at three sentences unlocked and six complete** (against seven in the round-2 draft and nine before it):
+
+| Key | Stage | Text |
+| --- | --- | --- |
+| `channel.look.10` | 1 | A derelict farm **stand** with a sound tin roof opens onto a rutted dirt **road**, where dusk is closing in through thick **fog**. |
+| `channel.look.50` | 1 | Behind it a **fence** sags, four strands of wire on posts leaning crookedly. |
+| `channel.look.80` | 1 | The air smells of cold and wet earth. |
+| `channel.look.40` | 2 | **Branches** reach out over the road from both sides, far enough up that they almost meet in the middle. |
+| `channel.look.60` | 2 | Across the road the fog obscures something tall and unlit, too square to be trees. |
+| `channel.look.70` | 2 | **Tire tracks** show in the dried mud of the shoulder. |
+
+Fragments 20 and 30 are removed. Stage 2 is back to three sentences, which is the shape it had before the stand arrived — and it answers the deck's open question about whether stage 2 earns its own mechanism better at three than it did at one.
+
+**Three conditions on the cut.**
+
+**One: the viewpoint has to stay inside the stand.** The round-2 draft opens *a derelict, tin-roofed farm stand sits at the edge of the road*, which describes the stand from outside it — and that is where this whole thread started, with a player standing on a road for no reason next to a cat bed. The version above opens *onto* the road instead, which costs nothing and keeps the player under the roof.
+
+**Two: the dropped details go down into the nouns, not out of the game.** The tracks lose *one set, turning off the road toward the other side and stopping where the fog does. Nothing has come back out over them* — which the deck records as the line doing the mailbox's old job, evidence of an owner. It belongs in `tire_tracks.look` now.
+
+**Three: `stand.look` becomes load-bearing for four rows.** The deck already records this hazard against `road.look` and the ruts: take the noun out of the parent's look and the child row stops being reachable by anything. Four children is the most any parent carries in this scene, so that string wants a comment saying so.
+
+**One change in the round-2 draft is an improvement and should stay:** the fence moves from *along one shoulder* to *behind it*. That puts the fence and the field on the player's own side of the road, consistent with the stand sitting on the shoulder, and it stops the geography competing with *across the road* two sentences later. `fence.look` should be checked for any shoulder phrasing of its own.
+
+**Downstream, `stand.look` rewritten to carry the four nouns:**
+
+> Final, 21 October — see the `stand.look` row in section 8, which carries the text.
+
+### Mark what is new
+
+The playtester could not tell which lines they had already seen. That is a defect in the staged reveal rather than in the prose, and it will recur at every drop that adds fragments to a room somebody has already looked at — so it is worth solving generally rather than for stage 2 alone.
+
+**The state for it already exists.** The hints table is `(guild, player, hint_id)`: one row per player per key, which is a general per-player boolean store under another name. The Functional Spec declined a `player_thing_seen` **table** — it never has to be a table. A row per fragment a player has been shown costs rows, not schema.
+
+So: the first time a fragment appears for a given player, render that fragment in *italics*; plain from then on. No label and no marker glyph — italics read as emphasis rather than as interface, so the fiction survives and the eye still goes straight to what changed.
+
+**One rule to go with it.** A brand new player's very first `/look` would otherwise come out entirely italic. Write the seen rows without marking on a player's first look in a room, and mark only from the second onward.
+
+### The negative pet loop
+
+Fire the existing nudge where the penalty starts rather than five pets later, and have it name the remedy. No new state: `pet_events` timestamps every pet and is never pruned, and the recent-pet window is ten minutes, so *how many pets in the last ten minutes* is a query the mood weighting already runs.
+
+> `pet.crowding` — She flattens her ears and slides out from under your hand. She has had enough of this for now; come back in a while and she will have forgotten about it.
+
+Two things it is doing. *Come back in a while* names the remedy without quoting ten minutes at the player, and *she will have forgotten about it* says the loss is not permanent — which is the part that decides whether someone stops or stops playing. Fire it once per window rather than on every pet, or it turns into wallpaper.
+
+**It belongs on the private side of `/stats`, not the public one.** If `/stats` also shows a line while the window is open, that is progress rather than result, and the public view in the leaderboard spec should not carry it.
+
+### Developer asks, 21 October
+
+- **Rerun the bolding check against aliases.** Channel nouns are now named in prose by alias as well as by row name — *counter* in the opening fragment resolves to `stand`, the same row the sentence already bolds as *stand* — so check 2 in section 4 has to match aliases too. If *counter* should not bold there, drop it from the stand's aliases.
+- **Confirm the cat bed no longer appears under `Items here:`.** The final wording names the bed in the prose, so at drop 1 the list should be absent entirely and first appear at drop 2 with the toys. Whatever rule listed the bed before has to stop.
+- **The cat is always in the player's room.** Nothing needs to check where she is.
+
+**Copy settled the same day:** `fence.look` is final in the copy deck, and `tire_tracks.look` stays as it is.
+
+**Also decided 21 October:**
+
+- **Italic marking of newly shown lines ships in the beta build.**
+- **Drop 2 contains only the toys.** The household trickle — bootie, rattle, photograph, brass key — is cut.
+- **The refusal strings are now in `thing_text.tsv`,** in the copy built from the 20 October upload, along with four new rows — `stand`, `shelves`, `firewood_bin`, `coin_slot` — and the final `fence.look`. The `things.tsv` rows for the four stand nouns are as specified in section 8; they were not added to the file, because the latest `things.tsv` on hand predates the `consumed_on_use` column.
+- **Add one row to `defaults.tsv`:** `take_fail.terrain` — *You would have to take the whole place with it.*

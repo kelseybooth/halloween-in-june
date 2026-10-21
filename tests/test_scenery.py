@@ -13,6 +13,7 @@ engine's behaviour depends on it.
 """
 
 import dataclasses
+import re
 
 import pytest
 
@@ -143,11 +144,8 @@ async def test_it_is_not_labelled_as_a_hint(channel):
     budget is spent on `/use`."""
     reply = (await look(channel, "cat bed")).reply
 
-    assert (
-        "*When you straighten up from the bed, the fog has thinned, and you "
-        "take in more of where you are.*"
-    ) in reply
-    assert "Hint: When you straighten up" not in reply
+    assert "*When you look up from the bed, the fog has thinned slightly.*" in reply
+    assert "Hint: When you look up" not in reply
 
     # Above the hint: it reports what happened, the hint recommends what
     # to do, and the rail owns the last line everywhere else.
@@ -552,25 +550,45 @@ async def take(channel, thing, who=ALICE):
 async def test_the_stand_is_the_first_thing_the_player_reads(channel):
     """Playtesters found a cat bed at a bare roadside odd, and they were
     right - the bed had nothing to be in. The stand is what the opening
-    sentence is now for, and the order matters: the shelter, then its
-    back wall, then everything outward of it."""
+    sentence is now for, and the order matters: where you are, then
+    everything outward of it.
+
+    **The viewpoint is the load-bearing part.** The paragraph opens
+    *onto* the road rather than describing the stand from the road,
+    which is what keeps the player under the roof - and a player
+    standing on a road for no reason beside a cat bed is where this
+    whole thread started.
+    """
     reply = (await look(channel)).reply
 
-    stand = reply.index("**stand**")
-    shelves = reply.index("**shelves**")
-    fence = reply.index("**fence**")
-
-    assert stand < shelves < fence
+    assert reply.startswith("A derelict farm **stand**")
+    assert reply.index("**stand**") < reply.index("**fence**")
 
 
-async def test_the_stands_interior_waits_for_the_bed(channel):
-    """The bin and the slot are stage 2, which is what keeps stage 1 to
-    five short sentences after the stand took two of them."""
-    assert "**bin**" not in (await look(channel)).reply
+async def test_the_stand_reveals_its_own_interior(channel):
+    """One level down, not a staged fragment.
 
-    await look(channel, "cat bed")
+    The shelves, the bin and the slot were two fragments of the channel
+    paragraph until the 21 October trim, which cut the description back
+    to what a player takes in at a glance. They live in the stand's own
+    `look` now - the same nesting as the ruts inside `road.look` and the
+    wasp nest inside `branches.look` - so all four are still reachable
+    and the opening paragraph is one sentence.
 
-    assert "**bin**" in (await look(channel)).reply
+    **Four children is the most any parent carries in this scene**, and
+    the cat bed is one of them: take a noun out of this string and the
+    row behind it stops being reachable by anything, which for the bed
+    would mean drop 1's whole mechanic sitting in a room that never
+    names it.
+    """
+    reply = (await look(channel)).reply
+    assert "**bin**" not in reply
+
+    inside = (await look(channel, "farm stand")).reply
+
+    for noun in ("**shelves**", "**sign**", "**bin**", "**coin slot**",
+                 "**cat bed**"):
+        assert noun in inside, noun
 
 
 @pytest.mark.parametrize("typed,thing_id", [
@@ -653,6 +671,45 @@ def test_a_scenery_word_may_name_a_fixture_in_another_room():
 
     assert len(claims) > 1, claims
     assert not content_module.validate(parsed)
+
+
+def test_a_fixture_no_sentence_names_fails():
+    """The third kind of unlisted thing, and the last one to get a check.
+
+    `Also here:` carries finite takeables and nothing else, which the
+    house has always done and the channel now does too - so a fixture is
+    revealed by prose or it is revealed by nothing. Sources have been
+    checked since 2b and scenery since this file; fixtures worked only
+    because the writers happened to name all ninety-odd of them.
+    """
+
+    def mangle(parsed):
+        for row in parsed.room_text:
+            if row.entity_id == "KI":
+                row.text["look"] = re.sub(
+                    r"[Tt]rash can", "receptacle", row.text["look"]
+                )
+
+    assert any("fixture trash_can is named nowhere" in p for p in _broken(mangle))
+
+
+def test_a_fixture_may_not_reveal_itself():
+    """Half the fixtures in the house say their own name in their own
+    `look`, so counting that would pass every row in the table and prove
+    nothing. The cat bed is the live case: drop 1's reply is prose
+    alone, and the only thing standing between that and an invisible bed
+    is `stand.look` naming it.
+
+    It names it twice over, as it happens - *a cat bed sits in place of
+    the cooler*, and *egg cooler* is one of the bed's own aliases - so
+    the whole string has to go to prove the point."""
+
+    def mangle(parsed):
+        for row in parsed.thing_text:
+            if row.entity_id == "stand":
+                row.text["look"] = "Bare planks, and a tin roof that holds."
+
+    assert any("fixture cat_bed is named nowhere" in p for p in _broken(mangle))
 
 
 def test_a_scenery_word_that_names_something_in_the_same_room_fails():

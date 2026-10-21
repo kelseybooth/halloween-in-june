@@ -324,7 +324,7 @@ async def test_a_narrow_room_text_is_rebuilt_rather_than_altered(tmp_path, monke
                 ),
                 {"room": content_module.CHANNEL_ROOM},
             )
-        assert fragments == 8, "the eight channel fragments are the whole point"
+        assert fragments == 6, "the six channel fragments are the whole point"
     finally:
         await database.close_db()
 
