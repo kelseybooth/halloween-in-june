@@ -370,7 +370,7 @@ async def things_in_room(guild_id: int, room_id: str) -> list[tuple[str, str | N
         (name, gate)
         for name, gate, since_drop, kind in rows
         if since_drop in arrived
-        and kind not in ({"exit", content.SCENERY} | content.CARRIABLE_TYPES)
+        and kind not in ({"exit"} | content.SCENERY_TYPES | content.CARRIABLE_TYPES)
     ]
 
 

@@ -2,6 +2,8 @@
 
 *Copy deck for the Halloween channel's `/look` description and the detail nested under it. It supersedes section 5 of the POC copy deck, which was written when the channel had no description at all. Conventions are the ones already settled in the other two decks and are not restated here.*
 
+**Superseded in part, 20 October.** Playtesters found the cat bed odd at a bare roadside, so the player now stands in a derelict roadside produce stand with the bed in a corner of it. Four nouns are added, the opening fragment is rewritten, two fragments are new, the fragment keys renumber to decades, and `cat_bed.look` takes a clause about the corner. **The copy and rows for all of that live in section 8 of the Drop 1 channel scenery work order** — work from there for the opener, and from this deck for everything outward of the stand, which is unchanged.
+
 ## Why this exists
 
 Playtesters came out of drop 1 saying it felt empty, and they were precise about it: they got excited by `/look` and then found there was only the bed to look at. The hint promises a category — *"Specific things can be looked at"* — and the channel delivered one member of it.
@@ -54,9 +56,10 @@ Three short sentences in three fragments, with the item list under them. Printed
 
 | Key | Text | Notes |
 | --- | --- | --- |
-| `channel.look.1` | A dirt **road** runs through the **fog**, pale and rutted. Dusk is closing in. | Two targets in one sentence. The last clause fixes the scene at dusk permanently, so no fragment ever needs a daytime variant |
-| `channel.look.3` | Along one shoulder a **fence** sags, four strands of wire on posts leaning in whatever direction they settled. | The gate clause lives in the fence's own text rather than here, to keep this fragment one sentence |
-| `channel.look.6` | The air smells of cold and wet earth. | Atmosphere. No target — see the trap test |
+| `channel.look.10` | A derelict produce **stand** sits at the edge of a dirt **road**, open along the side that faces it and roofed in tin. Past the opening the road runs pale and rutted into the **fog**, and dusk is closing in. | Three targets. Rewritten 20 October for the roadside stand. The dusk clause still fixes the scene permanently, so no fragment ever needs a daytime variant, and *past the opening* places the viewpoint inside the stand without resorting to "you are" |
+| `channel.look.20` | Empty **shelves** line the back, and a hand-lettered **sign** over them still offers sweet corn, blueberries, brown eggs, in paint gone the color of the wood behind it. | New, 20 October. Two targets, one of them named by alias — sign resolves to shelves, which is the case the bolding check has to cover |
+| `channel.look.50` | Along one shoulder a **fence** sags, four strands of wire on posts leaning in whatever direction they settled. | The gate clause lives in the fence's own text rather than here, to keep this fragment one sentence |
+| `channel.look.80` | The air smells of cold and wet earth. | Atmosphere. No target — see the trap test |
 
 Then, unchanged in shape: `Items here:` and the cat bed.
 
@@ -223,9 +226,10 @@ Triggered by the player's first `/look cat bed`, which is the one event the hint
 
 | Key | Text | Notes |
 | --- | --- | --- |
-| `channel.look.2` | **Branches** reach out over the road from both sides, far enough up that they almost meet in the middle, and what leaves they have left are scarlet and orange, and they rustle softly. | The only fragment that points upward, and the way in to the two best nested nouns. Moved here from stage 1, and it keeps the key channel.look.2 — which is what puts it back in position two of the paragraph when it unlocks, rather than tacked on the end |
-| `channel.look.4` | Across the road the fog holds its shape around something tall and unlit, too square to be trees. | Still no noun. *Too square to be trees* says house without spending it |
-| `channel.look.5` | **Tire tracks** show in the dried mud of the shoulder — one set, turning off the road toward the other side and stopping where the fog does. Nothing has come back out over them. | The one new target. It does the job the mailbox would have done — evidence of an owner — without being a thing anyone can open |
+| `channel.look.30` | A plank **bin** by the wall is labeled FIREWOOD in the same hand, a few gray splinters still in the bottom of it. A coin **slot** is cut into the counter, and below it a patch of pale, unweathered wood shows where the cash box it fed was unbolted and carried off. | New, 20 October. In stage 2 so the stand's interior details arrive after the player has crouched to the bed, keeping stage 1 to five short sentences. Both nouns named by alias |
+| `channel.look.40` | **Branches** reach out over the road from both sides, far enough up that they almost meet in the middle, and what leaves they have left are scarlet and orange, and they rustle softly. | The only fragment that points upward, and the way in to the two best nested nouns. Moved here from stage 1. Renumbered from `channel.look.2` to `channel.look.40` on 20 October, which keeps it fourth in the paragraph — after the stand's two fragments — rather than tacked on the end |
+| `channel.look.60` | Across the road the fog holds its shape around something tall and unlit, too square to be trees. | Still no noun. *Too square to be trees* says house without spending it |
+| `channel.look.70` | **Tire tracks** show in the dried mud of the shoulder — one set, turning off the road toward the other side and stopping where the fog does. Nothing has come back out over them. | The one new target. It does the job the mailbox would have done — evidence of an owner — without being a thing anyone can open |
 
 And one line, once, appended to the reply to that first `/look cat bed`:
 

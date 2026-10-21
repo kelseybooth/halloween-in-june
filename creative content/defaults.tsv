@@ -3,6 +3,7 @@ take.default	{player} picks up the {name} and tucks it into their bag.
 drop.default	{player} sets the {name} down.
 use.default	You turn the {name} over in your hands. Nothing obvious happens.
 take_fail.fixture	The {name} isn't yours to carry off.
+take_fail.terrain	You would have to take the whole place with it.
 take_fail.absent	You don't see a {name} here.
 take_fail.already_carried	You're already carrying the {name}.
 take_fail.exit	You can't put an exit in your bag.

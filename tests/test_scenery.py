@@ -256,13 +256,25 @@ async def test_the_bed_still_works(channel):
     assert "nothing to do with" not in reply
 
 
-async def test_the_wasp_nest_cannot_be_taken(channel):
+async def test_the_wasp_nest_refuses_on_circumstance(channel):
     """Written now and unreachable until `/take` ships at drop 2 -
-    somebody will try it on the first day it exists."""
+    somebody will try it on the first day it exists.
+
+    **The refusal has to be a no for today, not a no forever.** A paper
+    nest does not survive a winter, and the plan on the shelf is to put
+    this one on the ground in a later drop and let the players who went
+    after it in week one finally have it. A line like *there is no
+    version of this where you end up holding it* would make the game a
+    liar that day. So the refusal names the twenty feet and the road
+    under it, and never the nest itself as something not to be had.
+    """
     rows = content_module.load_files().thing_text
     nest = [r for r in rows if r.entity_id == "wasp_nest"]
+    refusal = next(r.text["take_fail"] for r in nest if r.state == "default")
 
-    assert any("decide against it" in r.text.get("take_fail", "") for r in nest)
+    assert "twenty feet" in refusal
+    for forever in ("never", "no version", "not yours", "cannot"):
+        assert forever not in refusal.lower(), forever
 
 
 # --------------------------------------------------------------------------
@@ -289,7 +301,17 @@ async def test_the_gate_reads_the_ladder(channel):
 SCENERY = (
     "road", "fog", "branches", "fence", "ruts",
     "ditch", "leaves", "wasp_nest", "field", "tire_tracks",
+    "stand", "shelves", "firewood_bin", "coin_slot",
 )
+
+# Playtesters tried both verbs on everything in the scene, so eight of
+# the fourteen were given refusals of their own. The other six are
+# terrain, and share one line about scale.
+WRITES_ITS_OWN_REFUSAL = (
+    "branches", "leaves", "fence", "wasp_nest",
+    "stand", "shelves", "firewood_bin", "coin_slot",
+)
+TERRAIN = ("road", "fog", "ruts", "ditch", "field", "tire_tracks")
 
 
 def _aliases():
@@ -309,17 +331,40 @@ async def test_every_alias_resolves(channel, thing_id, typed):
     assert found.thing_id == thing_id
 
 
-@pytest.mark.parametrize("thing_id", SCENERY)
-async def test_every_scenery_noun_refuses_use(channel, thing_id):
-    """Definition of done 3. None of the ten has `use` text and none
-    should: a scenery row that pays out a relationship point is farmed
-    by whoever finds the cheapest one, and the bed's once-a-day economy
-    stops meaning anything."""
+@pytest.mark.parametrize("thing_id", TERRAIN)
+async def test_terrain_refuses_use_with_the_default(channel, thing_id):
+    """Definition of done 3. None of the fourteen has `use` text and
+    none should: a scenery row that pays out a relationship point is
+    farmed by whoever finds the cheapest one, and the bed's once-a-day
+    economy stops meaning anything."""
     name = content_module.load_files().things_by_id[thing_id].name
 
     reply = (await use(channel, name)).reply
 
     assert f"nothing to do with the {name} but look at it" in reply
+
+
+@pytest.mark.parametrize("thing_id", WRITES_ITS_OWN_REFUSAL)
+async def test_a_written_refusal_beats_the_default(channel, thing_id):
+    """The eight that answer for themselves.
+
+    A refusal and no success is already a shape the engine reads out of
+    content, so these need no code - but they are the first scenery to
+    use it, and the failure mode is silent: lose the row and the fence
+    goes back to saying there is nothing to do with it but look at it,
+    which is the generic line the playtest was about.
+    """
+    parsed = content_module.load_files()
+    name = parsed.things_by_id[thing_id].name
+    written = [
+        r.text["use_fail"] for r in parsed.thing_text
+        if r.entity_id == thing_id and r.state == "default"
+    ]
+
+    reply = (await use(channel, name)).reply
+
+    assert reply == written[0]
+    assert "nothing to do with" not in reply
 
 
 async def test_no_scenery_row_has_use_text():
@@ -383,7 +428,7 @@ def test_a_bolded_word_with_no_row_behind_it_fails():
 
     def mangle(parsed):
         for row in parsed.room_text:
-            if row.entity_id == content_module.CHANNEL_ROOM and row.fragment == 1:
+            if row.entity_id == content_module.CHANNEL_ROOM and row.fragment == 10:
                 row.text["look"] += " A **lamppost** stands here."
 
     assert any("lamppost" in p for p in _broken(mangle))
@@ -395,7 +440,7 @@ def test_a_bolded_word_that_has_not_arrived_yet_fails():
 
     def mangle(parsed):
         for row in parsed.room_text:
-            if row.entity_id == content_module.CHANNEL_ROOM and row.fragment == 1:
+            if row.entity_id == content_module.CHANNEL_ROOM and row.fragment == 10:
                 row.text["look"] += " A **feather wand** lies here."
 
     assert any("until drop 2" in p for p in _broken(mangle))
@@ -482,3 +527,134 @@ async def test_resetting_a_player_returns_them_to_stage_one(channel):
     reply = (await look(channel)).reply
     assert "**Branches**" not in reply
     assert "the fog has thinned" in (await look(channel, "cat bed")).reply
+
+# --------------------------------------------------------------------------
+# The roadside stand
+# --------------------------------------------------------------------------
+
+
+async def take(channel, thing, who=ALICE):
+    _, guild, halloween = channel
+    interaction = FakeInteraction(who, GUILD_A, guild=guild, channel=halloween)
+    await bot.take.callback(interaction, thing)
+    return interaction
+
+
+async def test_the_stand_is_the_first_thing_the_player_reads(channel):
+    """Playtesters found a cat bed at a bare roadside odd, and they were
+    right - the bed had nothing to be in. The stand is what the opening
+    sentence is now for, and the order matters: the shelter, then its
+    back wall, then everything outward of it."""
+    reply = (await look(channel)).reply
+
+    stand = reply.index("**stand**")
+    shelves = reply.index("**shelves**")
+    fence = reply.index("**fence**")
+
+    assert stand < shelves < fence
+
+
+async def test_the_stands_interior_waits_for_the_bed(channel):
+    """The bin and the slot are stage 2, which is what keeps stage 1 to
+    five short sentences after the stand took two of them."""
+    assert "**bin**" not in (await look(channel)).reply
+
+    await look(channel, "cat bed")
+
+    assert "**bin**" in (await look(channel)).reply
+
+
+@pytest.mark.parametrize("typed,thing_id", [
+    ("sign", "shelves"),
+    ("sweet corn", "shelves"),
+    ("blueberries", "shelves"),
+    ("bin", "firewood_bin"),
+    ("slot", "coin_slot"),
+    ("cash box", "coin_slot"),
+    ("honor box", "coin_slot"),
+    ("cooler", "cat_bed"),
+])
+async def test_a_trap_answers_instead_of_shrugging(channel, typed, thing_id):
+    """**Every one of these is a word the prose spends without stocking.**
+
+    The sign lists sweet corn and blueberries that are not objects and
+    never will be; the slot names a cash box that was unbolted and
+    carried off; the bed sits on a cooler's footprint. A player who
+    types any of them deserves the sentence that explains the absence,
+    not "whatever that is, this house doesn't have one."
+
+    `cooler` is the one that points at something that is not scenery, so
+    it also pins that alias lookup does not filter by type.
+    """
+    found = await reach.find(GUILD_A, ALICE, content_module.CHANNEL_ROOM, typed,
+                             reach.Scope.REACH)
+
+    assert isinstance(found, reach.Found), f"{typed!r} -> {found}"
+    assert found.thing_id == thing_id
+
+
+@pytest.mark.parametrize("thing_id", TERRAIN)
+async def test_terrain_refuses_take_on_scale(channel, thing_id):
+    """`take_fail.fixture` reads "the {name} isn't yours to carry off",
+    which assumes an owner and is nonsense on fog. Terrain is a type so
+    that the content file says which joke a row is in - the same way
+    `take_fail.exit` is already chosen - rather than the engine keeping
+    a list of six ids."""
+    await resolve.set_current_drop(GUILD_A, 2)
+    name = content_module.load_files().things_by_id[thing_id].name
+
+    reply = (await take(channel, name)).reply
+
+    assert reply == "You would have to take the whole place with it."
+
+
+@pytest.mark.parametrize("thing_id", WRITES_ITS_OWN_REFUSAL)
+async def test_a_built_thing_refuses_in_its_own_words(channel, thing_id):
+    """The other eight. Nothing built falls to the terrain line, and
+    nothing terrain falls to the one about an owner."""
+    await resolve.set_current_drop(GUILD_A, 2)
+    parsed = content_module.load_files()
+    name = parsed.things_by_id[thing_id].name
+    written = next(
+        r.text["take_fail"] for r in parsed.thing_text
+        if r.entity_id == thing_id and r.state == "default"
+    )
+
+    reply = (await take(channel, name)).reply
+
+    assert reply == written
+    assert "take the whole place" not in reply
+    assert "isn't yours to carry off" not in reply
+
+
+def test_a_scenery_word_may_name_a_fixture_in_another_room():
+    """**The stand's shelves are the reason this check narrowed.**
+
+    It first read "a scenery word must mean nothing else anywhere in the
+    table", which is wider than either of its own arguments: the bag
+    travels, and one outdoors may one day sit beside another. A fixture
+    bolted to the Library satisfies neither - `/look` is scoped to the
+    room the player is standing in - and enforcing it there would have
+    cost the stand its shelves to prevent a confusion nobody could have.
+    """
+    parsed = content_module.load_files()
+    claims = {
+        t.thing_id for t in parsed.things if "shelves" in [n.lower() for n in t.names]
+    }
+
+    assert len(claims) > 1, claims
+    assert not content_module.validate(parsed)
+
+
+def test_a_scenery_word_that_names_something_in_the_same_room_fails():
+    """What the narrowing kept. Two rows answering to one word in one
+    view resolve to whichever sorts first and log nothing."""
+
+    def mangle(parsed):
+        things = parsed.things_by_id
+        fog = things["fog"]
+        parsed.things[parsed.things.index(fog)] = dataclasses.replace(
+            fog, aliases=fog.aliases + ("cat bed",)
+        )
+
+    assert any("scenery fog answers to 'cat bed'" in p for p in _broken(mangle))

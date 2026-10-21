@@ -108,8 +108,9 @@ async def test_using_her_hands_the_player_the_right_verb(house):
 
 
 async def test_a_thing_with_a_refusal_and_no_success_refuses(house):
-    """The rule that makes the line above land. Five rows have that shape
-    today and four are exits, which refuse through their own gates."""
+    """The rule that makes the line above land. Four of these are exits,
+    which refuse through their own gates, and eight are the channel
+    scenery that playtesters tried `/use` on."""
     parsed = content_module.load_files()
     text = {
         (r.entity_id, r.state): r.text for r in parsed.thing_text
@@ -124,10 +125,17 @@ async def test_a_thing_with_a_refusal_and_no_success_refuses(house):
     # The cat, the four gated exits, and the five cans - whose `use` text
     # already read as a failed attempt ("looking for a pull-tab") and moved
     # to `use_fail` when feeding the cat came to need a can opener.
+    #
+    # Then the eight channel nouns playtesters went at with `/use`. They
+    # are listed rather than filtered out by type, because the whole
+    # point of this test is that the shape is rare and deliberate: a
+    # ninth arriving silently is the thing it exists to catch.
     assert shaped == {
         "eunoia", "EH", "HE", "LS", "SL",
         "cat_food_chicken", "cat_food_salmon", "cat_food_tuna",
         "cat_food_expired", "cat_food_gourmet",
+        "branches", "leaves", "fence", "wasp_nest",
+        "stand", "shelves", "firewood_bin", "coin_slot",
     }
 
 

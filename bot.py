@@ -2026,7 +2026,7 @@ async def _finish_use(interaction, state, found) -> None:
             # refusal to it changes nothing that already works. Widening
             # it is this condition and those two tests, together.
             row_here = await phrasing.thing_row(found.thing_id)
-            if row_here is not None and row_here.type == content.SCENERY:
+            if row_here is not None and row_here.type in content.SCENERY_TYPES:
                 refusal = await phrasing.default_say(
                     "use_fail.fixture", name=found.name
                 )
@@ -3397,6 +3397,20 @@ async def _take_refusal(guild_id: int, found: reach.NotFound, typed: str) -> str
     return await phrasing.default_say("take_fail.unknown", name=typed.strip())
 
 
+def _no_carrying(row) -> str:
+    """Which default explains, to this kind of thing, why it stays put.
+
+    `take_fail.fixture` - "the {name} isn't yours to carry off" - assumes
+    an owner, which is true of a fence and a wasp nest and nonsense on
+    fog. Terrain gets the line about scale instead. Picked off `type` the
+    same way `take_fail.exit` already is, so the content file says which
+    joke a row is in rather than the engine holding a list of ids.
+    """
+    if row.type == content.TERRAIN:
+        return "take_fail.terrain"
+    return "take_fail.fixture"
+
+
 async def _cannot_take(
     guild_id: int, user_id: int, found: reach.Found, row
 ) -> str | None:
@@ -3411,7 +3425,7 @@ async def _cannot_take(
     if not found.is_source and not row.takeable:
         return await phrasing.say(
             guild_id, found.thing_id, "take_fail",
-            fallback="take_fail.fixture", name=found.name,
+            fallback=_no_carrying(row), name=found.name,
         )
 
     # The cap applies to what the player ends up holding, which for a source is
@@ -3425,7 +3439,7 @@ async def _cannot_take(
     if held < capped.max_per_player:
         return None
     return await phrasing.say(
-        guild_id, taken, "take_fail", fallback="take_fail.fixture", name=capped.name
+        guild_id, taken, "take_fail", fallback=_no_carrying(capped), name=capped.name
     )
 
 

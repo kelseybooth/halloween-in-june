@@ -30,6 +30,7 @@ BED = "cat_bed"
 SCENERY = frozenset({
     "road", "fog", "branches", "fence", "ruts",
     "ditch", "leaves", "wasp_nest", "field", "tire_tracks",
+    "stand", "shelves", "firewood_bin", "coin_slot",
 })
 
 
