@@ -143,8 +143,11 @@ async def test_it_is_not_labelled_as_a_hint(channel):
     budget is spent on `/use`."""
     reply = (await look(channel, "cat bed")).reply
 
-    assert "*When you look up from the bed, the fog has thinned slightly.*" in reply
-    assert "Hint: When you look up" not in reply
+    assert (
+        "*When you straighten up from the bed, the fog has thinned, and you "
+        "take in more of where you are.*"
+    ) in reply
+    assert "Hint: When you straighten up" not in reply
 
     # Above the hint: it reports what happened, the hint recommends what
     # to do, and the rail owns the last line everywhere else.
@@ -265,8 +268,14 @@ async def test_the_wasp_nest_refuses_on_circumstance(channel):
     this one on the ground in a later drop and let the players who went
     after it in week one finally have it. A line like *there is no
     version of this where you end up holding it* would make the game a
-    liar that day. So the refusal names the twenty feet and the road
-    under it, and never the nest itself as something not to be had.
+    liar that day. So the refusal names the twenty feet, which stops
+    being true the moment the nest is on the ground, and never the nest
+    itself as something not to be had.
+
+    *"That seems unwise"* opening it was a late call, made for the joke
+    and against the advice written into the work order. Both are on the
+    record; what this test guards is only the part that would break the
+    game later.
     """
     rows = content_module.load_files().thing_text
     nest = [r for r in rows if r.entity_id == "wasp_nest"]

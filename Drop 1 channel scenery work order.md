@@ -232,7 +232,7 @@ The `fragment` column goes to decades so that every future insert is free. This 
 | `channel.look.5` | `channel.look.70` | 2 | tire tracks |
 | `channel.look.6` | `channel.look.80` | 1 | the scent |
 
-**The reading sweep is deliberate:** where you are, then the back wall, then the rest of the inside, then out and up, then the shoulder, then across the road, then the ground, then the smell closing the paragraph. Stage 1 reads 10, 20, 50, 80 — five sentences, still short. `channel.fog_thins` is unchanged.
+**The reading sweep is deliberate:** where you are, then the back wall, then the rest of the inside, then out and up, then the shoulder, then across the road, then the ground, then the smell closing the paragraph. Stage 1 reads 10, 20, 50, 80 — five sentences, still short. `channel.fog_thins` was **reworded 20 October** and now reads *When you straighten up from the bed, the fog has thinned, and you take in more of where you are.* Fragment 30 is two objects an arm's length away under a roof, and weather was never what hid them; the notice reports taking the place in rather than the fog alone.
 
 ### `things.tsv` — four new rows
 
@@ -322,6 +322,8 @@ Recorded so nobody adds it back later.
 
 **That is exactly why the wasp nest held out.** Its current `take_fail` — *"It is twenty feet up and full of whatever a wasp colony leaves behind. You decide against it"* — opens with a fact and then hands the decision back. The deck also notes that `wasp_nest.look` ends on its own refusal "so the player never needs to be told no." **The playtest is the evidence that this does not work:** a no embedded in a description does not read as a no, it reads as a description of a challenge. The explicit refusal has to carry the whole weight, and it has to be complete — answering every follow-up the player already had in mind, so there is nothing left to try. That is why the nest gets the longest string in the scene. A short refusal invites a second attempt; a complete one ends the conversation.
 
+**Overruled, and shipped overruled.** The argument above is sound and lost to the joke: the string in the table is the two-sentence version opening *"That seems unwise,"* and that is what is in the files. The reasoning is left standing rather than deleted, because the next person to look at this refusal should see both the case against it and the fact that it was heard. What is *not* negotiable is the last paragraph of the parked section: the no stays grounded in twenty feet of air, so the day the nest is on the ground the game is not a liar. A test pins that much.
+
 | `thing_id` | `take_fail` | `use_fail` |
 | --- | --- | --- |
 | `wasp_nest` | That seems unwise. It is twenty feet up and full of whatever a wasp colony leaves behind. | You are twenty feet below it and it has been dead since the first frost. Looking at it is the whole of it. |
@@ -349,6 +351,6 @@ It covers `road`, `fog`, `ruts`, `ditch`, `field` and `tire_tracks` in one line,
 
 **The firewood forecloses a later use, on purpose.** Rotten wood is no use for burning, which is what stops a player carrying splits around looking for a fireplace. If any later drop wants firewood as a real item, this string is the thing that has to change first.
 
-**The bin and the counter are in the same scene as something out of reach.** Testers who want the nest will try standing on things. No string should acknowledge that, and the nest's refusal is written to foreclose the whole category rather than name a method — *it would come down in pieces* answers knocking it down without ever mentioning throwing anything.
+**The bin and the counter are in the same scene as something out of reach.** Testers who want the nest will try standing on things. No string should acknowledge that, and the shipped refusal names only the height and what is inside, which mentions no method at all. The longer draft that answered knocking it down — *it would come down in pieces* — went out with the rest of that version.
 
 **The fence refusal must not hint at a future.** The field behind it is reserved content, so *it is still a fence* is doing deliberate work: a sagging wire fence invites crossing, `/go` arrives in drop 3, and anything warmer than a flat close would read as a promise.
