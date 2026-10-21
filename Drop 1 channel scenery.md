@@ -235,7 +235,7 @@ And one line, once, appended to the reply to that first `/look cat bed`:
 
 | Key | Text | Notes |
 | --- | --- | --- |
-| `channel.fog_thins` | *When you look up from the bed, the fog has thinned slightly.* | Private, italic, **no `Hint:` prefix** — it is not instructional. This is a new formatting case; the nearest precedent is `bed_yield.public`, which is a public non-hint line |
+| `channel.fog_thins` | *When you straighten up from the bed, the fog has thinned, and you take in more of where you are.* | **Reworded 20 October.** Stage 2 now opens on the firewood bin and the coin slot, which are three feet away under a roof and were never hidden by weather; the notice had to report taking the place in, not the fog alone. Private, italic, **no `Hint:` prefix** — it is not instructional. This is a new formatting case; the nearest precedent is `bed_yield.public`, which is a public non-hint line |
 
 **This is why the change is announced here and not in the description.** A fragment reading *"the fog has drawn back"* is true once and a lie every time after. The description says what is there; the notice says what moved. Anyone adding a later reveal should copy that split.
 
