@@ -215,14 +215,30 @@ async def test_the_first_pet_of_all(house):
 
 
 async def test_and_nothing_until_the_crowding_nudge(house):
+    """Pets two to four earn nothing. The fifth is where petting starts
+    costing score, and the over-the-shoulder look is what the nudge
+    beside it says without words."""
     _, guild, _, assets = house
     await bot.upload_art(guild, assets)
     await pet(house)
 
-    for n in range(2, 9):
+    for n in range(2, 5):
         assert pet_image_of(await pet(house)) is None, n
 
     assert pet_image_of(await pet(house)) == "eunoia_suspicious.png"
+
+
+async def test_and_nothing_after_it_either(house):
+    """The image rides the nudge, so it inherits once-per-window. An
+    image seen twice a minute stops being a reward and becomes
+    latency - which used to be a comment and is now the behaviour."""
+    _, guild, _, assets = house
+    await bot.upload_art(guild, assets)
+    for _ in range(5):
+        await pet(house)
+
+    for n in range(6, 13):
+        assert pet_image_of(await pet(house)) is None, n
 
 
 async def test_the_nudge_image_rides_the_private_reply_only(house):

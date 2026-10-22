@@ -34,7 +34,7 @@ tutorial	Three things worth knowing.\n\n**`/look coat rack`** - look closely at 
 pet.public.friendly	{player} pets the cat. The cat seems to like it.
 pet.public.standoffish	{player} pets the cat. The cat does not seem pleased.
 pet.public.continues	{player} continues to pet the cat.
-pet.crowding	Maybe you should give the cat some space.
+pet.crowding	She flattens her ears and slides out from under your hand. She has had enough of this for now; come back in a while and she will have forgotten about it.
 achievement.private	You earned **{achievement}**: {description}
 achievement.public	{player} earned **{achievement}**
 achievement.public.group	{server} earned **{achievement}**: {description}

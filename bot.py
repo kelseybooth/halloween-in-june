@@ -87,6 +87,13 @@ RESTOCK_SWEEP_MINUTES = 10
 # How far one reaction moves the relationship meter.
 RELATIONSHIP_STEP = 5
 
+# The friendly chance at which a pet is worth nothing in expectation.
+# Derived rather than chosen: a pet is worth `+STEP` or `-STEP` on one
+# coin flip, so the expected value is `STEP x (2p - 1)` and crosses zero
+# at fifty percent whatever the step is. Below this a player is losing
+# score by petting, which is what the crowding nudge exists to say.
+BREAK_EVEN_CHANCE = 50
+
 # Where `/start-game` puts a server: a channel with a cat in it, and nothing
 # else at all. Not a magic number in the command, because drop 0 meaning
 # "the beginning" is a fact about the schedule rather than about the command.
@@ -130,27 +137,37 @@ def choose_response(recent_pets: int, rng=random) -> Reaction:
     return Reaction(rng.choice(STANDOFFISH_RESPONSES), False, chance)
 
 
-def _crowded(recent_pets: int) -> bool:
-    """Whether this pet should carry the nudge to give the cat some space.
+def _crowding_begins(recent_pets: int) -> bool:
+    """Whether this pet is the one that should say to give the cat space.
 
-    **The first pet that cannot possibly go well.** `friendly_chance` is
-    `80 - 10 x recent`, so this is the ninth pet inside ten minutes, where
-    the cat is certain to be standoffish and every further pet is a
-    guaranteed five points off.
+    **The first pet that loses points on average**, which is the fifth
+    inside ten minutes: `friendly_chance` is `80 - 10 x recent`, so this
+    pet is weighted at 40% and its expected value turns negative.
 
-    Tied to the chance rather than to a count of its own, because a count
-    would be a second number to keep in step with the weighting: retune
-    `BASE_FRIENDLY_CHANCE` and the nudge follows by itself.
+    It used to wait for a certainty - the ninth pet, where the chance
+    hits zero - on the argument that a warning fired while the odds were
+    still even would be crying wolf. The playtest answered that: a
+    warning fired four pets after the damage starts tells a player what
+    they did wrong too late to not do it, and the nudge is the only
+    place the penalty is ever mentioned, because the public line no
+    longer reports the meter.
 
-    Worth recording that the penalty starts earlier than the nudge does.
-    The fourth pet in the window is break-even in expectation and the
-    fifth is the first that loses points on average. The nudge waits for
-    certainty because it is the only place a player can ever learn the
-    penalty exists - the public line no longer reports the meter - and a
-    warning that fires while the odds are still even would be crying
-    wolf.
+    Tied to the chance rather than to a count of its own, so retuning
+    `BASE_FRIENDLY_CHANCE` moves the nudge with it rather than leaving a
+    second number to keep in step.
+
+    **Once per window, not once per pet.** Equality rather than
+    `<`: `recent` goes up by exactly one per pet, so it passes the
+    threshold once per run of petting and again only after the player
+    has gone quiet long enough for the window to drain. A nudge on every
+    pet from the fifth onward is wallpaper, and so is the image that
+    rides with it.
     """
-    return friendly_chance(recent_pets) == 0
+    return (
+        friendly_chance(recent_pets)
+        < BREAK_EVEN_CHANCE
+        <= friendly_chance(recent_pets - 1)
+    )
 
 
 def _debug_lines(reaction: Reaction, recent: int, relationship: int) -> str:
@@ -760,7 +777,8 @@ async def _answer_guess(message: discord.Message, guess) -> None:
 #
 # Two windows, deliberately separate, because they answer different
 # questions. Crowding is between a player and the cat, and fires the first
-# time a pet cannot possibly go well - see `_crowded`. The public rate
+# time a pet is worth less than nothing - see `_crowding_begins`. The
+# public rate
 # limit is about noise in a shared room: two lines per player per place
 # per thirty minutes.
 PUBLIC_PETS = 2
@@ -937,20 +955,22 @@ async def pet(interaction: discord.Interaction) -> None:
         return
 
     message = reaction.text
-    crowded = _crowded(result.recent)
-    if crowded:
+    crowding_begins = _crowding_begins(result.recent)
+    if crowding_begins:
         nudge = await phrasing.default_say("pet.crowding")
         if nudge:
             message = f"{message}\n\n{nudge}"
     if SHOW_DEBUG_INFO:
         message += _debug_lines(reaction, result.recent, relationship)
 
-    # The over-the-shoulder look is exactly what "give the cat some space"
-    # means, and it is the one image tied to something other than an
-    # achievement. It rides the private reply, never the public line, for the
-    # same reason the words do. The first pet of all gets her instead - and
-    # every pet in between gets nothing, because an image seen twice a minute
-    # stops being a reward and becomes latency.
+    # The over-the-shoulder look is exactly what the nudge says in
+    # words, and it is the one image tied to something other than an
+    # achievement. It rides the private reply, never the public line,
+    # for the same reason the words do. The first pet of all gets her
+    # instead - and every pet in between gets nothing, because an image
+    # seen twice a minute stops being a reward and becomes latency,
+    # which is now true by construction: the nudge fires on the pet
+    # that crosses into crowding and not on the ones after it.
     # The rail, under the blurb. `hint.something_new` is a candidate on
     # any private cat message, which is how a player who was not in the
     # channel when a drop opened still hears that something arrived.
@@ -1000,7 +1020,9 @@ async def pet(interaction: discord.Interaction) -> None:
         else await hints.after(guild_id, user.id, *candidates, hints.SOMETHING_NEW),
     )
 
-    art = ART_CROWDING if crowded else (ART_FIRST_PET if result.total == 1 else None)
+    art = ART_CROWDING if crowding_begins else (
+        ART_FIRST_PET if result.total == 1 else None
+    )
     content_, embed = await _with_art(interaction.guild, message, art)
     await interaction.followup.send(content_, embed=embed, ephemeral=True)
 
