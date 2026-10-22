@@ -1,0 +1,15 @@
+# Line endings: LF in the repository, native in the working tree.
+#
+# `core.autocrlf` is a per-clone setting and did not hold. Two merged
+# pull requests - #64 and #69 - each rewrote every line of bot.py
+# because a tool wrote it with CRLF and the commit kept them, so the
+# real change (about seventy lines each time) was buried in a diff of
+# four and a half thousand. This file is in the repository, so it
+# applies to every clone and cannot be forgotten.
+* text=auto
+
+# Content, not text. Without these, `text=auto` guesses from the bytes
+# and a guess that goes wrong corrupts the file.
+*.png binary
+*.ico binary
+*.xlsx binary
