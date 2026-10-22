@@ -42,7 +42,7 @@ _WORLD_TABLES = (
     "server_states",
     "thing_uses",
     "server_restocks",
-    "server_config",
+    "config_history",
     # Earned achievements are world state, so `--fresh` clears them with
     # everything else. An ordinary reload never touches them.
     "player_achievements",
@@ -105,9 +105,16 @@ async def reset_guild(guild_id: int, *, drop: int | None = None) -> dict[str, in
                 cleared[name] = result.rowcount
 
         if drop is not None:
+            # Opened as a window like any other config value. This runs
+            # inside the caller's transaction, so it writes the row
+            # directly rather than going through `set_config`, which
+            # opens its own.
             session.add(
-                database.ServerConfig(
-                    guild_id=guild_id, key=resolve.DROP_KEY, value=str(drop)
+                database.ConfigHistory(
+                    guild_id=guild_id,
+                    key=resolve.DROP_KEY,
+                    value=str(drop),
+                    effective_from=await database.server_now(guild_id),
                 )
             )
             await session.flush()
@@ -360,13 +367,14 @@ async def _arrived_drops(session, guild_id: int, parsed: Content) -> set[int]:
     drops table, which this transaction has just rewritten and not yet
     committed - the parsed files are the same data and are already in hand.
 
-    The pointer itself is safe to read: `server_config` is world state, and
+    The pointer itself is safe to read: the config is world state, and
     the loader never writes it.
     """
     raw = await session.scalar(
-        select(database.ServerConfig.value).where(
-            database.ServerConfig.guild_id == guild_id,
-            database.ServerConfig.key == resolve.DROP_KEY,
+        select(database.ConfigHistory.value).where(
+            database.ConfigHistory.guild_id == guild_id,
+            database.ConfigHistory.key == resolve.DROP_KEY,
+            database.ConfigHistory.effective_to.is_(None),
         )
     )
     if raw is None:
@@ -423,8 +431,14 @@ _KEPT_SETTINGS = (resolve.DROP_KEY, database.CONFIG_ANNOUNCE_CHANNEL)
 
 async def _wipe_world_state(session) -> None:
     for table in _WORLD_TABLES:
-        if table == "server_config":
-            config = database.ServerConfig.__table__
+        if table == "config_history":
+            # **Deleted rather than closed.** Everywhere else an old
+            # value is kept, because when a number changed is worth
+            # knowing - but this is a reset, and the history of a
+            # server that no longer exists is not history, it is
+            # wreckage that would date the next server's first rows to
+            # before it started.
+            config = database.ConfigHistory.__table__
             await session.execute(
                 config.delete().where(config.c.key.notin_(_KEPT_SETTINGS))
             )

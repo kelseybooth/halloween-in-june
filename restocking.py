@@ -204,9 +204,10 @@ async def initialized_on(guild_id: int) -> date | None:
     session_factory = database._require_session()
     async with session_factory() as session:
         value = await session.scalar(
-            select(database.ServerConfig.value).where(
-                database.ServerConfig.guild_id == guild_id,
-                database.ServerConfig.key == database.CONFIG_INITIALIZED_ON,
+            select(database.ConfigHistory.value).where(
+                database.ConfigHistory.guild_id == guild_id,
+                database.ConfigHistory.key == database.CONFIG_INITIALIZED_ON,
+                database.ConfigHistory.effective_to.is_(None),
             )
         )
     if not value:
@@ -233,21 +234,7 @@ async def set_initialized_on(guild_id: int, on: date | None = None) -> date:
         return existing
 
     on = on or await database.server_today(guild_id)
-    session_factory = database._require_session()
-    insert = database._upsert_statement()
-    async with session_factory() as session:
-        await session.execute(
-            insert(database.ServerConfig)
-            .values(
-                guild_id=guild_id,
-                key=database.CONFIG_INITIALIZED_ON,
-                value=on.isoformat(),
-            )
-            .on_conflict_do_nothing(
-                index_elements=[database.ServerConfig.guild_id, database.ServerConfig.key]
-            )
-        )
-        await session.commit()
+    await database.set_config(guild_id, database.CONFIG_INITIALIZED_ON, on.isoformat())
     log.info("Server %s starts counting restock days from %s", guild_id, on)
     return on
 

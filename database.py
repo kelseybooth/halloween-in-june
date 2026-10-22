@@ -767,6 +767,13 @@ class ServerConfig(Base):
 
     Values are strings so one table serves every type; callers coerce. Also holds
     CONFIG_INITIALIZED_ON, the date restock day numbers count from.
+
+    **Superseded by `config_history`, and read nowhere.** It survives only
+    so that a database written before the change can be migrated out of
+    it on the next boot; `_migrate_config_to_history` does that once and
+    the rows stay here, inert, as the thing to restore from if the move
+    turns out to have been wrong. Nothing writes it. Delete the table
+    when the beta server has been up long enough to be sure.
     """
 
     __tablename__ = "server_config"
@@ -774,6 +781,56 @@ class ServerConfig(Base):
     guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(String(255), nullable=False)
+
+
+class ConfigHistory(Base):
+    """Every value this server's config has ever held, and when.
+
+    **This is the config, not a journal beside it.** The live value is
+    the row whose `effective_to` is null, and there is no other copy -
+    which is the whole point. A table that merely *records* changes to
+    some other live value drifts from it, silently, and the drift is
+    found while analysing something else months later.
+
+    It matters more than it looks, because every number in the
+    interaction log is uninterpretable without it: *players pet forty
+    times a day* means nothing unless you know what a pet was worth
+    that week and how fast the drift pulled it back.
+
+    **Narrow rather than snapshots** - one row per
+    `(guild, key, value, window)`, not one row per whole-config state.
+    A snapshot table answers "what was the config on 14 October" more
+    directly; a narrow one answers "when did the decay rate last
+    change", survives a single-value edit without rewriting the set,
+    and joins per key to each logged event. The snapshot question is a
+    group-by.
+
+    **Windows never overlap per `(guild_id, key)`**, and exactly one is
+    open. That invariant lives in `set_setting`, which closes the
+    standing row and opens the next inside one transaction, rather than
+    in a partial unique index - SQLite and PostgreSQL both have those,
+    but the dialects spell them differently and the writer is one
+    function.
+    """
+
+    __tablename__ = "config_history"
+    __table_args__ = (
+        Index("ix_config_history_live", "guild_id", "key", "effective_to"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    key: Mapped[str] = mapped_column(String(64), nullable=False)
+    value: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Through `server_now`, per the single-clock rule: a QA clock offset
+    # that moved every dated behaviour but not this one would make the
+    # history incoherent the first time anybody tested a dated feature.
+    effective_from: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    effective_to: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class ThingUse(Base):
@@ -1140,6 +1197,49 @@ async def _add_missing_columns(conn) -> None:
             log.info("Schema upgrade: added %s.%s", table, column)
 
 
+async def _migrate_config_to_history(conn) -> None:
+    """Move an old database's settings into the history, once.
+
+    **Every existing value becomes an open window**, dated now rather
+    than when it was actually set - which is a lie, and the least bad
+    one available: nothing recorded the real date, and the alternative
+    is either no history at all or a fabricated one further back. A
+    value that has been standing since before the history existed reads
+    as "set when the history started", which is true of the record even
+    though it is not true of the value.
+
+    Runs only when the history is empty and `server_config` is not, so
+    it cannot fire twice and cannot touch a server that has set
+    anything since. The old rows are left in place as the thing to
+    restore from.
+    """
+    def _has_config(sync_conn) -> bool:
+        return "server_config" in inspect(sync_conn).get_table_names()
+
+    if not await conn.run_sync(_has_config):
+        return
+    if await conn.scalar(select(func.count()).select_from(ConfigHistory.__table__)):
+        return
+
+    moved = await conn.execute(
+        ConfigHistory.__table__.insert().from_select(
+            ["guild_id", "key", "value", "effective_from"],
+            select(
+                ServerConfig.guild_id,
+                ServerConfig.key,
+                ServerConfig.value,
+                func.now(),
+            ),
+        )
+    )
+    if moved.rowcount:
+        log.info(
+            "Schema upgrade: moved %d server_config row(s) into config_history, "
+            "which is the live config from now on",
+            moved.rowcount,
+        )
+
+
 def _enforce_sqlite_foreign_keys(engine: AsyncEngine) -> None:
     """Turn on foreign key enforcement for SQLite, which defaults it off.
 
@@ -1307,6 +1407,7 @@ async def init_db() -> None:
             await _rebuild_room_text_if_narrow(conn)
             await conn.run_sync(Base.metadata.create_all)
             await _add_missing_columns(conn)
+            await _migrate_config_to_history(conn)
     except StartupError:
         await _engine.dispose()
         _engine = None
@@ -2999,13 +3100,24 @@ async def toy_plays(guild_id: int, user_id: int) -> int:
 
 
 async def clear_setting(guild_id: int, key: str) -> None:
-    """Remove one setting, so the next read falls back to its default."""
+    """Close the standing window, so the next read falls back to its default.
+
+    **The history is not deleted.** Unsetting a value is itself a
+    tuning decision and dated like any other - a window that closed
+    with nothing after it says "from here, the default", which is the
+    truth and is exactly what an analysis needs to read.
+    """
+    now = await server_now(guild_id)
     session_factory = _require_session()
     async with session_factory() as session:
         await session.execute(
-            ServerConfig.__table__.delete().where(
-                ServerConfig.guild_id == guild_id, ServerConfig.key == key
+            update(ConfigHistory)
+            .where(
+                ConfigHistory.guild_id == guild_id,
+                ConfigHistory.key == key,
+                ConfigHistory.effective_to.is_(None),
             )
+            .values(effective_to=now)
         )
         await session.commit()
 
@@ -3092,6 +3204,15 @@ async def clear_cooldowns(guild_id: int, user_id: int) -> int:
     return cleared
 
 
+def _live_value(guild_id: int, key: str):
+    """The standing row for one key: the window nobody has closed."""
+    return select(ConfigHistory.value).where(
+        ConfigHistory.guild_id == guild_id,
+        ConfigHistory.key == key,
+        ConfigHistory.effective_to.is_(None),
+    )
+
+
 async def get_config_raw(guild_id: int, key: str) -> str | None:
     """One setting exactly as stored, or None if this server has never set it.
 
@@ -3101,11 +3222,7 @@ async def get_config_raw(guild_id: int, key: str) -> str | None:
     """
     session_factory = _require_session()
     async with session_factory() as session:
-        return await session.scalar(
-            select(ServerConfig.value).where(
-                ServerConfig.guild_id == guild_id, ServerConfig.key == key
-            )
-        )
+        return await session.scalar(_live_value(guild_id, key))
 
 
 async def get_setting(guild_id: int, key: str) -> int:
@@ -3117,11 +3234,7 @@ async def get_setting(guild_id: int, key: str) -> int:
     default, _ = CONFIG_KEYS.get(key, (0, ""))
     session_factory = _require_session()
     async with session_factory() as session:
-        raw = await session.scalar(
-            select(ServerConfig.value).where(
-                ServerConfig.guild_id == guild_id, ServerConfig.key == key
-            )
-        )
+        raw = await session.scalar(_live_value(guild_id, key))
     if raw is None:
         return default
     try:
@@ -3144,22 +3257,7 @@ async def set_announcement_channel(guild_id: int, channel_id: int) -> None:
     time, so moving the house to another channel moves the announcements with
     it. If the bot can post the rooms there it can post the names there.
     """
-    session_factory = _require_session()
-    insert = _upsert_statement()
-    async with session_factory() as session:
-        await session.execute(
-            insert(ServerConfig)
-            .values(
-                guild_id=guild_id,
-                key=CONFIG_ANNOUNCE_CHANNEL,
-                value=str(channel_id),
-            )
-            .on_conflict_do_update(
-                index_elements=[ServerConfig.guild_id, ServerConfig.key],
-                set_={"value": str(channel_id)},
-            )
-        )
-        await session.commit()
+    await set_config(guild_id, CONFIG_ANNOUNCE_CHANNEL, str(channel_id))
     log.info("Guild %s announces achievements in channel %s", guild_id, channel_id)
 
 
@@ -3167,12 +3265,7 @@ async def announcement_channel(guild_id: int) -> int | None:
     """Where to post an achievement name, or None if never initialized."""
     session_factory = _require_session()
     async with session_factory() as session:
-        raw = await session.scalar(
-            select(ServerConfig.value).where(
-                ServerConfig.guild_id == guild_id,
-                ServerConfig.key == CONFIG_ANNOUNCE_CHANNEL,
-            )
-        )
+        raw = await session.scalar(_live_value(guild_id, CONFIG_ANNOUNCE_CHANNEL))
     if raw is None:
         return None
     try:
@@ -3184,15 +3277,58 @@ async def announcement_channel(guild_id: int) -> int | None:
 
 async def set_setting(guild_id: int, key: str, value: int) -> int:
     """Store a setting and return it. Takes effect from the next read."""
+    return int(await set_config(guild_id, key, str(value)))
+
+
+CONFIG_CONTENT_VERSION = "content_version"
+
+
+async def record_content_version(guild_id: int, version: str) -> bool:
+    """Date this server's content, if it has changed. True when it had.
+
+    **Only on a change.** `set_config` deliberately writes a row even
+    when the value repeats, because setting a number back to itself is
+    still a decision somebody made. This is not a decision - it runs on
+    every boot - so a server that restarts twice an hour would collect
+    a row an hour saying nothing happened, and the one question the
+    column exists to answer, *when did the content last change*, would
+    be buried in them.
+    """
+    if await get_config_raw(guild_id, CONFIG_CONTENT_VERSION) == version:
+        return False
+    await set_config(guild_id, CONFIG_CONTENT_VERSION, version)
+    return True
+
+
+async def set_config(guild_id: int, key: str, value: str) -> str:
+    """Close the standing window for this key and open the next one.
+
+    **Both halves in one transaction**, because the invariant the whole
+    table rests on is that exactly one window per `(guild, key)` is
+    open. A crash between the two would leave either two live rows,
+    where which one wins depends on row order, or none, where the
+    setting silently reverts to its default.
+
+    Writing the same value again still closes and reopens. That looks
+    wasteful and is not: *somebody set the decay rate on the 14th* is a
+    fact worth having even when they set it to what it already was, and
+    a row costs nothing.
+    """
+    now = await server_now(guild_id)
     session_factory = _require_session()
-    insert = _upsert_statement()
     async with session_factory() as session:
         await session.execute(
-            insert(ServerConfig)
-            .values(guild_id=guild_id, key=key, value=str(value))
-            .on_conflict_do_update(
-                index_elements=[ServerConfig.guild_id, ServerConfig.key],
-                set_={"value": str(value)},
+            update(ConfigHistory)
+            .where(
+                ConfigHistory.guild_id == guild_id,
+                ConfigHistory.key == key,
+                ConfigHistory.effective_to.is_(None),
+            )
+            .values(effective_to=now)
+        )
+        session.add(
+            ConfigHistory(
+                guild_id=guild_id, key=key, value=value, effective_from=now
             )
         )
         await session.commit()

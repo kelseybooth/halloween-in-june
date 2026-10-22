@@ -10,6 +10,8 @@ wiping world state without being asked would end everyone's game.
 from dataclasses import replace
 
 import pytest
+
+from datetime import datetime
 from sqlalchemy import func, select
 
 from conftest import ALICE, BOB, GUILD_A, GUILD_B
@@ -422,7 +424,12 @@ async def test_fresh_clears_states_and_tunables_too(two_servers):
             [
                 database.PlayerState(guild_id=GUILD_A, user_id=ALICE, state="has_key"),
                 database.ServerState(guild_id=GUILD_A, state="stairs_repaired"),
-                database.ServerConfig(guild_id=GUILD_A, key="planks_required", value="10"),
+                database.ConfigHistory(
+                    guild_id=GUILD_A,
+                    key="planks_required",
+                    value="10",
+                    effective_from=datetime(2026, 10, 1),
+                ),
             ]
         )
         await session.commit()
@@ -455,9 +462,10 @@ async def setting(db, guild_id, key):
 
     async with db._require_session()() as session:
         return await session.scalar(
-            select(database.ServerConfig.value).where(
-                database.ServerConfig.guild_id == guild_id,
-                database.ServerConfig.key == key,
+            select(database.ConfigHistory.value).where(
+                database.ConfigHistory.guild_id == guild_id,
+                database.ConfigHistory.key == key,
+                database.ConfigHistory.effective_to.is_(None),
             )
         )
 

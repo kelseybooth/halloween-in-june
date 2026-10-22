@@ -50,7 +50,10 @@ async def started(db, registrations):
 async def unstart(guild_id):
     """Undo the fixture's helpfulness: this file is about not being started."""
     async with database._require_session()() as session:
-        table = database.ServerConfig.__table__
+        table = database.ConfigHistory.__table__
+        # Deleted rather than closed. `clear_setting` would leave a
+        # shut window behind, which reads as "started once, then
+        # stopped" - and this file is about a server that never did.
         await session.execute(
             table.delete().where(
                 table.c.guild_id == guild_id, table.c.key == resolve.DROP_KEY
@@ -113,10 +116,14 @@ async def test_an_unreadable_pointer_reads_as_no_game(started):
     showing everything is not."""
     await database.set_setting(GUILD_A, resolve.DROP_KEY, 0)
     async with database._require_session()() as session:
-        table = database.ServerConfig.__table__
+        table = database.ConfigHistory.__table__
         await session.execute(
             table.update()
-            .where(table.c.guild_id == GUILD_A, table.c.key == resolve.DROP_KEY)
+            .where(
+                table.c.guild_id == GUILD_A,
+                table.c.key == resolve.DROP_KEY,
+                table.c.effective_to.is_(None),
+            )
             .values(value="soon")
         )
         await session.commit()
