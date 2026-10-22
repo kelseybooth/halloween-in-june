@@ -3003,10 +3003,90 @@ async def _is_this_room(room_id: str, typed: str) -> bool:
     return wanted in {reach.normalise(name), reach.normalise(room_id), *words}
 
 
+SEEN_FRAGMENT = "seen.{room}.{fragment}"
+
+# Underscores rather than asterisks, which is the only part of this that
+# is not obvious. Every fragment that will ever be marked has bolding in
+# it - bolding is how a scenery noun announces itself - and `*a **b** c*`
+# asks a markdown parser to decide where one emphasis ends and the next
+# begins. `_` cannot collide with `**` at all. It renders identically,
+# and it is one constant if that ever stops being true.
+NEW_TO_YOU = "_{text}_"
+
+
+async def _describe_room(
+    guild_id: int,
+    user_id: int,
+    room_id: str,
+    state: str,
+    unlocked: frozenset[str] = frozenset(),
+) -> str | None:
+    """The room's description, with the sentences new to this player in italics.
+
+    **A playtester could not tell which lines they had already read.**
+    That is a defect in the staged reveal rather than in the prose, and
+    it recurs at every drop that adds a fragment to a room somebody has
+    already looked at - so it is answered once here rather than for the
+    channel's second stage alone.
+
+    No label and no marker glyph. Italics read as emphasis rather than
+    as interface, so the fiction survives and the eye still goes to what
+    changed.
+
+    **A first look is never marked.** Otherwise a new player's opening
+    `/look` arrives entirely in italics, which says "all of this is new"
+    to someone for whom nothing can be old. The rows are written anyway,
+    so the second look marks only what actually arrived in between.
+
+    **The state is the hints table**, which is `(guild, player, id)` and
+    therefore a per-player boolean store under another name. The
+    Functional Spec declined a `player_thing_seen` table; it never had
+    to be one. A row per fragment a player has been shown costs rows,
+    not schema - a couple of dozen per player across the whole house.
+
+    One thing it does not catch, because fragments are keyed by number:
+    a fragment whose *text* changes with the room's state is the same
+    fragment, so the Entryway's staircase sentence will not be marked
+    when the stairs are repaired. That wants its own answer, and it is
+    not this one.
+    """
+    parts = await resolve.room_fragments(guild_id, room_id, state, unlocked)
+    if not parts:
+        return None
+
+    prefix = SEEN_FRAGMENT.format(room=room_id, fragment="")
+    ids = {
+        fragment: SEEN_FRAGMENT.format(room=room_id, fragment=fragment)
+        for fragment, _ in parts
+    }
+    try:
+        seen = await database.notices_with_prefix(guild_id, user_id, prefix)
+    except SQLAlchemyError:
+        # The description is the command's whole answer. Losing the
+        # marking is a missing italic; losing the paragraph is a `/look`
+        # that did nothing.
+        log.exception("Could not read seen fragments in %s for %s", room_id, user_id)
+        return " ".join(look for _, look in parts)
+
+    first_look = not seen
+    fresh = [fragment for fragment, _ in parts if ids[fragment] not in seen]
+    await database.notice_many(guild_id, user_id, (ids[f] for f in fresh))
+
+    return " ".join(
+        NEW_TO_YOU.format(text=look)
+        if not first_look and fragment in set(fresh)
+        else look
+        for fragment, look in parts
+    )
+
+
 async def _look_around(guild_id: int, user_id: int, room_id: str) -> str:
     """The room's description, then what is lying about in it."""
     state = await _current_state(guild_id, user_id)
-    description = await resolve.room_look(guild_id, room_id, state) or GENERIC_ROOM_DESCRIPTION
+    description = (
+        await _describe_room(guild_id, user_id, room_id, state)
+        or GENERIC_ROOM_DESCRIPTION
+    )
 
     held = await states.in_force(guild_id, user_id)
     loose = await database.loose_here(guild_id, room_id, held_states=held)
@@ -3080,8 +3160,9 @@ async def _look_in_the_channel(guild_id: int, user_id: int) -> str:
     have.
     """
     held = await states.in_force(guild_id, user_id)
-    description = await resolve.room_look(
+    description = await _describe_room(
         guild_id,
+        user_id,
         content.CHANNEL_ROOM,
         await _current_state(guild_id, user_id),
         await _unlocked_for(guild_id, user_id),

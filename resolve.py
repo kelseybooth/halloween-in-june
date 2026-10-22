@@ -166,6 +166,28 @@ async def room_look(
 ) -> str | None:
     """The description of a room as this player currently sees it.
 
+    One paragraph. `room_fragments` is the same answer with the seams
+    still in it, for the one caller that has to treat the sentences
+    separately.
+    """
+    parts = await room_fragments(guild_id, room_id, state, unlocked)
+    return " ".join(look for _, look in parts) if parts else None
+
+
+async def room_fragments(
+    guild_id: int,
+    room_id: str,
+    state: str = DEFAULT_STATE,
+    unlocked: frozenset[str] = frozenset(),
+) -> list[tuple[int, str]]:
+    """The room's description as (fragment, sentence), in reading order.
+
+    **The fragment number comes back with the text because it is the
+    only stable name a sentence has.** A player is shown which lines
+    are new to them, and "new" has to survive the paragraph being
+    rewritten, reordered or extended - so it is keyed on the fragment
+    rather than on the sentence or on its position.
+
     Assembled from fragments **in fragment order, never in arrival
     order**. Nine rooms have one fragment each and read exactly as they
     always did; the channel has six, three of which are gated on what
@@ -232,10 +254,10 @@ async def room_look(
             # fragment this player cannot see stays unseen rather than
             # falling through to some other state's version of itself.
             if not visible_when or visible_when in unlocked:
-                parts.append(look)
+                parts.append((fragment, look))
             break
 
-    return " ".join(parts) if parts else None
+    return parts
 
 
 async def thing_text(
