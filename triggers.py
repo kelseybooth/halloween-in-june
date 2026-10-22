@@ -33,7 +33,9 @@ import achievements
 import alexa
 import craving
 import database
+import phrasing
 import states
+import world
 from achievements import Context
 
 log = logging.getLogger(__name__)
@@ -170,6 +172,68 @@ def on_tuesday(day: date) -> bool:
     with *Trash Panda*.
     """
     return day.weekday() == 1
+
+
+# --------------------------------------------------------------------------
+# The two October holidays
+#
+# Both are drop 0, both secret, and neither fits `_on_date`, whose whole
+# job is "this thing, on this day" - these have no thing behind them.
+#
+# They run on the same machinery as the Release 1 seven, which is worth
+# saying out loud because the writers specified their windows in UTC and
+# the engine computes them from Pacific. 27 October comes out as 26 Oct
+# 15:00 to 28 Oct 10:00 UTC and 31 October as 30 Oct 15:00 to 1 Nov 11:00
+# UTC, both exactly as the file's notes ask for. The second crosses the
+# end of daylight saving, which `window_bounds` gets right by converting
+# a Pacific wall-clock time rather than subtracting a fixed offset - and
+# it is the first window in the game that does, which dates the note at
+# the top of this file saying none of them do.
+# --------------------------------------------------------------------------
+
+BLACK_CAT_DAY = 27
+HALLOWEEN = 31
+
+
+async def _is_the_cat(thing_id: str | None) -> bool:
+    """Whether using this thing is reaching for the cat.
+
+    The bed, any toy, and any of the cans. Toys by *type*, so a
+    thirteenth toy stays a row in a spreadsheet - the same rule the cap
+    and the ramp already follow.
+    """
+    if thing_id is None:
+        return False
+    if thing_id == world.CAT_BED or thing_id in world.CAT_FOOD:
+        return True
+    row = await phrasing.thing_row(thing_id)
+    return row is not None and row.type == world.TOY
+
+
+async def lucky_black_cat(context: Context) -> bool:
+    """Any cat interaction on Black Cat Day.
+
+    **Any pet counts, friendly or not**, which is the point: this is
+    for spending the day with her, not for her enjoying it. The same
+    reasoning as the nightly drift, which also stamps on the attempt -
+    the toy's first offer is a guaranteed refusal and the bed refuses
+    inside its own window.
+    """
+    if not _window_is_open(context.when, on_october(BLACK_CAT_DAY)):
+        return False
+    return context.hook == "on_pet" or await _is_the_cat(context.thing_id)
+
+
+async def familiar(context: Context) -> bool:
+    """Being there at all on Halloween.
+
+    No thing and no verb, which makes it the widest condition in the
+    file and is the whole joke: somebody who opens `/stats` on 31
+    October spent Halloween in a haunted house with a black cat.
+    Making them prove it by petting her would be a narrower and worse
+    version of the same idea.
+    """
+    return _window_is_open(context.when, on_october(HALLOWEEN))
 
 
 def _on_date(matches, targets: set[str], *, source_only: bool = False):
@@ -562,6 +626,13 @@ def register_all() -> None:
     add("dressed_for_the_season", "on_use", _used(COSTUME))
     add("met_the_craving", "on_reaction", met_the_craving)
     add("forwarding_address", "on_use", _blocked("the letter"))
+
+    # The two October holidays. `lucky_black_cat` listens on both ways
+    # to reach her - `on_pet` for petting, `on_use` for the bed, the toy
+    # and the cans. `familiar` listens on the hook that fires for every
+    # command there is, which is the only hook it could use.
+    add("lucky_black_cat", ("on_pet", "on_use"), lucky_black_cat)
+    add("familiar", "on_command", familiar)
 
     # Drop 0 and drop 1: the proof of concept's own four.
     add("making_first_contact", "on_pet", making_first_contact)

@@ -4500,6 +4500,43 @@ def _fit(lines: list[str]) -> str:
     return "\n".join(kept)
 
 
+@bot.event
+async def on_app_command_completion(
+    interaction: discord.Interaction, command
+) -> None:
+    """Every finished slash command, for the one achievement that wants them all.
+
+    **The widest hook in the game, and it earns its width.** *Familiar*
+    asks whether somebody was in the house on Halloween, and the
+    honest answer is any command at all - a player who opened `/stats`
+    on the thirty-first was there. Narrowing it to petting would be a
+    worse version of the same joke.
+
+    Fired on completion rather than on dispatch, which is the one place
+    this differs from the file's note. Two reasons: a command that
+    raised did not happen, and announcing an award out of a hook that
+    runs *before* the command would put the award above the reply that
+    prompted it.
+
+    It swallows everything. This runs after the player already got
+    their answer, so a failure here must not turn a command that
+    worked into a command that errored - and `_fire` already logs.
+    """
+    if interaction.guild_id is None:
+        return
+    try:
+        await _fire(
+            achievements.Context(
+                guild_id=interaction.guild_id,
+                hook="on_command",
+                user_id=interaction.user.id,
+            ),
+            interaction=interaction,
+        )
+    except Exception:
+        log.exception("on_command hook failed after %s", getattr(command, "name", "?"))
+
+
 @bot.tree.error
 async def on_app_command_error(
     interaction: discord.Interaction, error: app_commands.AppCommandError

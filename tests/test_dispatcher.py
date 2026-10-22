@@ -18,13 +18,14 @@ obvious implementation gets it wrong:
 import pytest
 from types import SimpleNamespace
 
-from conftest import ALICE, BOB, GUILD_A, GUILD_B
+from conftest import ALICE, BOB, GUILD_A, GUILD_B, LAST_DROP
 from fake_discord import FakeChannel, FakeGuild, FakeInteraction, FakeMember
 
 import achievements
 import bot
 import content as content_module
 import content_loader
+import resolve
 import database
 from content import Achievement, Content
 
@@ -135,6 +136,10 @@ def test_every_hook_in_the_spec_exists():
         # V3. The three score thresholds listen here rather than on
         # `on_pet`, because the bed moves the meter too.
         "on_relationship_change",
+        # Every finished slash command. *Familiar* asks whether somebody
+        # was in the house on Halloween at all, and no narrower hook can
+        # answer that.
+        "on_command",
     }
 
 
@@ -581,10 +586,20 @@ async def test_fire_is_quiet_when_the_content_is_not_loaded(guild, halloween):
 
 @pytest.fixture
 async def playing(db, halloween):
-    """Alice in the Courtyard of the real house, with the real content."""
+    """Alice in the Courtyard of the real house, with the real content.
+
+    On the last drop. These tests borrow real achievement ids as
+    vehicles for watching a hook fire, and `fire` only dispatches
+    triggers whose achievement has arrived - so once the renumbering
+    put *Green Thumb* at drop 5 and *Making a Mess* at drop 4, the
+    watchers stopped being called and every one of these passed
+    vacuously or failed. The ids are incidental; the drop has to let
+    them through.
+    """
     await db.ensure_user_exists(ALICE, GUILD_A)
     await db.start_game(ALICE, GUILD_A, "CO", ["CO", "KI", "EN"])
     await content_loader.load_content(content_module.load_files())
+    await resolve.set_current_drop(GUILD_A, LAST_DROP)
     await db.set_announcement_channel(GUILD_A, halloween.text_channels[0].id)
     return db
 

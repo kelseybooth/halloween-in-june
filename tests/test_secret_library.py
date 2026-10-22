@@ -18,7 +18,7 @@ outright - so the four secret exits override both lines.
 
 import pytest
 
-from conftest import ALICE, BOB, GUILD_A
+from conftest import ALICE, BOB, GUILD_A, LAST_DROP
 from fake_discord import FakeChannel, FakeGuild, FakeInteraction, FakeMember, a_room_thread
 
 import achievements
@@ -54,6 +54,9 @@ async def house(db):
     for who in (ALICE, BOB):
         await db.start_game(who, GUILD_A, "EN", await resolve.rooms_open_at_launch())
     await db.set_announcement_channel(GUILD_A, halloween.id)
+    # *Out on a Limb* is a drop-7 achievement now, and this file is the
+    # only place it is driven end to end.
+    await resolve.set_current_drop(GUILD_A, LAST_DROP)
     return db, guild, halloween, rooms
 
 

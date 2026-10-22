@@ -506,7 +506,7 @@ async def test_the_shipped_content_loads(two_servers):
 
     assert report.content_rows["room_types"] == 10  # nine rooms and the channel
     assert report.content_rows["thing_types"] == 162  # ...and drop 1's ten scenery
-    assert report.content_rows["drops"] == 4  # 0 and 1 built, 2 and 3 named
+    assert report.content_rows["drops"] == 8  # 0 and 1 built, 2 to 7 named
     assert report.content_rows["restocks"] == 4  # the toy channel row joined them
 
 

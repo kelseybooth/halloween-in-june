@@ -15,7 +15,7 @@ from datetime import date, datetime, time, timedelta, timezone
 
 import pytest
 
-from conftest import ALICE, BOB, GUILD_A, GUILD_B
+from conftest import ALICE, BOB, GUILD_A, LAST_DROP, GUILD_B
 from fake_discord import FakeChannel, FakeGuild, FakeInteraction, FakeMember
 
 import achievements
@@ -24,6 +24,7 @@ import content as content_module
 import content_loader
 import craving
 import database
+import resolve
 import states
 import triggers
 from achievements import Context
@@ -49,11 +50,22 @@ def halloween():
 
 @pytest.fixture
 async def playing(db, halloween):
-    """Alice and Bob in the real house, with the real content."""
+    """Alice and Bob in the real house, with the real content.
+
+    On the last drop rather than the one the house opens on. Every
+    achievement here is tested against the moment it can be earned,
+    and the renumbering put most of them behind rooms that open at
+    drops 5 and 6 - on `HOUSE_DROP` two thirds of this file would be
+    asserting that an achievement which has not arrived cannot be
+    earned, which is true and not what any of it is about.
+    """
     for who in (ALICE, BOB):
         await db.ensure_user_exists(who, GUILD_A)
         await db.start_game(who, GUILD_A, "EN", ["EN"])
     await content_loader.load_content(content_module.load_files())
+    # After the load, because the drop has to exist in the database
+    # before a server can be moved to it.
+    await resolve.set_current_drop(GUILD_A, LAST_DROP)
     await db.set_announcement_channel(GUILD_A, halloween.text_channels[0].id)
     return db
 
@@ -473,11 +485,17 @@ async def test_nothing_blocked_can_be_earned_by_any_use(playing):
 
 
 def test_what_can_actually_be_earned():
-    """Twenty-eight of Release 1's thirty-five, plus the seven V3 adds
+    """Twenty-eight of Release 1's thirty-five, plus the nine V3 adds
     that have content behind them: making first contact, the two score
-    thresholds below 250, fluffing the bed, Tireless, and drop 2's two
-    toy achievements."""
-    assert len(achievements.registered_ids()) - len(BLOCKED) == 35
+    thresholds below 250, fluffing the bed, Tireless, drop 2's two toy
+    achievements, and the two October holidays.
+
+    **Registration, not arrival.** A row parked at `NEVER` is still
+    wired - *Met the Craving* is, and its predicate works - so this
+    counts what the engine can answer for, and the drop decides
+    separately whether anybody will ever be asked.
+    """
+    assert len(achievements.registered_ids()) - len(BLOCKED) == 37
 
 
 # --------------------------------------------------------------------------
@@ -741,10 +759,21 @@ async def test_talking_to_alexa_about_anything_else_earns_nothing(playing):
 
 
 async def test_met_the_craving(playing):
+    """**The predicate answers; the award is parked.**
+
+    The craving game is wired end to end - `on_raw_reaction_add` judges
+    a guess and fires `on_reaction` - but the 21 October renumbering
+    put `met_the_craving` at `NEVER`, so the row never arrives and
+    nothing can be awarded. Both halves are asserted, because they
+    disagree with each other and one of them is going to change: give
+    the row a real drop and the second assertion fails, which is the
+    reminder to delete it.
+    """
     guess = craving.Guess(verdict=craving.CORRECT, craving="\N{COOKIE}")
-    assert "met_the_craving" in await earned(
-        a_context("on_reaction", extra={"guess": guess})
-    )
+    context = a_context("on_reaction", extra={"guess": guess})
+
+    assert await triggers.met_the_craving(context)
+    assert await earned(context) == set()
 
 
 async def test_the_wrong_craving_guess_earns_nothing(playing):
@@ -967,3 +996,120 @@ async def test_the_boot_guard_is_quiet_when_everything_is_wired(playing, caplog)
     await bot._check_achievement_registry()
 
     assert "registration problem" not in caplog.text
+
+# --------------------------------------------------------------------------
+# The two October holidays
+#
+# Both are drop 0 and both are windows with no thing behind them, which
+# makes the window itself most of what there is to get wrong. The
+# writers specified the bounds in UTC and the engine derives them from
+# Pacific, so the first test here is that those two agree.
+# --------------------------------------------------------------------------
+
+
+def test_the_windows_are_the_ones_the_writers_asked_for():
+    """Asserted against the file's own notes column, in UTC.
+
+    **The Halloween window crosses the end of daylight saving**, which
+    is the first one in the game that does - 30 October is PDT and 1
+    November is PST, so a fixed seven-hour offset would put the close
+    an hour early and shut out whoever is last.
+    """
+    black_cat = triggers.window_bounds(date(2026, 10, triggers.BLACK_CAT_DAY))
+    halloween = triggers.window_bounds(date(2026, 10, triggers.HALLOWEEN))
+
+    assert black_cat == (datetime(2026, 10, 26, 15), datetime(2026, 10, 28, 10))
+    assert halloween == (datetime(2026, 10, 30, 15), datetime(2026, 11, 1, 11))
+
+
+async def test_petting_her_on_black_cat_day(playing):
+    assert "lucky_black_cat" in await earned(
+        a_context("on_pet", now=pacific(2026, 10, 27))
+    )
+
+
+async def test_a_standoffish_pet_still_counts(playing):
+    """**Any pet, friendly or not.** The achievement is for spending
+    the day with her, not for her enjoying it - the same reading the
+    nightly drift takes, which also stamps on the attempt."""
+    assert "lucky_black_cat" in await earned(
+        a_context("on_pet", now=pacific(2026, 10, 27), extra={"friendly": False})
+    )
+
+
+@pytest.mark.parametrize("thing_id", ["cat_bed", "cat_food_salmon"])
+async def test_the_other_ways_to_reach_her_count(playing, thing_id):
+    assert "lucky_black_cat" in await earned(
+        a_context("on_use", thing_id=thing_id, now=pacific(2026, 10, 27))
+    )
+
+
+TOYS = [t.thing_id for t in content_module.load_files().things if t.type == "toy"]
+
+
+@pytest.mark.parametrize("thing_id", TOYS)
+async def test_a_toy_counts_by_type(playing, thing_id):
+    """Toys are a class everywhere else - the cap, the ramp and three
+    achievements all count them by type - so a thirteenth toy must not
+    need an edit here.
+
+    One case per toy rather than a loop, because the award is
+    idempotent: the second toy in a loop earns nothing, having already
+    been earned by the first.
+    """
+    assert TOYS
+    assert "lucky_black_cat" in await earned(
+        a_context("on_use", thing_id=thing_id, now=pacific(2026, 10, 27))
+    )
+
+
+async def test_using_something_that_is_not_her_does_not_count(playing):
+    assert "lucky_black_cat" not in await earned(
+        a_context("on_use", thing_id="coffee_maker", now=pacific(2026, 10, 27))
+    )
+
+
+async def test_the_cat_on_the_wrong_day_earns_nothing(playing):
+    assert "lucky_black_cat" not in await earned(
+        a_context("on_pet", now=pacific(2026, 10, 20))
+    )
+
+
+async def test_any_command_at_all_on_halloween(playing):
+    """No thing and no verb. Somebody who opened `/stats` on the
+    thirty-first spent Halloween in a haunted house with a black
+    cat."""
+    assert "familiar" in await earned(
+        a_context("on_command", now=pacific(2026, 10, 31))
+    )
+
+
+async def test_familiar_does_not_fire_on_the_thirtieth_morning(playing):
+    """The window opens at 08:00 Pacific on the thirtieth, so the
+    morning before it is outside - which is the edge a fixed calendar
+    day would get wrong in the other direction."""
+    assert await earned(
+        a_context("on_command", now=pacific(2026, 10, 30, hour=7))
+    ) == set()
+
+
+async def test_familiar_reaches_the_far_side_of_the_time_change(playing):
+    """01 November 10:00 UTC is inside; 11:00 is not. Both are after
+    the clocks go back, so this is the assertion that would fail if the
+    close were computed by subtracting seven hours."""
+    assert "familiar" in await earned(
+        a_context("on_command", now=datetime(2026, 11, 1, 10, 30))
+    )
+    assert await earned(a_context("on_command", now=datetime(2026, 11, 1, 11))) == set()
+
+
+async def test_neither_is_pinned_to_2026(playing):
+    """Year-agnostic, for the same reason the Release 1 seven are: a
+    pinned year retires an achievement on 1 January."""
+    assert "lucky_black_cat" in await earned(
+        a_context("on_pet", now=pacific(2031, 10, 27))
+    )
+    assert "familiar" in await earned(
+        a_context("on_command", now=pacific(2031, 10, 31))
+    )
+
