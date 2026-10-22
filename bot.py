@@ -171,6 +171,31 @@ def _crowding_begins(recent_pets: int) -> bool:
     )
 
 
+def _is_crowded(recent_pets: int) -> bool:
+    """Whether the cat is *currently* tired of this player.
+
+    **The level, where `_crowding_begins` is the edge.** The nudge
+    fires once, on the pet that crosses into losing territory, because
+    a line on every pet afterwards is wallpaper. The status line
+    answers a different question - somebody opening `/stats` wants to
+    know where they stand now, and "you crossed over four pets ago" is
+    not an answer. Two predicates on one number, and collapsing them
+    into one would break whichever half it was collapsed into.
+    """
+    return friendly_chance(recent_pets) < BREAK_EVEN_CHANCE
+
+
+def _is_expectant(recent_pets: int) -> bool:
+    """The other side of the same line: better than even odds.
+
+    Exactly even is neither, which is why this is strict. A player at
+    fifty percent is being told nothing useful in either direction, and
+    the two can never both be true - they read one number from opposite
+    sides.
+    """
+    return friendly_chance(recent_pets) > BREAK_EVEN_CHANCE
+
+
 def _debug_lines(reaction: Reaction, recent: int, relationship: int) -> str:
     """TEMPORARY (testing) diagnostics appended to /pet replies."""
     mood = "friendly" if reaction.friendly else "standoffish"
@@ -4230,6 +4255,11 @@ async def _stats_embed(guild, viewer, subject) -> discord.Embed:
     ]
 
     if mine:
+        # Directly under the prose, and never on the public view: it is
+        # progress rather than result, and it changes minute to minute.
+        status = await _status_line(guild_id, subject.id)
+        if status:
+            body.append(status)
         body.append(
             await phrasing.default_say(
                 "stats.pets", count=await database.get_pet_count(subject.id, guild_id)
@@ -4309,6 +4339,72 @@ RELATIONSHIP_BANDS: tuple[tuple[int, str], ...] = (
     (-30, "stats.rel.irritated"),
     (database.RELATIONSHIP_MIN, "stats.rel.unimpressed"),
 )
+
+
+async def _status_line(guild_id: int, user_id: int) -> str | None:
+    """What the cat wants from this player right now, in one sentence.
+
+    **Private only.** It is progress rather than result - a standing
+    condition that changes minute to minute - and looking at somebody
+    else's stats reports what they have done, not what the cat happens
+    to think of them this moment.
+
+    Three conditions and six outcomes, from the spec's table. Hungry
+    and crowded compose, because they are two separate facts and read
+    as two sentences. Expectant and hungry do not: *expectantly with
+    hunger in her eyes* is one sentence a writer wrote, and composing
+    those two would give *looks at you expectantly. The cat looks at
+    you with hunger in her eyes.*
+
+    Expectant and crowded can never coincide, so the table's dash in
+    those rows is a fact rather than a convention.
+
+    **The hunger half doubles as the tutorial reminder.** From drop 3
+    an un-graduated player opening `/stats` is told the cat is hungry
+    right beside the open quest, which is the job the follow-the-player
+    nudge would have done before the cat started following everybody.
+    """
+    recent = await database.recent_pets(user_id, guild_id)
+    crowded, expectant = _is_crowded(recent), _is_expectant(recent)
+    hungry = await _is_hungry(guild_id, user_id)
+
+    if crowded:
+        keys = ["stats.status.hungry"] if hungry else []
+        keys.append("stats.status.crowded")
+    elif expectant and hungry:
+        keys = ["stats.status.expectant_hungry"]
+    elif expectant:
+        keys = ["stats.status.expectant"]
+    elif hungry:
+        keys = ["stats.status.hungry"]
+    else:
+        return None
+
+    said = [await phrasing.default_say(key) for key in keys]
+    return " ".join(part for part in said if part) or None
+
+
+async def _is_hungry(guild_id: int, user_id: int) -> bool:
+    """Whether this player could feed the cat right now.
+
+    Eight hours since their last successful feed, or never fed - and
+    only from the drop that puts food in the game. Without that gate
+    every player at drops 0 to 2 has never fed her, and `/stats` would
+    tell all of them she is hungry in a game with nothing to feed her
+    with.
+
+    Read off `thing_uses`, which `/use` already writes on a successful
+    feed and only on a successful one: a refused use returns before the
+    row is touched. Whoever builds feeding owns this function, and the
+    id set it reads is the part most likely to be replaced.
+    """
+    drop = await resolve.current_drop(guild_id)
+    if drop is resolve.NO_GAME or drop < world.FEEDING_FROM_DROP:
+        return False
+    fed = await database.last_used_any(user_id, guild_id, world.CAT_FOOD)
+    if fed is None:
+        return True
+    return await database.server_now(guild_id) - fed >= world.HUNGER_WINDOW
 
 
 async def _relationship_band(score: int, about=None) -> str:

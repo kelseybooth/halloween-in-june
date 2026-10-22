@@ -2246,6 +2246,52 @@ async def record_use(user_id: int, guild_id: int, thing_id: str) -> UseRecord:
     )
 
 
+async def last_used_any(
+    user_id: int, guild_id: int, thing_ids: Iterable[str]
+) -> datetime | None:
+    """The most recent use of any one of these, or None for none of them.
+
+    Written for hunger, which is "eight hours since this player's last
+    successful feed" and does not care which can it was. A `MAX` over
+    the rows rather than a column on the player, because `thing_uses`
+    already holds exactly this and a column would be a second place the
+    same fact lives.
+    """
+    wanted = sorted(set(thing_ids))
+    if not wanted:
+        return None
+    session_factory = _require_session()
+    async with session_factory() as session:
+        return await session.scalar(
+            select(func.max(ThingUse.last_used_at)).where(
+                ThingUse.guild_id == guild_id,
+                ThingUse.user_id == user_id,
+                ThingUse.thing_id.in_(wanted),
+            )
+        )
+
+
+async def recent_pets(user_id: int, guild_id: int) -> int:
+    """How many pets this player has inside the window, without adding one.
+
+    `increment_pet_count` returns the same figure, but only by petting.
+    `/stats` has to ask the question without answering it, which is the
+    whole difference between a status line and a mood roll.
+    """
+    session_factory = _require_session()
+    cutoff = await server_now(guild_id) - RECENT_PET_WINDOW
+    async with session_factory() as session:
+        return await session.scalar(
+            select(func.count())
+            .select_from(PetEvent)
+            .where(
+                PetEvent.user_id == user_id,
+                PetEvent.guild_id == guild_id,
+                PetEvent.created_at >= cutoff,
+            )
+        ) or 0
+
+
 async def last_used(user_id: int, guild_id: int, thing_id: str) -> datetime | None:
     """When this player last used a thing, without recording a new use."""
     session_factory = _require_session()

@@ -62,6 +62,32 @@ RAMP_STEP = 25
 PLAY_COOLDOWN = timedelta(minutes=10)
 
 
+# Feeding, which drop 3 builds. Only the hunger window is read today,
+# by the `/stats` status line, which has to be able to say the cat
+# wants feeding before anything can feed her.
+#
+# **A set of ids rather than a type or a column**, and that is the one
+# thing here worth revisiting. There is no `food` type, the five cans
+# are `object` like everything else carriable, and `requires =
+# can_opener` stops marking them the day the salmon gets its pull-tab.
+# Whoever builds feeding should give them a real marker and delete
+# this; until then an explicit list beats a prefix match, which would
+# sweep in the seven `cat_food_stash_*` sources.
+CAT_FOOD = frozenset({
+    "cat_food_chicken",
+    "cat_food_salmon",
+    "cat_food_tuna",
+    "cat_food_gourmet",
+    "cat_food_expired",
+})
+HUNGER_WINDOW = timedelta(hours=8)
+
+# Before this drop there is no food in the game, so every player has
+# never been fed and would read as permanently hungry. The gate is what
+# stops `/stats` promising a mechanic that does not exist yet.
+FEEDING_FROM_DROP = 3
+
+
 def play_chance(ramp: int) -> int:
     """Percentage chance that this attempt lands, from the ramp."""
     return min(100, max(0, RAMP_STEP * ramp))

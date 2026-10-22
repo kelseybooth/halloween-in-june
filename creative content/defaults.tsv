@@ -56,6 +56,10 @@ stats.rel.likes.other	The cat genuinely likes {player}.
 stats.rel.claimed.other	The cat has claimed {player} as her human.
 stats.rel.adores.other	The cat adores {player}.
 stats.rel.anywhere.other	The cat would follow {player} anywhere.
+stats.status.expectant	Right now, the cat is watching you expectantly.
+stats.status.hungry	Right now, the cat is watching you with hunger in her eyes.
+stats.status.expectant_hungry	Right now, the cat is watching you expectantly with hunger in her eyes.
+stats.status.crowded	You've petted the cat a lot recently.
 stats.relationship	Cat relationship strength: {score}
 stats.pets	Total pets: {count}
 stats.header.quests	Open Quests
