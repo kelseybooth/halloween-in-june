@@ -211,7 +211,7 @@ async def test_the_first_pet_of_all(house):
     _, guild, _, assets = house
     await bot.upload_art(guild, assets)
 
-    assert pet_image_of(await pet(house)) == "eunoia_alert.png"
+    assert pet_image_of(await pet(house)) == "black_cat_alert.png"
 
 
 async def test_and_nothing_until_the_crowding_nudge(house):
@@ -225,7 +225,7 @@ async def test_and_nothing_until_the_crowding_nudge(house):
     for n in range(2, 5):
         assert pet_image_of(await pet(house)) is None, n
 
-    assert pet_image_of(await pet(house)) == "eunoia_suspicious.png"
+    assert pet_image_of(await pet(house)) == "black_cat_suspicious.png"
 
 
 async def test_and_nothing_after_it_either(house):
@@ -265,7 +265,7 @@ async def test_an_achievement_image_rides_the_private_line(house):
         interaction=interaction,
     )
 
-    assert image_of(interaction) == "eunoia_sniffing.png"
+    assert image_of(interaction) == "black_cat_sniffing.png"
 
 
 async def test_the_public_line_carries_no_image(house):
@@ -319,7 +319,7 @@ async def test_the_first_dirty_diaper_a_player_looks_at(house):
     second = await an_interaction(house)
     await bot.look.callback(second, "diaper")
 
-    assert image_of(first) == "eunoia_sniffing.png"
+    assert image_of(first) == "black_cat_sniffing.png"
     assert image_of(second) is None
 
 
@@ -338,7 +338,7 @@ async def test_the_diaper_is_per_player(house):
     theirs = await an_interaction(house, who=BOB)
     await bot.look.callback(theirs, "diaper")
 
-    assert image_of(theirs) == "eunoia_sniffing.png"
+    assert image_of(theirs) == "black_cat_sniffing.png"
 
 
 # --------------------------------------------------------------------------
@@ -390,12 +390,12 @@ async def test_the_avatar_is_never_sent_as_an_image(house):
 
 
 async def test_no_image_is_tied_to_the_relationship_meter(house):
-    """`eunoia_content` and `eunoia_disdain` are the two endings of the
+    """`black_cat_content` and `black_cat_disdain` are the two endings of the
     relationship arc, and both fire on their achievement and nowhere else.
     A score that can swing back and forth would make them blink."""
-    assert bot.ART_FOR_ACHIEVEMENT["making_friends"] == "eunoia_content"
-    assert bot.ART_FOR_ACHIEVEMENT["trying_to_make_friends"] == "eunoia_disdain"
-    assert "eunoia_content" not in (
+    assert bot.ART_FOR_ACHIEVEMENT["making_friends"] == "black_cat_content"
+    assert bot.ART_FOR_ACHIEVEMENT["trying_to_make_friends"] == "black_cat_disdain"
+    assert "black_cat_content" not in (
         bot.ART_FIRST_PET, bot.ART_CROWDING,
     )
 
@@ -422,7 +422,7 @@ async def test_a_message_still_sends_with_nothing_uploaded(house):
 async def test_a_broken_url_still_sends_the_message(house):
     db, guild, _, assets = house
     await bot.upload_art(guild, assets)
-    await db.record_art(GUILD_A, "eunoia_sniffing", "")
+    await db.record_art(GUILD_A, "black_cat_sniffing", "")
     interaction = await an_interaction(house)
 
     await bot._announce(
@@ -433,3 +433,129 @@ async def test_a_broken_url_still_sends_the_message(house):
     )
 
     assert "You earned" in text_of(interaction)
+
+# --------------------------------------------------------------------------
+# How the art gets there at all
+#
+# It did not, for the whole of drops 0 and 1. `upload_art` had one
+# caller, `/initialize-haunted-house`, which also builds nine room
+# threads and is therefore registered only from drop 3 - so on a
+# drop-0 server there was no way to run it, `server_art` stayed empty,
+# and every message quietly took the degrade-to-text path. The
+# playtesters reported seeing no pictures at all, which was exactly
+# right.
+#
+# These are the tests that would have caught it: they drive the command
+# an admin actually runs first, and then check a player can see the
+# result.
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture
+async def fresh(db, registrations):
+    """A server nobody has started, which is where `/start-game` runs.
+
+    The `db` fixture opens the house in both test guilds so that the
+    rest of the suite has nine rooms to assert against; this file needs
+    the opposite, because the command under test refuses a server that
+    is already running.
+    """
+    async with database._require_session()() as session:
+        table = database.ConfigHistory.__table__
+        await session.execute(
+            table.delete().where(
+                table.c.guild_id == GUILD_A, table.c.key == resolve.DROP_KEY
+            )
+        )
+        await session.commit()
+    await content_loader.load_content(content_module.load_files())
+
+    halloween = FakeChannel(name="halloween")
+    assets = FakeChannel(name="bot-testing")
+    guild = FakeGuild(
+        GUILD_A,
+        name="Halloween in June",
+        channels=[halloween, assets],
+        members=[FakeMember(ALICE), FakeMember(BOB)],
+    )
+    for who in (ALICE, BOB):
+        await db.ensure_user_exists(who, GUILD_A)
+    return db, guild, halloween, assets
+
+
+async def starting(db, guild, channel, art_channel=None):
+    interaction = FakeInteraction(ALICE, GUILD_A, guild=guild, channel=channel)
+    await bot.start_game.callback(interaction, channel, art_channel)
+    return interaction
+
+
+async def test_starting_the_game_uploads_the_art(fresh):
+    db, guild, halloween, assets = fresh
+
+    await starting(db, guild, halloween, assets)
+
+    assert len(await db.art_urls(GUILD_A)) == 10
+    assert len(assets.posted) == 10
+
+
+async def test_a_first_pet_on_a_started_server_has_a_picture(fresh):
+    """**The end-to-end one, and the whole point.** Everything else
+    here could pass while a player still saw nothing."""
+    db, guild, halloween, assets = fresh
+    await starting(db, guild, halloween, assets)
+
+    petting = FakeInteraction(BOB, GUILD_A, guild=guild, channel=halloween)
+    await bot.pet.callback(petting)
+
+    assert pet_image_of(petting) == "black_cat_alert.png"
+
+
+async def test_without_an_art_channel_the_game_still_opens(fresh):
+    """Optional, and the reply says what was skipped rather than
+    leaving an admin to discover it from a playtester weeks later."""
+    db, guild, halloween, _ = fresh
+
+    interaction = await starting(db, guild, halloween)
+
+    assert await resolve.current_drop(GUILD_A) == 0
+    assert await db.art_urls(GUILD_A) == {}
+    assert "no art channel given" in interaction.sent[-1][0]
+
+
+async def test_art_that_will_not_upload_does_not_stop_the_game(
+    fresh, monkeypatch
+):
+    """The same reasoning that makes every message degrade to text: a
+    picture is never load-bearing."""
+    db, guild, halloween, assets = fresh
+
+    async def explode(*a, **k):
+        raise RuntimeError("no")
+
+    monkeypatch.setattr(bot, "upload_art", explode)
+    interaction = await starting(db, guild, halloween, assets)
+
+    assert await resolve.current_drop(GUILD_A) == 0
+    assert "did not upload" in interaction.sent[-1][0]
+
+
+async def test_running_it_twice_does_not_upload_twice(fresh):
+    """`/start-game` is idempotent, and the upload already skips what a
+    server has - so a second run is free either way."""
+    db, guild, halloween, assets = fresh
+    await starting(db, guild, halloween, assets)
+
+    await starting(db, guild, halloween, assets)
+
+    assert len(assets.posted) == 10
+
+
+def test_no_image_is_named_after_her():
+    """The player learns her name from the collar tag in the Bedroom,
+    and `upload_art` posts each file under its own name - so the
+    attachment URL on every embed used to read `eunoia_alert.png`,
+    three drops before the collar exists."""
+    for row in content_module.load_files().art:
+        assert "eunoia" not in row.art_id, row.art_id
+        assert "eunoia" not in row.file, row.file
+
