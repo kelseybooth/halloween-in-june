@@ -40,6 +40,7 @@ from sqlalchemy import (
     delete,
     func,
     inspect,
+    or_,
     select,
     text,
     update,
@@ -2431,6 +2432,81 @@ async def award_server_achievement(guild_id: int, achievement_id: str) -> bool:
     if created is not None:
         log.info("Guild %s earned %s", guild_id, achievement_id)
     return created is not None
+
+
+async def relationship_ranking(guild_id: int) -> list[tuple[int, int]]:
+    """(player, score) for everyone in this server who has met the cat, best first.
+
+    **Players who have never touched her are left out.** Without that,
+    day one is a wall of zeroes in whatever order the rows were created,
+    which is a list of who happens to be in the Discord rather than a
+    leaderboard. The test is `last_cat_interaction_date`, which every
+    pet, play, fluff and feed stamps - attempts included - plus a pet
+    count for anybody who played before that column existed.
+
+    **Ties break on the older row**, so two players on the same score do
+    not swap places between one viewing and the next. `created_at` is
+    the row's birth, which is the first pet or the first `/enter`: near
+    enough to "first interaction" to order by, and the only such date
+    stored.
+
+    Whole server in one list. A few dozen rows is not worth paginating
+    in SQL, and the caller needs the full order anyway to say where the
+    viewer sits in it.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(User.id, User.relationship)
+            .where(
+                User.guild_id == guild_id,
+                or_(
+                    User.last_cat_interaction_date.is_not(None),
+                    User.pet_count > 0,
+                ),
+            )
+            .order_by(User.relationship.desc(), User.created_at.asc(), User.id.asc())
+        )
+    return [(row[0], row[1]) for row in rows]
+
+
+async def recent_achievements(
+    guild_id: int, limit: int
+) -> list[tuple[str, int | None, datetime]]:
+    """The last few earned here: (achievement, who earned it, when).
+
+    `None` for the player on a server achievement, which has no earner
+    by design - nobody is credited and everyone holds it.
+
+    **No new column.** `earned_at` has been on both tables since they
+    were written, which is the whole answer to "find a way to list the
+    last five": a rolling five-row list would throw away the history
+    the telemetry plan wants and add a pruning rule that can be wrong.
+
+    Ties break on the id, because Postgres gives two awards in one
+    transaction the same `now()` and the list has to render the same way
+    twice. `_earned_lines` already breaks ties the same way.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        mine = await session.execute(
+            select(
+                PlayerAchievement.achievement_id,
+                PlayerAchievement.user_id,
+                PlayerAchievement.earned_at,
+            ).where(PlayerAchievement.guild_id == guild_id)
+        )
+        ours = await session.execute(
+            select(
+                ServerAchievement.achievement_id,
+                ServerAchievement.earned_at,
+            ).where(ServerAchievement.guild_id == guild_id)
+        )
+
+    rows = [(row[0], row[1], row[2]) for row in mine]
+    rows += [(row[0], None, row[1]) for row in ours]
+    rows.sort(key=lambda row: (row[2], row[0]), reverse=True)
+    return rows[:limit]
 
 
 async def player_achievements_of(guild_id: int, user_id: int) -> dict[str, datetime]:

@@ -47,12 +47,33 @@ stats.rel.likes	The cat genuinely likes you.
 stats.rel.claimed	The cat has claimed you as her human.
 stats.rel.adores	The cat adores you.
 stats.rel.anywhere	The cat would follow you anywhere.
+stats.rel.unimpressed.other	The cat is thoroughly unimpressed.
+stats.rel.irritated.other	The cat is mildly irritated.
+stats.rel.undecided.other	The cat is still trying to decide how she feels about {player}.
+stats.rel.warming.other	The cat is warming up to {player}.
+stats.rel.may_stay.other	The cat has decided {player} may stay.
+stats.rel.likes.other	The cat genuinely likes {player}.
+stats.rel.claimed.other	The cat has claimed {player} as her human.
+stats.rel.adores.other	The cat adores {player}.
+stats.rel.anywhere.other	The cat would follow {player} anywhere.
 stats.relationship	Cat relationship strength: {score}
 stats.pets	Total pets: {count}
 stats.header.quests	Open Quests
 stats.header.achievements	Completed Achievements
 stats.achievements.empty	No completed achievements. Try /pet.
+stats.achievements.empty.other	Nothing yet.
 stats.quests.empty	No open quests
+stats.rank	Leaderboard rank: {rank}
+leaderboard.title	Leaderboard
+leaderboard.header.top	By Relationship
+leaderboard.header.recent	Recently Earned
+leaderboard.entry	{rank}. {name} - {score}
+leaderboard.entry.you	**{rank}. {name} - {score}**
+leaderboard.separator	...
+leaderboard.recent	**{name}** - {player}
+leaderboard.recent.server	**{name}** - the whole server
+leaderboard.too_few	Too few people have met the cat for a leaderboard yet. It will fill in as they do.
+leaderboard.page	Page {page} of {total}
 hint.first_friendly	You've gotten your first achievement. Check /stats to see achievements and open quests.
 hint.first_standoffish	Petting affects your relationship with the cat. Check /stats to view it.
 hint.something_new	There is something new here. Try /look.

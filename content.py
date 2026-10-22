@@ -648,6 +648,7 @@ def validate(content: Content) -> list[str]:
     problems += _check_scenery_aliases_are_unique(content)
     problems += _check_visibility_gates(content)
     problems += _check_public_lines_name_the_player(content)
+    problems += _check_other_lines_are_not_second_person(content)
     problems += _check_emoji_groups(content)
     problems += _check_achievements(content)
     problems += _check_quests(content)
@@ -1379,6 +1380,32 @@ def _check_public_lines_name_the_player(content: Content) -> list[str]:
         for row in content.thing_text
         for verb in PUBLIC_VERBS
         if row.text.get(verb) and "{player}" not in row.text[verb]
+    ]
+
+
+def _check_other_lines_are_not_second_person(content: Content) -> list[str]:
+    """A default keyed `.other` is about a third party, so it cannot say "you".
+
+    **The same mistake as the take and drop lines, one file along.**
+    Every relationship band was written for the one person reading it,
+    and `/stats @somebody` shows them to a second person about a third:
+    *the cat adores you*, printed under Max's name, to Alice. The fix
+    was a parallel set of nine; this is what stops the tenth arriving in
+    the first person's voice.
+
+    The suffix is the whole rule, so it costs nothing to extend: any key
+    ending `.other` is a line about somebody who is not reading it.
+    Checked on "you" rather than on the presence of a token, because
+    unlike a `take` line these are not all required to name anybody -
+    *the cat is mildly irritated* is correct for either audience and
+    needs no substitution.
+    """
+    return [
+        f"default {key!r} ends in .other, so it is shown to somebody about "
+        "another player, but it says 'you': write it about them instead"
+        for key, text in content.defaults.items()
+        if key.endswith(".other")
+        and re.search(r"\byou(r|rs|rself)?\b", text, re.IGNORECASE)
     ]
 
 
