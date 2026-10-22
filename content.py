@@ -644,6 +644,7 @@ def validate(content: Content) -> list[str]:
     problems += _check_sources_are_named_in_prose(content, rooms)
     problems += _check_bolded_nouns_resolve(content)
     problems += _check_scenery_is_named_in_prose(content)
+    problems += _check_fixtures_are_named_in_prose(content)
     problems += _check_scenery_aliases_are_unique(content)
     problems += _check_visibility_gates(content)
     problems += _check_public_lines_name_the_player(content)
@@ -1539,15 +1540,84 @@ def _check_bolded_nouns_resolve(content: Content) -> list[str]:
     return problems
 
 
+def _check_fixtures_are_named_in_prose(content: Content) -> list[str]:
+    """A fixture is never listed either, so some sentence has to name it.
+
+    **The rule the house has always followed, written down.** `Also
+    here:` carries finite takeables and nothing else, because the engine
+    knows where those are and the prose would go stale naming them. Every
+    other kind of thing in a room is the room, and the description is
+    what reveals it. Sources have had that enforced since 2b and scenery
+    since drop 1's channel; fixtures are the third kind and the only one
+    the loader never checked, which worked only because the writers
+    happened to name all ninety-odd of them.
+
+    The channel was the exception and is not one any more: it listed its
+    fixtures while it had no prose to name them with, and now that it has
+    prose it lists what every other room lists.
+
+    **Naming, not bolding** - unlike scenery. Bolding is the stronger
+    contract and the house will want it before drop 3 opens, but no house
+    room text is bolded yet, so requiring it here would fail on every
+    room and stop the boot over work that is scheduled rather than
+    missing. This check pins the half that is already true, and tightens
+    to bolding when the writers' pass lands.
+
+    Named in the room's own description, or in the `look` or `use` of
+    something else whose home is that room - the nesting the house is
+    built on, where `road.look` reveals the ruts and `branches.look` the
+    wasp nest.
+    """
+    # Keyed by the room and by who wrote the sentence, because a thing
+    # may not reveal itself: half the fixtures in the house say their own
+    # name somewhere in their own `look`, and counting that would pass
+    # every row in the table while proving nothing.
+    readable: dict[str, dict[str, list[str]]] = {}
+    for row in content.room_text:
+        readable.setdefault(row.entity_id, {}).setdefault("", []).append(
+            row.text.get("look", "")
+        )
+
+    things = content.things_by_id
+    for row in content.thing_text:
+        thing = things.get(row.entity_id)
+        if thing is None or not thing.room_id:
+            continue
+        here = readable.setdefault(thing.room_id, {}).setdefault(row.entity_id, [])
+        here += [row.text.get("look") or "", row.text.get("use") or ""]
+
+    problems = []
+    for thing in content.things:
+        if thing.type != "fixture" or not thing.room_id:
+            continue
+        if thing.room_id == EVERYWHERE:
+            continue
+        others = readable.get(thing.room_id, {})
+        prose = " ".join(
+            line
+            for writer, lines in others.items()
+            if writer != thing.thing_id
+            for line in lines
+        ).lower()
+        if not any(re.search(rf"\b{re.escape(name.lower())}\b", prose)
+                   for name in thing.names):
+            problems.append(
+                f"fixture {thing.thing_id} is named nowhere a player in room "
+                f"{thing.room_id} can read; fixtures are not listed, so no "
+                "player could learn it is there"
+            )
+    return problems
+
+
 def _check_scenery_is_named_in_prose(content: Content) -> list[str]:
     """Scenery is never listed, so the prose that reveals it has to bold it.
 
     The same argument as `_check_sources_are_named_in_prose`, one type
     along. Scenery was added so that `/look` answers to what the
-    description points at, and `things_in_room` leaves it out of the
-    item list for exactly that reason - a channel listing "a road, a
-    fog, a ditch, a cat bed" buries the one noun worth typing. Which
-    leaves bolding as the only way a player learns the ditch is there.
+    description points at, and the item list carries finite takeables
+    and nothing else - a channel listing "a road, a fog, a ditch, a cat
+    bed" buries the one noun worth typing. Which leaves bolding as the
+    only way a player learns the ditch is there.
     An unbolded scenery row is not merely unpolished: it is a row no
     player will ever reach.
 

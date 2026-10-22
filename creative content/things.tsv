@@ -157,7 +157,7 @@ leaves	leaves	leaf|foliage	scenery	CH	1	no	no	1										1	146
 wasp_nest	wasp nest	nest|wasps nest|wasp's nest|hornet nest|hornets nest|wasps|hornets|paper nest	scenery	CH	1	no	no	1										1	147	
 field	field	pasture|meadow|empty field	terrain	CH	1	no	no	1										1	148	
 tire_tracks	tire tracks	tracks|track|tire track|tyre tracks|wheel tracks|tire marks|mud	terrain	CH	1	no	no	1										1	149	
-stand	produce stand	stand|farm stand|farmstand|roadside stand|fruit stand|vegetable stand|stall|counter|roof|tin roof|planks|plank	scenery	CH	1	no	no	1										1	150	
+stand	farm stand	stand|produce stand|farmstand|roadside stand|fruit stand|vegetable stand|stall|counter|roof|tin roof|planks|plank	scenery	CH	1	no	no	1										1	150	
 shelves	shelves	shelf|sign|board|produce|sweet corn|corn|blueberries|blueberry|eggs|brown eggs	scenery	CH	1	no	no	1										1	151	
 firewood_bin	firewood bin	bin|plank bin|wood bin|woodbin|firewood|wood|splits	scenery	CH	1	no	no	1										1	152	
 coin_slot	coin slot	slot|cash box|cashbox|money box|honor box|honesty box|cash|money	scenery	CH	1	no	no	1										1	153	

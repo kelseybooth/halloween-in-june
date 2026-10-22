@@ -3060,10 +3060,17 @@ async def _look_in_the_channel(guild_id: int, user_id: int) -> str:
     room-like row it always was, which retires the special case rather
     than adding one.
 
-    The list still names fixtures, which is the one way it differs from
-    `Also here:` in the house: scenery is bolded in the prose rather
-    than listed, and the bolding is what tells a player which nouns are
-    lookable.
+    **And it lists exactly what the house lists: finite takeables.**
+    The rule the house has always followed is that the list carries
+    what is loose and the prose names everything else - so the prose
+    cannot go stale, and a noun is either on the line or in a sentence
+    but never both. The channel strayed from it only because it had no
+    prose to name anything with. It has prose now, so the stray is over
+    and `/look` here is the same two parts in the same order.
+
+    At drop 1 that means the list is empty and the reply is prose
+    alone: the cat bed is named in the first fragment. The list first
+    appears in drop 2, carrying the toys, which is what it is for.
 
     **The cat is not in it.** Her row is `room_id = ALL` rather than the
     channel's, so she falls out of this query for free - which is the
@@ -3079,20 +3086,13 @@ async def _look_in_the_channel(guild_id: int, user_id: int) -> str:
         await _current_state(guild_id, user_id),
         await _unlocked_for(guild_id, user_id),
     )
-    # Two sources, because they answer two different questions. The
-    # fixtures come from the content table, which is the only thing that
-    # can name something with no presence row - the cat bed never enters
-    # `room_contents`. Everything carriable comes from `room_contents`,
-    # because a toy that has been picked up is *gone*, and a list built
-    # from home rooms went on naming it: the wand stayed on the line
-    # after the take, which reads as an endless supply and had testers
-    # taking it twice.
-    entries = [
-        (name, 1)
-        for name, gate in await resolve.things_in_room(guild_id, content.CHANNEL_ROOM)
-        if states.passes(gate, held)
-    ]
-    entries += await database.loose_here(
+    # `room_contents`, and nothing else. A list built from home rooms
+    # went on naming a toy that had been picked up, which reads as an
+    # endless supply and had testers taking it twice - and the fixture
+    # half of it is what this change retires, because a cat bed named
+    # in the description and listed underneath it is one noun printed
+    # twice.
+    entries = await database.loose_here(
         guild_id, content.CHANNEL_ROOM, held_states=held
     )
     line = await phrasing.listing(
