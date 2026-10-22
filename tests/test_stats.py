@@ -105,7 +105,14 @@ async def test_the_figure_is_shown_unrounded_and_labelled(playing, halloween):
     assert "Cat relationship strength: 137" in body(await ask(guild=halloween))
 
 
-async def test_the_three_lines_read_as_the_writers_wrote_them(playing, halloween):
+async def test_the_four_lines_read_as_the_writers_wrote_them(playing, halloween):
+    """The status line sits between the prose and the count, which is
+    where the spec puts it: directly under the description of the
+    relationship.
+
+    This fixture is in the house, so the cat reads as hungry - there is
+    food in the game from drop 3 and nobody has fed her.
+    """
     await playing.ensure_user_exists(ALICE, GUILD_A)
     await playing.set_relationship(GUILD_A, ALICE, -5)
     await playing.increment_pet_count(ALICE, GUILD_A)
@@ -115,6 +122,7 @@ async def test_the_three_lines_read_as_the_writers_wrote_them(playing, halloween
     assert reply.startswith(
         "Cat relationship strength: -5\n"
         "The cat is still trying to decide how she feels about you.\n"
+        "Right now, the cat is watching you expectantly with hunger in her eyes.\n"
         "Total pets: 1"
     )
 
