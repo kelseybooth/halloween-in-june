@@ -26,6 +26,11 @@ import database
 import resolve
 
 
+# The clause the nudge is recognised by, short enough to survive a
+# rewrite of the sentence around it.
+NUDGE = "has had enough of this for now"
+
+
 @pytest.fixture(autouse=True)
 def quiet_windows():
     bot.forget_public_pets()
@@ -192,36 +197,73 @@ async def test_no_pet_count_appears_anywhere_in_it(house):
     assert "3" not in reply
 
 
-async def test_the_first_pet_that_cannot_go_well_nudges(house):
-    """The ninth inside ten minutes: `80 - 10 x recent` reaches zero at
-    eight previous pets, so that is the first one the cat is certain to
-    refuse. It moved here from the tenth so that the nudge is tied to the
-    weighting rather than to a second number kept in step with it."""
-    for n in range(1, 9):
+async def test_the_first_pet_that_loses_points_nudges(house):
+    """The fifth inside ten minutes.
+
+    `80 - 10 x recent` puts the fifth pet at 40%, and a pet is worth
+    `+5` or `-5` on one flip, so that is the first one whose expected
+    value is negative - the point at which petting starts costing the
+    player score.
+
+    It used to wait for the ninth, where the chance hits zero and the
+    refusal is certain, on the argument that a warning fired over even
+    odds would be crying wolf. The playtest disagreed: told four pets
+    after the damage begins, the warning arrives too late to act on,
+    and this nudge is the only place the penalty is ever mentioned.
+    """
+    for n in range(1, 5):
         interaction = await act(house, bot.pet, None, "KI")
-        assert "give the cat some space" not in replies(interaction), n
+        assert NUDGE not in replies(interaction), n
 
-    ninth = await act(house, bot.pet, None, "KI")
+    fifth = await act(house, bot.pet, None, "KI")
 
-    assert "give the cat some space" in replies(ninth)
+    assert NUDGE in replies(fifth)
 
 
-async def test_and_so_does_every_pet_after_it(house):
-    for _ in range(10):
+async def test_and_no_pet_after_it_says_it_again(house):
+    """**Once per window, not once per pet.** A line on every pet from
+    the fifth onward is wallpaper, and the player has already been told
+    what they are doing - repeating it only makes the game nag."""
+    for _ in range(5):
+        await act(house, bot.pet, None, "KI")
+
+    for n in range(6, 13):
         interaction = await act(house, bot.pet, None, "KI")
+        assert NUDGE not in replies(interaction), n
 
-    assert "give the cat some space" in replies(interaction)
+
+async def test_it_can_fire_again_once_the_window_drains(house):
+    """No new state holds the "already warned" flag, and none is needed:
+    the nudge is the crossing itself, so going quiet long enough for the
+    ten minutes to empty makes the next burst a fresh crossing."""
+    db, *_ = house
+    for _ in range(5):
+        await act(house, bot.pet, None, "KI")
+
+    await db.set_setting(GUILD_A, database.CLOCK_KEY, 1)
+
+    for n in range(1, 5):
+        interaction = await act(house, bot.pet, None, "KI")
+        assert NUDGE not in replies(interaction), n
+
+    assert NUDGE in replies(await act(house, bot.pet, None, "KI"))
 
 
 def test_the_nudge_follows_the_weighting():
     """Asserted against the chance rather than against a count, because
-    that is why it moved: retune the weighting and the nudge comes with
-    it instead of needing to be kept in step by hand."""
-    certain = next(n for n in range(50) if bot.friendly_chance(n) == 0)
+    that is why it is computed this way: retune the weighting and the
+    nudge moves with it instead of needing to be kept in step by hand.
 
-    assert bot._crowded(certain)
-    assert not bot._crowded(certain - 1)
-    assert bot.friendly_chance(certain - 1) > 0
+    Both sides matter. It fires below break-even, and the pet at exactly
+    break-even is silent - a pet worth nothing in expectation is not one
+    a player should be warned off."""
+    losing = next(
+        n for n in range(50) if bot.friendly_chance(n) < bot.BREAK_EVEN_CHANCE
+    )
+
+    assert bot._crowding_begins(losing)
+    assert not bot._crowding_begins(losing - 1)
+    assert bot.friendly_chance(losing - 1) == bot.BREAK_EVEN_CHANCE
 
 
 async def test_the_nudge_never_appears_in_public(house):
@@ -231,9 +273,7 @@ async def test_the_nudge_never_appears_in_public(house):
     for _ in range(11):
         await act(house, bot.pet, None, "KI")
 
-    assert not any(
-        "give the cat some space" in line for line in threads["Kitchen"].posted
-    )
+    assert not any(NUDGE in line for line in threads["Kitchen"].posted)
 
 
 async def test_crowding_does_not_stop_the_pet_counting(house):
