@@ -3873,6 +3873,82 @@ async def qa_drop(interaction: discord.Interaction, drop: int) -> None:
 
 
 @bot.tree.command(
+    name="qa-reset-server",
+    description="(QA) Un-start this server, back to before /start-game.",
+)
+@app_commands.guild_only()
+@app_commands.describe(
+    confirm="Type this server's name exactly. It wipes everything.",
+)
+async def qa_reset_server(interaction: discord.Interaction, confirm: str) -> None:
+    """Back to the state a server is in before anybody runs `/start-game`.
+
+    **No admin command can reach this.** `/reset-haunted-house` writes
+    the drop and the channel straight back, deliberately - wiping
+    everyone's progress is not the same as the house never having
+    opened - and its `back_to_drop` floors at drop 0, because no drop
+    number means "not started". So the first five minutes of a server's
+    life could be tested exactly once.
+
+    **It also drops the art**, which is the difference that matters for
+    testing the upload: `upload_art` skips any image the server already
+    has, so a reset that kept them would report ten uploads and post
+    none.
+
+    The work is `reset_guild(drop=None)`, which already described this
+    outcome - "passing None leaves the game unstarted, which is a reset
+    nobody has run `/start-game` on yet". Nothing new; a second entry
+    point into a path the admin reset deliberately never takes.
+
+    QA-only, like the rest of this set, because a command whose purpose
+    is to undo a launch has no business existing in a server that is
+    playing.
+    """
+    if await qa.refuse(interaction):
+        return
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    guild = interaction.guild
+
+    # The same safeguard `/reset-haunted-house` uses, for the same
+    # reason: nothing here is recoverable, and this one goes further.
+    if confirm.strip() != guild.name:
+        await interaction.followup.send(
+            "That un-starts this server and wipes everything in it - "
+            "progress, achievements, the drop, the channel and the uploaded "
+            f"images.\n\nRun it again with `confirm` set to exactly "
+            f"**{guild.name}**.",
+            ephemeral=True,
+        )
+        return
+
+    was = await resolve.current_drop(guild.id)
+    try:
+        # `drop=None` is what un-starts it: the wipe takes the pointer
+        # with everything else, and nothing is written back.
+        cleared = await content_loader.reset_guild(guild.id, drop=None)
+        await qa.clear_forced(guild.id)
+    except (content.ContentError, SQLAlchemyError) as exc:
+        log.exception("qa-reset-server failed for %s", guild.id)
+        await interaction.followup.send(
+            f"The reset did not finish: {exc}. It is one transaction, so "
+            "nothing partial has been left behind.",
+            ephemeral=True,
+        )
+        return
+
+    await _reregister(interaction, guild, None)
+    await qa.record(interaction, f"un-started from drop {was}")
+    rows = sum(cleared.values())
+    await interaction.followup.send(
+        f"This server is un-started. Was on drop {was}; {rows} row(s) gone, "
+        "including the drop, the channel and the art.\n"
+        "- `/start-game <channel> [art_channel]` is the way back in\n"
+        "- the threads are untouched, as with every other reset",
+        ephemeral=True,
+    )
+
+
+@bot.tree.command(
     name="qa-reset-player", description="(QA) Wipe one player's state in this server."
 )
 @app_commands.guild_only()

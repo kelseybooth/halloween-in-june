@@ -206,18 +206,18 @@ def commands():
     return {c.name: c for c in bot.bot.tree.get_commands()}
 
 
-def test_the_bot_defines_twenty_two_commands():
-    """Thirteen the game uses and nine QA tools.
+def test_the_bot_defines_twenty_three_commands():
+    """Thirteen the game uses and ten QA tools.
 
     **Defined is not registered.** Every one of these exists in the
     tree; which of them a given server can see is decided per guild and
-    per drop by `gating`, and the seven QA ones reach two servers only.
+    per drop by `gating`, and the ten QA ones reach two servers only.
     The count is pinned here because a command appearing or disappearing
     should be a decision rather than a diff nobody read.
     """
     import gating
 
-    assert len(commands()) == 22
+    assert len(commands()) == 23
     assert set(gating.QA_COMMANDS) <= set(commands())
     assert {"start-game", "advance-game"} <= set(commands())
 

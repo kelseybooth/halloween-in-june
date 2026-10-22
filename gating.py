@@ -68,6 +68,12 @@ QA_COMMANDS: tuple[str, ...] = (
     # plays is four hours of cooldowns without a way to set it.
     "qa-state",
     "qa-spawn",
+    # Undoes a launch, which no admin command can: `/reset-haunted-house`
+    # writes the drop and the channel straight back on purpose, and its
+    # `back_to_drop` floors at drop 0 because no drop number means "not
+    # started". Testing the first five minutes needs the state before
+    # them, and that state was reachable exactly once per server.
+    "qa-reset-server",
 )
 
 

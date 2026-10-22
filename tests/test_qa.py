@@ -31,8 +31,13 @@ TEST_GUILD = sorted(qa.TEST_GUILDS)[0]
 
 
 @pytest.fixture
-async def testing(db):
-    """A test server, with a QA log channel and a tester who holds the role."""
+async def testing(db, registrations):
+    """A test server, with a QA log channel and a tester who holds the role.
+
+    `registrations` because the commands that move a server's drop
+    re-register the slash menu, which wants a gateway. The patch
+    records the call instead, so these stay about the drop.
+    """
     achievements.clear()
     triggers.register_all()
     await content_loader.load_content(content_module.load_files())
@@ -466,3 +471,125 @@ async def test_resetting_a_player_clears_the_play_state(testing):
     await bot.qa_reset_player.callback(qa_call(guild, "qa-reset-player"), member(guild))
 
     assert (await database.play_state(TEST_GUILD, BOB))[0] == 0
+
+# --------------------------------------------------------------------------
+# Un-starting a server
+#
+# The state before `/start-game` was unreachable by any command. The
+# admin reset writes the drop and the channel straight back on purpose,
+# and its `back_to_drop` floors at drop 0 because no drop number means
+# "not started" - so the first five minutes of a server's life could be
+# tested exactly once per server.
+# --------------------------------------------------------------------------
+
+
+async def reset_server(testing, confirm=None):
+    _, guild, _, _ = testing
+    interaction = qa_call(guild, "qa-reset-server")
+    await bot.qa_reset_server.callback(interaction, confirm or guild.name)
+    return interaction
+
+
+async def test_it_un_starts_the_server(testing):
+    """**The whole point.** `current_drop` is None afterwards, which is
+    the one state `/start-game` will act on."""
+    assert await resolve.current_drop(TEST_GUILD) == 1
+
+    await reset_server(testing)
+
+    assert await resolve.current_drop(TEST_GUILD) is resolve.NO_GAME
+
+
+async def test_the_whole_round_trip_including_the_art(testing):
+    """**What somebody testing the first five minutes actually needs**,
+    and the reason this command exists: un-start, then start again and
+    watch the pictures arrive.
+
+    It is also the assertion that would fail if the drop pointer were
+    closed rather than deleted - a shut window reads as "started once,
+    then stopped", and `/start-game` refuses that.
+    """
+    db, guild, halloween, _ = testing
+    assets = FakeChannel(name="bot-testing")
+    guild.text_channels.append(assets)
+    await db.record_art(TEST_GUILD, "black_cat_alert", "https://example/old.png")
+
+    await reset_server(testing)
+
+    starting = FakeInteraction(ALICE, TEST_GUILD, guild=guild, channel=halloween)
+    await bot.start_game.callback(starting, halloween, assets)
+
+    assert await resolve.current_drop(TEST_GUILD) == 0
+    assert len(await db.art_urls(TEST_GUILD)) == 10
+    assert "uploaded 10 cat picture(s)" in starting.sent[-1][0]
+
+
+async def test_the_art_goes_too(testing):
+    """**The difference that matters for the upload.** `upload_art`
+    skips any image a server already has, so a reset that kept them
+    would report ten uploads and post none."""
+    db, _, _, _ = testing
+    await db.record_art(TEST_GUILD, "black_cat_alert", "https://example/a.png")
+
+    await reset_server(testing)
+
+    assert await db.art_urls(TEST_GUILD) == {}
+
+
+async def test_the_channel_goes_too(testing):
+    """Every other reset writes it back. This one means "never
+    started", and a server that was never started does not know where
+    it lives."""
+    db, _, _, _ = testing
+
+    await reset_server(testing)
+
+    assert await db.announcement_channel(TEST_GUILD) is None
+
+
+async def test_it_takes_the_progress_with_it(testing):
+    db, _, _, _ = testing
+    await db.adjust_relationship(BOB, TEST_GUILD, 40)
+    await db.award_player_achievement(TEST_GUILD, BOB, "making_first_contact")
+
+    await reset_server(testing)
+
+    assert await db.get_relationship(BOB, TEST_GUILD) == 0
+    assert await db.player_achievements_of(TEST_GUILD, BOB) == {}
+
+
+async def test_the_wrong_name_changes_nothing(testing):
+    """The same safeguard the admin reset uses, and this one goes
+    further than it does."""
+    interaction = await reset_server(testing, confirm="not the server")
+
+    assert await resolve.current_drop(TEST_GUILD) == 1
+    assert "Run it again with" in interaction.sent[-1][0]
+
+
+async def test_it_leaves_no_forced_drop_behind(testing):
+    """A forced pointer on an un-started server would have
+    `/qa-inspect` report an override on a game that does not exist."""
+    await qa.mark_forced(TEST_GUILD, 1)
+
+    await reset_server(testing)
+
+    assert await qa.forced_drop(TEST_GUILD) is None
+
+
+async def test_it_is_logged_like_every_other_qa_call(testing):
+    _, _, _, qa_log = testing
+
+    await reset_server(testing)
+
+    assert any("qa-reset-server" in line for line in qa_log.posted)
+
+
+async def test_somebody_without_the_role_cannot(testing):
+    _, guild, _, _ = testing
+    interaction = qa_call(guild, "qa-reset-server", roles=())
+
+    await bot.qa_reset_server.callback(interaction, guild.name)
+
+    assert await resolve.current_drop(TEST_GUILD) == 1
+
