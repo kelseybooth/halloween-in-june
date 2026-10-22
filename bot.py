@@ -26,7 +26,8 @@ import content_loader
 import craving
 import database
 import gating
-import hints
+import hints
+import leaderboard
 import house_utils
 import phrasing
 import qa
@@ -376,6 +377,14 @@ class CatBot(commands.Bot):
         # - so the global set is emptied once here and every guild gets its
         # own in `on_ready`. GUILD_ID is gone with it: per-guild is what
         # this does everywhere, so the local shortcut is the normal path.
+        # The buttons under `/stats` outlive the process that sent
+        # them: an ephemeral reply can sit open for hours, and a deploy
+        # in the middle must not leave it with dead rectangles. Both
+        # carry their whole state in the `custom_id`, so registering
+        # the classes here is all it takes to answer a click on a
+        # message this process never sent.
+        self.add_dynamic_items(_OpenLeaderboard, _MyStats)
+
         global _DEFINED
         _DEFINED = _capture_commands(self.tree)
         await self.tree.sync()
@@ -4015,9 +4024,135 @@ async def qa_inspect(
     )
 
 
+# --------------------------------------------------------------------------
+# The two views, and the buttons between them
+# --------------------------------------------------------------------------
+#
+# **The first components in the game.** Everything until now has been a
+# command and a reply, so the rules these follow are worth stating once.
+#
+# *Persistent.* An ephemeral `/stats` can sit open in somebody's client
+# for hours, and a deploy in the middle of that must not turn its
+# buttons into dead rectangles. So every view has `timeout=None` and
+# every button carries its state in its own `custom_id` - there is no
+# per-message state held in the process to lose. `DynamicItem` is what
+# rebuilds the handler from the id after a restart, which is why the
+# page number is in the string rather than in an attribute.
+#
+# *Edited in place.* Each click updates the same ephemeral message
+# rather than sending another, so going back and forth between the two
+# views never stacks replies.
+#
+# *Answered in one round trip.* Discord drops an interaction left
+# unanswered for three seconds. Both queries are a few dozen rows on one
+# guild, so `edit_message` answers directly rather than deferring first.
+BUTTON_PREFIX = "hij"
+
+
+class _OpenLeaderboard(
+    discord.ui.DynamicItem[discord.ui.Button],
+    template=rf"{BUTTON_PREFIX}:lb:(?P<page>\d+)",
+):
+    """Open the leaderboard at one page. Also the Previous and Next buttons.
+
+    One class for all three because they are one action with different
+    labels: go to page N. Previous and Next are absent rather than
+    greyed when there is nowhere to go - two dead rectangles under a
+    one-page board read as something broken.
+    """
+
+    def __init__(self, page: int, label: str = "Leaderboard", **kwargs) -> None:
+        self.page = page
+        super().__init__(
+            discord.ui.Button(
+                label=label, custom_id=f"{BUTTON_PREFIX}:lb:{page}", **kwargs
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):
+        return cls(int(match["page"]), label=item.label or "Leaderboard")
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _show_leaderboard(interaction, self.page)
+
+
+class _MyStats(
+    discord.ui.DynamicItem[discord.ui.Button],
+    template=rf"{BUTTON_PREFIX}:me",
+):
+    """Back to the clicker's own stats - never the player they were looking at.
+
+    `/stats @somebody` carries the same footer, and its leaderboard
+    carries this: the way back from a stranger's standing is to your
+    own, which is the only one that is yours to return to.
+    """
+
+    def __init__(self, label: str = "See my stats") -> None:
+        super().__init__(
+            discord.ui.Button(label=label, custom_id=f"{BUTTON_PREFIX}:me")
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):
+        return cls(label=item.label or "See my stats")
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        try:
+            embed = await _stats_embed(
+                interaction.guild, interaction.user, interaction.user
+            )
+        except SQLAlchemyError:
+            await interaction.response.send_message(DB_ERROR_MESSAGE, ephemeral=True)
+            return
+        await interaction.response.edit_message(embed=embed, view=StatsView())
+
+
+class StatsView(discord.ui.View):
+    def __init__(self) -> None:
+        super().__init__(timeout=None)
+        self.add_item(_OpenLeaderboard(0))
+
+
+class LeaderboardView(discord.ui.View):
+    def __init__(self, page: int, pages: int) -> None:
+        super().__init__(timeout=None)
+        self.add_item(_MyStats())
+        if page > 0:
+            self.add_item(_OpenLeaderboard(page - 1, label="Previous"))
+        if page + 1 < pages:
+            self.add_item(_OpenLeaderboard(page + 1, label="Next"))
+
+
+async def _show_leaderboard(interaction: discord.Interaction, page: int) -> None:
+    try:
+        pages = await leaderboard.pages(interaction.guild)
+        page = max(0, min(page, pages - 1))
+        body = await leaderboard.lines(interaction.guild, interaction.user.id, page)
+    except SQLAlchemyError:
+        await interaction.response.send_message(DB_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    embed = discord.Embed(
+        title=await phrasing.default_say("leaderboard.title"), description=_fit(body)
+    )
+    if pages > 1:
+        embed.set_footer(
+            text=await phrasing.default_say(
+                "leaderboard.page", page=page + 1, total=pages
+            )
+        )
+    await interaction.response.edit_message(
+        embed=embed, view=LeaderboardView(page, pages)
+    )
+
+
 @bot.tree.command(name="stats", description="See what you've earned, and how the cat feels.")
 @app_commands.guild_only()
-async def stats(interaction: discord.Interaction) -> None:
+@app_commands.describe(player="Whose stats to look at. Leave blank for your own.")
+async def stats(
+    interaction: discord.Interaction, player: discord.Member | None = None
+) -> None:
     """Everything this player has, privately. Three parts, in order.
 
     **Ephemeral, always.** It carries unlock descriptions, which are the
@@ -4055,39 +4190,102 @@ async def stats(interaction: discord.Interaction) -> None:
     read.
     """
     await interaction.response.defer(ephemeral=True)
-    user, guild_id = interaction.user, interaction.guild_id
+    subject = player or interaction.user
 
     try:
-        relationship = await database.get_relationship(user.id, guild_id)
-        pets = await database.get_pet_count(user.id, guild_id)
-        quests = await resolve.open_quests(guild_id, user.id)
-        earned = await _earned_lines(guild_id, user.id)
-        await _mark_quests_seen(guild_id, user.id, quests)
+        embed = await _stats_embed(interaction.guild, interaction.user, subject)
     except SQLAlchemyError:
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
         return
 
+    await interaction.followup.send(
+        embed=embed, view=StatsView(), ephemeral=True
+    )
+
+
+async def _stats_embed(guild, viewer, subject) -> discord.Embed:
+    """One player's stats, as the viewer is allowed to see them.
+
+    **Two audiences, one command.** Looking at somebody else is the same
+    question asked from outside, so it is the same embed with the parts
+    that are nobody else's business left out: the open quests, the
+    unlock blurbs that are the spoilers `/stats` exists to keep private,
+    and every per-player mechanic - the toy ramp, the cooldowns, the pet
+    count. What is left is a score, a sentence, a rank and a list of
+    names, all of which the room has already watched happen.
+
+    **Neither view carries a count out of a total.** `_earned_lines`
+    has always refused one - a player's own list is what they have
+    done, not a checklist of what they have not - and the same holds
+    from outside, where "nine of twenty-two" would turn somebody else's
+    play into a completion percentage. The list of names is the whole
+    disclosure.
+    """
+    guild_id, mine = guild.id, subject.id == viewer.id
+    relationship = await database.get_relationship(subject.id, guild_id)
+
     body = [
         await phrasing.default_say("stats.relationship", score=relationship),
-        await _relationship_band(relationship),
-        await phrasing.default_say("stats.pets", count=pets),
-        "",
+        await _relationship_band(relationship, None if mine else subject),
     ]
 
-    if quests:
-        body.append(f"**{await phrasing.default_say('stats.header.quests')}**")
-        body.extend(
-            QUEST_LINE.format(name=row.name, prompt=row.prompt) for row in quests
+    if mine:
+        body.append(
+            await phrasing.default_say(
+                "stats.pets", count=await database.get_pet_count(subject.id, guild_id)
+            )
         )
-        body.append("")
+    else:
+        rank = await leaderboard.rank_of(guild, subject.id)
+        if rank:
+            body.append(await phrasing.default_say("stats.rank", rank=rank))
+    body.append("")
 
-    body.append(f"**{await phrasing.default_say('stats.header.achievements')}**")
-    body.extend(earned or [await phrasing.default_say("stats.achievements.empty")])
+    if mine:
+        quests = await resolve.open_quests(guild_id, subject.id)
+        if quests:
+            body.append(f"**{await phrasing.default_say('stats.header.quests')}**")
+            body.extend(
+                QUEST_LINE.format(name=row.name, prompt=row.prompt) for row in quests
+            )
+            body.append("")
+        await _mark_quests_seen(guild_id, subject.id, quests)
 
-    embed = discord.Embed(
-        title=f"{user.display_name}'s stats", description=_fit(body)
+    header = await phrasing.default_say("stats.header.achievements")
+    if mine:
+        body.append(f"**{header}**")
+        body.extend(
+            await _earned_lines(guild_id, subject.id)
+            or [await phrasing.default_say("stats.achievements.empty")]
+        )
+    else:
+        names = await _earned_names(guild_id, subject.id)
+        body.append(f"**{header}**")
+        body.extend(
+            names
+            or [await phrasing.default_say("stats.achievements.empty.other")]
+        )
+
+    return discord.Embed(
+        title=f"{subject.display_name}'s stats", description=_fit(body)
     )
-    await interaction.followup.send(embed=embed, ephemeral=True)
+
+
+async def _earned_names(guild_id: int, user_id: int) -> list[str]:
+    """The names alone, newest first - no unlock text.
+
+    The unlock line is the spoiler the public announcement withholds, so
+    it is the one part of the list that cannot cross to another player's
+    view. The name has already been posted to the channel.
+    """
+    available = await resolve.achievements(guild_id)
+    when = {
+        **await database.server_achievements_of(guild_id),
+        **await database.player_achievements_of(guild_id, user_id),
+    }
+    rows = [(when[key], key, row) for key, row in available.items() if key in when]
+    rows.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    return [f"**{row.name}**" for _, _, row in rows]
 
 
 # What the cat thinks of you, by score. Nine bands, each given as the
@@ -4113,19 +4311,31 @@ RELATIONSHIP_BANDS: tuple[tuple[int, str], ...] = (
 )
 
 
-async def _relationship_band(score: int) -> str:
+async def _relationship_band(score: int, about=None) -> str:
     """The sentence under the figure.
 
     Zero has no band of its own any more: it sits inside *still trying
     to decide how she feels about you*, which is a better reading of
     where every player starts and where the drift returns them than a
     sentence about not caring.
+
+    **Nine of these address the player, and `/stats @somebody` does
+    not.** Every band was written for the one person reading it, so
+    showing Max's to Alice printed *the cat adores you* about somebody
+    else - the same mistake the take and drop lines made when they went
+    public, found the same way, by reading the output. `about` is the
+    player being looked at, and it selects a parallel set that names
+    them instead.
     """
     key = next(
         (key for floor, key in RELATIONSHIP_BANDS if score >= floor),
         RELATIONSHIP_BANDS[-1][1],
     )
-    return await phrasing.default_say(key) or ""
+    if about is None:
+        return await phrasing.default_say(key) or ""
+    return await phrasing.default_say(
+        f"{key}.other", player=about.display_name
+    ) or ""
 
 
 async def _mark_quests_seen(guild_id: int, user_id: int, quests) -> None:

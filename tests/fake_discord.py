@@ -249,6 +249,16 @@ class FakeResponse:
     async def send_message(self, content=None, **kwargs):
         self._interaction.sent.append((content, kwargs))
 
+    async def edit_message(self, **kwargs):
+        """What a button click answers with: the same message, changed.
+
+        Recorded separately from `sent`, because "replaced what was
+        there" and "added another reply underneath" are different
+        outcomes and the whole point of the leaderboard buttons is that
+        going back and forth never stacks messages.
+        """
+        self._interaction.edited.append(kwargs)
+
 
 class FakeFollowup:
     def __init__(self, interaction):
@@ -292,6 +302,8 @@ class FakeInteraction:
         # Set when a handler withdraws the deferred placeholder because
         # its whole output went to the channel instead.
         self.withdrawn = False
+        # What a component callback edited this message into, in order.
+        self.edited: list[dict] = []
 
     async def delete_original_response(self) -> None:
         """Take back the ephemeral "thinking" message.

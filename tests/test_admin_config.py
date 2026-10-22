@@ -240,10 +240,17 @@ def test_the_admin_commands_are_registered(name):
     assert cmd.default_permissions and cmd.default_permissions.administrator
 
 
-def test_stats_takes_no_options():
-    """Adding the member argument later costs another re-sync. That is a known
-    cost, and better than an option that exists and refuses."""
-    assert commands()["stats"].parameters == []
+def test_stats_takes_one_optional_player():
+    """The member argument this test was written to anticipate.
+
+    It cost the re-sync the old version predicted, and it is no longer
+    an option that exists and refuses: `/stats @somebody` shows their
+    score, their rank and the names they have earned.
+    """
+    param = commands()["stats"].parameters[0]
+
+    assert [p.name for p in commands()["stats"].parameters] == ["player"]
+    assert not param.required
 
 
 @pytest.mark.parametrize("name, option", [("take", "thing"), ("drop", "thing"), ("use", "thing")])
