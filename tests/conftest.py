@@ -31,10 +31,18 @@ GUILD_A = 900000000000000001
 GUILD_B = 900000000000000002
 
 # The drop the house opens on. Everything carried over from Release 1 waits
-# here, so a test that wants nine rooms and 35 achievements wants a server
-# sitting on this drop - which is why the `db` fixture puts both test guilds
-# on it. A test about the drops themselves moves its own server and says so.
+# here, so a test that wants nine rooms wants a server sitting on this drop -
+# which is why the `db` fixture puts both test guilds on it. A test about the
+# drops themselves moves its own server and says so.
 HOUSE_DROP = 3
+
+# The last drop anything real waits for. **Achievements no longer all arrive
+# with the house**: the 21 October renumbering spread them from drop 0 to
+# drop 7 against the drop each one can first be earned at, so a server on
+# `HOUSE_DROP` is missing two thirds of them. A test about what can be
+# *earned* wants this instead - the eight parked at 99 are unreachable by
+# design and stay that way.
+LAST_DROP = 7
 
 ALICE = 100000000000000001
 BOB = 100000000000000002

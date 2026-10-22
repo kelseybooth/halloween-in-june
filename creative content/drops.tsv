@@ -3,3 +3,7 @@ drop_id	trigger	date	event	name	notes
 1	manual			A Place to Sleep	The cat bed appears in the channel, and with it /look and /use.
 2	manual			Something to Play With	The cat toy, /take and /inventory. Not built yet; defined here because content already waits on it.
 3	manual			The Door	The house opens. Every row carried over from Release 1 waits here - uniformly, because per-row accuracy for drops 3 to 7 belongs to whoever builds them.
+4	manual			The Rest of the Hall	Not built yet; defined here because content already waits on it - the 21 October achievement renumbering put rows at this drop, and a drop the calendar does not define can never arrive. Name is a placeholder for the writers.
+5	manual			The Ground Floor	Not built yet; defined here because content already waits on it - the 21 October achievement renumbering put rows at this drop, and a drop the calendar does not define can never arrive. Name is a placeholder for the writers.
+6	manual			Upstairs	Not built yet; defined here because content already waits on it - the 21 October achievement renumbering put rows at this drop, and a drop the calendar does not define can never arrive. Name is a placeholder for the writers.
+7	manual			The Last Door	Not built yet; defined here because content already waits on it - the 21 October achievement renumbering put rows at this drop, and a drop the calendar does not define can never arrive. Name is a placeholder for the writers.

@@ -49,6 +49,19 @@ ACHIEVEMENT_KINDS = {"public", "secret", "group"}
 # fire, because a condition that stops being true must not un-ship content.
 DROP_TRIGGERS = {"date", "event", "manual"}
 
+# `since_drop` for content that is written but not scheduled. Eight
+# achievements wait on systems nobody has built - crossing, the
+# doorbell, the ghosts, the letter, the craving - and a real drop
+# number would promise a date their trigger cannot keep.
+#
+# **It has to be a value the loader knows about rather than a number
+# chosen to be large.** Arrival is a set membership test against the
+# drops the calendar defines, so *any* undefined number never arrives -
+# which means a row parked deliberately and a row with a typo in it
+# behave identically and neither says anything. Naming one value is
+# what lets the check below refuse the other.
+NEVER = 99
+
 # A `date` drop whose date is this arrives the moment a server initializes.
 LAUNCH = "launch"
 
@@ -1009,7 +1022,18 @@ def _check_drops(content: Content) -> list[str]:
 
 
 def _check_drop_references(content: Content) -> list[str]:
-    """Content waiting on a drop that does not exist would never appear."""
+    """Content waiting on a drop that does not exist would never appear.
+
+    **Silently.** Arrival is `since_drop in arrived`, and `arrived` is
+    built from the drops the calendar defines - so a row pointing at a
+    drop nobody has written is not late, it is unreachable, and nothing
+    logs it. The 21 October achievement renumbering put twenty-three
+    rows at drops 4 to 7 while `drops.tsv` stopped at 3, and the only
+    symptom was a test asking why an achievement could not be earned.
+
+    Achievements may say `NEVER`, and only `NEVER`. That is what
+    separates a row parked on purpose from a row with a typo in it.
+    """
     known = set(content.drops_by_id)
     problems = []
 
@@ -1021,6 +1045,11 @@ def _check_drop_references(content: Content) -> list[str]:
 
     for thing in content.things:
         check("thing", thing.thing_id, thing.since_drop)
+    for row in content.achievements:
+        # The one file allowed to say "not scheduled", because it is the
+        # one with rows whose triggers do not exist yet.
+        if row.since_drop != NEVER:
+            check("achievement", row.achievement_id, row.since_drop)
     for row in content.room_text:
         check("room_text row for", row.entity_id, row.since_drop)
     for row in content.thing_text:

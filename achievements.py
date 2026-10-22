@@ -65,6 +65,12 @@ HOOKS = (
     "on_message",
     "on_midnight",
     "on_cross",
+    # Every slash command, after it has run. The widest hook there is,
+    # and the only one that can answer "was this player here at all" -
+    # which is what *Familiar* asks. `/stats` and `/help` count, and
+    # they are meant to: being in the house on Halloween is the whole
+    # condition.
+    "on_command",
 )
 
 
