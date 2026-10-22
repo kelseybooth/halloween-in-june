@@ -57,7 +57,7 @@ async def play(db, guild_id):
     await db.award_player_achievement(guild_id, ALICE, "gourd_job")
     await db.award_server_achievement(guild_id, "making_a_mess")
     await db.set_setting(guild_id, "planks_required", 3)
-    await db.record_art(guild_id, "eunoia_icon", "https://cdn.test/icon.png")
+    await db.record_art(guild_id, "black_cat_icon", "https://cdn.test/icon.png")
     await restocking.set_initialized_on(guild_id)
     await craving.credit(guild_id, ALICE, database.pacific_today())
 

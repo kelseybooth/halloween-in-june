@@ -26,7 +26,7 @@ import content_loader
 import craving
 import database
 import gating
-import hints
+import hints
 import leaderboard
 import house_utils
 import phrasing
@@ -828,7 +828,7 @@ async def _answer_guess(message: discord.Message, guess) -> None:
 #
 # Two windows, deliberately separate, because they answer different
 # questions. Crowding is between a player and the cat, and fires the first
-# time a pet is worth less than nothing - see `_crowding_begins`. The
+# time a pet is worth less than nothing - see `_crowding_begins`. The
 # public rate
 # limit is about noise in a shared room: two lines per player per place
 # per thirty minutes.
@@ -1071,8 +1071,8 @@ async def pet(interaction: discord.Interaction) -> None:
         else await hints.after(guild_id, user.id, *candidates, hints.SOMETHING_NEW),
     )
 
-    art = ART_CROWDING if crowding_begins else (
-        ART_FIRST_PET if result.total == 1 else None
+    art = ART_CROWDING if crowding_begins else (
+        ART_FIRST_PET if result.total == 1 else None
     )
     content_, embed = await _with_art(interaction.guild, message, art)
     await interaction.followup.send(content_, embed=embed, ephemeral=True)
@@ -1113,11 +1113,27 @@ async def _reregister(interaction, guild, drop: int | None) -> str:
 @app_commands.checks.has_permissions(administrator=True)
 @app_commands.describe(
     channel="Where the game lives. Every public line it ever posts goes here.",
+    art_channel="Somewhere to park the cat pictures. Any channel; nobody reads it.",
 )
 async def start_game(
-    interaction: discord.Interaction, channel: discord.TextChannel
+    interaction: discord.Interaction,
+    channel: discord.TextChannel,
+    art_channel: discord.TextChannel | None = None,
 ) -> None:
     """Put a server on drop 0, in a named channel.
+
+    **The art is uploaded here**, and that is a fix rather than a
+    feature. It used to ride `/initialize-haunted-house`, which also
+    builds nine room threads and is therefore registered from drop 3 -
+    so on a drop-0 server there was no way to run it, `server_art` was
+    empty, and every message took the "degrades to text" path. Four
+    images belonging to drops 0 and 1 had never once been seen: the
+    first pet, the crowding nudge, and the two petting achievements.
+
+    Only the *threads* have a reason to wait for drop 3. The upload
+    moves to the command that opens the game, and
+    `/initialize-haunted-house` keeps its own copy for a server that
+    started before this change.
 
     **The channel is an argument rather than a name the bot goes looking
     for.** Servers call it different things, and this one will be renamed
@@ -1191,12 +1207,43 @@ async def start_game(
         FIRST_DROP,
     )
     opened = await _reregister(interaction, guild, FIRST_DROP)
-    await interaction.followup.send(
+    lines = [
         f"The game is open in {channel.mention}, on drop {FIRST_DROP}. There "
-        f"is a cat there and nothing else.\n"
-        f"- players here can now use {opened}\n"
+        f"is a cat there and nothing else.",
+        f"- players here can now use {opened}",
         "- `/advance-game` brings the next drop",
-        ephemeral=True,
+        await _stock_the_art(guild, art_channel),
+    ]
+    await interaction.followup.send("\n".join(lines), ephemeral=True)
+
+
+async def _stock_the_art(guild, art_channel) -> str:
+    """Upload the images, and say what happened, in one line for the reply.
+
+    **A separate channel, because the upload is ten posts.** They are
+    never read again - the bot keeps the attachment URL Discord hands
+    back and embeds that - so they want somewhere out of the way
+    rather than the channel the game lives in.
+
+    Never raises. The game is worth opening without pictures, which is
+    the same reasoning that makes every message degrade to text.
+    """
+    if art_channel is None:
+        return (
+            "- no art channel given, so the cat pictures are not uploaded and "
+            "every message that wants one will be text. Run `/start-game` "
+            "again with one to fix that."
+        )
+    try:
+        uploaded, problems = await upload_art(guild, art_channel)
+    except Exception:
+        log.exception("Could not upload the art in %s", guild.id)
+        return "- the cat pictures did not upload, so messages will be text"
+    if problems:
+        log.warning("Art problems in %s: %s", guild.id, "; ".join(problems))
+    return (
+        f"- uploaded {uploaded} cat picture(s) to {art_channel.mention}"
+        + (f", and {len(problems)} failed" if problems else "")
     )
 
 
@@ -1665,27 +1712,27 @@ FIRST_CONTACT = "making_first_contact"
 HINT_FOR_ACHIEVEMENT = {FIRST_CONTACT: hints.FIRST_FRIENDLY}
 
 ART_FOR_ACHIEVEMENT = {
-    "making_friends": "eunoia_content",
-    "cats_best_friend": "eunoia_content",
-    "trying_to_make_friends": "eunoia_disdain",
-    "met_the_craving": "eunoia_happy_bowl",
-    "charcuterie_board": "eunoia_gorging",
-    "bulk_buyer": "eunoia_gorging",
-    "the_feline_collection": "eunoia_gorging",
-    "follow_your_nose": "eunoia_sniffing",
-    "catproof_the_house": "eunoia_bottle",
+    "making_friends": "black_cat_content",
+    "cats_best_friend": "black_cat_content",
+    "trying_to_make_friends": "black_cat_disdain",
+    "met_the_craving": "black_cat_happy_bowl",
+    "charcuterie_board": "black_cat_gorging",
+    "bulk_buyer": "black_cat_gorging",
+    "the_feline_collection": "black_cat_gorging",
+    "follow_your_nose": "black_cat_sniffing",
+    "catproof_the_house": "black_cat_bottle",
     # No live trigger in Release 1 - the ghost system is not built - and
     # shipped anyway so the image is there the day the ghosts land.
-    "getting_into_the_spirit": "eunoia_startled",
+    "getting_into_the_spirit": "black_cat_startled",
 }
 
-ART_FIRST_PET = "eunoia_alert"
-ART_CROWDING = "eunoia_suspicious"
-ART_DIAPER = "eunoia_sniffing"
+ART_FIRST_PET = "black_cat_alert"
+ART_CROWDING = "black_cat_suspicious"
+ART_DIAPER = "black_cat_sniffing"
 # The bot's face on every message she sends. Set by hand in the developer
 # portal, and never sent as an embed image: an avatar and a thumbnail of the
 # same face six pixels apart looks like a mistake.
-ART_AVATAR = "eunoia_icon"
+ART_AVATAR = "black_cat_icon"
 
 DIAPER = "dirty_diaper"
 DIAPER_SEEN = "diaper_seen"
