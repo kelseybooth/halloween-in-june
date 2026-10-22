@@ -19,6 +19,7 @@ either one.
 import logging
 import os
 from datetime import date, datetime, time, timedelta, timezone
+from collections.abc import Iterable
 from typing import NamedTuple
 from zoneinfo import ZoneInfo
 
@@ -2619,6 +2620,68 @@ async def has_been_told(guild_id: int, user_id: int, notice_id: str) -> bool:
             )
         )
     return found is not None
+
+
+async def notices_with_prefix(guild_id: int, user_id: int, prefix: str) -> set[str]:
+    """Every notice this player holds whose id starts with `prefix`.
+
+    `has_been_told` answers one id at a time, which is right for a hint
+    rung and wrong for a set: marking the new sentences in a room asks
+    about every fragment in it at once, and a query per sentence is a
+    query per sentence.
+
+    The caller owns the id format. This knows only that ids are strings
+    with a shape somebody else chose.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = await session.scalars(
+            select(PlayerNotice.notice_id).where(
+                PlayerNotice.guild_id == guild_id,
+                PlayerNotice.user_id == user_id,
+                PlayerNotice.notice_id.startswith(prefix),
+            )
+        )
+        return set(rows)
+
+
+async def notice_many(guild_id: int, user_id: int, notice_ids: Iterable[str]) -> None:
+    """Record several at once, ignoring the ones already there.
+
+    No return value, unlike `notice`: that one reports the transition
+    because a hint fires on it. Here the caller has already worked out
+    which ids are new - that is what decided the formatting - and is
+    writing them down afterwards.
+
+    Swallows its errors for the same reason `notice` does. A lost row
+    means a sentence is marked new twice, which is better than failing
+    the `/look` that carried it.
+    """
+    wanted = sorted(set(notice_ids))
+    if not wanted:
+        return
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    stmt = (
+        insert(PlayerNotice)
+        .values([
+            {"guild_id": guild_id, "user_id": user_id, "notice_id": one}
+            for one in wanted
+        ])
+        .on_conflict_do_nothing(
+            index_elements=[
+                PlayerNotice.guild_id,
+                PlayerNotice.user_id,
+                PlayerNotice.notice_id,
+            ]
+        )
+    )
+    try:
+        async with session_factory() as session:
+            await session.execute(stmt)
+            await session.commit()
+    except SQLAlchemyError:
+        log.exception("Could not record notices %s for %s", wanted, user_id)
 
 
 async def notice_order(guild_id: int, user_id: int) -> dict[str, int]:
