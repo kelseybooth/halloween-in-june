@@ -8,6 +8,8 @@ of stale signatures rather than a redeploy.
 
 import pytest
 
+from datetime import datetime
+
 from conftest import ALICE, GUILD_A, GUILD_B
 from fake_discord import FakeInteraction
 
@@ -94,7 +96,7 @@ async def test_an_unknown_key_writes_nothing(server):
         from sqlalchemy import select
 
         rows = (
-            await session.execute(select(database.ServerConfig.key))
+            await session.execute(select(database.ConfigHistory.key))
         ).scalars().all()
     assert "nonsense" not in rows
 
@@ -115,7 +117,12 @@ async def test_an_unreadable_stored_value_falls_back_to_the_default(server):
     """Somebody hand-edits a row; the command should not take a feature down."""
     async with server._require_session()() as session:
         session.add(
-            database.ServerConfig(guild_id=GUILD_A, key="planks_required", value="lots")
+            database.ConfigHistory(
+                guild_id=GUILD_A,
+                key="planks_required",
+                value="lots",
+                effective_from=datetime(2026, 10, 1),
+            )
         )
         await session.commit()
 

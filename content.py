@@ -14,6 +14,8 @@ whole set is known good - a half-loaded house is worse than a stale one.
 from __future__ import annotations
 
 import csv
+import hashlib
+import os
 import re
 import unicodedata
 from dataclasses import dataclass, field
@@ -1709,6 +1711,32 @@ def _check_scenery_is_named_in_prose(content: Content) -> list[str]:
                 "could learn it is there"
             )
     return problems
+
+
+def version(directory: Path | None = None) -> str:
+    """A short name for exactly this set of content files.
+
+    **The config history only sees what lives in config**, and the
+    numbers that will move most often - the per-thing relationship
+    deltas, the restock rates, every string - live in TSVs instead. So
+    a content deploy writes one row too, and that row dates every file
+    at once.
+
+    Railway's commit hash where there is one, because it names a diff
+    somebody can read. A digest of the files themselves otherwise,
+    which covers local runs and, more usefully, a content reload that
+    did not come from a deploy at all - the case a commit hash alone
+    would miss.
+    """
+    sha = os.getenv("RAILWAY_GIT_COMMIT_SHA", "").strip()
+    if sha:
+        return f"git:{sha[:12]}"
+
+    digest = hashlib.sha256()
+    for path in sorted((directory or CONTENT_DIR).glob("*.tsv")):
+        digest.update(path.name.encode())
+        digest.update(path.read_bytes())
+    return f"files:{digest.hexdigest()[:12]}"
 
 
 def load(directory: Path | None = None) -> Content:

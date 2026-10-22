@@ -155,7 +155,12 @@ async def test_every_trace_of_the_game_is_gone(two_games):
     await reset(two_games)
 
     left = await rows(GUILD_A)
-    assert set(left) <= {"server_art", "room_contents", "server_config"}
+    # `config_history` keeps the two rows a reset deliberately spares -
+    # the drop pointer and the announcement channel - so the server is
+    # still on its drop and still knows where to post afterwards.
+    assert set(left) <= {
+        "server_art", "room_contents", "server_config", "config_history",
+    }
 
 
 @pytest.mark.parametrize(

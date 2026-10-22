@@ -377,11 +377,7 @@ async def test_config_key_changes_how_many_arrive(server):
         a_world(a_restock(times_per_day=8, config_key="bottles_per_day"))
     )
     await started()
-    async with server._require_session()() as session:
-        session.add(
-            database.ServerConfig(guild_id=GUILD_A, key="bottles_per_day", value="2")
-        )
-        await session.commit()
+    await database.set_config(GUILD_A, "bottles_per_day", "2")
 
     report = await restocking.run_for_guild(GUILD_A, now=end_of_day())
     assert len(report.placed) == 2
@@ -409,11 +405,7 @@ async def test_a_nonsense_config_value_falls_back_rather_than_crashing(server):
         a_world(a_restock(times_per_day=3, config_key="bottles_per_day"))
     )
     await started()
-    async with server._require_session()() as session:
-        session.add(
-            database.ServerConfig(guild_id=GUILD_A, key="bottles_per_day", value="lots")
-        )
-        await session.commit()
+    await database.set_config(GUILD_A, "bottles_per_day", "lots")
 
     placed = (await restocking.run_for_guild(GUILD_A, now=end_of_day())).placed
     assert len(placed) == database.CONFIG_KEYS["bottles_per_day"][0]
@@ -424,11 +416,7 @@ async def test_setting_it_to_zero_stops_them(server):
         a_world(a_restock(times_per_day=8, config_key="bottles_per_day"))
     )
     await started()
-    async with server._require_session()() as session:
-        session.add(
-            database.ServerConfig(guild_id=GUILD_A, key="bottles_per_day", value="0")
-        )
-        await session.commit()
+    await database.set_config(GUILD_A, "bottles_per_day", "0")
 
     assert (await restocking.run_for_guild(GUILD_A)).placed == []
 

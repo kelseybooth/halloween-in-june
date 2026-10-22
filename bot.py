@@ -282,6 +282,23 @@ async def load_content_at_startup() -> None:
 
     log.info("Content loaded. %s", report.summary().replace(chr(10), " | "))
 
+    # Date the files, per server, so the interaction log can be read
+    # against them. The config history only sees what lives in config,
+    # and the numbers that move most often - the restock rates, the
+    # relationship deltas when they land, every string - live in TSVs;
+    # one row names the whole set at once.
+    #
+    # Written here rather than at deploy because a content reload that
+    # did not come from a deploy is exactly the change a commit hash
+    # would miss.
+    try:
+        version = content.version()
+        for guild in bot.guilds:
+            if await database.record_content_version(guild.id, version):
+                log.info("Guild %s is now on content %s", guild.id, version)
+    except SQLAlchemyError:
+        log.exception("Could not record the content version")
+
     # Positions were stored as room names before 2b and as room ids after. This
     # needs the rooms in place to translate against, so it runs here rather than
     # with the schema migrations.
