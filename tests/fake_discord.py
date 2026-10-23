@@ -215,9 +215,15 @@ class FakeMember:
 class FakeGuild:
     """A guild that can find its own channels and members by id."""
 
-    def __init__(self, guild_id, *, name="Test Server", channels=(), members=()):
+    def __init__(
+        self, guild_id, *, name="Test Server", channels=(), members=(), chunked=True
+    ):
         self.id = guild_id
         self.name = name
+        # Discord's own answer to "is the member list complete here".
+        # False for every guild when the bot lacks the members intent,
+        # which is the state that made the leaderboard hide everybody.
+        self.chunked = chunked
         self.text_channels = list(channels)
         self.me = SimpleNamespace()
         self._members = {m.id: m for m in members}

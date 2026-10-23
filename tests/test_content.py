@@ -48,7 +48,7 @@ def test_the_shipped_content_parses():
     c = content.load_files()
     assert len(c.rooms) == 10  # nine rooms and the channel
     assert len(c.things) == 162  # ...drop 1's ten scenery, and the stand's four
-    assert len(c.defaults) == 111  # ...and the four status lines
+    assert len(c.defaults) == 112  # ...and a name for a player the cache cannot place
     assert len(c.drops) == 8      # 0 and 1 built; 2 to 7 named ahead of their content
     assert len(c.restocks) == 4  # the toy channel row joined them
 
