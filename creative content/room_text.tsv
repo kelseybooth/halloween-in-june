@@ -1,5 +1,5 @@
 room_id	state	since_drop	fragment	visible_when	look
-CH	default	1	10		A derelict farm **stand** with a sound tin roof opens onto a rutted dirt **road**, where dusk is closing in through thick **fog**.
+CH	default	1	10		A derelict, tin-roofed farm **stand** containing a **cat bed** but no produce opens onto a rutted dirt **road**, where dusk is closing in through thick **fog**.
 CH	default	1	40	looked_at_bed	**Branches** reach out over the road from both sides, far enough up that they almost meet in the middle.
 CH	default	1	50		Behind the stand a **fence** sags, four strands of wire on posts leaning crookedly.
 CH	default	1	60	looked_at_bed	Across the road the fog obscures something tall and unlit, too square to be trees.
