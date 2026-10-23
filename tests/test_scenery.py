@@ -561,7 +561,7 @@ async def test_the_stand_is_the_first_thing_the_player_reads(channel):
     """
     reply = (await look(channel)).reply
 
-    assert reply.startswith("A derelict farm **stand**")
+    assert reply.startswith("A derelict, tin-roofed farm **stand**")
     assert reply.index("**stand**") < reply.index("**fence**")
 
 
@@ -697,17 +697,24 @@ def test_a_fixture_may_not_reveal_itself():
     """Half the fixtures in the house say their own name in their own
     `look`, so counting that would pass every row in the table and prove
     nothing. The cat bed is the live case: drop 1's reply is prose
-    alone, and the only thing standing between that and an invisible bed
-    is `stand.look` naming it.
+    alone, and without somebody else naming it the drop's whole
+    mechanic sits in a room that never mentions it.
 
-    It names it twice over, as it happens - *a cat bed sits in place of
-    the cooler*, and *egg cooler* is one of the bed's own aliases - so
-    the whole string has to go to prove the point."""
+    **Three things name it now**, which is why the mangle has to be so
+    thorough: the opening fragment, since the 22 October rewrite put
+    *containing a cat bed but no produce* in it; `stand.look`, with *a
+    cat bed sits in place of the cooler*; and the slot's sentence,
+    because *egg cooler* is one of the bed's own aliases. The first of
+    those is the good one - the bed used to be findable only by
+    looking at the stand first, or by taking the hint."""
 
     def mangle(parsed):
         for row in parsed.thing_text:
             if row.entity_id == "stand":
                 row.text["look"] = "Bare planks, and a tin roof that holds."
+        for row in parsed.room_text:
+            if row.entity_id == content_module.CHANNEL_ROOM and row.fragment == 10:
+                row.text["look"] = "A derelict farm **stand** by a **road**."
 
     assert any("fixture cat_bed is named nowhere" in p for p in _broken(mangle))
 

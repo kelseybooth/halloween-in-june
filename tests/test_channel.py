@@ -65,7 +65,7 @@ async def test_drop_one_is_prose_with_no_list_at_all(channel):
 
     reply = (await look(channel)).reply
 
-    assert reply.startswith("A derelict farm **stand**")
+    assert reply.startswith("A derelict, tin-roofed farm **stand**")
     assert "Also here:" not in reply
 
 
@@ -155,7 +155,7 @@ async def test_the_description_sits_above_the_list(channel):
 
     reply = (await look(channel)).reply
 
-    assert reply.startswith("A derelict farm **stand** with a sound tin roof")
+    assert reply.startswith("A derelict, tin-roofed farm **stand**")
     assert "Also here:" not in reply
 
 

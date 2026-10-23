@@ -321,12 +321,26 @@ async def test_nothing_fires_before_its_first_day(server):
 
 
 async def test_every_n_days_skips_the_days_between(server):
+    """**The clock is pinned, and it has to be.**
+
+    Day 4 is today, and today's single occurrence is scattered
+    somewhere in its window by a seed drawn from (guild, restock, day)
+    - so "has it happened yet" depends on the hour the test runs and on
+    a time that is redrawn every day. Unpinned, this asserted that
+    today's delivery was already in the past: it passed all evening and
+    failed in the small hours. CI caught it at 01:50 Pacific against an
+    occurrence due at 02:32, forty-two minutes short.
+
+    `end_of_day` exists for exactly this and seven other tests here use
+    it. This one is the only place an exact count was asked for without
+    saying when.
+    """
     await content_loader.load_content(
         a_world(a_restock(first_day=1, every_n_days=3, times_per_day=1))
     )
     await started(days_ago=3)  # days 1 to 4 have elapsed
 
-    report = await restocking.run_for_guild(GUILD_A)
+    report = await restocking.run_for_guild(GUILD_A, now=end_of_day())
     assert len(report.placed) == 2  # days 1 and 4
 
 

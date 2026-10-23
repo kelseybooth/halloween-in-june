@@ -29,7 +29,7 @@ HUNGRY = "Right now, the cat is watching you with hunger in her eyes."
 BOTH = (
     "Right now, the cat is watching you expectantly with hunger in her eyes."
 )
-CROWDED = "You've petted the cat a lot recently."
+CROWDED = "You've pet the cat a lot recently."
 
 # A server the bot is merely a member of. The fixtures start both of
 # conftest's guilds, so this one has to be nobody's.
