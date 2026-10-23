@@ -383,12 +383,25 @@ async def register_commands_for(guild, drop: int | None = None, tree=None) -> se
 
 class CatBot(commands.Bot):
     def __init__(self) -> None:
-        # Slash commands need no privileged intents, but Alexa does: without
-        # message_content every message arrives with an empty body and she
-        # never answers anybody. It is enabled in the developer portal, which
-        # is necessary and not sufficient - it has to be asked for here too.
+        # Slash commands need no privileged intents, but two other things
+        # do, and both are enabled in the developer portal as well as
+        # here - the portal is necessary and not sufficient, and asking
+        # for one the portal has not granted makes the login itself fail.
+        #
+        # **message_content**, or every message arrives with an empty
+        # body and Alexa never answers anybody.
+        #
+        # **members**, because the leaderboard asks `guild.get_member`
+        # whether each player is still in the server, to leave the ones
+        # who have gone off it. Without this intent that cache holds
+        # almost nobody, every player reads as departed, and a server
+        # with three testers on it reports that too few people have met
+        # the cat. It is also what fills in a name on an achievement
+        # announced by the midnight job, where there is no interaction
+        # to read one from.
         intents = discord.Intents.default()
         intents.message_content = True
+        intents.members = True
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self) -> None:

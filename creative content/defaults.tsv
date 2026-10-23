@@ -74,6 +74,7 @@ leaderboard.header.recent	Recently Earned
 leaderboard.entry	{rank}. {name} - {score}
 leaderboard.entry.you	**{rank}. {name} - {score}**
 leaderboard.separator	...
+leaderboard.unknown_player	a player
 leaderboard.recent	**{name}** - {player}
 leaderboard.recent.server	**{name}** - the whole server
 leaderboard.too_few	Too few people have met the cat for a leaderboard yet. It will fill in as they do.

@@ -54,12 +54,35 @@ async def standings(guild) -> list[tuple[int, int]]:
 
     Membership is the guild's answer, not the database's, which is why
     this filter lives here and not in the query.
+
+    **It fails open, and that is the hard-won half.** The first version
+    kept only players the member cache confirmed, which reads as
+    "everybody" right up until the cache is empty - and it was, because
+    the bot did not have the members intent. Three testers who had all
+    petted the cat came back as nought, and the board told them too few
+    people had met her. Hiding somebody who left is a courtesy; hiding
+    everybody is a broken feature, so an unanswerable question now
+    leaves a player on.
     """
+    rows = await database.relationship_ranking(guild.id)
+    if not _membership_is_knowable(guild):
+        return rows
     return [
         (user_id, score)
-        for user_id, score in await database.relationship_ranking(guild.id)
+        for user_id, score in rows
         if guild.get_member(user_id) is not None
     ]
+
+
+def _membership_is_knowable(guild) -> bool:
+    """Whether this guild's member list is complete in the cache.
+
+    `chunked` is Discord's own answer and is false for every guild when
+    the members intent is off, which is exactly the case that has to be
+    told apart from "this person left". Defaults to true for anything
+    that does not have the attribute, which is the test harness.
+    """
+    return bool(getattr(guild, "chunked", True))
 
 
 async def rank_of(guild, user_id: int) -> int | None:
@@ -178,9 +201,14 @@ async def _recent(guild, page: int) -> list[str]:
             # Earned under a drop that has since been rolled back, or an
             # id the files no longer carry. Nothing to name it with.
             continue
-        if user_id is not None and guild.get_member(user_id) is None:
-            # Same rule as the standings: somebody who has left is not
-            # news, and naming them here would say they have gone.
+        if (
+            user_id is not None
+            and _membership_is_knowable(guild)
+            and guild.get_member(user_id) is None
+        ):
+            # Same rule as the standings, and the same failure open:
+            # somebody who has left is not news, but a cache that
+            # cannot answer must not empty the section.
             continue
         key = "leaderboard.recent" if user_id else "leaderboard.recent.server"
         body.append(
@@ -202,4 +230,9 @@ async def _name(guild, user_id: int | None) -> str:
     if user_id is None:
         return ""
     member = guild.get_member(user_id)
-    return member.display_name if member else ""
+    if member is not None:
+        return member.display_name
+    # Only reachable when the cache cannot answer, since a player it
+    # denies has already been filtered out. A rank with no name beside
+    # it is still a rank; a board with nobody on it is not a board.
+    return await phrasing.default_say("leaderboard.unknown_player") or "?"

@@ -540,3 +540,82 @@ def test_a_third_person_line_that_names_nobody_is_fine():
     assert "you" not in parsed.defaults["stats.rel.irritated.other"]
     assert not content_module.validate(parsed)
 
+# --------------------------------------------------------------------------
+# When the server cannot say who is in it
+#
+# The bot asked `guild.get_member` whether each player was still a
+# member and kept only the ones it confirmed. That reads as "everybody"
+# until the cache is empty - and it was, because `Intents.default()`
+# does not include members and nothing had turned it on. A test server
+# with three testers who had all petted the cat reported that too few
+# people had met her.
+#
+# Two fixes, and these cover the second: the intent is requested now,
+# and the filter no longer treats an unanswerable question as a no.
+# --------------------------------------------------------------------------
+
+
+def a_cold_guild():
+    """A guild whose member cache cannot answer - no members intent."""
+    return FakeGuild(
+        GUILD_A,
+        name="Test Server",
+        members=[FakeMember(who, display_name=f"P{who}") for who in EVERYONE],
+        chunked=False,
+    )
+
+
+async def test_an_unanswerable_cache_leaves_everybody_on(server):
+    """**The bug, exactly.** Three testers, all of whom had petted, and
+    a board that said too few people had met the cat."""
+    db, _ = server
+    for who in (ALICE, BOB, CAROL):
+        await met_the_cat(db, who, 10)
+
+    body = await leaderboard.lines(a_cold_guild(), ALICE)
+
+    assert "Too few" not in "\n".join(body)
+    assert len(await leaderboard.standings(a_cold_guild())) == 3
+
+
+async def test_a_cold_cache_still_ranks_the_viewer(server):
+    """`/stats @somebody` reads the same standings, so a rank of None
+    was the same bug wearing different clothes."""
+    db, _ = server
+    for who in (ALICE, BOB, CAROL):
+        await met_the_cat(db, who, 10)
+
+    assert await leaderboard.rank_of(a_cold_guild(), BOB) is not None
+
+
+async def test_a_cold_cache_does_not_empty_recently_earned(server):
+    db, _ = server
+    for who in (ALICE, BOB, CAROL):
+        await met_the_cat(db, who, 10)
+    await db.award_player_achievement(GUILD_A, BOB, "making_first_contact")
+
+    body = "\n".join(await leaderboard.lines(a_cold_guild(), ALICE))
+
+    assert "Recently Earned" in body
+
+
+async def test_a_warm_cache_still_hides_the_departed(server):
+    """The other half. Failing open must not quietly retire the
+    behaviour it was added for."""
+    db, guild = server
+    for who in (ALICE, BOB, CAROL):
+        await met_the_cat(db, who, 10)
+    await met_the_cat(db, 9999, 500)
+
+    assert not any("500" in line for line in await leaderboard.lines(guild, ALICE))
+
+
+def test_the_bot_asks_for_the_intent_that_makes_this_work():
+    """Requested in code *and* granted in the developer portal - and
+    asking for one the portal has not granted makes the login fail, so
+    the two have to move together."""
+    import bot
+
+    assert bot.bot.intents.members
+    assert bot.bot.intents.message_content
+
