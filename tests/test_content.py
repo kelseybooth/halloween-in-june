@@ -48,7 +48,7 @@ def test_the_shipped_content_parses():
     c = content.load_files()
     assert len(c.rooms) == 10  # nine rooms and the channel
     assert len(c.things) == 162  # ...drop 1's ten scenery, and the stand's four
-    assert len(c.defaults) == 112  # ...and a name for a player the cache cannot place
+    assert len(c.defaults) == 113  # ...and the bed's public line
     assert len(c.drops) == 8      # 0 and 1 built; 2 to 7 named ahead of their content
     assert len(c.restocks) == 4  # the toy channel row joined them
 
@@ -88,12 +88,29 @@ def test_the_secret_library_is_the_only_room_locked_at_launch(shipped):
 
 
 def test_what_carries_a_cooldown(shipped):
-    """The staircase's two days between planks, and the bed's one day
-    between fluffs - rolling hours rather than a calendar day, which is
-    what this column already meant and what the design accepted rather
-    than coding around."""
-    cooled = {t.thing_id: t.use_cooldown_hours for t in shipped.things if t.use_cooldown_hours}
-    assert cooled == {"lumber": 48, "cat_bed": 24}
+    """**Two kinds, and the bed changed kind.**
+
+    The staircase waits two rolling days between planks: forty-eight
+    hours from whenever the last one went in. The bed waits for Pacific
+    midnight, which resets for everybody at the same instant.
+
+    It used to be rolling hours here too, because that is what the
+    column meant and the design accepted it rather than coding around
+    it. A rolling day drifts - fluff at nine tonight and the next turn
+    is nine tomorrow - so anybody taking their turn at the first
+    opportunity loses a few minutes a day forever, and somebody who
+    fluffs just before midnight loses nearly all of the next day.
+    """
+    hourly = {
+        t.thing_id: t.use_cooldown_hours
+        for t in shipped.things
+        if t.use_cooldown_hours
+    }
+    daily = {t.thing_id for t in shipped.things if t.use_cooldown_daily}
+
+    assert hourly == {"lumber": 48}
+    assert daily == {"cat_bed"}
+    assert not (set(hourly) & daily)  # the loader refuses both on one row
 
 
 def test_quantity_many_parses_as_no_count(shipped):

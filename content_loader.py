@@ -237,6 +237,7 @@ def _rows_for(parsed: Content) -> dict[str, list[dict]]:
                 "takeable": t.takeable,
                 "droppable": t.droppable,
                 "consumed_on_use": t.consumed_on_use,
+                "use_cooldown_daily": t.use_cooldown_daily,
                 "cross_weight": t.cross_weight,
                 "max_per_player": t.max_per_player,
                 "requires": t.requires,

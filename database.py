@@ -526,6 +526,13 @@ class ThingType(Base):
     consumed_on_use: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("0")
     )
+    # Usable once per Pacific day, which resets for everybody at the
+    # same instant - the boundary the midnight job already keeps. The
+    # hours column cannot say this: a rolling window drifts later every
+    # day for anyone who uses the thing at their first opportunity.
+    use_cooldown_daily: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("0")
+    )
     cross_weight: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     max_per_player: Mapped[int | None] = mapped_column(Integer, nullable=True)
     requires: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -1103,6 +1110,7 @@ _LATER_COLUMNS: list[tuple[str, str, str]] = [
     ("achievements", "requires", "VARCHAR(64)"),
     ("things", "cohort", "VARCHAR(1)"),
     ("thing_types", "consumed_on_use", "BOOLEAN NOT NULL DEFAULT FALSE"),
+    ("thing_types", "use_cooldown_daily", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ("thing_text", "move_depart", "TEXT"),
     ("thing_text", "move_arrive", "TEXT"),
     ("things", "can_take", "BOOLEAN NOT NULL DEFAULT FALSE"),

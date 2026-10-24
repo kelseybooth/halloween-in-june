@@ -2110,6 +2110,10 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
             await _use_transform(interaction, state, found, row)
             return
 
+        if row.use_cooldown_daily:
+            await _use_once_a_day(interaction, state, found, row)
+            return
+
         if row.use_cooldown_hours:
             await _use_with_cooldown(interaction, state, found, row)
             return
@@ -2238,6 +2242,11 @@ async def _finish_use(interaction, state, found) -> None:
         if effect is not None and effect.relationship is not None:
             dislodged = await world.dislodge_from_bed(guild_id, user.id)
 
+        # Every successful fluff says so in the room. The yield line
+        # below is the exception rather than an addition: it already
+        # opens on the fluff - *as {player} fluffs the cat bed,
+        # something falls out* - so posting both would narrate the same
+        # action twice in consecutive messages.
         if dislodged and await _announce_bed_yield(interaction):
             # **The public line is the whole event now.** It says both
             # halves - something fell out, and the cat took the bed
@@ -2251,6 +2260,7 @@ async def _finish_use(interaction, state, found) -> None:
             # what the hint was for.
             privately = False
         else:
+            await _announce_bed_fluff(interaction)
             carried = any(a.achievement_id in HINT_FOR_ACHIEVEMENT for a in earned)
             nudge = hints.BED_YIELD if dislodged else hints.TRY_LOOK
             reply = hints.beneath(
@@ -2648,6 +2658,30 @@ async def _say_in_the_room(interaction, line: str, nudges=()) -> None:
             await interaction.followup.send(nudge, ephemeral=True)
 
 
+async def _announce_bed_fluff(interaction) -> None:
+    """The room watches somebody fluff the bed.
+
+    **Public and private both**, which is the opposite of the call the
+    toy got: a play that posts publicly suppresses its private copy,
+    because the two said the same thing. Here they do not. The public
+    line reports the event to the room; the private one is the thing's
+    own `use` text, which describes the cat climbing in and watching
+    the operation, and is written to the person who did it.
+
+    Never raises and never blocks the fluff. The score has already
+    moved by the time this runs, and a channel that will not take the
+    line must not turn a successful use into a failed command.
+    """
+    channel = interaction.channel
+    if channel is None or not hasattr(channel, "send"):
+        return
+    line = await phrasing.default_say(
+        "bed_fluff.public", player=interaction.user.display_name
+    )
+    if line:
+        await _post_quietly(channel, line)
+
+
 async def _announce_bed_yield(interaction) -> bool:
     """The bed's one public line. True if it actually went out.
 
@@ -2758,12 +2792,55 @@ async def _use_transform(interaction, state, found, row) -> None:
     await _finish_use(interaction, state, found)
 
 
+async def _use_once_a_day(interaction, state, found, row) -> None:
+    """A thing that can be used once per Pacific day, not once per N hours.
+
+    **The boundary is the one the midnight job already keeps**, which is
+    the whole reason this is a different kind of cooldown rather than a
+    length of the other one. A rolling twenty-four hours drifts: fluff
+    the bed at nine tonight and the next chance is nine tomorrow, so
+    anybody who takes their turn at the first opportunity loses a few
+    minutes a day forever, and somebody who fluffs just before midnight
+    loses nearly the whole of the next day. A calendar day resets for
+    everyone at the same instant.
+
+    Per player, like the hours path: `thing_uses` is keyed on (player,
+    thing), so the bed is a shared fixture everybody gets one turn at.
+
+    The refusal still carries {time}, now meaning the time until
+    midnight, because the default string asks for it and a player who
+    is told "not yet" deserves to know how long.
+    """
+    user, guild_id = interaction.user, interaction.guild_id
+
+    previous = await database.last_used(user.id, guild_id, found.thing_id)
+    if previous is not None:
+        today = await database.server_today(guild_id)
+        opened, closes = database.pacific_day_bounds_utc(today)
+        if previous >= opened:
+            await interaction.followup.send(
+                await phrasing.say(
+                    guild_id, found.thing_id, "use_fail",
+                    fallback="use_fail.cooldown",
+                    name=found.name,
+                    time=phrasing.approximate_duration(
+                        closes - await database.server_now(guild_id)
+                    ),
+                ),
+                ephemeral=True,
+            )
+            return
+
+    await _finish_use(interaction, state, found)
+
+
 async def _use_with_cooldown(interaction, state, found, row) -> None:
     """A thing that cannot be used again for a while.
 
-    Only lumber, at 48 hours. The refusal carries {time}, and a refused use is
-    not a use: nothing is recorded, so the window does not slide forward every
-    time somebody tries.
+    Only lumber, at 48 hours - the bed moved to the daily path above. The
+    refusal carries {time}, and a refused use is not a use: nothing is
+    recorded, so the window does not slide forward every time somebody
+    tries.
     """
     user, guild_id = interaction.user, interaction.guild_id
     window = timedelta(hours=row.use_cooldown_hours)
