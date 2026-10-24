@@ -41,33 +41,30 @@ async def test_relationships_are_per_server(db):
     assert await db.get_relationship(ALICE, GUILD_B) == db.RELATIONSHIP_START
 
 
-async def test_nightly_decay_treats_each_server_separately(db):
-    """Petting in one server does not excuse an idle day in another."""
+async def test_the_nightly_recovery_treats_each_server_separately(db):
+    """One player, two servers, two separate grudges.
+
+    It used to be *petting here does not excuse an idle day there* -
+    the drift skipped anybody who turned up. Recovery skips nobody, so
+    what is left to isolate is the score itself, which is the half
+    that was always the point: settling one server must not reach into
+    another.
+    """
     day = date(2026, 6, 10)
-    for guild in (GUILD_A, GUILD_B):
+    for guild, score in ((GUILD_A, -40), (GUILD_B, -100)):
         await db.ensure_user_exists(ALICE, guild)
         async with db._require_session()() as session:
             await session.execute(
                 update(db.User)
                 .where(db.User.id == ALICE, db.User.guild_id == guild)
-                .values(relationship=50, last_decay_date=None)
+                .values(relationship=score, last_decay_date=None)
             )
             await session.commit()
 
-    start, _ = db.pacific_day_bounds_utc(day)
-    async with db._require_session()() as session:
-        session.add(
-            db.PetEvent(user_id=ALICE, guild_id=GUILD_A, created_at=start + timedelta(hours=1))
-        )
-        await session.commit()
-    # The drift reads the stamp rather than the pet log now, and the stamp
-    # is per (player, server) like everything else here.
-    await db.touched_the_cat(ALICE, GUILD_A, day)
+    await db.apply_daily_recovery(day, guild_id=GUILD_A)
 
-    await db.apply_daily_decay(day)
-
-    assert await db.get_relationship(ALICE, GUILD_A) == 50  # petted here
-    assert await db.get_relationship(ALICE, GUILD_B) == 40  # idle here
+    assert await db.get_relationship(ALICE, GUILD_A) == -20  # settled here
+    assert await db.get_relationship(ALICE, GUILD_B) == -100  # untouched there
 
 
 async def test_game_state_is_per_server(db):

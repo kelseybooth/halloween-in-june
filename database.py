@@ -87,12 +87,24 @@ PERFECT_RELATIONSHIP = 100
 # disagree.
 RELATIONSHIP_START = 0
 
-# Nightly drift back toward neutral, applied only to players who did not
-# touch the cat at all that day - see `last_cat_interaction_date`.
-DECAY_POSITIVE_THRESHOLD = 10   # at or above this, affection fades...
-DECAY_POSITIVE_STEP = 10        # ...by this much, never past 0
-DECAY_NEGATIVE_THRESHOLD = -20  # at or below this, grudges soften...
-DECAY_NEGATIVE_STEP = 20        # ...by this much, never past 0
+# Grudges soften overnight. A score at or below RECOVERY_THRESHOLD
+# climbs by RECOVERY_STEP each Pacific day, never past 0.
+#
+# **This used to be half of a two-sided drift**, and the other half -
+# affection fading by ten a day for anybody who stayed away - is gone
+# rather than dormant. A score that falls while somebody is absent
+# punishes exactly the players a staged release is hardest on. A score
+# that climbs back toward neutral does the opposite, and matters more
+# the larger the single swings get: a later drop puts a can in the
+# house worth -75, and without this a player who opens it has no route
+# back except petting at poor odds.
+#
+# **It applies whether or not they played that day**, unlike the drift
+# it came from. Making recovery conditional on absence would mean the
+# player who keeps showing up is the one who stays in the hole
+# longest, which is backwards.
+RECOVERY_THRESHOLD = -20
+RECOVERY_STEP = 20
 
 # Ceiling on catch-up work after a long outage.
 MAX_CATCHUP_DAYS = 30
@@ -137,8 +149,8 @@ class GameState(NamedTuple):
     rooms_unlocked: list[str]
 
 
-class DecayChange(NamedTuple):
-    """One player's relationship movement in one server during a nightly decay run."""
+class RecoveryChange(NamedTuple):
+    """One player's climb back toward neutral on one night, in one server."""
 
     user_id: int
     guild_id: int
@@ -257,14 +269,19 @@ class User(Base):
         default=RELATIONSHIP_START,
         server_default=text(str(RELATIONSHIP_START)),
     )
-    # Last Pacific day the nightly decay was evaluated for this row. Lets the
-    # bot catch up on days it was offline without double-applying any of them.
+    # Last Pacific day the nightly job was evaluated for this row. Lets the
+    # bot catch up on days it was offline without double-applying any of
+    # them. Named for the drift it was written for; the mechanic it serves
+    # now only ever raises a score.
     last_decay_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # The last Pacific day this player touched the cat in this server, by
-    # any means and whether or not it worked. One column rather than four
-    # branches in the decay query, and the reason it is a date rather than
-    # a count is that the drift only ever asks "was this player here".
+    # any means and whether or not it worked.
+    #
+    # **The recovery no longer reads it** - grudges soften whether or not
+    # somebody played that day. It stays because the leaderboard does read
+    # it: a player with no recorded interaction is not on the board, which
+    # is what keeps day one from being a wall of zeroes.
     last_cat_interaction_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # How willing the cat is to play with this player right now, as the
@@ -1799,47 +1816,47 @@ class LookResult(NamedTuple):
 
 
 # --------------------------------------------------------------------------
-# Nightly relationship decay, per (player, server)
+# The nightly climb back toward neutral, per (player, server)
 # --------------------------------------------------------------------------
 
 
 # --------------------------------------------------------------------------
-# The nightly drift, withdrawn
+# Grudges soften
 #
-# **Nothing calls these.** The mechanic dropped a player's score on any
-# day they did not touch the cat, and it was taken out rather than
-# retuned: a score that falls while somebody is away punishes exactly
-# the players a staged release is hardest on, the ones who cannot check
-# in daily. It may come back if the table spreads out and the people at
-# the top stop playing, which is the problem it was for.
+# What is left of the nightly drift. The downward half - affection
+# fading by ten a day for anybody who stayed away - was withdrawn and
+# is not coming back here; a score that falls during an absence
+# punishes the players a staged release is hardest on. The upward half
+# is the opposite and stays: somebody who annoyed the cat can climb
+# back to neutral whether or not they keep playing.
 #
-# Kept, with its tests, because that is cheaper and more honest than
-# deleting a mechanic somebody has said they may want back. To re-arm
-# it: call `run_pending_decay` from `bot.nightly_job` and at startup,
-# which is where it used to live.
+# The names changed with the meaning. A function called "decay" that
+# only ever raises a score is a trap for whoever reads it next.
 # --------------------------------------------------------------------------
 
 
-async def apply_daily_decay(day: date, *, guild_id: int | None = None) -> list[DecayChange]:
-    """Settle one Pacific calendar day, drifting idle players back toward neutral.
+async def apply_daily_recovery(
+    day: date, *, guild_id: int | None = None
+) -> list[RecoveryChange]:
+    """Settle one Pacific calendar day, softening grudges back toward 0.
 
-    Each (player, server) row is independent: a player is skipped in a
-    server only if they touched the cat *in that server* during `day` -
-    petting it, playing with it, fluffing its bed or feeding it, and
-    whether or not any of those worked. It used to be petting alone, which
-    would have meant a player who spent the evening fluffing the bed and
-    offering the toy still lost ten points for not having petted.
+    A score at or below `RECOVERY_THRESHOLD` climbs by `RECOVERY_STEP`,
+    never crossing above 0. Everything else is left exactly where it
+    is: there is no longer a downward half, so a positive score only
+    ever moves because somebody did something.
 
-    Rows at or above DECAY_POSITIVE_THRESHOLD lose DECAY_POSITIVE_STEP
-    without crossing below 0; rows at or below DECAY_NEGATIVE_THRESHOLD
-    gain DECAY_NEGATIVE_STEP without crossing above 0. Scores between those
-    thresholds are left alone.
+    **No interaction test.** The drift this came from skipped any day
+    a player touched the cat, which was right when the question was
+    whether to punish an absence. It is wrong for recovery - it would
+    leave the player who turns up every day stuck below zero longest,
+    while somebody who walked away climbed out for free.
 
-    Every row considered has `last_decay_date` stamped to `day`, so a restart
-    cannot apply the same night twice.
+    Each (player, server) row is independent, and every row considered
+    has `last_decay_date` stamped to `day`, so a restart cannot apply
+    the same day twice.
     """
     session_factory = _require_session()
-    changes: list[DecayChange] = []
+    changes: list[RecoveryChange] = []
 
     try:
         async with session_factory() as session:
@@ -1857,22 +1874,17 @@ async def apply_daily_decay(day: date, *, guild_id: int | None = None) -> list[D
                 )
             ).all()
 
-            for user_id, guild_id, score, touched in pending:
-                if touched != day:
-                    if score >= DECAY_POSITIVE_THRESHOLD:
-                        new_score = max(0, score - DECAY_POSITIVE_STEP)
-                    elif score <= DECAY_NEGATIVE_THRESHOLD:
-                        new_score = min(0, score + DECAY_NEGATIVE_STEP)
-                    else:
-                        new_score = score
-
-                    if new_score != score:
-                        await session.execute(
-                            update(User)
-                            .where(User.id == user_id, User.guild_id == guild_id)
-                            .values(relationship=new_score)
-                        )
-                        changes.append(DecayChange(user_id, guild_id, score, new_score, day))
+            for user_id, guild_id, score, _touched in pending:
+                if score <= RECOVERY_THRESHOLD:
+                    new_score = min(0, score + RECOVERY_STEP)
+                    await session.execute(
+                        update(User)
+                        .where(User.id == user_id, User.guild_id == guild_id)
+                        .values(relationship=new_score)
+                    )
+                    changes.append(
+                        RecoveryChange(user_id, guild_id, score, new_score, day)
+                    )
 
                 await session.execute(
                     update(User)
@@ -1883,15 +1895,15 @@ async def apply_daily_decay(day: date, *, guild_id: int | None = None) -> list[D
             await session.commit()
 
         if changes:
-            log.info("Nightly decay for %s adjusted %d row(s)", day, len(changes))
+            log.info("Recovery for %s raised %d score(s)", day, len(changes))
         return changes
     except SQLAlchemyError:
-        log.exception("Nightly decay failed for %s", day)
+        log.exception("Nightly recovery failed for %s", day)
         raise
 
 
-async def run_pending_decay() -> list[DecayChange]:
-    """Settle every fully elapsed day that has not been decayed yet.
+async def run_pending_recovery() -> list[RecoveryChange]:
+    """Settle every fully elapsed day that has not been settled yet.
 
     Called at startup and after each scheduled midnight run, so an outage
     of a few days is caught up rather than silently skipped. Only days
@@ -1900,7 +1912,7 @@ async def run_pending_decay() -> list[DecayChange]:
     **Per server, because each server has its own today.** A test server
     running a week ahead on `/qa-clock` has a week of nights to settle
     that the live one does not, and settling them all against one
-    calendar would either skip its days or decay everybody else's
+    calendar would either skip its days or settle everybody else's
     future.
     """
     session_factory = _require_session()
@@ -1910,13 +1922,13 @@ async def run_pending_decay() -> list[DecayChange]:
             await session.execute(select(User.guild_id).distinct())
         ).scalars().all()
 
-    changes: list[DecayChange] = []
+    changes: list[RecoveryChange] = []
     for guild_id in sorted(guilds):
         changes.extend(await _catch_up(guild_id))
     return changes
 
 
-async def _catch_up(guild_id: int) -> list[DecayChange]:
+async def _catch_up(guild_id: int) -> list[RecoveryChange]:
     """Every night one server owes, oldest first."""
     session_factory = _require_session()
     today = await server_today(guild_id)
@@ -1926,14 +1938,14 @@ async def _catch_up(guild_id: int) -> list[DecayChange]:
             select(func.min(User.last_decay_date)).where(User.guild_id == guild_id)
         )
 
-    # Never decayed before: settle yesterday only, rather than all of history.
+    # Never settled before: yesterday only, rather than all of history.
     first_day = (earliest + timedelta(days=1)) if earliest else today - timedelta(days=1)
     first_day = max(first_day, today - timedelta(days=MAX_CATCHUP_DAYS))
 
-    changes: list[DecayChange] = []
+    changes: list[RecoveryChange] = []
     day = first_day
     while day < today:
-        changes.extend(await apply_daily_decay(day, guild_id=guild_id))
+        changes.extend(await apply_daily_recovery(day, guild_id=guild_id))
         day += timedelta(days=1)
     return changes
 

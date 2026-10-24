@@ -468,6 +468,11 @@ class CatBot(commands.Bot):
         triggers.register_all()
         await _check_achievement_registry()
 
+        # Settle any days the bot was down for, before serving commands:
+        # a weekend offline must not cost somebody their climb back.
+        caught_up = await database.run_pending_recovery()
+        if caught_up:
+            log.info("Startup settled %d recovering score(s)", len(caught_up))
         nightly_job.start()
         keep_threads_alive.start()
         restock_sweep.start()
@@ -560,19 +565,31 @@ bot = CatBot()
 # that is currently PST or PDT.
 @tasks.loop(time=dt_time(hour=0, minute=0, tzinfo=database.PACIFIC))
 async def nightly_job() -> None:
-    """Midnight, Pacific. Fires `on_midnight` and nothing else.
+    """Midnight, Pacific. Softens grudges, then fires `on_midnight`.
 
-    **It used to drift idle players back toward neutral**, and that is
-    withdrawn rather than retuned: a score that falls while somebody is
-    away punishes the players a staged release is hardest on, which is
-    the ones who cannot check in daily. The machinery is still in
-    `database`, still tested and wired to nothing, for the day it is
-    wanted back - see `apply_daily_decay`.
+    **Only the upward half of the old drift runs here.** Affection no
+    longer fades during an absence; a score at or below the recovery
+    threshold still climbs back toward neutral, whether or not that
+    player turned up. See `database.apply_daily_recovery`.
 
-    The loop stays because the hook does. Nothing listens on
-    `on_midnight` today, and the bottle scatter and the craving roll
-    are both meant to.
+    Nothing listens on `on_midnight` yet. The hook fires anyway,
+    because the bottle scatter and the craving roll are both meant to.
     """
+    try:
+        for change in await database.run_pending_recovery():
+            log.info(
+                "Recovery %s: user %s in guild %s: %s -> %s",
+                change.day,
+                change.user_id,
+                change.guild_id,
+                change.before,
+                change.after,
+            )
+    except SQLAlchemyError:
+        # Already logged with a traceback; swallow so the loop survives
+        # to retry tomorrow rather than dying on one bad night.
+        log.error("Nightly recovery failed; will retry at the next midnight")
+
     for guild in bot.guilds:
         # No player and no interaction: whatever listens here is looking at the
         # server rather than at somebody's action.
@@ -4171,28 +4188,28 @@ async def qa_clock(interaction: discord.Interaction, days: int) -> None:
 @bot.tree.command(name="qa-midnight", description="(QA) Run the nightly job now.")
 @app_commands.guild_only()
 async def qa_midnight(interaction: discord.Interaction) -> None:
-    """Fire midnight for this server without waiting for one.
+    """Settle every night this server owes, without waiting for one.
 
-    It used to settle the nightly drift, which is withdrawn, so what is
-    left is the `on_midnight` hook. Nothing listens on it yet and the
-    bottle scatter and the craving roll both will, so the command stays
-    rather than going with the mechanic it was written for.
+    Two things happen at midnight: grudges soften, and `on_midnight`
+    fires. Only a negative score moves - affection no longer fades
+    during an absence - so a tester who sees nothing settle has
+    nobody below the threshold rather than a broken command.
     """
     if await qa.refuse(interaction):
         return
     await interaction.response.defer(ephemeral=True, thinking=True)
 
-    earned = await _fire(
+    changes = await database.run_pending_recovery()
+    mine = [c for c in changes if c.guild_id == interaction.guild_id]
+    await _fire(
         achievements.Context(guild_id=interaction.guild_id, hook="on_midnight"),
         guild=interaction.guild,
         announce=False,
     )
-    await qa.record(interaction, f"midnight: {len(earned)} award(s)")
-    await interaction.followup.send(
-        f"Midnight fired here. {len(earned)} award(s) landed, and no scores "
-        "moved - the nightly drift is withdrawn.",
-        ephemeral=True,
-    )
+    await qa.record(interaction, f"midnight: {len(mine)} score(s) recovered")
+    lines = [f"Settled {len(mine)} recovering score(s) here."]
+    lines += [f"- `{c.user_id}` {c.before} -> {c.after} on {c.day}" for c in mine[:10]]
+    await interaction.followup.send(chr(10).join(lines), ephemeral=True)
 
 
 @bot.tree.command(
