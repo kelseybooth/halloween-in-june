@@ -71,8 +71,8 @@ stats.rank	Leaderboard rank: {rank}
 leaderboard.title	Leaderboard
 leaderboard.header.top	By Relationship
 leaderboard.header.recent	Recently Earned
-leaderboard.entry	{rank}. {name} - {score}
-leaderboard.entry.you	**{rank}. {name} - {score}**
+leaderboard.entry	{rank}. {name}: {score}
+leaderboard.entry.you	**{rank}. {name}: {score}**
 leaderboard.separator	...
 leaderboard.unknown_player	a player
 leaderboard.recent	**{name}** - {player}
@@ -106,6 +106,7 @@ hint.take_toy	This toy can be picked up. Try /take {name}.
 hint.use_toy	Give this toy a shake. Try /use {name}.
 hint.hold_to_use	You need to hold it to use it. Try picking it up with /take {name}.
 hint.bed_yield	You dislodged something from the bed. Check /look to see what appeared.
+bed_fluff.public	{player} fluffs the cat bed. The cat approves.
 bed_yield.public	As {player} fluffs the cat bed, something falls out. Undistracted, the cat leaps into the bed and curls up.
 use_fail.fixture	There is nothing to do with the {name} but look at it.
 channel.fog_thins	When you look up from the bed, the fog has thinned slightly.

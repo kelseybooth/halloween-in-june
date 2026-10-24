@@ -200,6 +200,9 @@ class Thing:
     # places that build a Thing without one keep working - almost
     # nothing in the house is consumable.
     consumed_on_use: bool = False
+    # Once per Pacific day rather than once per N hours. A different
+    # kind of cooldown, not a different length of one.
+    use_cooldown_daily: bool = False
 
     @property
     def is_exit(self) -> bool:
@@ -521,6 +524,7 @@ def load_files(directory: Path | None = None) -> Content:
                 takeable=_bool(row.get("takeable")),
                 droppable=_bool(row.get("droppable"), default=True),
                 consumed_on_use=_bool(row.get("consumed_on_use")),
+                use_cooldown_daily=_bool(row.get("use_cooldown_daily")),
                 cross_weight=_int(row.get("cross_weight"), default=0) or 0,
                 max_per_player=_int(row.get("max_per_player")),
                 requires=_text(row.get("requires")),
@@ -669,6 +673,7 @@ def validate(content: Content) -> list[str]:
     problems += _check_quests(content)
     problems += _check_art(content)
     problems += _check_consumables(content)
+    problems += _check_cooldowns(content)
     return problems
 
 
@@ -1296,6 +1301,24 @@ def _check_consumables(content: Content) -> list[str]:
                 "for good"
             )
     return problems
+
+
+def _check_cooldowns(content: Content) -> list[str]:
+    """A thing has one kind of cooldown, or none. Never two.
+
+    They are different questions, not two settings of one: hours is a
+    rolling window from the last use, and daily is a calendar boundary
+    everybody crosses together. A row carrying both would answer to
+    whichever branch the dispatcher happened to test first, which is a
+    decision nobody made and nothing records.
+    """
+    return [
+        f"thing {thing.thing_id} has both use_cooldown_hours and "
+        "use_cooldown_daily; a rolling window and a calendar day are "
+        "different rules, so pick one"
+        for thing in content.things
+        if thing.use_cooldown_daily and thing.use_cooldown_hours
+    ]
 
 
 def _check_quests(content: Content) -> list[str]:

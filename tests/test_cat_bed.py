@@ -156,23 +156,48 @@ async def test_everybody_gets_their_own_day(channel):
     assert await score(BOB) == world.BED_FLUFF
 
 
-async def test_the_cooldown_lets_go_after_a_day(channel):
+async def test_the_cooldown_lets_go_at_midnight(channel):
+    """**A calendar day, not a rolling twenty-four hours.**
+
+    Pushed back to just before Pacific midnight yesterday, which a
+    rolling window would still be inside: a fluff at 23:30 last night
+    is well under twenty-four hours old. The day has turned, so it is
+    a new turn.
+    """
     db, _, _ = channel
     await fluff(channel)
-    async with db._require_session()() as session:
-        from datetime import timedelta
+    yesterday = await db.server_today(GUILD_A) - timedelta(days=1)
+    _, closes = db.pacific_day_bounds_utc(yesterday)
+    await _last_fluffed_at(db, closes - timedelta(minutes=30))
 
+    assert FLUFFED in replies(await fluff(channel))
+    assert await score() == world.BED_FLUFF * 2
+
+
+async def test_it_does_not_let_go_earlier_in_the_same_day(channel):
+    """The other side. Just after midnight *this* morning is still
+    today, however many hours ago it was."""
+    db, _, _ = channel
+    await fluff(channel)
+    today = await db.server_today(GUILD_A)
+    opened, _ = db.pacific_day_bounds_utc(today)
+    await _last_fluffed_at(db, opened + timedelta(minutes=1))
+
+    assert FLUFFED not in replies(await fluff(channel))
+    assert await score() == world.BED_FLUFF
+
+
+async def _last_fluffed_at(db, when):
+    """Move this player's last fluff to a chosen moment."""
+    async with db._require_session()() as session:
         from sqlalchemy import update
 
         await session.execute(
             update(db.ThingUse)
             .where(db.ThingUse.user_id == ALICE, db.ThingUse.thing_id == BED)
-            .values(last_used_at=db._utcnow() - timedelta(hours=25))
+            .values(last_used_at=when)
         )
         await session.commit()
-
-    assert FLUFFED in replies(await fluff(channel))
-    assert await score() == world.BED_FLUFF * 2
 
 
 # --------------------------------------------------------------------------
@@ -473,3 +498,57 @@ async def test_the_look_rung_survives_a_public_line_that_never_went_out(
 
     assert "You dislodged something from the bed" in replies(interaction)
     assert not interaction.withdrawn
+
+# --------------------------------------------------------------------------
+# What the room sees
+# --------------------------------------------------------------------------
+
+
+def posted(channel) -> str:
+    _, _, halloween = channel
+    return "\n".join(halloween.posted)
+
+
+async def test_a_fluff_is_announced_in_the_room(channel):
+    """**Both halves, which is the opposite of the call the toy got.**
+    A play suppresses its private copy because the two said the same
+    thing; these do not. The room is told the event, and the person who
+    did it is told what the cat did about it."""
+    interaction = await fluff(channel)
+
+    assert "fluffs the cat bed. The cat approves." in posted(channel)
+    assert FLUFFED in replies(interaction)
+
+
+async def test_it_names_who_did_it(channel):
+    _, guild, _ = channel
+
+    await fluff(channel)
+
+    assert guild.get_member(ALICE).display_name in posted(channel)
+
+
+async def test_a_refused_fluff_says_nothing_in_the_room(channel):
+    """Nothing happened, so the room hears nothing - and the player who
+    tried is told privately, which is where a refusal belongs."""
+    await fluff(channel)
+    before = len((channel[2]).posted)
+
+    await fluff(channel)
+
+    assert len((channel[2]).posted) == before
+
+
+async def test_a_yield_posts_one_line_rather_than_two(channel):
+    """The yield line already opens on the fluff - *as {player} fluffs
+    the cat bed, something falls out* - so adding the ordinary fluff
+    line would narrate the same action twice in consecutive
+    messages."""
+    await resolve.set_current_drop(GUILD_A, 2)
+    _, _, halloween = channel
+
+    await fluff(channel)
+
+    assert "something falls out" in posted(channel)
+    assert "The cat approves." not in posted(channel)
+
