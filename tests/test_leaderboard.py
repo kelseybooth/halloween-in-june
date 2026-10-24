@@ -619,3 +619,116 @@ def test_the_bot_asks_for_the_intent_that_makes_this_work():
     assert bot.bot.intents.members
     assert bot.bot.intents.message_content
 
+# --------------------------------------------------------------------------
+# Catching up
+#
+# The cat tires more slowly of the bottom thirty per cent, and starts
+# warmer for the bottom ten. Read off the same standings the board
+# renders, so where a player sees themselves and how the game treats
+# them cannot disagree.
+# --------------------------------------------------------------------------
+
+
+async def a_field(db, guild, *scores):
+    """One player per score, in the order given, all of them members."""
+    for n, score in enumerate(scores):
+        who = 2000 + n
+        guild.add_member(FakeMember(who, display_name=f"F{n}"))
+        await met_the_cat(db, who, score)
+    return [2000 + n for n in range(len(scores))]
+
+
+async def test_the_bottom_of_a_spread_field_is_behind(server):
+    db, guild = server
+    low, _, high = await a_field(db, guild, 10, 50, 100)
+
+    assert await leaderboard.behind_the_field(guild, low) == (True, True)
+    assert await leaderboard.behind_the_field(guild, high) == (False, False)
+
+
+async def test_a_level_field_leaves_nobody_behind(server):
+    """**Everybody equal is not everybody lagging.** Handing the whole
+    server a bonus for being tied would be a strange reading of
+    "behind", and it is the state a fresh server is in."""
+    db, guild = server
+    players = await a_field(db, guild, 20, 20, 20)
+
+    for who in players:
+        assert await leaderboard.behind_the_field(guild, who) == (False, False)
+
+
+async def test_a_tie_at_the_boundary_takes_everybody_tied(server):
+    """By score rather than by position, so the sort order is not
+    quietly deciding who gets an easier time of it."""
+    db, guild = server
+    players = await a_field(db, guild, 100, 90, 50, 50)
+
+    assert (await leaderboard.behind_the_field(guild, players[2]))[0]
+    assert (await leaderboard.behind_the_field(guild, players[3]))[0]
+
+
+async def test_the_two_slices_are_not_the_same_slice(server):
+    db, guild = server
+    players = await a_field(db, guild, *range(100, 0, -10))
+
+    assert await leaderboard.behind_the_field(guild, players[-1]) == (True, True)
+    assert await leaderboard.behind_the_field(guild, players[-3]) == (True, False)
+    assert await leaderboard.behind_the_field(guild, players[0]) == (False, False)
+
+
+async def test_somebody_off_the_board_is_not_behind(server):
+    """Not on the standings, not in the field - a player who has never
+    touched the cat has no place to be behind in."""
+    db, guild = server
+    await a_field(db, guild, 10, 50, 100)
+    await db.ensure_user_exists(9876, GUILD_A)
+
+    assert await leaderboard.behind_the_field(guild, 9876) == (False, False)
+
+
+# --------------------------------------------------------------------------
+# What it is worth
+# --------------------------------------------------------------------------
+
+
+def test_a_level_player_is_unchanged():
+    """The default has to be exactly what it always was, or this is a
+    rebalance of the whole game rather than a hand to the people at the
+    bottom of it."""
+    assert [bot.friendly_chance(n) for n in range(5)] == [80, 70, 60, 50, 40]
+
+
+def test_the_bottom_thirty_per_cent_tire_her_half_as_fast():
+    behind = bot.Standing(decay_per_pet=bot.SLOW_DECAY_PER_PET)
+
+    assert [bot.friendly_chance(n, behind) for n in range(5)] == [80, 75, 70, 65, 60]
+
+
+def test_the_bottom_tenth_start_twenty_points_up():
+    well_behind = bot.Standing(
+        decay_per_pet=bot.SLOW_DECAY_PER_PET, bonus=bot.CATCHING_UP_BONUS
+    )
+
+    assert [bot.friendly_chance(n, well_behind) for n in range(3)] == [100, 95, 90]
+
+
+def test_the_chance_never_passes_a_hundred():
+    """Eighty and twenty meet exactly at the top, and a chance above it
+    would make the ramp read as longer than it is."""
+    best = bot.Standing(bonus=bot.CATCHING_UP_BONUS)
+
+    assert bot.friendly_chance(0, best) == 100
+
+
+def test_the_crowding_nudge_moves_with_the_standing():
+    """The nudge, the two status lines and the mood roll all read
+    `friendly_chance`, so a standing that changes one has to change all
+    of them - a status line describing a cat the next `/pet` does not
+    match is the failure here."""
+    behind = bot.Standing(decay_per_pet=bot.SLOW_DECAY_PER_PET)
+    level = next(n for n in range(30) if bot._crowding_begins(n))
+    slowed = next(n for n in range(30) if bot._crowding_begins(n, behind))
+
+    assert slowed > level
+    assert bot._is_expectant(level, behind)
+

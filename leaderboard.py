@@ -13,6 +13,8 @@ player between the two views live in `bot`, because they need both.
 
 from __future__ import annotations
 
+import math
+
 import database
 import phrasing
 import resolve
@@ -83,6 +85,62 @@ def _membership_is_knowable(guild) -> bool:
     that does not have the attribute, which is the test harness.
     """
     return bool(getattr(guild, "chunked", True))
+
+
+# How far down the field a player has to be before the game starts
+# helping them along. Fractions of the field rather than scores,
+# because a score means nothing without knowing what the others have.
+CATCHING_UP = 0.30
+WELL_BEHIND = 0.10
+
+
+def _cutoff(scores: list[int], fraction: float) -> int | None:
+    """The highest score still inside the bottom `fraction` of the field.
+
+    **Rounded up, so a small server is not excluded by arithmetic.**
+    Three players and a thirtieth percentile is nine tenths of a
+    person; taking the floor would mean nobody on the board is ever
+    behind, which is true of the maths and useless to the game.
+
+    **None when the field is level.** If the bottom of the table holds
+    the same score as the top, nobody is lagging - everybody is equal,
+    and handing the whole server a bonus for it would be a strange
+    reading of "behind".
+    """
+    if not scores:
+        return None
+    wanted = max(1, math.ceil(len(scores) * fraction))
+    cut = scores[-wanted]
+    return None if cut >= scores[0] else cut
+
+
+async def behind_the_field(guild, user_id: int) -> tuple[bool, bool]:
+    """Whether this player is in the bottom 30%, and the bottom 10%.
+
+    **Compared by score rather than by position**, so a tie at the
+    boundary includes everybody tied rather than whichever of them the
+    sort happened to put last - which would be an invisible coin toss
+    deciding who gets an easier time of it.
+
+    The two are not exclusive: the bottom tenth is inside the bottom
+    thirty per cent and collects both.
+
+    Same population as the board itself, so where a player sees
+    themselves standing and how the game treats them cannot disagree.
+    """
+    scores = [score for _, score in await standings(guild)]
+    mine = next(
+        (score for who, score in await standings(guild) if who == user_id), None
+    )
+    if mine is None:
+        return False, False
+
+    thirty = _cutoff(scores, CATCHING_UP)
+    ten = _cutoff(scores, WELL_BEHIND)
+    return (
+        thirty is not None and mine <= thirty,
+        ten is not None and mine <= ten,
+    )
 
 
 async def rank_of(guild, user_id: int) -> int | None:

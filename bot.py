@@ -80,6 +80,45 @@ PET_RESPONSES = FRIENDLY_RESPONSES + STANDOFFISH_RESPONSES
 BASE_FRIENDLY_CHANCE = 80
 DECAY_PER_RECENT_PET = 10
 
+# What the game does for somebody the field has left behind. The cat
+# tires of them more slowly, and the ones furthest back start warmer.
+#
+# **Both are read off the leaderboard's own standings**, so where a
+# player sees themselves and how the game treats them cannot disagree,
+# and a player who climbs out loses the help on their next pet rather
+# than at some boundary of its own.
+SLOW_DECAY_PER_PET = 5
+CATCHING_UP_BONUS = 20
+
+
+class Standing(NamedTuple):
+    """How the field is treating this player, as two numbers.
+
+    Passed in rather than looked up inside `friendly_chance`, which is
+    pure and is called by four things that must all see the same
+    answer - the mood roll, the crowding nudge and the two halves of
+    the status line. One of them reading a different chance from the
+    others is how `/stats` starts lying about the cat.
+    """
+
+    decay_per_pet: int = DECAY_PER_RECENT_PET
+    bonus: int = 0
+
+
+# Everybody who is not behind, which on a level server is everybody.
+LEVEL = Standing()
+
+
+async def standing_of(guild, user_id: int) -> Standing:
+    """What this player's place in the field is worth to them."""
+    if guild is None:
+        return LEVEL
+    behind, well_behind = await leaderboard.behind_the_field(guild, user_id)
+    return Standing(
+        decay_per_pet=SLOW_DECAY_PER_PET if behind else DECAY_PER_RECENT_PET,
+        bonus=CATCHING_UP_BONUS if well_behind else 0,
+    )
+
 # How often to look for restock occurrences that have come due. Occurrences
 # are scattered through the day, so a once-a-day job would deliver eight
 # bottles in a heap rather than eight times.
@@ -117,28 +156,38 @@ class Reaction(NamedTuple):
     chance: int
 
 
-def friendly_chance(recent_pets: int) -> int:
-    """Percentage chance of a friendly response, floored at zero.
+def friendly_chance(recent_pets: int, standing: Standing = LEVEL) -> int:
+    """Percentage chance of a friendly response, clamped to 0 and 100.
 
-    Once `BASE_FRIENDLY_CHANCE / DECAY_PER_RECENT_PET` recent pets have piled
-    up this is 0 and the cat is reliably standoffish until the window clears -
-    eight pets at the numbers above.
+    Eight recent pets takes a level player to zero, and the cat is
+    reliably standoffish until the window clears.
+
+    `standing` is what the field is worth: a player in the bottom
+    thirty per cent loses half as much per pet, and one in the bottom
+    tenth starts twenty points up. Clamped at the top because those
+    two together open at a hundred, and a chance above it would make
+    the ramp read as longer than it is.
     """
-    return max(0, BASE_FRIENDLY_CHANCE - DECAY_PER_RECENT_PET * recent_pets)
+    chance = (
+        BASE_FRIENDLY_CHANCE + standing.bonus - standing.decay_per_pet * recent_pets
+    )
+    return max(0, min(100, chance))
 
 
-def choose_response(recent_pets: int, rng=random) -> Reaction:
+def choose_response(
+    recent_pets: int, rng=random, standing: Standing = LEVEL
+) -> Reaction:
     """Pick a response, weighted by how much this user has been pestering the cat.
 
     `rng` is injectable so the weighting can be exercised deterministically.
     """
-    chance = friendly_chance(recent_pets)
+    chance = friendly_chance(recent_pets, standing)
     if rng.random() * 100 < chance:
         return Reaction(rng.choice(FRIENDLY_RESPONSES), True, chance)
     return Reaction(rng.choice(STANDOFFISH_RESPONSES), False, chance)
 
 
-def _crowding_begins(recent_pets: int) -> bool:
+def _crowding_begins(recent_pets: int, standing: Standing = LEVEL) -> bool:
     """Whether this pet is the one that should say to give the cat space.
 
     **The first pet that loses points on average**, which is the fifth
@@ -165,13 +214,13 @@ def _crowding_begins(recent_pets: int) -> bool:
     rides with it.
     """
     return (
-        friendly_chance(recent_pets)
+        friendly_chance(recent_pets, standing)
         < BREAK_EVEN_CHANCE
-        <= friendly_chance(recent_pets - 1)
+        <= friendly_chance(recent_pets - 1, standing)
     )
 
 
-def _is_crowded(recent_pets: int) -> bool:
+def _is_crowded(recent_pets: int, standing: Standing = LEVEL) -> bool:
     """Whether the cat is *currently* tired of this player.
 
     **The level, where `_crowding_begins` is the edge.** The nudge
@@ -182,10 +231,10 @@ def _is_crowded(recent_pets: int) -> bool:
     not an answer. Two predicates on one number, and collapsing them
     into one would break whichever half it was collapsed into.
     """
-    return friendly_chance(recent_pets) < BREAK_EVEN_CHANCE
+    return friendly_chance(recent_pets, standing) < BREAK_EVEN_CHANCE
 
 
-def _is_expectant(recent_pets: int) -> bool:
+def _is_expectant(recent_pets: int, standing: Standing = LEVEL) -> bool:
     """The other side of the same line: better than even odds.
 
     Exactly even is neither, which is why this is strict. A player at
@@ -193,7 +242,7 @@ def _is_expectant(recent_pets: int) -> bool:
     the two can never both be true - they read one number from opposite
     sides.
     """
-    return friendly_chance(recent_pets) > BREAK_EVEN_CHANCE
+    return friendly_chance(recent_pets, standing) > BREAK_EVEN_CHANCE
 
 
 def _debug_lines(reaction: Reaction, recent: int, relationship: int) -> str:
@@ -419,11 +468,7 @@ class CatBot(commands.Bot):
         triggers.register_all()
         await _check_achievement_registry()
 
-        # Settle any nights the bot was offline for before serving commands.
-        caught_up = await database.run_pending_decay()
-        if caught_up:
-            log.info("Startup decay settled %d relationship(s)", len(caught_up))
-        nightly_decay.start()
+        nightly_job.start()
         keep_threads_alive.start()
         restock_sweep.start()
 
@@ -502,7 +547,7 @@ class CatBot(commands.Bot):
 
     async def close(self) -> None:
         """Graceful shutdown: stop the scheduler, release the pool, then disconnect."""
-        nightly_decay.cancel()
+        nightly_job.cancel()
         keep_threads_alive.cancel()
         await database.close_db()
         await super().close()
@@ -514,24 +559,20 @@ bot = CatBot()
 # discord.py handles the timezone maths, waking the loop at 00:00 Pacific whether
 # that is currently PST or PDT.
 @tasks.loop(time=dt_time(hour=0, minute=0, tzinfo=database.PACIFIC))
-async def nightly_decay() -> None:
-    """Drift idle players back toward a neutral relationship each midnight."""
-    try:
-        changes = await database.run_pending_decay()
-        for change in changes:
-            log.info(
-                "Decay %s: user %s in guild %s: %s -> %s",
-                change.day,
-                change.user_id,
-                change.guild_id,
-                change.before,
-                change.after,
-            )
-    except SQLAlchemyError:
-        # Already logged with a traceback; swallow so the loop survives to retry
-        # tomorrow rather than dying permanently on one bad night.
-        log.error("Nightly decay run failed; will retry at the next midnight")
+async def nightly_job() -> None:
+    """Midnight, Pacific. Fires `on_midnight` and nothing else.
 
+    **It used to drift idle players back toward neutral**, and that is
+    withdrawn rather than retuned: a score that falls while somebody is
+    away punishes the players a staged release is hardest on, which is
+    the ones who cannot check in daily. The machinery is still in
+    `database`, still tested and wired to nothing, for the day it is
+    wanted back - see `apply_daily_decay`.
+
+    The loop stays because the hook does. Nothing listens on
+    `on_midnight` today, and the bottle scatter and the craving roll
+    are both meant to.
+    """
     for guild in bot.guilds:
         # No player and no interaction: whatever listens here is looking at the
         # server rather than at somebody's action.
@@ -541,8 +582,8 @@ async def nightly_decay() -> None:
         )
 
 
-@nightly_decay.before_loop
-async def _before_nightly_decay() -> None:
+@nightly_job.before_loop
+async def _before_nightly_job() -> None:
     await bot.wait_until_ready()
 
 
@@ -1011,7 +1052,10 @@ async def pet(interaction: discord.Interaction) -> None:
 
     try:
         result = await database.increment_pet_count(user.id, guild_id)
-        reaction = choose_response(result.recent)
+        # Read before the meter moves, so it is this player's place
+        # coming into the pet rather than the one it leaves them in.
+        standing = await standing_of(interaction.guild, user.id)
+        reaction = choose_response(result.recent, standing=standing)
         delta = RELATIONSHIP_STEP if reaction.friendly else -RELATIONSHIP_STEP
         relationship = await _move_the_meter(user.id, guild_id, delta)
     except SQLAlchemyError:
@@ -1019,7 +1063,7 @@ async def pet(interaction: discord.Interaction) -> None:
         return
 
     message = reaction.text
-    crowding_begins = _crowding_begins(result.recent)
+    crowding_begins = _crowding_begins(result.recent, standing)
     if crowding_begins:
         nudge = await phrasing.default_say("pet.crowding")
         if nudge:
@@ -4124,22 +4168,29 @@ async def qa_clock(interaction: discord.Interaction, days: int) -> None:
     )
 
 
-@bot.tree.command(name="qa-midnight", description="(QA) Run the nightly drift now.")
+@bot.tree.command(name="qa-midnight", description="(QA) Run the nightly job now.")
 @app_commands.guild_only()
 async def qa_midnight(interaction: discord.Interaction) -> None:
-    """Settle every night this server owes, without waiting for one."""
+    """Fire midnight for this server without waiting for one.
+
+    It used to settle the nightly drift, which is withdrawn, so what is
+    left is the `on_midnight` hook. Nothing listens on it yet and the
+    bottle scatter and the craving roll both will, so the command stays
+    rather than going with the mechanic it was written for.
+    """
     if await qa.refuse(interaction):
         return
     await interaction.response.defer(ephemeral=True, thinking=True)
 
-    changes = await database.run_pending_decay()
-    mine = [c for c in changes if c.guild_id == interaction.guild_id]
-    await qa.record(interaction, f"midnight: {len(mine)} player(s) drifted")
+    earned = await _fire(
+        achievements.Context(guild_id=interaction.guild_id, hook="on_midnight"),
+        guild=interaction.guild,
+        announce=False,
+    )
+    await qa.record(interaction, f"midnight: {len(earned)} award(s)")
     await interaction.followup.send(
-        "\n".join(
-            [f"Settled {len(mine)} player(s) here."]
-            + [f"- `{c.user_id}` {c.before} -> {c.after} on {c.day}" for c in mine[:10]]
-        ),
+        f"Midnight fired here. {len(earned)} award(s) landed, and no scores "
+        "moved - the nightly drift is withdrawn.",
         ephemeral=True,
     )
 
@@ -4487,7 +4538,7 @@ async def _stats_embed(guild, viewer, subject) -> discord.Embed:
     if mine:
         # Directly under the prose, and never on the public view: it is
         # progress rather than result, and it changes minute to minute.
-        status = await _status_line(guild_id, subject.id)
+        status = await _status_line(guild, subject.id)
         if status:
             body.append(status)
         body.append(
@@ -4571,7 +4622,7 @@ RELATIONSHIP_BANDS: tuple[tuple[int, str], ...] = (
 )
 
 
-async def _status_line(guild_id: int, user_id: int) -> str | None:
+async def _status_line(guild, user_id: int) -> str | None:
     """What the cat wants from this player right now, in one sentence.
 
     **Private only.** It is progress rather than result - a standing
@@ -4594,8 +4645,13 @@ async def _status_line(guild_id: int, user_id: int) -> str | None:
     right beside the open quest, which is the job the follow-the-player
     nudge would have done before the cat started following everybody.
     """
+    guild_id = guild.id
     recent = await database.recent_pets(user_id, guild_id)
-    crowded, expectant = _is_crowded(recent), _is_expectant(recent)
+    # The same standing the pet itself would use, or the line would
+    # describe a cat the next `/pet` does not match.
+    standing = await standing_of(guild, user_id)
+    crowded = _is_crowded(recent, standing)
+    expectant = _is_expectant(recent, standing)
     hungry = await _is_hungry(guild_id, user_id)
 
     if crowded:

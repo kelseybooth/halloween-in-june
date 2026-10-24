@@ -1803,6 +1803,23 @@ class LookResult(NamedTuple):
 # --------------------------------------------------------------------------
 
 
+# --------------------------------------------------------------------------
+# The nightly drift, withdrawn
+#
+# **Nothing calls these.** The mechanic dropped a player's score on any
+# day they did not touch the cat, and it was taken out rather than
+# retuned: a score that falls while somebody is away punishes exactly
+# the players a staged release is hardest on, the ones who cannot check
+# in daily. It may come back if the table spreads out and the people at
+# the top stop playing, which is the problem it was for.
+#
+# Kept, with its tests, because that is cheaper and more honest than
+# deleting a mechanic somebody has said they may want back. To re-arm
+# it: call `run_pending_decay` from `bot.nightly_job` and at startup,
+# which is where it used to live.
+# --------------------------------------------------------------------------
+
+
 async def apply_daily_decay(day: date, *, guild_id: int | None = None) -> list[DecayChange]:
     """Settle one Pacific calendar day, drifting idle players back toward neutral.
 
