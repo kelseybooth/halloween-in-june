@@ -301,16 +301,22 @@ async def test_zero_puts_it_back_on_the_real_clock(testing):
     assert await database.server_today(TEST_GUILD) == database.pacific_today()
 
 
-async def test_midnight_settles_the_nights_the_clock_skipped(testing):
-    """Shift a week forward and the drift has a week to catch up on,
-    which is the pair of commands a tester actually uses."""
+async def test_midnight_no_longer_moves_anybodys_score(testing):
+    """**The drift is withdrawn**, so the pair of commands a tester
+    used to reach for - jump the clock, settle the nights - now settles
+    nothing. It still fires `on_midnight`, which is the half worth
+    keeping: nothing listens on it yet and the bottle scatter and the
+    craving roll both will.
+    """
     _, guild, _, _ = testing
     await database.set_relationship(TEST_GUILD, BOB, 100)
     await bot.qa_clock.callback(qa_call(guild, "qa-clock"), 3)
 
-    await bot.qa_midnight.callback(qa_call(guild, "qa-midnight"))
+    interaction = qa_call(guild, "qa-midnight")
+    await bot.qa_midnight.callback(interaction)
 
-    assert await database.get_relationship(BOB, TEST_GUILD) < 100
+    assert await database.get_relationship(BOB, TEST_GUILD) == 100
+    assert "no scores moved" in interaction.sent[-1][0]
 
 
 async def test_clearing_cooldowns_lets_the_bed_be_fluffed_again(testing):
