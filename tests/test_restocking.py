@@ -453,10 +453,46 @@ async def test_the_sweep_does_not_start_the_clock(server):
     assert await restocking.initialized_on(GUILD_A) is None
 
 
-async def test_the_sweep_places_nothing_before_anybody_has_entered(server):
-    await content_loader.load_content(a_world(a_restock()))
+async def test_a_row_that_counts_days_places_nothing_before_anybody_has_entered(
+    server,
+):
+    """A row whose schedule depends on *which* day it is has no day to
+    read before `/enter` sets one, so it stays put. Spice jars start on
+    day 2 and come every third day after; without a day one, "day 2" is
+    not a question with an answer."""
+    await content_loader.load_content(
+        a_world(a_restock(first_day=2, every_n_days=3))
+    )
 
     assert (await restocking.run_for_guild(GUILD_A, now=end_of_day())).placed == []
+
+
+async def test_but_a_row_that_fires_every_day_does_not_wait_for_one(server):
+    """**The bug this fixes.** Day one is set by `/enter`, which is a
+    drop-3 command, so before the house opens there was no day one at
+    all and the sweep returned empty for every guild. Drop 2's channel
+    fills from a row that fires every day and has no calendar to
+    read - it never fired once, and the drop shipped with whatever its
+    content rows had placed on arrival and nothing after.
+
+    Falling back to today costs the counting rows nothing: for them
+    every day is day 1, which is before `first_day` or off the cycle,
+    so they still stay put until somebody enters.
+    """
+    await content_loader.load_content(a_world(a_restock()))
+
+    assert (await restocking.run_for_guild(GUILD_A, now=end_of_day())).placed
+
+
+async def test_and_it_still_does_not_start_the_clock(server):
+    """The fallback is read, not written. A guild the bot merely sits in
+    must not have its day one stamped by a sweep, or the counting rows
+    would start their calendars at boot."""
+    await content_loader.load_content(a_world(a_restock()))
+
+    await restocking.run_for_guild(GUILD_A, now=end_of_day())
+
+    assert await restocking.initialized_on(GUILD_A) is None
 
 
 async def test_the_sweep_runs_normally_once_day_one_is_set(server):
@@ -723,3 +759,80 @@ async def test_placing_stamps_when_it_landed(server):
             )
         )
     assert stamped is not None
+
+# --------------------------------------------------------------------------
+# One key, and which number it means
+#
+# `config_key` names the one number its row is about. A scatter row is
+# defined by its rate; a top-up row is defined by its ceiling. Both
+# read the same column, which is why registering `toys_present` without
+# this split would have set the cap *and* halved the top-up frequency.
+# --------------------------------------------------------------------------
+
+
+async def test_a_capped_rows_key_tunes_the_cap(server):
+    """Two in the channel, topped up toward a limit an admin can raise."""
+    await content_loader.load_content(
+        a_world(
+            a_restock(
+                thing_id="type:toy", placement="room", destination="EN",
+                max_present=2, times_per_day=8, config_key="toys_present",
+            ),
+            things=[a_thing("feather_wand", type="toy", room_id=None, quantity=0)],
+        )
+    )
+    await started()
+    await database.set_config(GUILD_A, "toys_present", "3")
+
+    report = await restocking.run_for_guild(GUILD_A, now=end_of_day())
+
+    assert len(report.placed) == 3
+
+
+async def test_a_capped_rows_key_leaves_the_rate_alone(server):
+    """**The half that would have broken quietly.** With the key read
+    as the rate too, a cap of two would also have meant two top-ups a
+    day instead of eight - a channel that refills half as often, for a
+    setting that says nothing about frequency."""
+    await content_loader.load_content(
+        a_world(
+            a_restock(
+                thing_id="type:toy", placement="room", destination="EN",
+                max_present=9, times_per_day=5, config_key="toys_present",
+            ),
+            things=[a_thing("feather_wand", type="toy", room_id=None, quantity=0)],
+        )
+    )
+    await started()
+    await database.set_config(GUILD_A, "toys_present", "9")
+
+    report = await restocking.run_for_guild(GUILD_A, now=end_of_day())
+
+    assert len(report.placed) == 5  # the row's own rate, not the cap
+
+
+async def test_an_uncapped_rows_key_still_tunes_the_rate(server):
+    """The other side, unchanged: the bottles have no ceiling, so their
+    key is the only number they have."""
+    await content_loader.load_content(
+        a_world(a_restock(times_per_day=8, config_key="bottles_per_day"))
+    )
+    await started()
+    await database.set_config(GUILD_A, "bottles_per_day", "2")
+
+    report = await restocking.run_for_guild(GUILD_A, now=end_of_day())
+
+    assert len(report.placed) == 2
+
+
+def test_the_shipped_toy_row_points_at_a_registered_key():
+    """It did not, and the sweep logged a warning every ten minutes
+    while falling back to the row's own numbers."""
+    toys = next(
+        r for r in content_module.load_files().restocks
+        if r.thing_id == "type:toy"
+    )
+
+    assert toys.config_key == "toys_present"
+    assert toys.config_key in database.CONFIG_KEYS
+

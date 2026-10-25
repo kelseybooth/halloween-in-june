@@ -48,7 +48,7 @@ def test_the_shipped_content_parses():
     c = content.load_files()
     assert len(c.rooms) == 10  # nine rooms and the channel
     assert len(c.things) == 162  # ...drop 1's ten scenery, and the stand's four
-    assert len(c.defaults) == 113  # ...and the bed's public line
+    assert len(c.defaults) == 114  # ...and the toy arrival line
     assert len(c.drops) == 8      # 0 and 1 built; 2 to 7 named ahead of their content
     assert len(c.restocks) == 4  # the toy channel row joined them
 
@@ -276,6 +276,34 @@ def test_the_sanitized_bottle_is_obtainable_through_its_transform(shipped):
 def test_cutting_the_transform_makes_the_sanitized_bottle_unobtainable(shipped):
     broken = replace_thing(shipped, "used_baby_bottle", transforms_to=None)
     assert problems_matching(broken, "sanitized_baby_bottle")
+
+
+def test_a_toy_is_obtainable_through_the_class_its_restock_names(shipped):
+    """Both toys sit in no room: drop 2's channel opens empty and the
+    schedule fills it. The row that fills it names `type:toy` rather
+    than either toy, so counting a restock as a route means expanding
+    the class - unexpanded, the only way to get a toy reads as no way
+    at all and the shipped files fail to load.
+    """
+    for toy in ("feather_wand", "crinkle_ball"):
+        assert thing(shipped, toy).quantity in (None, 0)
+    assert "type:toy" in {r.thing_id for r in shipped.restocks}
+
+    assert not problems_matching(shipped, "no player could ever obtain it")
+
+
+def test_pointing_that_row_at_another_class_strands_the_toys(shipped):
+    """The other side of it. The expansion is a real lookup against the
+    things, not a blanket pass for any row with a colon in it."""
+    broken = copy.deepcopy(shipped)
+    broken.restocks = [
+        replace(r, thing_id="type:nothing_of_this_kind")
+        if r.thing_id == "type:toy"
+        else r
+        for r in broken.restocks
+    ]
+
+    assert problems_matching(broken, "feather_wand")
 
 
 # --------------------------------------------------------------------------

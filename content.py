@@ -359,7 +359,27 @@ class Content:
 
     @property
     def restocked_thing_ids(self) -> set[str]:
-        return {r.thing_id for r in self.restocks}
+        """Every thing a restock schedule could place.
+
+        **A class selector is expanded**, which is the difference
+        between this and the column it reads. A row may name one thing
+        - `used_baby_bottle` - or a class, `type:toy`, and the second
+        kind can place any thing of that type. Without expanding it,
+        the only route to a toy reads as no route at all, and
+        `_check_obtainable_things` calls a restock-only toy
+        unreachable.
+        """
+        by_type: dict[str, set[str]] = {}
+        for thing in self.things:
+            by_type.setdefault(thing.type, set()).add(thing.thing_id)
+
+        ids: set[str] = set()
+        for restock in self.restocks:
+            if restock.thing_id.startswith(CLASS_PREFIX):
+                ids |= by_type.get(restock.thing_id[len(CLASS_PREFIX):], set())
+            else:
+                ids.add(restock.thing_id)
+        return ids
 
     @property
     def craving_pool(self) -> list[EmojiGroup]:

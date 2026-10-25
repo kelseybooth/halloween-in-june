@@ -2827,6 +2827,10 @@ CONFIG_KEYS: dict[str, tuple[int, str]] = {
         8,
         "How many used baby bottles are scattered through the house each day.",
     ),
+    "toys_present": (
+        2,
+        "How many cat toys the channel is kept topped up to.",
+    ),
 }
 
 
