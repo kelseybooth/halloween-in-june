@@ -2744,7 +2744,12 @@ async def _play_with_toy(interaction, state, found) -> None:
         return
 
     effect = await world.play_with(guild_id, user.id, now)
-    succeeded = effect.relationship is not None
+    # **Read off the play, not off the score.** Far enough down the
+    # day's curve a play pays nothing, and inferring success from the
+    # meter moving would turn exactly those plays into refusals: the
+    # wrong copy, no public line, and the ramp advancing on a play
+    # that landed.
+    succeeded = effect.played
 
     # **Logged as a refusal, though no gate refused it.** The cat
     # declining is the mechanic working rather than a player bouncing
@@ -2758,13 +2763,30 @@ async def _play_with_toy(interaction, state, found) -> None:
     # holds is cheaper than an off-by-one nobody notices for a month.
     if succeeded:
         await database.record_use(user.id, guild_id, found.thing_id)
+        # **Every play logged with what it actually paid, zeros
+        # included.** A play at the tail of the curve is worth zero,
+        # and that is known rather than unknown - null is reserved for
+        # rows that cannot say, like the ones carried over from
+        # `pet_events`. The score has to be read on those, because the
+        # meter did not move and the effect has nothing to report.
+        #
+        # `play=` is which of the day's plays this was, which is the
+        # question the curve raises and cannot answer from the delta
+        # alone: two players both earning one point are in very
+        # different places if one is on their eighth play and the
+        # other on their eleventh.
+        paid = effect.delta or 0
+        standing = effect.relationship
+        if standing is None:
+            standing = await database.get_relationship(user.id, guild_id)
         await telemetry.succeeded(
             guild_id,
             user.id,
             telemetry.USE,
             thing_id=found.thing_id,
-            relationship_delta=effect.delta,
-            score_after=effect.relationship,
+            relationship_delta=paid,
+            score_after=standing,
+            detail=f"play={effect.tokens.get('play')}",
         )
         reply = await phrasing.say(
             guild_id, found.thing_id, "use",
@@ -2811,7 +2833,9 @@ async def _play_with_toy(interaction, state, found) -> None:
         interaction=interaction,
         announce=False,
     )
-    if succeeded:
+    # The score, not the play: a capped play moved nothing, and a hook
+    # that watches the meter has nothing to look at.
+    if effect.relationship is not None:
         earned += await _fire(
             achievements.Context(
                 guild_id=guild_id,

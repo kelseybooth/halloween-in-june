@@ -57,9 +57,58 @@ TOY = "toy"
 # 0, 25, 50, 75, 100 per cent - the first offer always fails and the
 # fifth always lands, which is why four refusals running is the rarest
 # thing *Impressively Bad Luck* can ask for and five is impossible.
-TOY_PLAY = 10
 RAMP_STEP = 25
-PLAY_COOLDOWN = timedelta(minutes=10)
+
+# All three live in config, because all three are numbers a beta would
+# plausibly retune - and a tuning change made in code leaves no dated
+# trace, so the interaction rows from before and after it cannot be
+# told apart. These are the key names; the values and their defaults
+# are in `database.CONFIG_KEYS`.
+PLAY_COOLDOWN_SETTING = "toy_cooldown_minutes"
+TOY_BASE_SETTING = "toy_base_points"
+TOY_DECAY_SETTING = "toy_daily_decay_percent"
+
+
+async def play_cooldown(guild_id: int) -> timedelta:
+    """How long the cat needs after a play, for this server."""
+    minutes = await database.get_setting(guild_id, PLAY_COOLDOWN_SETTING)
+    return timedelta(minutes=minutes)
+
+
+def play_value(nth: int, base: int, decay_percent: int) -> int:
+    """What the `nth` successful play of a player's day is worth.
+
+    Each play pays a fixed fraction of the one before it, so the day
+    runs 10, 8, 6, 4, 3, 2, 2, 1, 1, 1, 1 and then nothing - thirty
+    nine points in all, most of them in the first hour of playing.
+
+    **A curve rather than a cap**, and the difference is what a player
+    sees. A cap pays full value and then abruptly pays nothing, which
+    reads as the game breaking; this tails off, so the eleventh play
+    paying one point is obviously the same rule as the second paying
+    eight. Nothing announces it and nothing needs to.
+
+    The zero at the end is the curve reaching it, not a separate rule.
+    A play worth nothing is still a play: it lands, it resets the
+    ramp, it is recorded, and it counts toward *Tireless*.
+
+    **Rounded half up, not with `round`.** Python rounds halves to the
+    nearest even number, so a fifty per cent decay would pay 20, 10, 5
+    and then 2 - because `round(2.5)` is 2. The shipped curve has one
+    half in it and lands on 8 either way, so this changes nothing
+    today and stops the dials surprising whoever turns them.
+    """
+    return int(base * (decay_percent / 100) ** (nth - 1) + 0.5)
+
+
+async def toy_base_points(guild_id: int) -> int:
+    """What this server pays for the first play of a player's day."""
+    return await database.get_setting(guild_id, TOY_BASE_SETTING)
+
+
+async def toy_decay_percent(guild_id: int) -> int:
+    """What each play is worth as a percentage of the one before it."""
+    return await database.get_setting(guild_id, TOY_DECAY_SETTING)
 
 
 # Feeding, which drop 3 builds. Only the hunger window is read today,
@@ -195,6 +244,12 @@ class Effect:
     # for the handler to infer, because the interaction log wants both
     # and only this module knows which constant was applied.
     delta: int | None = None
+    # Whether the cat played, which is **not** the same question as
+    # whether the score moved. A play past the day's cap does
+    # everything a play does except pay, so a handler reading success
+    # off `relationship` would show it the refusal copy and hold the
+    # public line back - the opposite of what the cap is for.
+    played: bool = False
 
     @property
     def changed_the_world(self) -> bool:
@@ -282,10 +337,18 @@ async def play_with(guild_id: int, user_id: int, now, rng=None) -> Effect:
     player. That is what keeps the eleven toys still in the bank a
     content change rather than an engine one.
 
-    A success pays `TOY_PLAY`, resets the ramp and starts the cooldown.
-    A refusal advances the ramp one rung and starts nothing, so the next
-    offer is likelier - which is the whole mechanic, and the reason the
-    refusal copy promises nothing while leaving the retry open.
+    A success pays what `play_value` says the day's nth play is worth,
+    resets the ramp and starts the cooldown. A refusal advances the
+    ramp one rung and starts nothing, so the next offer is likelier -
+    which is the whole mechanic, and the reason the refusal copy
+    promises nothing while leaving the retry open.
+
+    **Far enough down the curve a success pays nothing, and is still a
+    success.** It resets the ramp, starts the cooldown, records the
+    use and reads to the player exactly as any other play does. The
+    falling value is deliberately invisible: a player who has had
+    eleven plays today is not told that the twelfth is free, because
+    the point of the curve is that there is no edge to notice.
     """
     ramp, _ = await database.play_state(guild_id, user_id)
     # Resolved at call time, not bound as a default: a default argument
@@ -295,17 +358,39 @@ async def play_with(guild_id: int, user_id: int, now, rng=None) -> Effect:
     roll = (rng or random).random()
     succeeded = roll * 100 < play_chance(ramp)
 
+    cooldown_until = None
+    if succeeded:
+        cooldown_until = now + await play_cooldown(guild_id)
     landed = await database.record_play(
-        guild_id,
-        user_id,
-        succeeded=succeeded,
-        cooldown_until=now + PLAY_COOLDOWN if succeeded else None,
+        guild_id, user_id, succeeded=succeeded, cooldown_until=cooldown_until
     )
     if not succeeded:
         return Effect(tokens={"ramp": landed}, public=False)
 
-    score = await database.adjust_relationship(user_id, guild_id, TOY_PLAY)
-    return Effect(tokens={"ramp": 0}, public=True, relationship=score, delta=TOY_PLAY)
+    # Counted before it is valued, because the count is what the value
+    # is a function of. `nth` rides along in the tokens so the handler
+    # can log where on the curve this play fell - which is the whole
+    # question the curve raises: where do players stop.
+    nth = await database.count_toy_play(
+        guild_id, user_id, await database.server_today(guild_id)
+    )
+    paid = play_value(
+        nth, await toy_base_points(guild_id), await toy_decay_percent(guild_id)
+    )
+    tokens = {"ramp": 0, "play": nth}
+
+    # Nothing to report but the play itself: the meter did not move, so
+    # there is no new score and no delta for the relationship hook to
+    # fire on. The handler is what writes the zero into the log, where
+    # a zero beside `success` is a play that paid nothing rather than a
+    # refusal.
+    if not paid:
+        return Effect(tokens=tokens, public=True, played=True)
+
+    score = await database.adjust_relationship(user_id, guild_id, paid)
+    return Effect(
+        tokens=tokens, public=True, played=True, relationship=score, delta=paid
+    )
 
 
 async def _fluff_the_bed(guild_id: int, user_id: int) -> Effect:
