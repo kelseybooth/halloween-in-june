@@ -3156,6 +3156,22 @@ CONFIG_KEYS: dict[str, tuple[int, str]] = {
         10,
         "How long after a successful play before the cat will play again.",
     ),
+    # **Declared, never derived**, and that is the whole reason it is a
+    # setting rather than a query. The collection achievement that reads
+    # it wants every toy *planned for the game*; a count of the toy rows
+    # in `things.tsv` reads as 2 while only drop 2's two exist, which
+    # would award it on a player's first successful play.
+    #
+    # Seeded now though nothing reads it yet, so the figure is agreed
+    # once here rather than invented by whoever builds the drop that
+    # needs it. Raising it later must not take the award back from
+    # anybody already holding it.
+    "toy_set_total": (
+        13,
+        "How many cat toys the whole game will have. Used by the toy-collection "
+        "achievement, which counts toward a declared total rather than the toys "
+        "that have arrived so far.",
+    ),
 }
 
 
@@ -3387,6 +3403,73 @@ async def toy_plays_today(guild_id: int, user_id: int, today: date) -> int:
     if row is None or row[0] != today:
         return 0
     return row[1]
+
+
+async def set_toy_plays(guild_id: int, user_id: int, count: int) -> str | None:
+    """Put this player's lifetime toy-play count at `count`, for QA.
+
+    Returns the toy the count was written against, or None if the
+    content has no toys to write it to.
+
+    **Written as a use count on one toy rather than as rows.**
+    `toy_plays` sums `use_count` over the player's toy rows, so one row
+    holding the whole figure answers it exactly - and the alternative,
+    inserting `count` separate rows, would be slower and no more
+    truthful, because `thing_uses` keeps a count and not a history.
+
+    It deliberately does **not** touch the day's play count or the
+    interaction log. A lifetime total is what *Tireless* reads; where a
+    player sits on today's paying curve is a different question with
+    its own lever.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        toy = await session.scalar(
+            select(ThingType.thing_id).where(ThingType.type == "toy").order_by(
+                ThingType.thing_id
+            )
+        )
+        if toy is None:
+            return None
+        insert = _upsert_statement()
+        await session.execute(
+            insert(ThingUse)
+            .values(
+                guild_id=guild_id,
+                user_id=user_id,
+                thing_id=toy,
+                last_used_at=await server_now(guild_id),
+                use_count=count,
+            )
+            .on_conflict_do_update(
+                index_elements=[ThingUse.guild_id, ThingUse.user_id, ThingUse.thing_id],
+                set_={"use_count": count},
+            )
+        )
+        await session.commit()
+    return toy
+
+
+async def set_toy_plays_today(guild_id: int, user_id: int, count: int) -> None:
+    """Put this player `count` plays into today's paying curve, for QA.
+
+    The lever for the far end of the curve. Set it to eleven and the
+    next successful play is worth nothing, which is the state two
+    achievements and a good deal of copy depend on and which otherwise
+    costs eleven plays and an hour of cooldowns to reach.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        await session.execute(
+            update(User)
+            .where(User.id == user_id, User.guild_id == guild_id)
+            .values(
+                toy_plays_date=await server_today(guild_id),
+                toy_plays_today=count,
+                updated_at=func.now(),
+            )
+        )
+        await session.commit()
 
 
 async def _bump_ramp(guild_id: int, user_id: int) -> int:
