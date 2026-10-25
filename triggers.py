@@ -511,6 +511,11 @@ BAD_LUCK_RAMP = 4
 
 TIRELESS_PLAYS = 25
 
+# Two, not one. The first play that pays nothing can be an accident of
+# a long afternoon; coming back for a second is the thing the
+# achievement is about.
+PURRSISTENT_PLAYS = 2
+
 
 async def persuasive(context: Context) -> bool:
     """The first toy play that works."""
@@ -545,6 +550,28 @@ async def tireless(context: Context) -> bool:
     lost for good if that play races or the bot is down for it.
     """
     return await database.toy_plays(context.guild_id, context.user_id) >= TIRELESS_PLAYS
+
+
+async def purrsistent(context: Context) -> bool:
+    """Two successful plays, ever, that were worth nothing.
+
+    The far end of the day's curve, where a play still lands and still
+    counts toward *Tireless* but no longer moves the meter. Nothing
+    tells a player they have got there - the curve tails off rather
+    than stopping - so this is for the ones who kept going anyway.
+
+    **Lifetime rather than daily.** Two in one afternoon and two a
+    fortnight apart are the same gesture, and a daily counter would
+    make the second one depend on which the player happened to be.
+
+    "Two or more and not held", like the other thresholds, so that a
+    play which races or lands while the bot is down costs a day rather
+    than the award.
+    """
+    if not context.extra.get("played"):
+        return False
+    plays = await database.free_toy_plays(context.guild_id, context.user_id)
+    return plays >= PURRSISTENT_PLAYS
 
 
 async def making_first_contact(context: Context) -> bool:
@@ -643,6 +670,7 @@ def register_all() -> None:
     # toy is a registration change rather than a reopened phase.
     add("persuasive", "on_use", persuasive)
     add("impressively_bad_luck", "on_use", impressively_bad_luck)
+    add("purrsistent", "on_use", purrsistent)
     add("bowl_half_empty", "on_use", _blocked("feeding the cat"))
 
     # Secret

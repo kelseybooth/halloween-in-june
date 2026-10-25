@@ -348,6 +348,27 @@ class User(Base):
     toy_cooldown_until: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True
     )
+
+    # How many successful plays this player has had today, and which
+    # day that is.
+    #
+    # **A count of plays, not a total of points.** What a play pays
+    # falls away with each one - the curve is in `world.play_value` -
+    # so the only thing that has to be remembered is how far down it
+    # the player already is. Storing the points instead would make the
+    # same number unrecoverable the first time the curve is retuned.
+    #
+    # **Successes only.** A refusal is not a play; the ramp is what
+    # notices those, and counting them here would have a player paid
+    # less for the cat having said no to them.
+    #
+    # Dated rather than reset by a job. A nightly sweep over every
+    # player to zero a counter is work the read can do for nothing: a
+    # stamp from an earlier day simply reads as no plays yet today.
+    toy_plays_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    toy_plays_today: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -1207,6 +1228,8 @@ _LATER_COLUMNS: list[tuple[str, str, str]] = [
     ("thing_uses", "use_count", "INTEGER NOT NULL DEFAULT 0"),
     ("users", "toy_ramp", "INTEGER NOT NULL DEFAULT 0"),
     ("users", "toy_cooldown_until", "TIMESTAMP"),
+    ("users", "toy_plays_date", "DATE"),
+    ("users", "toy_plays_today", "INTEGER NOT NULL DEFAULT 0"),
     ("room_contents", "placed_at", "TIMESTAMP"),
     # Drop 2 renamed `restocks.container` to `destination` and added
     # `max_present`. A rename is two steps for a live database: the new
@@ -3108,6 +3131,31 @@ CONFIG_KEYS: dict[str, tuple[int, str]] = {
         2,
         "How many cat toys the channel is kept topped up to.",
     ),
+    # All three are here rather than in code because they are the
+    # drop's balance, and the whole argument for the config history is
+    # that a number you retune mid-beta has to leave a dated trace -
+    # otherwise the interaction rows from before and after it cannot be
+    # told apart.
+    "toy_base_points": (
+        10,
+        "What the first successful toy play of the day is worth. Each one "
+        "after it pays less.",
+    ),
+    # **A percentage because this registry holds integers**, and
+    # `/admin_config` takes a whole number of at least one. The
+    # quantity is a ratio - each play is worth this much of the one
+    # before - and the name says percent so that nobody retuning it
+    # types 0.75 and silently turns every play after the first into
+    # nothing.
+    "toy_daily_decay_percent": (
+        75,
+        "What each toy play is worth as a percentage of the one before it, "
+        "within the same day.",
+    ),
+    "toy_cooldown_minutes": (
+        10,
+        "How long after a successful play before the cat will play again.",
+    ),
 }
 
 
@@ -3283,6 +3331,64 @@ async def record_play(
     return ramp
 
 
+async def count_toy_play(guild_id: int, user_id: int, today: date) -> int:
+    """Record one successful play and say which of the day's it is.
+
+    Returns a 1-based index, so the first play of the day is 1 - which
+    is the `n` the paying curve is written in terms of. The caller
+    works out what that is worth; this only knows how far down the day
+    the player has got.
+
+    **The day rolls over on the read.** A stamp from an earlier day
+    counts as no plays yet, so there is no nightly sweep to write and
+    no server that misses one because the bot was down.
+
+    Counted here rather than derived from `interaction_log`, which
+    could answer the same question: a derived count would make the
+    curve depend on a table that started empty, and this one has to be
+    right from the first play of drop 2.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        row = (
+            await session.execute(
+                select(User.toy_plays_date, User.toy_plays_today).where(
+                    User.id == user_id, User.guild_id == guild_id
+                )
+            )
+        ).one_or_none()
+        stamped, played = row if row is not None else (None, 0)
+        nth = (played if stamped == today else 0) + 1
+
+        await session.execute(
+            update(User)
+            .where(User.id == user_id, User.guild_id == guild_id)
+            .values(
+                toy_plays_date=today,
+                toy_plays_today=nth,
+                updated_at=func.now(),
+            )
+        )
+        await session.commit()
+    return nth
+
+
+async def toy_plays_today(guild_id: int, user_id: int, today: date) -> int:
+    """How many successful plays this player has had today."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        row = (
+            await session.execute(
+                select(User.toy_plays_date, User.toy_plays_today).where(
+                    User.id == user_id, User.guild_id == guild_id
+                )
+            )
+        ).one_or_none()
+    if row is None or row[0] != today:
+        return 0
+    return row[1]
+
+
 async def _bump_ramp(guild_id: int, user_id: int) -> int:
     current, _ = await play_state(guild_id, user_id)
     return current + 1
@@ -3301,13 +3407,24 @@ async def set_play_ramp(guild_id: int, user_id: int, ramp: int) -> None:
 
 
 async def clear_play_state(guild_id: int, user_id: int) -> None:
-    """Forget the ramp and the cooldown. For `/qa-cooldown`."""
+    """Forget the ramp, the cooldown and the day's play count.
+
+    For `/qa-cooldown`. The count goes with the other two because it
+    blocks testing in the same way they do: a tester eleven plays into
+    a day cannot see what a full-value play looks like until tomorrow,
+    which is the same afternoon the cooldown used to cost them.
+    """
     session_factory = _require_session()
     async with session_factory() as session:
         await session.execute(
             update(User)
             .where(User.id == user_id, User.guild_id == guild_id)
-            .values(toy_ramp=0, toy_cooldown_until=None)
+            .values(
+                toy_ramp=0,
+                toy_cooldown_until=None,
+                toy_plays_date=None,
+                toy_plays_today=0,
+            )
         )
         await session.commit()
 
@@ -3415,6 +3532,38 @@ async def toy_plays(guild_id: int, user_id: int) -> int:
             )
         )
     return int(total or 0)
+
+
+async def free_toy_plays(guild_id: int, user_id: int) -> int:
+    """Successful toy plays that paid nothing, ever.
+
+    **Counted from the interaction log**, which is the only table that
+    knows what a play was worth: `thing_uses` counts plays and cannot
+    tell a ten-point one from a nothing one. Safe to derive because
+    the behaviour starts when drop 2 opens and the log was already
+    there - the rule everywhere else is that a count comes off the log
+    only when nothing could have happened before the log existed.
+
+    Joined on the thing's type rather than filtered on the delta
+    alone: nothing but a toy writes an integer delta on a `use` today,
+    but that is an invariant across two modules rather than a fact
+    about this query, and it would fail silently.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        return await session.scalar(
+            select(func.count())
+            .select_from(InteractionLog)
+            .join(ThingType, ThingType.thing_id == InteractionLog.thing_id)
+            .where(
+                InteractionLog.guild_id == guild_id,
+                InteractionLog.user_id == user_id,
+                InteractionLog.action == USE,
+                InteractionLog.outcome == SUCCESS,
+                InteractionLog.relationship_delta == 0,
+                ThingType.type == "toy",
+            )
+        ) or 0
 
 
 async def clear_setting(guild_id: int, key: str) -> None:

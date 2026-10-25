@@ -495,7 +495,7 @@ def test_what_can_actually_be_earned():
     counts what the engine can answer for, and the drop decides
     separately whether anybody will ever be asked.
     """
-    assert len(achievements.registered_ids()) - len(BLOCKED) == 37
+    assert len(achievements.registered_ids()) - len(BLOCKED) == 38
 
 
 # --------------------------------------------------------------------------

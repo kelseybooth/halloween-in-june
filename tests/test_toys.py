@@ -327,12 +327,14 @@ async def test_a_success_still_speaks_when_the_channel_is_rate_limited(
 # --------------------------------------------------------------------------
 
 
-async def test_a_success_is_worth_ten(channel, monkeypatch):
+async def test_the_first_success_of_the_day_is_worth_ten(channel, monkeypatch):
+    """Ten is the top of the curve, not a flat rate - every play after
+    it today pays less. `test_toy_budget` owns the rest of the slope."""
     await take(channel)
 
     await a_success(channel, monkeypatch)
 
-    assert await database.get_relationship(ALICE, GUILD_A) == world.TOY_PLAY
+    assert await database.get_relationship(ALICE, GUILD_A) == 10
 
 
 async def test_a_refusal_is_worth_nothing(channel, monkeypatch):
