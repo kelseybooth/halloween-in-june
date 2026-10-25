@@ -167,7 +167,7 @@ async def test_every_trace_of_the_game_is_gone(two_games):
     "table",
     ["player_achievements", "server_achievements", "player_states",
      "server_states", "thing_uses", "player_inventory",
-     "craving_tally", "player_game_state", "pet_events", "users"],
+     "craving_tally", "player_game_state", "interaction_log", "users"],
 )
 async def test_each_kind_of_progress_is_cleared(two_games, table):
     assert table in await rows(GUILD_A)

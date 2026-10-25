@@ -61,6 +61,47 @@ DEFAULT_SQLITE_URL = "sqlite+aiosqlite:///./catbot.db"
 # How far back a pet still counts as "recent" when weighting the cat's mood.
 RECENT_PET_WINDOW = timedelta(minutes=10)
 
+# The vocabulary of `interaction_log`. Spelled out as constants because
+# every one of them is a value some later query will have to match
+# exactly, and a typo in a string literal is a row that silently never
+# joins rather than an error anybody sees.
+PLAYER = "player"
+SYSTEM = "system"
+
+SUCCESS = "success"
+REFUSED = "refused"
+
+# What a player did. `look` is looking around; looking *at* something
+# that is not there is `unknown_noun`, which is a different question and
+# the more useful of the two.
+PET = "pet"
+USE = "use"
+TAKE = "take"
+DROP = "drop"
+LOOK = "look"
+HINT = "hint"
+UNKNOWN_NOUN = "unknown_noun"
+RECOVERY = "recovery"
+
+# Why a refusal refused. Open-ended on purpose - a new gate adds a new
+# reason here rather than reusing an approximate one, because the whole
+# value of the column is that it distinguishes.
+NO_GAME_YET = "no_game"
+WRONG_ROOM = "wrong_room"
+AMBIGUOUS = "ambiguous"
+ABSENT = "absent"
+UNKNOWN = "unknown"
+REQUIRES_MISSING = "requires_missing"
+NOT_CARRIED = "not_carried"
+COOLDOWN = "cooldown"
+ONCE_A_DAY = "once_a_day"
+NOT_TAKEABLE = "not_takeable"
+# The toy's own refusal, which is not a gate but the mechanic working:
+# the cat declines, the ramp advances, and the next offer is likelier.
+RAMP = "ramp"
+NOT_HELD = "not_held"
+FULL_HANDS = "full_hands"
+
 # A real zone, not a fixed offset, so midnight stays midnight across DST.
 PACIFIC = ZoneInfo("America/Los_Angeles")
 
@@ -138,6 +179,11 @@ class PetResult(NamedTuple):
 
     total: int
     recent: int
+    # The `interaction_log` row this pet opened, for the caller to
+    # finish once the roll has decided what the pet was worth. None
+    # only when the row could not be written, which must not stop the
+    # pet.
+    log_id: int | None = None
 
 
 class GameState(NamedTuple):
@@ -310,41 +356,66 @@ class User(Base):
     )
 
 
-class PetEvent(Base):
-    """One row per pet, used to count activity inside a sliding time window.
+class InteractionLog(Base):
+    """One row per thing that happened, kept for tuning rather than for play.
 
-    The `users` table only carries a lifetime total, which cannot answer "how
-    many pets in the last ten minutes" - that needs per-pet timestamps.
+    Nothing in the game reads this to decide anything, with a single
+    exception: the mood roll counts a player's recent `pet` rows, which
+    is what `pet_events` existed for. That table is gone, absorbed here
+    - two logs of the same event can disagree with each other, and this
+    one answers the narrower question with a filter on `action`.
+
+    **Written generously and pruned never.** A few dozen people playing
+    a cat bot produce nothing worth partitioning, so the only expensive
+    mistake available is the column nobody wrote: rows can be thrown
+    away afterwards, and a field that was never recorded cannot be
+    recovered.
     """
 
-    __tablename__ = "pet_events"
+    __tablename__ = "interaction_log"
     __table_args__ = (
-        Index("ix_pet_events_guild_user_time", "guild_id", "user_id", "created_at"),
+        # The mood roll: one player's recent rows of one action.
+        Index(
+            "ix_interaction_log_player",
+            "guild_id", "user_id", "action", "created_at",
+        ),
+        # Everything analytical: one server's rows in order.
+        Index("ix_interaction_log_server", "guild_id", "created_at"),
     )
 
+    # Monotonic, so two rows inside the same second still order
+    # correctly - which is not pedantry here, because the timestamp is
+    # `server_now` and a QA clock offset can move it backwards between
+    # one row and the next.
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    # Null on a system row. The nightly recovery acts on a whole server
+    # at once and belongs to no player.
+    user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    actor: Mapped[str] = mapped_column(String(16), nullable=False, default=PLAYER)
+    action: Mapped[str] = mapped_column(String(32), nullable=False)
+    thing_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    outcome: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # Only on a refusal, and it is the half that says where to fix the
+    # game: a count of refusals tells you players are bouncing off
+    # something, and this tells you off what.
+    reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # **Null rather than zero where it is unknown**, because zero is a
+    # real answer here - a refusal moves nothing - and a row backfilled
+    # from `pet_events` cannot say which of the two it was.
+    relationship_delta: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # The score once this row applied, so a row is self-describing
+    # rather than a figure you reconstruct by summing deltas correctly
+    # from the beginning of time. The score *before* is this minus the
+    # delta, which is exactly what `pet_events.relationship_at_pet`
+    # recorded.
+    score_after: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Joinable from the config history, stored anyway: it is the most
+    # useful slicer there is and it costs an integer.
+    drop: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # The hint rung for `hint`, the typed noun for `unknown_noun`.
+    detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    # The relationship score as it stood *before* this pet applied.
-    #
-    # **Nothing reads this any more.** Two achievements used to count the
-    # pets made on each side of zero, and V3 made them one counter of
-    # every pet with the sign checked once at two hundred - so the column
-    # is now a record of how a player's meter moved rather than a source
-    # of truth for anything. Kept because that history cannot be
-    # reconstructed afterwards and is the only way to see the shape of a
-    # relationship over a month; delete it if nobody ever looks.
-    #
-    # Formerly: two achievements counted 200 pets while the score was
-    # negative, and no other table can answer that after the fact - the score is
-    # a running total, so history cannot be reconstructed from it. Recorded now,
-    # ahead of the achievements themselves, because the only moment backfill is
-    # free is before a real server starts petting. Rows written before this
-    # column existed read 0; reset_db.py is the intended way past that.
-    relationship_at_pet: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, server_default=text("0")
-    )
 
 
 class PlayerGameState(Base):
@@ -1132,10 +1203,6 @@ _LATER_COLUMNS: list[tuple[str, str, str]] = [
     ("thing_text", "move_arrive", "TEXT"),
     ("things", "can_take", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ("things", "removed_on_take", "BOOLEAN NOT NULL DEFAULT TRUE"),
-    # Rows written before this column existed read 0 rather than their true score,
-    # which cannot be recovered. Acceptable only because every such row is test
-    # data; reset_db.py is the way past it.
-    ("pet_events", "relationship_at_pet", "INTEGER NOT NULL DEFAULT 0"),
     ("room_contents", "container_id", "VARCHAR(64) NOT NULL DEFAULT ''"),
     ("thing_uses", "use_count", "INTEGER NOT NULL DEFAULT 0"),
     ("users", "toy_ramp", "INTEGER NOT NULL DEFAULT 0"),
@@ -1263,6 +1330,67 @@ async def _migrate_config_to_history(conn) -> None:
             "which is the live config from now on",
             moved.rowcount,
         )
+
+
+async def _migrate_pet_events(conn) -> None:
+    """Move the old pet log into the interaction log, once, and drop it.
+
+    `pet_events` answered one question - how many pets in the last ten
+    minutes - and the interaction log answers it with a filter on
+    `action`. Two logs of the same event can disagree, so the old one
+    goes rather than sitting beside the new one.
+
+    **The rows are copied rather than abandoned**, for two reasons that
+    are both about the same ten minutes. A server upgraded mid-evening
+    would otherwise read every player as having pet nobody recently,
+    so the cat would turn friendly for everyone at once and the
+    crowding nudge would fire again on the next pet. And
+    `relationship_at_pet` is the only record of where a player's meter
+    stood over a month of petting, which no other table can
+    reconstruct - the score is a running total.
+
+    **What does not survive is honest about not surviving.** The old
+    row recorded the score *before* the pet and never the outcome, so a
+    copied row cannot say whether the cat was friendly or what the pet
+    was worth: `relationship_delta` and `score_after` stay null, and
+    the score before goes into `detail` where it cannot be mistaken for
+    either. Rows from here on carry all three.
+    """
+
+    def _state(sync_conn):
+        insp = inspect(sync_conn)
+        if "pet_events" not in insp.get_table_names():
+            return None
+        return {col["name"] for col in insp.get_columns("pet_events")}
+
+    columns = await conn.run_sync(_state)
+    if columns is None:
+        return
+
+    # A database old enough to predate the column gets the rows without
+    # the history, which is all there is to give.
+    before = (
+        "'score_before=' || relationship_at_pet"
+        if "relationship_at_pet" in columns
+        else "NULL"
+    )
+    moved = await conn.execute(
+        text(
+            f"""
+            INSERT INTO interaction_log
+                (guild_id, user_id, actor, action, outcome, detail, created_at)
+            SELECT guild_id, user_id, '{PLAYER}', '{PET}', '{SUCCESS}',
+                   {before}, created_at
+            FROM pet_events
+            """
+        )
+    )
+    await conn.execute(text("DROP TABLE pet_events"))
+    log.info(
+        "Schema upgrade: moved %d pet_events row(s) into interaction_log and "
+        "dropped the old table",
+        moved.rowcount or 0,
+    )
 
 
 def _enforce_sqlite_foreign_keys(engine: AsyncEngine) -> None:
@@ -1433,6 +1561,7 @@ async def init_db() -> None:
             await conn.run_sync(Base.metadata.create_all)
             await _add_missing_columns(conn)
             await _migrate_config_to_history(conn)
+            await _migrate_pet_events(conn)
     except StartupError:
         await _engine.dispose()
         _engine = None
@@ -1464,7 +1593,9 @@ def _require_session() -> async_sessionmaker:
 # --------------------------------------------------------------------------
 
 
-async def increment_pet_count(user_id: int, guild_id: int) -> PetResult:
+async def increment_pet_count(
+    user_id: int, guild_id: int, *, drop: int | None = None
+) -> PetResult:
     """Record a pet for this player in this server, creating their row if needed.
 
     Returns the new lifetime total alongside the number of pets this player
@@ -1473,7 +1604,11 @@ async def increment_pet_count(user_id: int, guild_id: int) -> PetResult:
     is inserted, so `recent` describes the state the player arrived in.
 
     The count, the increment and the new event all share one transaction, so a
-    burst of rapid /pet calls cannot interleave into a wrong reading.
+    burst of rapid /pet calls cannot interleave into a wrong reading. That is
+    why the log row is opened here rather than by the caller after the roll:
+    the row has to exist before the next pet counts the window, and what this
+    one was worth is not known until afterwards. `close_interaction` finishes
+    it.
     """
     session_factory = _require_session()
 
@@ -1494,28 +1629,25 @@ async def increment_pet_count(user_id: int, guild_id: int) -> PetResult:
     try:
         async with session_factory() as session:
             recent = await session.scalar(
-                select(func.count())
-                .select_from(PetEvent)
-                .where(
-                    PetEvent.user_id == user_id,
-                    PetEvent.guild_id == guild_id,
-                    PetEvent.created_at >= cutoff,
-                )
+                _recent_pet_count(user_id, guild_id, cutoff)
             )
-            total, relationship_before = (await session.execute(stmt)).one()
+            total, _relationship_before = (await session.execute(stmt)).one()
             # The upsert touches pet_count, never relationship, so what comes back
-            # is the score as it stood before this pet - which is exactly what the
-            # achievements need, and what nothing could reconstruct afterwards. A
-            # brand-new player reads RELATIONSHIP_START, their score at that moment.
-            session.add(
-                PetEvent(
-                    user_id=user_id,
-                    guild_id=guild_id,
-                    created_at=now,
-                    relationship_at_pet=relationship_before,
-                )
+            # is the score as it stood before this pet. Nothing needs it here any
+            # more: the log records the score *after*, and the score before is
+            # that minus the delta on the same row.
+            row = InteractionLog(
+                guild_id=guild_id,
+                user_id=user_id,
+                actor=PLAYER,
+                action=PET,
+                outcome=SUCCESS,
+                drop=drop,
+                created_at=now,
             )
+            session.add(row)
             await session.commit()
+            log_id = row.id
 
             log.info(
                 "User %s petted the cat in guild %s (total: %s, recent: %s)",
@@ -1524,7 +1656,7 @@ async def increment_pet_count(user_id: int, guild_id: int) -> PetResult:
                 total,
                 recent,
             )
-            return PetResult(total=total, recent=recent or 0)
+            return PetResult(total=total, recent=recent or 0, log_id=log_id)
     except SQLAlchemyError:
         log.exception("Failed to increment pet count for user %s in guild %s", user_id, guild_id)
         raise
@@ -2409,6 +2541,140 @@ async def last_used_any(
         )
 
 
+async def log_interaction(
+    guild_id: int,
+    *,
+    action: str,
+    user_id: int | None = None,
+    actor: str = PLAYER,
+    outcome: str | None = None,
+    reason: str | None = None,
+    thing_id: str | None = None,
+    relationship_delta: int | None = None,
+    score_after: int | None = None,
+    drop: int | None = None,
+    detail: str | None = None,
+    now: datetime | None = None,
+) -> int | None:
+    """Write one row to `interaction_log` and return its id.
+
+    **This never raises.** A telemetry write that fails is a row nobody
+    gets to read later; a telemetry write that *throws* turns a pet the
+    player already made into an error message, and rolls back the
+    command around it. The log is worth a great deal and worth nothing
+    at all next to that, so every failure here is logged and swallowed,
+    and the caller gets None.
+
+    The timestamp goes through `server_now` like every other dated
+    thing in the game, so a QA clock offset moves the log with the
+    world rather than leaving the two disagreeing about what day it is.
+    """
+    session_factory = _session_factory
+    if session_factory is None:
+        return None
+    try:
+        stamp = now if now is not None else await server_now(guild_id)
+        async with session_factory() as session:
+            row = InteractionLog(
+                guild_id=guild_id,
+                user_id=user_id,
+                actor=actor,
+                action=action,
+                thing_id=thing_id,
+                outcome=outcome,
+                reason=reason,
+                relationship_delta=relationship_delta,
+                score_after=score_after,
+                drop=drop,
+                detail=detail,
+                created_at=stamp,
+            )
+            session.add(row)
+            await session.commit()
+            return row.id
+    except SQLAlchemyError:
+        log.exception(
+            "Could not log %s/%s for user %s in guild %s",
+            action, outcome, user_id, guild_id,
+        )
+        return None
+
+
+async def close_interaction(
+    log_id: int | None,
+    *,
+    relationship_delta: int | None = None,
+    score_after: int | None = None,
+    outcome: str | None = None,
+    reason: str | None = None,
+    detail: str | None = None,
+) -> None:
+    """Fill in what a row could not know when it was opened.
+
+    One case needs this: a pet is written inside the same transaction
+    that counts the window, so that two rapid pets cannot both read the
+    same count - but what the pet was *worth* is decided afterwards, by
+    a roll that needs that count as its input. The row therefore exists
+    before its delta does.
+
+    Silent on a None id, which is what a failed open returns, and
+    silent on its own failure for the same reason as the open.
+    """
+    if log_id is None:
+        return
+    values = {
+        name: value
+        for name, value in (
+            ("relationship_delta", relationship_delta),
+            ("score_after", score_after),
+            ("outcome", outcome),
+            ("reason", reason),
+            ("detail", detail),
+        )
+        if value is not None
+    }
+    if not values:
+        return
+    session_factory = _session_factory
+    if session_factory is None:
+        return
+    try:
+        async with session_factory() as session:
+            await session.execute(
+                update(InteractionLog)
+                .where(InteractionLog.id == log_id)
+                .values(**values)
+            )
+            await session.commit()
+    except SQLAlchemyError:
+        log.exception("Could not complete interaction_log row %s", log_id)
+
+
+async def recent_interactions(guild_id: int, user_id: int, limit: int = 10):
+    """This player's last few logged rows, newest first.
+
+    For `/qa-inspect`, which is the only way to see the log from inside
+    Discord. It is a QA command, so this reads the two test servers -
+    where the point is to confirm rows are landing at all before a beta
+    server starts producing ones worth analysing.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        return list(
+            (
+                await session.scalars(
+                    select(InteractionLog)
+                    .where(
+                        InteractionLog.guild_id == guild_id,
+                        InteractionLog.user_id == user_id,
+                    )
+                    .order_by(InteractionLog.id.desc())
+                    .limit(limit)
+                )
+            ).all()
+        )
+
+
 async def recent_pets(user_id: int, guild_id: int) -> int:
     """How many pets this player has inside the window, without adding one.
 
@@ -2419,15 +2685,26 @@ async def recent_pets(user_id: int, guild_id: int) -> int:
     session_factory = _require_session()
     cutoff = await server_now(guild_id) - RECENT_PET_WINDOW
     async with session_factory() as session:
-        return await session.scalar(
-            select(func.count())
-            .select_from(PetEvent)
-            .where(
-                PetEvent.user_id == user_id,
-                PetEvent.guild_id == guild_id,
-                PetEvent.created_at >= cutoff,
-            )
-        ) or 0
+        return await session.scalar(_recent_pet_count(user_id, guild_id, cutoff)) or 0
+
+
+def _recent_pet_count(user_id: int, guild_id: int, cutoff: datetime):
+    """The mood roll's question, in one place because it is asked twice.
+
+    Once by `/stats`, which wants the answer without petting, and once
+    inside the pet itself, which wants it in the same transaction as
+    the row it is about to write.
+    """
+    return (
+        select(func.count())
+        .select_from(InteractionLog)
+        .where(
+            InteractionLog.user_id == user_id,
+            InteractionLog.guild_id == guild_id,
+            InteractionLog.action == PET,
+            InteractionLog.created_at >= cutoff,
+        )
+    )
 
 
 async def last_used(user_id: int, guild_id: int, thing_id: str) -> datetime | None:
@@ -3226,21 +3503,34 @@ async def clear_cooldowns(guild_id: int, user_id: int) -> int:
     """Forget every cooldown this player is inside.
 
     The bed's twenty-four hours live in `thing_uses`; the ten-minute pet
-    window is a count of recent `pet_events`, so the events go too. The
-    lifetime pet count on the user row is left alone - it is progress,
-    not a cooldown, and a tester clearing a window should not lose their
-    march on two hundred.
+    window is a count of recent `pet` rows in the interaction log, so those
+    rows go too. The lifetime pet count on the user row is left alone - it is
+    progress, not a cooldown, and a tester clearing a window should not lose
+    their march on two hundred.
+
+    **It costs telemetry, and that is the right trade here.** Deleting the
+    rows is the only way to clear a window counted from them, and the
+    alternative - backdating them - would put a lie in the log instead of a
+    hole. This is a QA command, so the rows it destroys are on the two test
+    servers whose data is excluded from the analysis anyway.
     """
     session_factory = _require_session()
     cleared = 0
     async with session_factory() as session:
-        for table in (ThingUse.__table__, PetEvent.__table__):
-            result = await session.execute(
-                table.delete().where(
-                    table.c.guild_id == guild_id, table.c.user_id == user_id
-                )
+        result = await session.execute(
+            ThingUse.__table__.delete().where(
+                ThingUse.guild_id == guild_id, ThingUse.user_id == user_id
             )
-            cleared += result.rowcount or 0
+        )
+        cleared += result.rowcount or 0
+        result = await session.execute(
+            delete(InteractionLog).where(
+                InteractionLog.guild_id == guild_id,
+                InteractionLog.user_id == user_id,
+                InteractionLog.action == PET,
+            )
+        )
+        cleared += result.rowcount or 0
         await session.commit()
     return cleared
 

@@ -33,14 +33,21 @@ async def make_player(db, user_id, guild_id, relationship, last_decay=None):
 async def petted_on(db, user_id, guild_id, day):
     """Record a pet an hour into the given Pacific day, and stamp it.
 
-    The stamp is what the drift now reads. The pet row is written too,
+    The stamp is what the drift now reads. The log row is written too,
     because the achievements still count those - the two are separate
     records of the same moment, and the drift asks the cheaper question.
     """
     start, _ = db.pacific_day_bounds_utc(day)
     async with db._require_session()() as session:
         session.add(
-            db.PetEvent(user_id=user_id, guild_id=guild_id, created_at=start + timedelta(hours=1))
+            db.InteractionLog(
+                user_id=user_id,
+                guild_id=guild_id,
+                action=db.PET,
+                actor=db.PLAYER,
+                outcome=db.SUCCESS,
+                created_at=start + timedelta(hours=1),
+            )
         )
         await session.commit()
     await db.touched_the_cat(user_id, guild_id, day)

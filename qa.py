@@ -156,4 +156,18 @@ async def describe(guild_id: int, user_id: int) -> list[str]:
 
     told = await database.notice_order(guild_id, user_id)
     lines.append(f"**told** {', '.join(sorted(told)) or 'nothing'}")
+
+    # The log, from inside Discord. Five rows rather than the ten the
+    # query will give, because this is a confirmation that writing
+    # works and not a place to read the data from - that is a database
+    # query against the beta server, which no QA command can reach.
+    recent = await database.recent_interactions(guild_id, user_id, limit=5)
+    lines.append("**last interactions** " + (", ".join(_one_line(r) for r in recent) or "none"))
     return lines
+
+
+def _one_line(row) -> str:
+    """One logged row, short enough that five of them fit in a reply."""
+    what = row.action if row.outcome != database.REFUSED else f"{row.action}!{row.reason}"
+    about = row.thing_id or row.detail
+    return f"{what}({about})" if about else what

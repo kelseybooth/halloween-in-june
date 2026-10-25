@@ -55,7 +55,7 @@ async def _wipe() -> None:
 
     **The table list is read off the schema rather than written here.** It
     used to be written here, and it fell eleven tables behind: it named
-    `inventory`, `player_game_state`, `pet_events` and `users` while
+    `inventory`, `player_game_state`, `interaction_log` and `users` while
     achievements, the current inventory, room contents, player and server
     states, uses, config, drops, restocks and art all quietly survived a
     "reset". The result was worse than doing nothing - players vanished and

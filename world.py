@@ -191,6 +191,10 @@ class Effect:
     # `on_relationship_change` on. None when the use did not touch it,
     # which is every use but one.
     relationship: int | None = None
+    # What it moved by. Carried alongside the result rather than left
+    # for the handler to infer, because the interaction log wants both
+    # and only this module knows which constant was applied.
+    delta: int | None = None
 
     @property
     def changed_the_world(self) -> bool:
@@ -301,7 +305,7 @@ async def play_with(guild_id: int, user_id: int, now, rng=None) -> Effect:
         return Effect(tokens={"ramp": landed}, public=False)
 
     score = await database.adjust_relationship(user_id, guild_id, TOY_PLAY)
-    return Effect(tokens={"ramp": 0}, public=True, relationship=score)
+    return Effect(tokens={"ramp": 0}, public=True, relationship=score, delta=TOY_PLAY)
 
 
 async def _fluff_the_bed(guild_id: int, user_id: int) -> Effect:
@@ -317,7 +321,7 @@ async def _fluff_the_bed(guild_id: int, user_id: int) -> Effect:
     the last day of October is the same bed as on the first.
     """
     score = await database.adjust_relationship(user_id, guild_id, BED_FLUFF)
-    return Effect(relationship=score)
+    return Effect(relationship=score, delta=BED_FLUFF)
 
 
 async def _place_a_plank(guild_id: int) -> Effect:

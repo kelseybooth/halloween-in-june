@@ -29,6 +29,7 @@ from dataclasses import dataclass
 import database
 import gating
 import resolve
+import telemetry
 
 log = logging.getLogger(__name__)
 
@@ -297,6 +298,20 @@ async def pick(
             tokens["name"] = await a_takeable_toy(guild_id) or "toy"
         if not await database.notice(guild_id, user_id, hint.hint_id):
             continue
+        # **Which rung fired, in the log.** The rail is a bet about
+        # discoverability that it cannot settle on its own: a player
+        # who reads the bed's description and does nothing might have
+        # missed the prose or might have missed the verb, and those
+        # want opposite fixes. A hint row before an action says the
+        # rail carried them; an action with no hint before it says the
+        # prose did its job.
+        await telemetry.record(
+            guild_id,
+            action=telemetry.HINT,
+            user_id=user_id,
+            outcome=telemetry.SUCCESS,
+            detail=hint.hint_id,
+        )
         return await render(hint.hint_id, **tokens)
     return None
 
