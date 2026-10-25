@@ -185,8 +185,17 @@ async def _times_per_day(guild_id: int, restock) -> int:
 
     A change applies from the next occurrence onward and never retroactively
     adds or removes anything already placed.
+
+    **`config_key` names the one number its row is about**, and which
+    number that is depends on the row. A scatter row - eight bottles a
+    day, with no cap - is defined by its rate, so the key tunes the
+    rate. A top-up row - fill the channel toward two toys - is defined
+    by the ceiling, so the key tunes that instead and the rate stays
+    the row's own. Without the split, registering `toys_present` would
+    have set both at once: two would have halved the top-up frequency
+    as well, and four would have doubled the toys.
     """
-    if not restock.config_key:
+    if not restock.config_key or restock.max_present is not None:
         return restock.times_per_day
     if restock.config_key not in database.CONFIG_KEYS:
         log.warning(
@@ -411,6 +420,8 @@ async def _room_for_more(guild_id: int, room_id: str, restock) -> bool:
         return True
     cap = restock.max_present
     if restock.config_key:
+        # The key means the cap on a row that has one - see
+        # `_times_per_day` for the other half of that rule.
         cap = await database.get_setting(guild_id, restock.config_key) or cap
     return await database.count_of_type(guild_id, room_id, kind) < cap
 

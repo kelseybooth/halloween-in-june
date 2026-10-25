@@ -723,3 +723,80 @@ async def test_placing_stamps_when_it_landed(server):
             )
         )
     assert stamped is not None
+
+# --------------------------------------------------------------------------
+# One key, and which number it means
+#
+# `config_key` names the one number its row is about. A scatter row is
+# defined by its rate; a top-up row is defined by its ceiling. Both
+# read the same column, which is why registering `toys_present` without
+# this split would have set the cap *and* halved the top-up frequency.
+# --------------------------------------------------------------------------
+
+
+async def test_a_capped_rows_key_tunes_the_cap(server):
+    """Two in the channel, topped up toward a limit an admin can raise."""
+    await content_loader.load_content(
+        a_world(
+            a_restock(
+                thing_id="type:toy", placement="room", destination="EN",
+                max_present=2, times_per_day=8, config_key="toys_present",
+            ),
+            things=[a_thing("feather_wand", type="toy", room_id=None, quantity=0)],
+        )
+    )
+    await started()
+    await database.set_config(GUILD_A, "toys_present", "3")
+
+    report = await restocking.run_for_guild(GUILD_A, now=end_of_day())
+
+    assert len(report.placed) == 3
+
+
+async def test_a_capped_rows_key_leaves_the_rate_alone(server):
+    """**The half that would have broken quietly.** With the key read
+    as the rate too, a cap of two would also have meant two top-ups a
+    day instead of eight - a channel that refills half as often, for a
+    setting that says nothing about frequency."""
+    await content_loader.load_content(
+        a_world(
+            a_restock(
+                thing_id="type:toy", placement="room", destination="EN",
+                max_present=9, times_per_day=5, config_key="toys_present",
+            ),
+            things=[a_thing("feather_wand", type="toy", room_id=None, quantity=0)],
+        )
+    )
+    await started()
+    await database.set_config(GUILD_A, "toys_present", "9")
+
+    report = await restocking.run_for_guild(GUILD_A, now=end_of_day())
+
+    assert len(report.placed) == 5  # the row's own rate, not the cap
+
+
+async def test_an_uncapped_rows_key_still_tunes_the_rate(server):
+    """The other side, unchanged: the bottles have no ceiling, so their
+    key is the only number they have."""
+    await content_loader.load_content(
+        a_world(a_restock(times_per_day=8, config_key="bottles_per_day"))
+    )
+    await started()
+    await database.set_config(GUILD_A, "bottles_per_day", "2")
+
+    report = await restocking.run_for_guild(GUILD_A, now=end_of_day())
+
+    assert len(report.placed) == 2
+
+
+def test_the_shipped_toy_row_points_at_a_registered_key():
+    """It did not, and the sweep logged a warning every ten minutes
+    while falling back to the row's own numbers."""
+    toys = next(
+        r for r in content_module.load_files().restocks
+        if r.thing_id == "type:toy"
+    )
+
+    assert toys.config_key == "toys_present"
+    assert toys.config_key in database.CONFIG_KEYS
+
