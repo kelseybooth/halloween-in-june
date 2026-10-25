@@ -25,6 +25,7 @@ import database
 import gating
 import qa
 import resolve
+import telemetry
 import triggers
 
 TEST_GUILD = sorted(qa.TEST_GUILDS)[0]
@@ -246,6 +247,31 @@ async def test_an_unforced_server_says_nothing_about_it(testing):
     await bot.qa_inspect.callback(interaction, member(guild))
 
     assert "forced" not in interaction.reply
+
+
+async def test_inspect_shows_that_the_log_is_being_written(testing):
+    """The only way to see the interaction log from inside Discord, and
+    the reason it is here: confirming rows land at all, on a test
+    server, before a beta server starts producing ones worth reading."""
+    _, guild, _, _ = testing
+    await telemetry.refused(
+        TEST_GUILD, member(guild).id, telemetry.UNKNOWN_NOUN,
+        reason=telemetry.UNKNOWN, detail="chandelier",
+    )
+    interaction = qa_call(guild, "qa-inspect")
+
+    await bot.qa_inspect.callback(interaction, member(guild))
+
+    assert "unknown_noun!unknown(chandelier)" in interaction.reply
+
+
+async def test_inspect_says_so_when_there_is_nothing_logged_yet(testing):
+    _, guild, _, _ = testing
+    interaction = qa_call(guild, "qa-inspect")
+
+    await bot.qa_inspect.callback(interaction, member(guild))
+
+    assert "**last interactions** none" in interaction.reply
 
 
 async def test_advancing_properly_clears_the_mark(testing):

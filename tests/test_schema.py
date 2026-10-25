@@ -103,8 +103,23 @@ async def test_thing_uses_records_a_count_as_well_as_a_time(db):
     assert {"last_used_at", "use_count"} <= await columns_of(db, "thing_uses")
 
 
-async def test_pet_events_records_the_relationship_at_the_time(db):
-    assert "relationship_at_pet" in await columns_of(db, "pet_events")
+async def test_the_interaction_log_can_answer_the_questions_it_exists_for(db):
+    """Four of these are what the first proposal was short of: an
+    outcome, so a refusal is not a zero-scoring success; a reason, so
+    you can see what players bounce off rather than only that they do;
+    the score after, so a row is self-describing; and the thing, so
+    `use` means something."""
+    assert {
+        "guild_id", "user_id", "actor", "action", "thing_id", "outcome",
+        "reason", "relationship_delta", "score_after", "drop", "detail",
+        "created_at",
+    } <= await columns_of(db, "interaction_log")
+
+
+async def test_pet_events_is_gone(db):
+    """Absorbed, not duplicated. Two logs of the same event can
+    disagree, and the mood roll now asks this one."""
+    assert "pet_events" not in await table_names(db)
 
 
 async def test_text_tables_are_keyed_by_state_and_drop(db):
@@ -239,7 +254,9 @@ async def test_an_older_database_gains_the_new_tables_and_columns(tmp_path, monk
     async with database._engine.begin() as conn:
         for table in sorted(CONTENT_TABLES | WORLD_TABLES):
             await conn.execute(text(f"DROP TABLE IF EXISTS {table}"))
-        await conn.execute(text("ALTER TABLE pet_events DROP COLUMN relationship_at_pet"))
+        # `users` survives the sweep above, so it is where a dropped
+        # column can be left for the ALTER list to put back.
+        await conn.execute(text("ALTER TABLE users DROP COLUMN last_decay_date"))
     await database.close_db()
 
     database._engine = None
@@ -249,7 +266,7 @@ async def test_an_older_database_gains_the_new_tables_and_columns(tmp_path, monk
         names = await table_names(database)
         assert CONTENT_TABLES <= names
         assert WORLD_TABLES <= names
-        assert "relationship_at_pet" in await columns_of(database, "pet_events")
+        assert "last_decay_date" in await columns_of(database, "users")
 
         # And it still works afterwards.
         result = await database.increment_pet_count(ALICE, GUILD_A)
@@ -345,11 +362,11 @@ async def test_fragment_is_not_in_the_alter_list(tmp_path):
 
 async def test_running_the_migration_twice_is_a_no_op(db):
     """Startup runs it every boot, so it has to be safe to repeat."""
-    before = await columns_of(db, "pet_events")
+    before = await columns_of(db, "users")
     async with db._engine.begin() as conn:
         await db._add_missing_columns(conn)
         await db._add_missing_columns(conn)
-    assert await columns_of(db, "pet_events") == before
+    assert await columns_of(db, "users") == before
 
 
 async def test_the_play_ramp_lives_on_the_player(db):

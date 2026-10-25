@@ -43,6 +43,11 @@ _WORLD_TABLES = (
     "thing_uses",
     "server_restocks",
     "config_history",
+    # Telemetry is this server's, and a reset is the one moment it is
+    # right to throw away: the rows describe a game that no longer
+    # exists, and leaving them would date the next server's first
+    # interaction to before it started.
+    "interaction_log",
     # Earned achievements are world state, so `--fresh` clears them with
     # everything else. An ordinary reload never touches them.
     "player_achievements",

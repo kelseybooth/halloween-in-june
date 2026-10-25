@@ -35,6 +35,7 @@ import reach
 import resolve
 import restocking
 import states
+import telemetry
 import triggers
 
 TUTORIAL_SEEN = "tutorial_seen"
@@ -471,6 +472,7 @@ class CatBot(commands.Bot):
         # Settle any days the bot was down for, before serving commands:
         # a weekend offline must not cost somebody their climb back.
         caught_up = await database.run_pending_recovery()
+        await telemetry.recoveries(caught_up)
         if caught_up:
             log.info("Startup settled %d recovering score(s)", len(caught_up))
         nightly_job.start()
@@ -576,7 +578,9 @@ async def nightly_job() -> None:
     because the bottle scatter and the craving roll are both meant to.
     """
     try:
-        for change in await database.run_pending_recovery():
+        settled = await database.run_pending_recovery()
+        await telemetry.recoveries(settled)
+        for change in settled:
             log.info(
                 "Recovery %s: user %s in guild %s: %s -> %s",
                 change.day,
@@ -1125,13 +1129,22 @@ async def pet(interaction: discord.Interaction) -> None:
     user, guild_id = interaction.user, interaction.guild_id
 
     try:
-        result = await database.increment_pet_count(user.id, guild_id)
+        drop = await telemetry.drop_of(guild_id)
+        result = await database.increment_pet_count(user.id, guild_id, drop=drop)
         # Read before the meter moves, so it is this player's place
         # coming into the pet rather than the one it leaves them in.
         standing = await standing_of(interaction.guild, user.id)
         reaction = choose_response(result.recent, standing=standing)
         delta = RELATIONSHIP_STEP if reaction.friendly else -RELATIONSHIP_STEP
         relationship = await _move_the_meter(user.id, guild_id, delta)
+        # The row was opened inside the pet's own transaction, before
+        # the roll that decides what the pet was worth. This is the
+        # other half of it. A standoffish pet is not a refusal - the
+        # command did what it does - so the sign of the delta is what
+        # separates the two moods, and nothing else needs to.
+        await database.close_interaction(
+            result.log_id, relationship_delta=delta, score_after=relationship
+        )
     except SQLAlchemyError:
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
         return
@@ -2134,11 +2147,17 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
                     "You're not in the haunted house yet. Use `/enter` first.",
                     ephemeral=True,
                 )
+                await _turned_away(
+                    interaction, telemetry.USE, telemetry.NO_GAME_YET, detail=thing
+                )
                 return
 
             elsewhere = await _outside_the_house(interaction, state.current_room)
             if elsewhere:
                 await interaction.followup.send(elsewhere, ephemeral=True)
+                await _turned_away(
+                    interaction, telemetry.USE, telemetry.WRONG_ROOM, detail=thing
+                )
                 return
 
         found = await reach.find(guild_id, user.id, state.current_room, thing, reach.Scope.REACH)
@@ -2150,12 +2169,25 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
                 ),
                 ephemeral=True,
             )
+            await _turned_away(
+                interaction, telemetry.USE, telemetry.AMBIGUOUS, detail=thing
+            )
             return
 
         if isinstance(found, reach.NotFound):
             key = "use_fail.absent" if found.exists_elsewhere else "use_fail.unknown"
             await interaction.followup.send(
                 await phrasing.default_say(key, name=thing.strip()), ephemeral=True
+            )
+            # The typed word is the point of the row. A thing that is
+            # somewhere else is a player who knows the game and is in
+            # the wrong room; a word the game has never heard of is a
+            # player telling you what they expected to find.
+            await _turned_away(
+                interaction,
+                telemetry.USE,
+                telemetry.ABSENT if found.exists_elsewhere else telemetry.UNKNOWN,
+                detail=thing.strip(),
             )
             return
 
@@ -2179,6 +2211,9 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
                 await phrasing.default_say("use_fail.absent", name=found.name),
                 ephemeral=True,
             )
+            await _turned_away(
+                interaction, telemetry.USE, telemetry.ABSENT, thing_id=found.thing_id
+            )
             return
 
         wanted = states.required_things(row.requires)
@@ -2193,6 +2228,13 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
                     fallback="use_fail.default", name=found.name,
                 ),
                 ephemeral=True,
+            )
+            await _turned_away(
+                interaction,
+                telemetry.USE,
+                telemetry.REQUIRES_MISSING,
+                thing_id=found.thing_id,
+                detail=row.requires,
             )
             return
 
@@ -2217,6 +2259,12 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
                 await phrasing.default_say("use_fail.not_carried", name=found.name),
                 ephemeral=True,
             )
+            await _turned_away(
+                interaction,
+                telemetry.USE,
+                telemetry.NOT_CARRIED,
+                thing_id=found.thing_id,
+            )
             await _hold_to_use_hint(interaction, found)
             return
 
@@ -2240,6 +2288,19 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
     except SQLAlchemyError:
         log.exception("Failed to use %r in guild %s", thing, guild_id)
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+
+
+async def _turned_away(interaction, action: str, reason: str, **fields) -> None:
+    """Log a refusal the player has just been told about.
+
+    A wrapper this thin earns its place by how often it is called: every
+    gate in `/use`, `/take` and `/drop` ends in a `followup.send` and a
+    `return`, and a refusal nobody logged is the one shape of row the
+    whole table exists to collect.
+    """
+    await telemetry.refused(
+        interaction.guild_id, interaction.user.id, action, reason=reason, **fields
+    )
 
 
 async def _finish_use(interaction, state, found) -> None:
@@ -2300,11 +2361,28 @@ async def _finish_use(interaction, state, found) -> None:
                 await phrasing.default_say("use_fail.not_carried", name=found.name),
                 ephemeral=True,
             )
+            await _turned_away(
+                interaction,
+                telemetry.USE,
+                telemetry.NOT_CARRIED,
+                thing_id=found.thing_id,
+            )
             return
 
     await database.record_use(user.id, guild_id, found.thing_id)
 
     effect = await world.after_use(guild_id, user.id, found.thing_id, state.current_room)
+    # Every use that is not an exit or a toy arrives here, including
+    # the three cooldown paths, which is why this is the one place a
+    # plain success is logged rather than four.
+    await telemetry.succeeded(
+        guild_id,
+        user.id,
+        telemetry.USE,
+        thing_id=found.thing_id,
+        relationship_delta=effect.delta if effect else None,
+        score_after=effect.relationship if effect else None,
+    )
     tokens = dict(effect.tokens) if effect else {}
 
     # The text is resolved *after* the effect, so a use that changes a state
@@ -2660,13 +2738,34 @@ async def _play_with_toy(interaction, state, found) -> None:
             ),
             ephemeral=True,
         )
+        await _turned_away(
+            interaction, telemetry.USE, telemetry.COOLDOWN, thing_id=found.thing_id
+        )
         return
 
     effect = await world.play_with(guild_id, user.id, now)
     succeeded = effect.relationship is not None
 
+    # **Logged as a refusal, though no gate refused it.** The cat
+    # declining is the mechanic working rather than a player bouncing
+    # off a locked door - but it reads as a refusal to them, and the
+    # rung is what makes a run of them interpretable: four in a row at
+    # rungs 0 to 3 is the design, four at rung 0 is it broken.
+    #
+    # `rung_after`, not `rung`, because the ramp has already advanced
+    # by the time the effect comes back. The rung this offer was
+    # actually rolled at is one less, and naming the column for what it
+    # holds is cheaper than an off-by-one nobody notices for a month.
     if succeeded:
         await database.record_use(user.id, guild_id, found.thing_id)
+        await telemetry.succeeded(
+            guild_id,
+            user.id,
+            telemetry.USE,
+            thing_id=found.thing_id,
+            relationship_delta=effect.delta,
+            score_after=effect.relationship,
+        )
         reply = await phrasing.say(
             guild_id, found.thing_id, "use",
             fallback="use.default",
@@ -2674,6 +2773,14 @@ async def _play_with_toy(interaction, state, found) -> None:
             player=user.display_name,
         )
     else:
+        await telemetry.refused(
+            guild_id,
+            user.id,
+            telemetry.USE,
+            reason=telemetry.RAMP,
+            thing_id=found.thing_id,
+            detail=f"rung_after={effect.tokens.get('ramp')}",
+        )
         reply = await _a_play_refusal(found.name)
 
     # The best moment in the drop, and the only thing that makes other
@@ -2947,6 +3054,12 @@ async def _use_once_a_day(interaction, state, found, row) -> None:
                 ),
                 ephemeral=True,
             )
+            await _turned_away(
+                interaction,
+                telemetry.USE,
+                telemetry.ONCE_A_DAY,
+                thing_id=found.thing_id,
+            )
             return
 
     await _finish_use(interaction, state, found)
@@ -2975,6 +3088,9 @@ async def _use_with_cooldown(interaction, state, found, row) -> None:
                     time=phrasing.approximate_duration(window - elapsed),
                 ),
                 ephemeral=True,
+            )
+            await _turned_away(
+                interaction, telemetry.USE, telemetry.COOLDOWN, thing_id=found.thing_id
             )
             return
 
@@ -3052,6 +3168,13 @@ async def _use_exit(interaction, state, found, row) -> None:
     try:
         await database.update_current_room(user.id, guild_id, destination)
         await database.record_use(user.id, guild_id, found.thing_id)
+        await telemetry.succeeded(
+            guild_id,
+            user.id,
+            telemetry.USE,
+            thing_id=found.thing_id,
+            detail=f"to={destination}",
+        )
         # The discovery is recorded after the move has committed, so a player
         # who could not be moved is not told they found something.
         await world.after_move(guild_id, user.id, found.thing_id)
@@ -3170,6 +3293,9 @@ async def look(interaction: discord.Interaction, thing: str | None = None) -> No
                     ),
                     ephemeral=True,
                 )
+                await telemetry.succeeded(
+                    guild_id, user.id, telemetry.LOOK, detail=content.CHANNEL_ROOM
+                )
                 return
             await _look_at_one_thing(
                 interaction, guild_id, user.id, content.CHANNEL_ROOM, thing
@@ -3179,16 +3305,25 @@ async def look(interaction: discord.Interaction, thing: str | None = None) -> No
         state = await database.get_game_state(user.id, guild_id)
         if state is None:
             await interaction.followup.send(NOT_IN_ROOM_MESSAGE, ephemeral=True)
+            await _turned_away(
+                interaction, telemetry.LOOK, telemetry.NO_GAME_YET, detail=thing
+            )
             return
 
         elsewhere = await _outside_the_house(interaction, state.current_room)
         if elsewhere:
             await interaction.followup.send(elsewhere, ephemeral=True)
+            await _turned_away(
+                interaction, telemetry.LOOK, telemetry.WRONG_ROOM, detail=thing
+            )
             return
 
         if thing is None or not thing.strip():
             await interaction.followup.send(
                 await _look_here(guild_id, user.id, state.current_room), ephemeral=True
+            )
+            await telemetry.succeeded(
+                guild_id, user.id, telemetry.LOOK, detail=state.current_room
             )
             return
 
@@ -3219,6 +3354,10 @@ async def _look_at_one_thing(
             ),
             ephemeral=True,
         )
+        await telemetry.refused(
+            guild_id, user_id, telemetry.LOOK,
+            reason=telemetry.AMBIGUOUS, detail=thing.strip(),
+        )
         return
 
     if isinstance(found, reach.NotFound):
@@ -3231,6 +3370,9 @@ async def _look_at_one_thing(
             await interaction.followup.send(
                 await _look_here(guild_id, user_id, room_id), ephemeral=True
             )
+            await telemetry.succeeded(
+                guild_id, user_id, telemetry.LOOK, detail=room_id
+            )
             return
 
         # One refusal per verb for a word the house does not know:
@@ -3240,6 +3382,19 @@ async def _look_at_one_thing(
         key = "take_fail.absent" if found.exists_elsewhere else "look_fail.unknown"
         await interaction.followup.send(
             await phrasing.default_say(key, name=thing.strip()), ephemeral=True
+        )
+        # **The free list of things players expect and the game does
+        # not have.** A word typed at a room that has never heard of it
+        # is a guess about what should be there, and a week of them
+        # says more about the scenery than another playtest would. The
+        # word is stored exactly as typed, trimmed and no more: casing
+        # and plurals are part of the answer.
+        await telemetry.refused(
+            guild_id,
+            user_id,
+            telemetry.UNKNOWN_NOUN,
+            reason=telemetry.ABSENT if found.exists_elsewhere else telemetry.UNKNOWN,
+            detail=thing.strip(),
         )
         return
 
@@ -3285,6 +3440,9 @@ async def _look_at_one_thing(
 
     content_, embed = await _with_art(interaction.guild, text, art)
     await interaction.followup.send(content_, embed=embed, ephemeral=True)
+    await telemetry.succeeded(
+        guild_id, user_id, telemetry.LOOK, thing_id=found.thing_id
+    )
 
 
 async def _look_here(guild_id: int, user_id: int, room_id: str) -> str:
@@ -3693,6 +3851,9 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
         room_id, elsewhere = await _room_to_act_in(interaction)
         if elsewhere:
             await interaction.followup.send(elsewhere, ephemeral=True)
+            await _turned_away(
+                interaction, telemetry.TAKE, telemetry.WRONG_ROOM, detail=thing
+            )
             return
 
         found = await reach.find(guild_id, user.id, room_id, thing, reach.Scope.ROOM)
@@ -3704,18 +3865,31 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
                 ),
                 ephemeral=True,
             )
+            await _turned_away(
+                interaction, telemetry.TAKE, telemetry.AMBIGUOUS, detail=thing
+            )
             return
 
         if isinstance(found, reach.NotFound):
             await interaction.followup.send(
                 await _take_refusal(guild_id, found, thing), ephemeral=True
             )
+            await _turned_away(
+                interaction,
+                telemetry.TAKE,
+                telemetry.ABSENT if found.exists_elsewhere else telemetry.UNKNOWN,
+                detail=thing.strip(),
+            )
             return
 
         row = await phrasing.thing_row(found.thing_id)
         refusal = await _cannot_take(guild_id, user.id, found, row)
         if refusal:
-            await interaction.followup.send(refusal, ephemeral=True)
+            line, reason = refusal
+            await interaction.followup.send(line, ephemeral=True)
+            await _turned_away(
+                interaction, telemetry.TAKE, reason, thing_id=found.thing_id
+            )
             return
 
         # A source hands over what it yields and is not itself consumed; a
@@ -3733,7 +3907,14 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
                 await phrasing.default_say("take_fail.absent", name=found.name),
                 ephemeral=True,
             )
+            await _turned_away(
+                interaction, telemetry.TAKE, telemetry.ABSENT, thing_id=found.thing_id
+            )
             return
+
+        await telemetry.succeeded(
+            guild_id, user.id, telemetry.TAKE, thing_id=taken
+        )
 
         taken_row = await phrasing.thing_row(taken)
         name = taken_row.name if taken_row else found.name
@@ -3823,18 +4004,33 @@ def _no_carrying(row) -> str:
 async def _cannot_take(
     guild_id: int, user_id: int, found: reach.Found, row
 ) -> str | None:
-    """The refusal table, in the spec's order. None means go ahead."""
+    """The refusal table, in the spec's order. None means go ahead.
+
+    Returns the line *and* the reason it was refused for, because the
+    two audiences are different: the player reads a written sentence
+    about this particular object, and the log wants the one word that
+    groups it with every other refusal of the same kind.
+    """
     if row is None:
-        return await phrasing.default_say("take_fail.absent", name=found.name)
+        return (
+            await phrasing.default_say("take_fail.absent", name=found.name),
+            telemetry.ABSENT,
+        )
 
     if row.type == "exit":
-        return await phrasing.default_say("take_fail.exit", name=found.name)
+        return (
+            await phrasing.default_say("take_fail.exit", name=found.name),
+            telemetry.NOT_TAKEABLE,
+        )
 
     # A source is never takeable itself; what matters is whether its yield is.
     if not found.is_source and not row.takeable:
-        return await phrasing.say(
-            guild_id, found.thing_id, "take_fail",
-            fallback=_no_carrying(row), name=found.name,
+        return (
+            await phrasing.say(
+                guild_id, found.thing_id, "take_fail",
+                fallback=_no_carrying(row), name=found.name,
+            ),
+            telemetry.NOT_TAKEABLE,
         )
 
     # The cap applies to what the player ends up holding, which for a source is
@@ -3847,8 +4043,12 @@ async def _cannot_take(
     held = await database.carried_of(user_id, guild_id, taken)
     if held < capped.max_per_player:
         return None
-    return await phrasing.say(
-        guild_id, taken, "take_fail", fallback=_no_carrying(capped), name=capped.name
+    return (
+        await phrasing.say(
+            guild_id, taken, "take_fail",
+            fallback=_no_carrying(capped), name=capped.name,
+        ),
+        telemetry.FULL_HANDS,
     )
 
 
@@ -3870,6 +4070,9 @@ async def drop(interaction: discord.Interaction, thing: str) -> None:
         room_id, elsewhere = await _room_to_act_in(interaction)
         if elsewhere:
             await interaction.followup.send(elsewhere, ephemeral=True)
+            await _turned_away(
+                interaction, telemetry.DROP, telemetry.WRONG_ROOM, detail=thing
+            )
             return
 
         found = await reach.find(guild_id, user.id, room_id, thing, reach.Scope.CARRIED)
@@ -3881,12 +4084,21 @@ async def drop(interaction: discord.Interaction, thing: str) -> None:
                 ),
                 ephemeral=True,
             )
+            await _turned_away(
+                interaction, telemetry.DROP, telemetry.AMBIGUOUS, detail=thing
+            )
             return
 
         if isinstance(found, reach.NotFound):
             await interaction.followup.send(
                 await phrasing.default_say("drop_fail.not_carried", name=thing.strip()),
                 ephemeral=True,
+            )
+            await _turned_away(
+                interaction,
+                telemetry.DROP,
+                telemetry.NOT_HELD,
+                detail=thing.strip(),
             )
             return
 
@@ -3901,6 +4113,12 @@ async def drop(interaction: discord.Interaction, thing: str) -> None:
                 ),
                 ephemeral=True,
             )
+            await _turned_away(
+                interaction,
+                telemetry.DROP,
+                telemetry.NOT_TAKEABLE,
+                thing_id=found.thing_id,
+            )
             return
 
         if not await database.drop_into_room(user.id, guild_id, room_id, found.thing_id):
@@ -3908,7 +4126,17 @@ async def drop(interaction: discord.Interaction, thing: str) -> None:
                 await phrasing.default_say("drop_fail.not_carried", name=found.name),
                 ephemeral=True,
             )
+            await _turned_away(
+                interaction,
+                telemetry.DROP,
+                telemetry.NOT_HELD,
+                thing_id=found.thing_id,
+            )
             return
+
+        await telemetry.succeeded(
+            guild_id, user.id, telemetry.DROP, thing_id=found.thing_id
+        )
 
         # Retires `hint.drop_something`. Recorded here rather than
         # inferred from an empty bag, because putting one of three
@@ -4257,6 +4485,7 @@ async def qa_midnight(interaction: discord.Interaction) -> None:
     await interaction.response.defer(ephemeral=True, thinking=True)
 
     changes = await database.run_pending_recovery()
+    await telemetry.recoveries(changes)
     mine = [c for c in changes if c.guild_id == interaction.guild_id]
     await _fire(
         achievements.Context(guild_id=interaction.guild_id, hook="on_midnight"),

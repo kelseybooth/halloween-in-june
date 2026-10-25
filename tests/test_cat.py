@@ -109,21 +109,33 @@ async def test_recent_count_describes_the_state_the_player_arrived_in(db):
     assert (await db.increment_pet_count(ALICE, GUILD_A)).recent == 2
 
 
+async def a_logged_pet(db, user_id, guild_id, when):
+    """A pet row at a chosen moment, which is what the window counts."""
+    async with db._require_session()() as session:
+        session.add(
+            db.InteractionLog(
+                user_id=user_id,
+                guild_id=guild_id,
+                action=db.PET,
+                actor=db.PLAYER,
+                outcome=db.SUCCESS,
+                created_at=when,
+            )
+        )
+        await session.commit()
+
+
 async def test_pets_outside_the_window_do_not_count_as_recent(db):
     """A pet older than RECENT_PET_WINDOW has left the window; the cat forgets."""
     stale = db._utcnow() - db.RECENT_PET_WINDOW - timedelta(seconds=1)
-    async with db._require_session()() as session:
-        session.add(db.PetEvent(user_id=ALICE, guild_id=GUILD_A, created_at=stale))
-        await session.commit()
+    await a_logged_pet(db, ALICE, GUILD_A, stale)
 
     assert (await db.increment_pet_count(ALICE, GUILD_A)).recent == 0
 
 
 async def test_a_pet_just_inside_the_window_still_counts(db):
     fresh = db._utcnow() - db.RECENT_PET_WINDOW + timedelta(seconds=30)
-    async with db._require_session()() as session:
-        session.add(db.PetEvent(user_id=ALICE, guild_id=GUILD_A, created_at=fresh))
-        await session.commit()
+    await a_logged_pet(db, ALICE, GUILD_A, fresh)
 
     assert (await db.increment_pet_count(ALICE, GUILD_A)).recent == 1
 
@@ -249,65 +261,104 @@ def test_a_pet_reply_carries_no_diagnostics(fixed_rng):
 
 
 # --------------------------------------------------------------------------
-# relationship_at_pet
+# What a pet leaves in the interaction log
 #
-# Recorded ahead of the achievements that read it, because it is the one value
-# that cannot be reconstructed later: the relationship is a running total, so a
-# pet's score at the time is gone the moment the next pet moves it.
+# This is where `pet_events.relationship_at_pet` went. The log records the
+# score *after* a pet and what the pet was worth, and the score before is the
+# one minus the other - so nothing that column answered has been lost, and the
+# row now also says which way the cat went.
+#
+# A pet is two halves on purpose. The row is opened inside the same
+# transaction that counts the ten-minute window, so a burst cannot read a
+# stale count; what the pet was worth is decided afterwards by a roll that
+# needs that count as its input. `a_pet` below is both halves, in the order
+# the command does them.
 # --------------------------------------------------------------------------
 
 
-async def pet_scores(db, user_id, guild_id):
+async def pet_rows(db, user_id, guild_id):
     from sqlalchemy import select
 
     async with db._require_session()() as session:
         rows = await session.execute(
-            select(db.PetEvent.relationship_at_pet)
-            .where(db.PetEvent.user_id == user_id, db.PetEvent.guild_id == guild_id)
-            .order_by(db.PetEvent.id)
+            select(db.InteractionLog.relationship_delta, db.InteractionLog.score_after)
+            .where(
+                db.InteractionLog.user_id == user_id,
+                db.InteractionLog.guild_id == guild_id,
+                db.InteractionLog.action == db.PET,
+            )
+            .order_by(db.InteractionLog.id)
         )
-        return [r[0] for r in rows]
+        return list(rows)
+
+
+async def scores_before(db, user_id, guild_id):
+    """What `relationship_at_pet` used to hold, read off the new row."""
+    return [after - delta for delta, after in await pet_rows(db, user_id, guild_id)]
+
+
+async def a_pet(db, user_id, guild_id, delta):
+    """One whole pet: the row, then the roll that completes it."""
+    result = await db.increment_pet_count(user_id, guild_id)
+    score = await db.adjust_relationship(user_id, guild_id, delta)
+    await db.close_interaction(
+        result.log_id, relationship_delta=delta, score_after=score
+    )
+    return score
 
 
 async def test_a_first_pet_records_the_starting_score(db):
-    await db.increment_pet_count(ALICE, GUILD_A)
-    assert await pet_scores(db, ALICE, GUILD_A) == [db.RELATIONSHIP_START]
+    await a_pet(db, ALICE, GUILD_A, bot.RELATIONSHIP_STEP)
+    assert await scores_before(db, ALICE, GUILD_A) == [db.RELATIONSHIP_START]
 
 
 async def test_each_pet_records_the_score_before_it_applied(db):
-    """The point of the column: the value as it stood, not as it ended up."""
-    await db.increment_pet_count(ALICE, GUILD_A)
-    await db.adjust_relationship(ALICE, GUILD_A, 5)
-    await db.increment_pet_count(ALICE, GUILD_A)
-    await db.adjust_relationship(ALICE, GUILD_A, -5)
-    await db.increment_pet_count(ALICE, GUILD_A)
+    """The point of the pair: the value as it stood, not as it ended up."""
+    step = bot.RELATIONSHIP_STEP
+    await a_pet(db, ALICE, GUILD_A, step)
+    await a_pet(db, ALICE, GUILD_A, -step)
+    await a_pet(db, ALICE, GUILD_A, step)
 
     start = db.RELATIONSHIP_START
-    assert await pet_scores(db, ALICE, GUILD_A) == [start, start + 5, start]
+    assert await scores_before(db, ALICE, GUILD_A) == [start, start + step, start]
 
 
 async def test_the_recorded_score_survives_later_movement(db):
     """A pet at 50 still reads 50 after the relationship has moved on."""
-    await db.increment_pet_count(ALICE, GUILD_A)
+    await a_pet(db, ALICE, GUILD_A, bot.RELATIONSHIP_STEP)
     await db.adjust_relationship(ALICE, GUILD_A, -100)
 
-    assert await pet_scores(db, ALICE, GUILD_A) == [db.RELATIONSHIP_START]
+    assert await scores_before(db, ALICE, GUILD_A) == [db.RELATIONSHIP_START]
 
 
 async def test_a_negative_relationship_is_recorded_as_negative(db):
     """One achievement counts pets at a negative score, so the sign has to land."""
-    await db.increment_pet_count(ALICE, GUILD_A)
+    step = bot.RELATIONSHIP_STEP
+    await a_pet(db, ALICE, GUILD_A, step)
     await db.adjust_relationship(ALICE, GUILD_A, -80)
-    await db.increment_pet_count(ALICE, GUILD_A)
+    await a_pet(db, ALICE, GUILD_A, step)
 
-    scores = await pet_scores(db, ALICE, GUILD_A)
-    assert scores[1] == db.RELATIONSHIP_START - 80 < 0
+    before = await scores_before(db, ALICE, GUILD_A)
+    assert before[1] == db.RELATIONSHIP_START + step - 80 < 0
+
+
+async def test_the_direction_is_on_the_row_the_old_table_could_not_say(db):
+    """**What the move bought.** `pet_events` recorded where the meter
+    stood and never whether the cat was friendly, so a standoffish pet
+    and a friendly one at the same score were the same row. The sign of
+    the delta separates them now."""
+    step = bot.RELATIONSHIP_STEP
+    await a_pet(db, ALICE, GUILD_A, step)
+    await a_pet(db, ALICE, GUILD_A, -step)
+
+    assert [delta for delta, _ in await pet_rows(db, ALICE, GUILD_A)] == [step, -step]
 
 
 async def test_scores_are_recorded_per_server(db):
-    await db.increment_pet_count(ALICE, GUILD_A)
+    step = bot.RELATIONSHIP_STEP
+    await a_pet(db, ALICE, GUILD_A, step)
     await db.adjust_relationship(ALICE, GUILD_A, -60)
-    await db.increment_pet_count(ALICE, GUILD_A)
-    await db.increment_pet_count(ALICE, GUILD_B)
+    await a_pet(db, ALICE, GUILD_A, step)
+    await a_pet(db, ALICE, GUILD_B, step)
 
-    assert await pet_scores(db, ALICE, GUILD_B) == [db.RELATIONSHIP_START]
+    assert await scores_before(db, ALICE, GUILD_B) == [db.RELATIONSHIP_START]
