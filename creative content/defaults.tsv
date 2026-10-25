@@ -88,6 +88,7 @@ hint.try_look	Things can be looked at, too. Try /look cat bed.
 hint.new_quest	A new quest is available. Check /stats.
 hint.new_quest.named	A new quest is available. {quest_name}: {quest_prompt}
 channel.look_empty	Nothing here but the cat, and she was here already.
+channel.arrival	The cat swats her paw and something slides a couple feet away... something that didn't appear to be here before now.
 drop.1.announce	The cat swats her paw and something slides a couple feet away... something that didn't appear to be here before now.
 use_fail.toy.1	The cat looks at the {name}. She looks at you.
 use_fail.toy.2	You have the cat's attention for most of a second. The {name} does not hold it.

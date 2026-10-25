@@ -676,6 +676,63 @@ async def restock_sweep() -> None:
     if report.placed:
         log.info("%s", report.summary())
 
+    for guild in bot.guilds:
+        if any(_slid_into_the_channel(guild.id, row) for row in report.placed):
+            await _announce_arrival(guild)
+
+
+def _slid_into_the_channel(guild_id: int, placed) -> bool:
+    """Whether this placement is a thing now lying on the channel floor.
+
+    Loose in the room, not tucked inside something: a bottle that
+    appears in a box in the corner has not slid anywhere, and the line
+    this gates claims it has. No shipped schedule does that today -
+    this is the sentence staying true if one ever does.
+    """
+    its_guild, room_id, container_id, _, _ = placed
+    return (
+        its_guild == guild_id
+        and room_id == content.CHANNEL_ROOM
+        and not container_id
+    )
+
+
+async def _announce_arrival(guild) -> None:
+    """Say in the channel that something new is on the floor.
+
+    **The same words the cat bed arrived with, from a key of its own.**
+    `drop.1.announce` is about drop 1 specifically; a writer reaching
+    for it should not silently reword every toy arrival for the rest of
+    the game, so the text is duplicated on purpose and the two can
+    drift apart when a writer wants them to.
+
+    **Once per sweep, however many things arrived.** The line never
+    names what came, so it reads the same for one toy or two - whereas
+    two identical sentences back to back read as a bug rather than as
+    two toys. A bot that was down for a day places everything it owed
+    in a single sweep, which is where that really happens.
+
+    **Whatever arrived, not toys only.** Drop 2's channel is filled by
+    the toy row, but drop 3 scatters bottles and diapers over every
+    room and can land one here. The line does not name what came, so
+    it is as true of a bottle as of a toy - and the alternative is a
+    thing appearing in front of everyone standing there in silence.
+
+    No hint rides this one. `SOMETHING_NEW` is the hint for a drop
+    opening up, and a toy arriving on a Tuesday is not news of that
+    kind.
+    """
+    channel_id = await database.announcement_channel(guild.id)
+    channel = guild.get_channel(channel_id) if channel_id else None
+    if channel is None:
+        # A server that never finished setup. The thing is placed and
+        # waiting either way; only the notice is lost.
+        return
+
+    line = await phrasing.default_say("channel.arrival")
+    if line:
+        await _post_quietly(channel, line)
+
 
 @restock_sweep.before_loop
 async def _before_restock() -> None:

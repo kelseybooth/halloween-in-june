@@ -272,9 +272,18 @@ async def run_for_guild(
     # the house has been built and nobody has entered yet. Setting it here
     # would start the calendar at boot and put spice jars in the Amazon box
     # before anyone could find them.
-    start_day = await initialized_on(guild_id)
-    if start_day is None:
-        return report
+    # **A row that fires every day needs no calendar.** Day one is set
+    # by the first `/enter`, which is a drop-3 command, so before the
+    # house opens this used to return empty and the toy row in the
+    # channel never fired at all - drop 2 had the two toys its content
+    # rows placed on arrival and nothing after them.
+    #
+    # Falling back to today keeps drop 3's intent exactly. A row that
+    # counts days - the spice jars arrive on day 2 and every third day
+    # after - sees day 1 again every day and stays put, which is right:
+    # they are in a box in a house nobody can reach. Once somebody
+    # walks in, the real origin takes over and they count from it.
+    start_day = await initialized_on(guild_id) or await database.server_today(guild_id)
 
     # Which drops this server has reached, for the class draw: a
     # selector must never hand out a toy from a drop that has not

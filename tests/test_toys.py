@@ -33,7 +33,15 @@ COOLDOWN_LINE = "pretending the last few minutes"
 
 @pytest.fixture
 async def channel(db):
-    """A server on drop 2, with both toys in the channel."""
+    """A server on drop 2, with both toys in the channel.
+
+    **Placed here rather than by the drop.** The toys used to arrive
+    with drop 2 and sit on the floor from the first minute; they are
+    `quantity = 0` now, and the restock schedule is what puts them
+    there. Everything below is about what a player does with a toy
+    they have found, so these tests put one in front of them and the
+    scheduler is `test_toy_arrival`'s subject.
+    """
     achievements.clear()
     triggers.register_all()
     await content_loader.load_content(content_module.load_files())
@@ -45,6 +53,10 @@ async def channel(db):
     await database.set_announcement_channel(GUILD_A, halloween.id)
     await resolve.set_current_drop(GUILD_A, 2)
     await content_loader.place_arrived(GUILD_A)
+    for toy in (WAND, BALL):
+        await database.place_in_room(
+            GUILD_A, content_module.CHANNEL_ROOM, toy, 1
+        )
     await database.ensure_user_exists(ALICE, GUILD_A)
     bot.forget_public_pets()
     yield db, guild, halloween
