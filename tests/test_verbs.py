@@ -467,7 +467,7 @@ async def use(user_id=ALICE, guild_id=GUILD_A, thing="spoon", guild=None):
     from types import SimpleNamespace
 
     interaction = FakeInteraction(
-        user_id, guild_id, guild=guild or SimpleNamespace(name="Test", text_channels=[])
+        user_id, guild_id, guild=guild or SimpleNamespace(id=guild_id, name="Test", text_channels=[])
     )
     await bot.use.callback(interaction, thing)
     return interaction
@@ -847,7 +847,7 @@ async def command(fn, arg, channel, user_id=ALICE, guild_id=GUILD_A, guild=None)
     interaction = FakeInteraction(
         user_id,
         guild_id,
-        guild=guild or SimpleNamespace(name="Test", text_channels=[]),
+        guild=guild or SimpleNamespace(id=guild_id, name="Test", text_channels=[]),
         channel=channel,
     )
     args = () if arg is None else (arg,)
