@@ -108,6 +108,19 @@ async def defined_drop_ids() -> set[int]:
     return {row[0] for row in rows}
 
 
+async def next_drop_after(drop_id: int) -> int | None:
+    """The drop an admin advancing from `drop_id` would open, or None.
+
+    **The next one the files define, not `drop_id + 1`.** The drops stopped
+    being consecutive on 26 October: 0, 1, 2, 3, then 10, 20, 30, 40, 50,
+    numbered in tens to leave room between them. Adding one lands on a
+    drop that does not exist, so `/advance-game` from drop 3 would refuse
+    to open the very next drop there is.
+    """
+    later = [d for d in await defined_drop_ids() if d > drop_id]
+    return min(later) if later else None
+
+
 async def drop_name(drop_id: int) -> str | None:
     """What the files call a drop, for an admin about to open one."""
     session_factory = database._require_session()

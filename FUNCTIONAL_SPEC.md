@@ -208,7 +208,7 @@ This needs the Message Content intent, which is already enabled. It changes what
 
 Drop 3, and nothing else is in drop 3. One food or prey emoji per day, **the same for every player on a server**, so the guessing is collaborative. Nothing announces the game; the first clue is a 🐱 coming back at a heart on somebody's achievement.
 
-**The pool is the writers' catalogue, not Unicode's grouping.** `emoji-catalogue-v18.csv` sorts all 1,927 emoji into a **category** (Food, Prey, Adjacent, Toy, Cat, Misc, Bot) and a **type** within it. The craving is drawn from the 136 Food and Prey rows marked drawable — which excludes anything new in the current Unicode release, because Discord's picker lags the standard and a craving nobody can type is unwinnable. Adjacent (drinks, dishes, ingredients, cooking) and Toy are real game categories that can never be the answer. Custom server emoji and skin-tone variants are not in the file at all, and variation selectors are normalized on both sides or some guesses silently will not match.
+**The pool is the writers' catalogue, not Unicode's grouping.** `emoji-catalogue-v18.csv` sorts all 1,927 emoji into a **category** (Food, Prey, Adjacent, Toy, Cat, Misc, Bot) and a **type** within it. The craving is drawn from the 134 Food and Prey rows marked drawable — which excludes anything new in the current Unicode release, because Discord's picker lags the standard and a craving nobody can type is unwinnable. Adjacent (drinks, dishes, ingredients, cooking) and Toy are real game categories that can never be the answer. Custom server emoji and skin-tone variants are not in the file at all, and variation selectors are normalized on both sides or some guesses silently will not match.
 
 The two TSVs the game loads are **generated** from that catalogue by `generate_emoji_files.py`, and the pre-push hook fails if what is on disk is not what the catalogue makes. Never hand-edit them: the edit loads fine and disappears at the next export.
 
@@ -232,7 +232,15 @@ Players guess by reacting to any message the bot posted. The bot answers with re
 
 The one gap left is deliberate: a **win** can swap out a face the bot owned alone and end at nineteen, with no ❌ because a win returns first. That message already shows the 😻, which is the best answer there is, so a guess into the last slot learns nothing it could not read — and it is still judged, scored and logged. Padding it would put a ✖ beside a 😻 and claim the message ran out of guesses, which is not what happened to it.
 
-**The opening week is written**: mouse, cut of meat, broccoli, fish, egg. Counted in draws rather than in days, so a day nobody plays is not spent.
+**Two emoji can be one animal.** A `Same As` column pairs the 🐭 with the 🐁 and the 🐰 with the 🐇: guessing either wins, and only the canonical one is ever drawn. To a player the face of the thing the cat wants *is* the thing the cat wants, and a 👀 answering "right type, wrong emoji" there reads as the game being broken. It is a column rather than a special case for the same reason dishware is — whoever decides the 🐷 and the 🐖 are one pig should not need a release.
+
+**The opening week is written**: mouse, cut of meat, broccoli, fish, egg — and **each stays up until somebody finds it**, however many days that takes. A server that opens on a Friday and goes quiet until Tuesday is still looking for the mouse on Tuesday.
+
+These five are the game teaching itself. A player who has never seen the ladder work needs to watch one craving get found, and rolling them past at midnight would let a quiet server burn the written week without playing it and reach the random draw having never had a win. It also makes the hour of the drop stop mattering: a short first evening is a short evening, not a craving spent.
+
+**The five only.** After them the craving rolls at midnight regardless, because a random draw can be genuinely hard — a type with thirty members, or a category line the writers and the players read differently — and a game that cannot move past a bad day is worse than one that forgets it.
+
+The position is counted as *cravings found*, not stored as an index: that is what makes a reset put a server back at the mouse, and what means there is no second place it could drift out of step with.
 
 **Scoring.** A win pays `craving_points` — five — once per player per day. Small on purpose: copying somebody else's correct guess is a reaction away and that is fine, so the figure has to be small enough that copying it is not the cheapest relationship in the game. A second win the same day still shows the 😻 and pays nothing; the display is a function of the emoji and the day, because Discord cannot show one message two ways. **A guess is not a cat interaction**: it does not stop the overnight drift and does not count toward *Lucky Black Cat*.
 

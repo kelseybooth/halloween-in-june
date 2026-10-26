@@ -387,11 +387,94 @@ def test_dishes_are_not_drawable(shipped):
 
 
 def test_the_drawable_pool_is_the_food_and_the_prey(shipped):
-    """138 Food and Prey rows, less the two that are new in Unicode 18.0:
-    Discord's picker may not have them yet, and a craving nobody can type
-    is unwinnable."""
-    assert len(shipped.craving_pool) == 136
+    """138 Food and Prey rows, less four, for two different reasons.
+
+    Two are new in Unicode 18.0, which Discord's picker may not have yet,
+    and a craving nobody can type is unwinnable. Two are faces of an
+    animal already in the pool - the 🐭 and the 🐰 - and putting a pair in
+    twice would make the mouse twice as likely as the rat while giving
+    the cat two ways to want the same thing.
+    """
+    assert len(shipped.craving_pool) == 134
     assert {e.category for e in shipped.craving_pool} == {"Food", "Prey"}
+    assert not any(e.same_as for e in shipped.craving_pool)
+
+
+def test_an_alias_is_still_in_the_file(shipped):
+    """Out of the pool, not out of the game. The 🐭 has to resolve to a
+    category and a type like anything else, because it is a legal guess -
+    and the one that wins."""
+    face = next(e for e in shipped.emoji_groups if e.emoji == chr(0x1F42D))
+    body = next(e for e in shipped.emoji_groups if e.emoji == chr(0x1F401))
+
+    assert face.same_as == body.emoji
+    assert (face.category, face.type) == (body.category, body.type)
+    assert face.drawable is False and body.drawable is True
+
+
+def test_the_shipped_aliases_are_valid(shipped):
+    assert content._check_emoji_aliases(shipped) == []
+
+
+def test_an_alias_pointing_at_nothing_is_caught(shipped):
+    groups = [
+        replace(e, same_as="\u0000") if e.emoji == chr(0x1F42D) else e
+        for e in shipped.emoji_groups
+    ]
+
+    problems = content._check_emoji_aliases(replace(shipped, emoji_groups=groups))
+
+    assert any("not in the file" in p for p in problems)
+
+
+def test_a_chain_of_aliases_is_caught(shipped):
+    """Whether 🐭 answers for 🐁 or for whatever 🐁 answers for would
+    depend on which row was read first."""
+    groups = [
+        replace(e, same_as=chr(0x1F400)) if e.emoji == chr(0x1F401) else e
+        for e in shipped.emoji_groups
+    ]
+
+    problems = content._check_emoji_aliases(replace(shipped, emoji_groups=groups))
+
+    assert any("chains are not resolved" in p for p in problems)
+
+
+def test_an_alias_filed_somewhere_else_is_caught(shipped):
+    """A 👀 means "right type". An alias in another type would win while
+    the rung below it said the type was wrong."""
+    groups = [
+        replace(e, type="Bird") if e.emoji == chr(0x1F42D) else e
+        for e in shipped.emoji_groups
+    ]
+
+    problems = content._check_emoji_aliases(replace(shipped, emoji_groups=groups))
+
+    assert any("ladder would disagree with itself" in p for p in problems)
+
+
+def test_a_drawable_alias_is_caught(shipped):
+    groups = [
+        replace(e, drawable=True) if e.emoji == chr(0x1F42D) else e
+        for e in shipped.emoji_groups
+    ]
+
+    problems = content._check_emoji_aliases(replace(shipped, emoji_groups=groups))
+
+    assert any("two ways" in p for p in problems)
+
+
+def test_an_alias_for_something_undrawable_is_caught(shipped):
+    """Both halves unwinnable: the cat can never want the 🐁, and the 🐭
+    only ever answers for it."""
+    groups = [
+        replace(e, drawable=False) if e.emoji == chr(0x1F401) else e
+        for e in shipped.emoji_groups
+    ]
+
+    problems = content._check_emoji_aliases(replace(shipped, emoji_groups=groups))
+
+    assert any("can never want" in p for p in problems)
 
 
 def test_salt_is_not_a_possible_craving(shipped):

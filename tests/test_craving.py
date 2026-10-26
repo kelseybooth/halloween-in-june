@@ -18,6 +18,7 @@ what lets most of this file name the answer instead of drawing one and working
 backwards from it.
 """
 
+import io
 from datetime import date, timedelta
 
 import pytest
@@ -145,77 +146,122 @@ def test_punctuation_and_case_do_not_matter():
 # --------------------------------------------------------------------------
 
 
+SCRIPT = [MOUSE, CUT_OF_MEAT, BROCCOLI, FISH, EGG]
+
+
+async def play_the_script(days=range(5), who=ALICE):
+    """Find each written craving in turn, one a day, and report them."""
+    found = []
+    for n in days:
+        day = TODAY + timedelta(days=n)
+        answer = await craving.craving_for(GUILD_A, day)
+        found.append(answer)
+        await craving.judge(GUILD_A, who, answer, day)
+    return found
+
+
 async def test_the_opening_week_is_scripted(server):
-    """The first five cravings a server draws are written, not rolled.
+    """Found one a day, the five come up in the written order.
 
     A beta server's first day should not be able to open on a 🫑. The
     script is the writers', and this asserts the emoji rather than the
     names so that a rename in the catalogue that loses one is a failure
     here rather than a silent fall-through to random.
     """
-    drawn = [
-        await craving.craving_for(GUILD_A, TODAY + timedelta(days=n))
-        for n in range(5)
-    ]
-
-    assert drawn == [MOUSE, CUT_OF_MEAT, BROCCOLI, FISH, EGG]
+    assert await play_the_script() == SCRIPT
 
 
-async def test_the_script_is_counted_in_draws_not_in_days(server):
-    """A day nobody plays is not spent.
-
-    The craving is drawn on first use, so a quiet server has no row for
-    that day at all. Counting the calendar instead of the rows would mean
-    a server that opens on a Friday and is next touched on a Tuesday skips
-    four of its five written cravings.
+async def test_a_written_craving_stays_up_until_it_is_found(server):
+    """**The point of the five.** They are the game teaching itself, and
+    a player who has never seen the ladder work needs to see one craving
+    found. Rolling them past at midnight would let a quiet server burn
+    the written week without playing it, and arrive at the random draw
+    having never had a win.
     """
+    for n in range(10):
+        assert await craving.craving_for(GUILD_A, TODAY + timedelta(days=n)) == MOUSE
+
+
+async def test_finding_it_is_what_moves_the_script_on(server):
+    await craving.craving_for(GUILD_A, TODAY)
+    tomorrow = TODAY + timedelta(days=1)
+    assert await craving.craving_for(GUILD_A, tomorrow) == MOUSE
+
+    await craving.judge(GUILD_A, ALICE, MOUSE, tomorrow)
+
+    assert await craving.craving_for(
+        GUILD_A, tomorrow + timedelta(days=1)
+    ) == CUT_OF_MEAT
+
+
+async def test_the_day_it_is_found_keeps_its_craving(server):
+    """Finding the mouse at two in the afternoon does not change what the
+    cat wanted this morning. The day's row is already written, and the
+    next draw is tomorrow's."""
     assert await craving.craving_for(GUILD_A, TODAY) == MOUSE
-    far = TODAY + timedelta(days=30)
 
-    assert await craving.craving_for(GUILD_A, far) == CUT_OF_MEAT
-
-
-async def test_a_mid_day_advance_spends_day_one_if_anybody_plays(server):
-    """**Asked and answered, 26 October: left as it is.**
-
-    The craving is drawn on first use, so advancing to drop 3 at three in
-    the afternoon makes that afternoon day one for anybody who reacts
-    before Pacific midnight - a nine-hour day one rather than a whole one.
-
-    The alternative was to hold the game until the next midnight so that
-    all five written cravings get full days. It was not taken: it costs a
-    read of when the drop arrived, and it gives an admin who has just
-    advanced the drop a window where the game is on and the bot looks
-    dead, which is a worse thing to debug than a short first day.
-
-    The operational answer is to advance the drop shortly after midnight,
-    which costs nothing.
-    """
-    await resolve.set_current_drop(GUILD_A, 3)
+    await craving.judge(GUILD_A, ALICE, MOUSE, TODAY)
 
     assert await craving.craving_for(GUILD_A, TODAY) == MOUSE
-    assert await craving.craving_for(GUILD_A, TODAY + timedelta(days=1)) == CUT_OF_MEAT
 
 
-async def test_a_mid_day_advance_nobody_plays_costs_nothing(server):
-    """The other half of the same decision, and what makes it tolerable.
-
-    Nothing is drawn until somebody reacts, so an evening where the drop
-    lands and nobody is about does not spend the mouse. The short day one
-    only happens if somebody is there to have it.
-    """
-    await resolve.set_current_drop(GUILD_A, 3)
+async def test_a_near_miss_does_not_move_the_script_on(server):
+    """Only a win counts. A 👀 is not finding it."""
+    await craving.craving_for(GUILD_A, TODAY)
+    await craving.judge(GUILD_A, ALICE, chr(0x1F430), TODAY)  # rabbit: right type
 
     assert await craving.craving_for(GUILD_A, TODAY + timedelta(days=1)) == MOUSE
 
 
+async def test_the_script_is_not_spent_by_a_day_nobody_plays(server):
+    """The craving is drawn on first use, so a quiet server has no row
+    for that day at all - and now, no win either. Both halves point the
+    same way: the written week is spent by playing it."""
+    far = TODAY + timedelta(days=30)
+
+    assert await craving.craving_for(GUILD_A, far) == MOUSE
+
+
+async def test_the_script_restarts_after_a_reset(server):
+    """Counting found rows rather than keeping an index is what buys
+    this: clearing `craving_days` puts a server back at the mouse, which
+    is what a reset should do and what a playtester expects."""
+    await play_the_script(days=range(2))
+    assert await craving.craving_for(GUILD_A, TODAY + timedelta(days=2)) == BROCCOLI
+
+    await content_loader.reset_guild(GUILD_A, drop=world.CRAVING_FROM_DROP)
+
+    assert await craving.craving_for(GUILD_A, TODAY) == MOUSE
+
+
+async def test_a_mid_day_advance_does_not_cost_the_opening(server):
+    """**The question that prompted the sticky script.**
+
+    Advancing to drop 3 at eleven at night used to be able to spend the
+    mouse on twenty minutes almost nobody saw. It cannot now: the mouse
+    is up until somebody finds it, so a short evening is just a short
+    evening and the opening carries into the next day intact.
+    """
+    await resolve.set_current_drop(GUILD_A, 3)
+
+    assert await craving.craving_for(GUILD_A, TODAY) == MOUSE
+    assert await craving.craving_for(GUILD_A, TODAY + timedelta(days=1)) == MOUSE
+
+
 async def test_the_draw_takes_over_after_the_script(server):
-    for n in range(len(craving.SCRIPTED_CRAVINGS)):
-        await craving.craving_for(GUILD_A, TODAY + timedelta(days=n))
+    """**And it rolls at midnight from then on, found or not.** A random
+    draw can be genuinely hard - a type with thirty members, or a
+    category line the writers and the players read differently - and a
+    game that cannot move past a bad day is worse than one that forgets
+    it."""
+    await play_the_script()
+    sixth = TODAY + timedelta(days=5)
 
-    after = await craving.craving_for(GUILD_A, TODAY + timedelta(days=5))
+    first_random = await craving.craving_for(GUILD_A, sixth)
+    nobody_found_it = await craving.craving_for(GUILD_A, sixth + timedelta(days=1))
 
-    assert after in await craving._pool()
+    pool = await craving._pool()
+    assert first_random in pool and nobody_found_it in pool
 
 
 async def test_every_scripted_craving_is_drawable(server):
@@ -399,12 +445,130 @@ async def test_the_bots_own_reactions_are_not_judged_at_all(server):
 
 
 async def test_a_variation_selector_does_not_stop_a_match(server):
-    """Discord hands back some emoji with U+FE0F and some without, and the
-    catalogue carries one on 158 of its rows. Normalising both sides the
-    same way is what stops one emoji silently never matching."""
-    guess = await craving.judge(GUILD_A, ALICE, MOUSE + "️", TODAY)
+    """Discord hands back some emoji with U+FE0F and some without.
+
+    **Both sides, which is the half that is easy to miss.** Stripping
+    only what Discord sends would still fail for the catalogue rows that
+    carry the selector themselves: those would load with it, and a bare
+    reaction would never match them. The loader normalises on the way in
+    and the judge normalises every guess, through the same function, so
+    the two cannot drift apart.
+
+    Written as `chr(0xFE0F)` rather than pasted, because the character
+    is invisible and a test whose subject cannot be seen in the diff is
+    a test somebody will delete by accident.
+    """
+    guess = await craving.judge(GUILD_A, ALICE, MOUSE + chr(0xFE0F), TODAY)
 
     assert guess.outcome == craving.WIN
+
+
+async def test_the_catalogues_own_selectors_are_stripped_on_the_way_in(server):
+    """The file's side of the same problem, read off the file.
+
+    A row that arrives still carrying its selector is unmatchable by a
+    bare reaction, and nothing else would say so - that one emoji out of
+    1,927 would simply never be guessable.
+    """
+    carried = [
+        row["emoji"] for row in _catalogue_rows() if chr(0xFE0F) in row["emoji"]
+    ]
+    assert carried, "no catalogue row carries a selector; has the file changed?"
+
+    for raw in carried:
+        assert await craving.entry(raw) is not None, raw
+        assert await craving.entry(raw.replace(chr(0xFE0F), "")) is not None, raw
+
+
+async def test_a_zero_width_joiner_is_left_alone(server):
+    """**Not every invisible character is noise.** The joiner is what
+    makes the black cat a black cat rather than a cat beside a black
+    square, so stripping it would merge two different emoji into one."""
+    black_cat = chr(0x1F408) + chr(0x200D) + chr(0x2B1B)
+    plain_cat = chr(0x1F408)
+
+    assert content_module.normalise_emoji(black_cat) == black_cat
+    assert await craving.entry(black_cat) is not None
+    assert await craving.entry(plain_cat) is not None
+
+
+# --------------------------------------------------------------------------
+# Two emoji, one animal
+# --------------------------------------------------------------------------
+
+
+MOUSE_FACE = chr(0x1F42D)
+RABBIT = chr(0x1F407)
+RABBIT_FACE = chr(0x1F430)
+
+
+async def test_the_mouse_face_wins_when_the_cat_wants_the_mouse(server):
+    """**What a player means.** The mouse face is the mouse to anybody
+    not reading the Unicode names, and being told "right type, wrong
+    emoji" for the face of the thing the cat wants reads as the game
+    being broken rather than as a near miss."""
+    guess = await craving.judge(GUILD_A, ALICE, MOUSE_FACE, TODAY)
+
+    assert guess.outcome == craving.WIN
+    assert guess.credited is True
+
+
+async def test_the_pair_scores_once_between_them(server):
+    """One animal, so one win. Guessing both is not two days' worth."""
+    await craving.judge(GUILD_A, ALICE, MOUSE_FACE, TODAY)
+
+    again = await craving.judge(GUILD_A, ALICE, MOUSE, TODAY)
+
+    assert again.won is True and again.credited is False
+    assert await craving.tally(GUILD_A, ALICE) == 1
+
+
+async def test_either_half_moves_the_script_on(server):
+    """Finding it with the face is finding it."""
+    await craving.judge(GUILD_A, ALICE, MOUSE_FACE, TODAY)
+
+    assert await craving.craving_for(
+        GUILD_A, TODAY + timedelta(days=1)
+    ) == CUT_OF_MEAT
+
+
+async def test_the_rabbit_is_the_other_pair(server):
+    """Two pairs today, and the second is the evidence that the first is
+    not a special case hiding in the data."""
+    face = await craving.entry(RABBIT_FACE)
+
+    assert face is not None and face.same_as == RABBIT
+
+
+async def test_an_alias_is_never_the_craving_itself(server):
+    """Out of the pool, so the cat wants the mouse and never the mouse
+    face - which is what stops the mouse being twice as likely as the
+    rat, and the cat wanting one animal two different ways."""
+    pool = await craving._pool()
+
+    assert MOUSE in pool and MOUSE_FACE not in pool
+    assert RABBIT in pool and RABBIT_FACE not in pool
+
+
+async def test_a_mouse_guessed_on_a_rabbit_day_is_still_a_near_miss(server):
+    """The alias folds the pair together, not the type. A mouse face on
+    a rabbit day is the right type and the wrong animal, which is
+    exactly what it is."""
+    await craving.judge(GUILD_A, ALICE, MOUSE, TODAY)  # spend day one
+    rabbit_day = TODAY + timedelta(days=1)
+    # Set the rabbit by hand: the script's second craving is the meat.
+    session_factory = database._require_session()
+    async with session_factory() as session:
+        await session.execute(
+            database.CravingDay.__table__.insert().values(
+                guild_id=GUILD_A, day=rabbit_day, emoji=RABBIT
+            )
+        )
+        await session.commit()
+
+    guess = await craving.judge(GUILD_A, ALICE, MOUSE_FACE, rabbit_day)
+
+    assert guess.outcome == craving.RIGHT_TYPE
 
 
 # --------------------------------------------------------------------------
@@ -662,6 +826,18 @@ async def test_outcomes_are_per_server(server, db):
 # --------------------------------------------------------------------------
 
 
+def _catalogue_rows():
+    """The writers' catalogue, straight off disk."""
+    import csv
+
+    with io.open(
+        content_module.CONTENT_DIR / "emoji-catalogue-v18.csv",
+        encoding="utf-8-sig",
+        newline="",
+    ) as handle:
+        return list(csv.DictReader(handle))
+
+
 async def _filed():
     """Every row of the emoji file, as the game loaded it."""
     session_factory = database._require_session()
@@ -670,9 +846,15 @@ async def _filed():
 
 
 async def _one(*, category, type=None, other_than=None):
-    """Any emoji filed under this category, and optionally this type."""
+    """Any emoji filed under this category, and optionally this type.
+
+    Aliases are skipped. The mouse face is filed under Prey/Mammal like
+    the mouse it answers for, so a helper reaching for "another mammal"
+    could hand back the one guess that wins - which would make the
+    near-miss test pass or fail on row order.
+    """
     for row in await _filed():
-        if row.category != category or row.excluded:
+        if row.category != category or row.excluded or row.same_as:
             continue
         if type is not None and row.type != type:
             continue

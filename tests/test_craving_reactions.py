@@ -424,9 +424,11 @@ async def test_padding_is_cleared_with_everything_else_the_next_day(server):
     players' own reactions stay, and it closes again straight away.
     """
     message = a_message(others=crowd(3), mine=[NO_ROOM, PADDING])
-    # Spend day one, so tomorrow is the cut of meat and the broccoli below
-    # is the right category - as it is in the stale tests above.
-    await craving.craving_for(GUILD_A, TODAY)
+    # Find day one's mouse, so tomorrow is the cut of meat and the
+    # broccoli below is the right category - as in the stale tests above.
+    # A written craving stays up until it is found, so merely drawing it
+    # would leave tomorrow on the mouse.
+    await craving.judge(GUILD_A, ALICE, MOUSE, TODAY)
     await craving.set_message_outcome(
         GUILD_A, message.id, TODAY, craving.OUT_OF_GUESSES
     )

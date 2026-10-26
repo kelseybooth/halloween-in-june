@@ -324,6 +324,11 @@ class EmojiGroup:
     type: str
     drawable: bool
     excluded: bool
+    # The emoji this one answers for, or "" if it answers for itself. Two
+    # pairs today: the 🐭 is the 🐁 and the 🐰 is the 🐇. To a player those
+    # are one animal, and being told "right type, wrong emoji" for the
+    # face of the thing the cat wants reads as the game being broken.
+    same_as: str = ""
 
 
 @dataclass(frozen=True)
@@ -694,6 +699,7 @@ def load_files(directory: Path | None = None) -> Content:
                 type=_text(row.get("type")) or "",
                 drawable=_bool(row.get("drawable"), default=False),
                 excluded=_bool(row.get("excluded"), default=False),
+                same_as=normalise_emoji(row.get("same_as") or ""),
             )
         )
 
@@ -1361,6 +1367,53 @@ def _check_emoji_groups(content: Content) -> list[str]:
         problems.append(
             "no emoji is drawable, so the daily craving could never be drawn"
         )
+    return problems + _check_emoji_aliases(content)
+
+
+def _check_emoji_aliases(content: Content) -> list[str]:
+    """An alias has to answer for something real, and answer for it fully.
+
+    All four of these load fine and go wrong only in play: a dangling
+    alias makes one emoji unguessable, a chain makes the answer depend on
+    which row is read first, a cross-type alias makes the 👀 lie about
+    what it narrowed to, and a drawable alias puts the same craving in
+    the pool twice under two faces.
+    """
+    problems = []
+    filed = {row.emoji: row for row in content.emoji_groups}
+
+    for row in content.emoji_groups:
+        if not row.same_as:
+            continue
+        target = filed.get(row.same_as)
+        if target is None:
+            problems.append(
+                f"emoji {row.emoji!r} is the same as {row.same_as!r}, which is "
+                "not in the file"
+            )
+            continue
+        if target.same_as:
+            problems.append(
+                f"emoji {row.emoji!r} is the same as {row.same_as!r}, which is "
+                "itself the same as something else; chains are not resolved"
+            )
+        if (row.category, row.type) != (target.category, target.type):
+            problems.append(
+                f"emoji {row.emoji!r} is the same as {row.same_as!r} but is "
+                f"filed under {row.category}/{row.type} rather than "
+                f"{target.category}/{target.type}, so the ladder would "
+                "disagree with itself about a guess that wins"
+            )
+        if row.drawable:
+            problems.append(
+                f"emoji {row.emoji!r} is drawable and is also the same as "
+                f"{row.same_as!r}, so the cat could want one craving two ways"
+            )
+        if not target.drawable:
+            problems.append(
+                f"emoji {row.emoji!r} answers for {row.same_as!r}, which the "
+                "cat can never want - so neither of them can ever win"
+            )
     return problems
 
 

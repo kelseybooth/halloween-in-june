@@ -42,15 +42,28 @@ type, which a single grouping column could never do.
 | Column | Where it comes from |
 |-|-|
 |`category`, `type`|Copied from the catalogue's Category and Type.|
-|`excluded`|Copied from Game Exclusion. The bot's own six reaction emoji.|
-|`drawable`|**Worked out**: yes for Food and Prey, except anything new in this Unicode release.|
+|`excluded`|Copied from Game Exclusion. The emoji the bot answers with.|
+|`same_as`|Resolved from Same As: the code of the emoji this one counts as.|
+|`drawable`|**Worked out**: yes for Food and Prey, except anything new in this Unicode release and anything with a Same As.|
 
-`drawable` is the pool the craving is drawn from — 136 of the 1,927. A new emoji
+`drawable` is the pool the craving is drawn from — 134 of the 1,927. A new emoji
 is left out because Discord's picker lags the standard by months, and a craving
 nobody can type is unwinnable with no way for the player to tell that apart from
 being wrong. The rule reads the ⊛ Unicode puts in front of a name that is new in
 the current release, so a 19.0 catalogue needs no code change. Today that loses
 🫝 pickle and 🫌 monarch butterfly, and keeps 🫜 root vegetable, which is 16.0.
+
+### Two emoji that are one animal
+
+Put the canonical emoji's **code** in the alias's `Same As` cell, and the two
+count as the same guess. Today that is the 🐭 answering for the 🐁 and the
+🐰 for the 🐇 — to a player those are one animal, and being told "right
+type, wrong emoji" for the face of the thing the cat wants reads as a bug.
+
+The alias drops out of the pool, so the cat wants the 🐁 and never the 🐭;
+otherwise the mouse would be twice as likely as the rat. The pair must share
+a category and a type, the target must be drawable, and chains are refused —
+`load_content.py --check` says so if any of that is wrong.
 
 ### What changed on 26 October
 

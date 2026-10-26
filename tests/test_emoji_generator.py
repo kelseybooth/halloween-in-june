@@ -98,16 +98,42 @@ def test_an_emoji_new_in_this_unicode_release_is_not_drawable(catalogue):
     assert not any(gen.is_drawable(row) for row in new)
 
 
-def test_the_pickle_and_the_butterfly_are_the_two_that_lose_out(catalogue):
-    """Named here rather than in the script, so that the derivation above
-    is checked against the answer it is meant to produce today."""
+def test_the_four_that_lose_out_and_why(catalogue):
+    """Named here rather than in the script, so the derivations above are
+    checked against the answer they are meant to produce today - and so
+    the two reasons stay distinguishable. A pickle is out because Discord
+    may not have it; a mouse face is out because it is already in the
+    pool, as a mouse."""
     lost = {
         row["CLDR short name"]
         for row in catalogue
         if row["Category"] in gen.CRAVABLE and not gen.is_drawable(row)
     }
 
-    assert lost == {"⊛ pickle", "⊛ monarch butterfly"}
+    assert lost == {
+        "⊛ pickle",
+        "⊛ monarch butterfly",
+        "mouse face",
+        "rabbit face",
+    }
+
+
+def test_an_alias_resolves_to_the_emoji_it_answers_for(catalogue):
+    """The catalogue names the pair by code, because a code survives a
+    spreadsheet and a paste where an emoji may not. The game compares
+    emoji, so the generator resolves it once instead of every guess."""
+    resolved = gen.canonical_emoji(catalogue)
+
+    assert resolved["U+1F42D"] == chr(0x1F401)
+    assert resolved["U+1F430"] == chr(0x1F407)
+
+
+def test_an_alias_pointing_at_a_code_that_is_not_there_is_an_error(catalogue):
+    bent = [dict(row) for row in catalogue]
+    next(r for r in bent if r["code"] == "U+1F42D")["Same As"] = "U+NOPE"
+
+    with pytest.raises(gen.Stale, match="not a code in the catalogue"):
+        gen.canonical_emoji(bent)
 
 
 def test_the_root_vegetable_survives(catalogue):
@@ -119,7 +145,8 @@ def test_the_root_vegetable_survives(catalogue):
 
 
 def test_the_count_the_spec_asks_for(catalogue):
-    assert sum(1 for row in catalogue if gen.is_drawable(row)) == 136
+    """136 in the spec, less the two face/body pairs folded together."""
+    assert sum(1 for row in catalogue if gen.is_drawable(row)) == 134
 
 
 # --------------------------------------------------------------------------

@@ -756,6 +756,8 @@ class EmojiGroup(Base):
     type: Mapped[str] = mapped_column(String(32), nullable=False)
     drawable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     excluded: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # The emoji this one answers for, "" if it answers for itself.
+    same_as: Mapped[str] = mapped_column(String(32), nullable=False, default="")
 
 
 class CravingReaction(Base):
@@ -1357,7 +1359,7 @@ async def _rebuild_room_text_if_narrow(conn) -> None:
 
 
 async def _rebuild_emoji_groups_if_old(conn) -> None:
-    """Drop `emoji_groups` when it still has the `subgroup` column.
+    """Drop `emoji_groups` when it is missing a column the loader writes.
 
     **Safe for the same reason the `room_text` rebuild is.** This is
     content, not world state: it carries no `guild_id`, nothing mutates
@@ -1365,28 +1367,36 @@ async def _rebuild_emoji_groups_if_old(conn) -> None:
     of it on every boot. The rebuild throws away rows that were about to
     be thrown away.
 
-    The column could not be ALTERed in: `subgroup` is NOT NULL and the
-    new file has nothing to put in it, so the first insert after an
-    upgrade would fail on a table that cannot be fixed forward.
+    The columns cannot be ALTERed in: they are NOT NULL and the old file
+    has nothing to put in them, so the first insert after an upgrade
+    would fail on a table that cannot be fixed forward.
+
+    **The check is every column the loader writes, not a named one.**
+    Written against `category` alone it answered correctly for exactly
+    one upgrade and then silently stopped - `same_as` arrived three days
+    later into a table that already had `category`, and the rebuild
+    skipped it. Comparing the whole set means the next column added to
+    the model is handled by this function without anybody remembering it
+    exists.
 
     Runs before `create_all`, which then creates it in the new shape. A
-    database that already has `category` is untouched, so this is a
-    no-op from the second boot onward and on every fresh install.
+    database that already matches is untouched, so this is a no-op from
+    the second boot onward and on every fresh install.
     """
+    wanted = {col.name for col in EmojiGroup.__table__.columns}
 
     def _old(sync_conn) -> bool:
         insp = inspect(sync_conn)
         if "emoji_groups" not in insp.get_table_names():
             return False
         columns = {col["name"] for col in insp.get_columns("emoji_groups")}
-        return "category" not in columns
+        return not wanted <= columns
 
     if await conn.run_sync(_old):
         await conn.execute(text("DROP TABLE emoji_groups"))
         log.warning(
-            "Schema upgrade: rebuilt emoji_groups for the category and type "
-            "columns. Its rows are rewritten from the content files on this "
-            "same boot."
+            "Schema upgrade: rebuilt emoji_groups to match the model. Its "
+            "rows are rewritten from the content files on this same boot."
         )
 
 

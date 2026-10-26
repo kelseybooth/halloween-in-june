@@ -307,6 +307,7 @@ def _rows_for(parsed: Content) -> dict[str, list[dict]]:
                 "type": e.type,
                 "drawable": e.drawable,
                 "excluded": e.excluded,
+                "same_as": e.same_as,
             }
             for e in parsed.emoji_groups
         ],

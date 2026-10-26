@@ -74,9 +74,23 @@ MAX_REACTIONS = 20
 NON_GAME_CATEGORIES = frozenset({"Misc", "Cat", "Bot"})
 
 # The written opening week, by CLDR short name, out of the module that
-# validates it. Counted by rows in `craving_days` rather than by the
-# calendar, so a day nobody plays is not spent: the script is the first five
-# cravings this server draws, whenever they happen.
+# validates it.
+#
+# **Indexed by wins, not by days.** A written craving stays up until
+# somebody finds it, however many days that takes - so a server that opens
+# on a Friday and goes quiet until Tuesday is still looking for the mouse
+# on Tuesday. Only once it is found does the cut of meat come up.
+#
+# The reason is that these five are the game teaching itself. A player who
+# has never seen the ladder work needs to see one craving found; shuffling
+# them past at midnight would mean a quiet server burning the written week
+# without anybody playing it, and arriving at the random draw never having
+# had a win.
+#
+# **The five only.** After them the craving rolls at midnight regardless,
+# because a random draw can be genuinely hard - a type with thirty members,
+# or a category line the writers and the players read differently - and a
+# game that cannot move past a bad day is worse than one that forgets it.
 SCRIPTED_CRAVINGS = content_module.SCRIPTED_CRAVINGS
 
 POINTS_SETTING = "craving_points"
@@ -149,6 +163,13 @@ async def entry(emoji: str) -> database.EmojiGroup | None:
         )
 
 
+def _canonical(row: database.EmojiGroup | None) -> str | None:
+    """What an emoji answers for: itself, unless the file says otherwise."""
+    if row is None:
+        return None
+    return row.same_as or row.emoji
+
+
 async def category_of(emoji: str) -> str | None:
     row = await entry(emoji)
     return row.category if row else None
@@ -217,16 +238,29 @@ async def _pool() -> list[str]:
 
 
 async def _scripted(session, guild_id: int) -> str | None:
-    """The opening week's craving, if this server is still inside it."""
-    drawn = await session.scalar(
+    """The opening week's craving, if this server is still inside it.
+
+    Counted in cravings *found*, which is what makes a written one stick.
+    A day that ends unsolved leaves a row with no `found_by`, the count
+    does not move, and tomorrow draws the same emoji again.
+
+    Counting found rows rather than tracking an index is what makes this
+    survive a reset: clearing `craving_days` puts a server back at the
+    mouse, which is what a reset should do. It also cannot drift, because
+    there is no second place the position is written down.
+    """
+    found = await session.scalar(
         select(database.func.count())
         .select_from(database.CravingDay)
-        .where(database.CravingDay.guild_id == guild_id)
+        .where(
+            database.CravingDay.guild_id == guild_id,
+            database.CravingDay.found_by.is_not(None),
+        )
     )
-    if drawn is None or drawn >= len(SCRIPTED_CRAVINGS):
+    if found is None or found >= len(SCRIPTED_CRAVINGS):
         return None
 
-    wanted = SCRIPTED_CRAVINGS[drawn]
+    wanted = SCRIPTED_CRAVINGS[found]
     return await session.scalar(
         select(database.EmojiGroup.emoji).where(
             database.EmojiGroup.name == wanted,
@@ -475,7 +509,13 @@ async def judge(
     if row is None or row.category in NON_GAME_CATEGORIES:
         return Guess(outcome=GREETING, craving=craving)
 
-    if guessed == craving:
+    wanted = await entry(craving)
+
+    # **The 🐭 and the 🐁 are one animal.** Compared through the alias on
+    # both sides rather than by emoji, because to a player the face of the
+    # thing the cat wants *is* the thing the cat wants, and a 👀 saying
+    # "right type, wrong emoji" reads as the game being broken.
+    if _canonical(row) == _canonical(wanted):
         first = await _mark_found(guild_id, user_id, day)
         scored = await credit(guild_id, user_id, day)
         points, score = 0, None
@@ -496,7 +536,6 @@ async def judge(
             score_after=score,
         )
 
-    wanted = await entry(craving)
     if wanted is None or row.category != wanted.category:
         return Guess(outcome=WRONG_CATEGORY, craving=craving)
     if row.type != wanted.type:

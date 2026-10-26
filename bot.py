@@ -1565,8 +1565,17 @@ async def advance_game(interaction: discord.Interaction, confirm: bool = False) 
         )
         return
 
-    target = current + 1
-    if target > resolve.LAST_PLAYABLE_DROP:
+    # **The next drop the files define, not one more.** The drops are
+    # numbered in tens above 3, so adding one lands between them and an
+    # admin on drop 3 could never reach drop 10.
+    try:
+        target = await resolve.next_drop_after(current)
+    except SQLAlchemyError:
+        log.exception("Could not read the drop calendar in %s", guild.id)
+        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+        return
+
+    if target is None or target > resolve.LAST_PLAYABLE_DROP:
         await interaction.followup.send(
             f"Drop {current} is the last one built. There is nothing to "
             "advance into yet.",

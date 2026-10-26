@@ -47,7 +47,9 @@ CRAVABLE = ("Food", "Prey")
 # the writers paste in a fresh catalogue.
 NEW_IN_THIS_UNICODE = "\N{CIRCLED ASTERISK OPERATOR}"
 
-GROUP_COLUMNS = ("emoji", "code", "name", "category", "type", "drawable", "excluded")
+GROUP_COLUMNS = (
+    "emoji", "code", "name", "category", "type", "drawable", "excluded", "same_as"
+)
 REACTION_COLUMNS = ("outcome", "progression", "emoji", "code", "meaning", "when")
 
 # The catalogue's Type is display text the writers own; the game needs a
@@ -80,9 +82,40 @@ def read_catalogue() -> list[dict[str, str]]:
 
 
 def is_drawable(row: dict[str, str]) -> bool:
-    return row["Category"] in CRAVABLE and not row["CLDR short name"].startswith(
-        NEW_IN_THIS_UNICODE
+    """Whether the cat can want this emoji.
+
+    An alias is not drawable even though guessing it wins: the 🐭 and the
+    🐁 are one craving, so putting both in the pool would make the mouse
+    twice as likely as the rat and give the cat two different ways to want
+    the same thing.
+    """
+    return (
+        row["Category"] in CRAVABLE
+        and not row["CLDR short name"].startswith(NEW_IN_THIS_UNICODE)
+        and not row.get("Same As", "").strip()
     )
+
+
+def canonical_emoji(catalogue: list[dict[str, str]]) -> dict[str, str]:
+    """Each alias's emoji, resolved from the code the writers typed.
+
+    The catalogue names the pair by code because a code survives a
+    spreadsheet and a paste; the game compares emoji, so the resolution
+    happens here rather than at every guess.
+    """
+    by_code = {row["code"]: row["emoji"] for row in catalogue}
+    resolved = {}
+    for row in catalogue:
+        wanted = row.get("Same As", "").strip()
+        if not wanted:
+            continue
+        if wanted not in by_code:
+            raise Stale(
+                f"{row['CLDR short name']} is marked the same as {wanted}, which "
+                f"is not a code in the catalogue"
+            )
+        resolved[row["code"]] = by_code[wanted]
+    return resolved
 
 
 def group_rows(catalogue: list[dict[str, str]]) -> list[tuple[str, ...]]:
@@ -92,6 +125,7 @@ def group_rows(catalogue: list[dict[str, str]]) -> list[tuple[str, ...]]:
     is kept because a diff against the previous export is how a writer checks
     their own change, and a re-sort would make every row look edited.
     """
+    same_as = canonical_emoji(catalogue)
     return [
         (
             row["emoji"],
@@ -101,6 +135,7 @@ def group_rows(catalogue: list[dict[str, str]]) -> list[tuple[str, ...]]:
             row["Type"],
             yes_no(is_drawable(row)),
             yes_no(row["Game Exclusion"].strip().upper() == "TRUE"),
+            same_as.get(row["code"], ""),
         )
         for row in catalogue
     ]
