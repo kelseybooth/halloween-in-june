@@ -175,6 +175,40 @@ async def test_the_script_is_counted_in_draws_not_in_days(server):
     assert await craving.craving_for(GUILD_A, far) == CUT_OF_MEAT
 
 
+async def test_a_mid_day_advance_spends_day_one_if_anybody_plays(server):
+    """**Asked and answered, 26 October: left as it is.**
+
+    The craving is drawn on first use, so advancing to drop 3 at three in
+    the afternoon makes that afternoon day one for anybody who reacts
+    before Pacific midnight - a nine-hour day one rather than a whole one.
+
+    The alternative was to hold the game until the next midnight so that
+    all five written cravings get full days. It was not taken: it costs a
+    read of when the drop arrived, and it gives an admin who has just
+    advanced the drop a window where the game is on and the bot looks
+    dead, which is a worse thing to debug than a short first day.
+
+    The operational answer is to advance the drop shortly after midnight,
+    which costs nothing.
+    """
+    await resolve.set_current_drop(GUILD_A, 3)
+
+    assert await craving.craving_for(GUILD_A, TODAY) == MOUSE
+    assert await craving.craving_for(GUILD_A, TODAY + timedelta(days=1)) == CUT_OF_MEAT
+
+
+async def test_a_mid_day_advance_nobody_plays_costs_nothing(server):
+    """The other half of the same decision, and what makes it tolerable.
+
+    Nothing is drawn until somebody reacts, so an evening where the drop
+    lands and nobody is about does not spend the mouse. The short day one
+    only happens if somebody is there to have it.
+    """
+    await resolve.set_current_drop(GUILD_A, 3)
+
+    assert await craving.craving_for(GUILD_A, TODAY + timedelta(days=1)) == MOUSE
+
+
 async def test_the_draw_takes_over_after_the_script(server):
     for n in range(len(craving.SCRIPTED_CRAVINGS)):
         await craving.craving_for(GUILD_A, TODAY + timedelta(days=n))
