@@ -184,7 +184,7 @@ async def test_the_floor_is_still_a_floor(db):
 
 
 async def test_a_new_player_starts_at_nothing(db):
-    """The cat has no opinion of somebody it has never met, and every
+    """The cat has no opinion of somebody she has never met, and every
     point after this one was earned."""
     await db.increment_pet_count(ALICE, GUILD_A)
 

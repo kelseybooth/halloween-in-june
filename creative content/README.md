@@ -78,6 +78,18 @@ special case in code. And "not in the file" no longer means "nothing to do with
 food": a car is a Misc row, and the game checks the category first so that a car
 and a custom emote get the same friendly 🐱.
 
+## The cat is "she"
+
+Female pronouns throughout, never *it*. She is a character, and the one
+place that slips is a line written about her in the third person where the
+nearest noun happens to be a thing — *the cat puts a paw on the toy and
+leaves **it** there* is fine, *the cat washes **its** paw* is not.
+
+`test_the_cat_is_never_an_it` checks every string in these files on each
+run. It does not look for "it", which is unavoidable in prose about
+objects; it looks for "it" doing something only a cat does — purring,
+pouncing, winding between ankles — or owning a tail, whiskers or paws.
+
 Writers edit `room_text.tsv`, `thing_text.tsv` and `defaults.tsv`.
 `rooms.tsv` and `things.tsv` carry game rules — changing those is a design decision.
 
