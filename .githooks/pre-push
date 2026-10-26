@@ -54,4 +54,15 @@ if ! "$PYTHON" load_content.py --check; then
     exit 1
 fi
 
+# The two emoji TSVs are built from the writers' catalogue, so a hand-edit
+# to either one survives until the next export and then vanishes. This is
+# the only moment anybody finds out, because the stale file still loads.
+echo "pre-push: checking the generated emoji files..."
+if ! "$PYTHON" generate_emoji_files.py --check; then
+    echo
+    echo "pre-push: the emoji files do not match the catalogue - push aborted."
+    echo "          Regenerate them, or push anyway with: git push --no-verify"
+    exit 1
+fi
+
 echo "pre-push: content is valid. The suite itself runs in CI."

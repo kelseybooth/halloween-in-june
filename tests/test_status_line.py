@@ -19,6 +19,7 @@ from fake_discord import FakeChannel, FakeGuild, FakeInteraction, FakeMember
 import bot
 import content as content_module
 import content_loader
+import craving
 import database
 import resolve
 import world
@@ -30,6 +31,7 @@ BOTH = (
     "Right now, the cat is watching you expectantly with hunger in her eyes."
 )
 CROWDED = "You've pet the cat a lot recently."
+CRAVING = "She's craving something very specific today."
 
 # A server the bot is merely a member of. The fixtures start both of
 # conftest's guilds, so this one has to be nobody's.
@@ -58,8 +60,17 @@ async def status(server, who=ALICE):
     interaction = FakeInteraction(who, GUILD_A, guild=guild, channel=halloween)
     await bot.stats.callback(interaction, None)
     body = interaction.sent[-1][1]["embed"].description.split("\n")
-    return next((line for line in body if line in
-                 (EXPECTANT, HUNGRY, BOTH, CROWDED, f"{HUNGRY} {CROWDED}")), None)
+    wanted = (
+        EXPECTANT, HUNGRY, BOTH, CROWDED,
+        f"{HUNGRY} {CROWDED}",
+        CRAVING,
+        f"{EXPECTANT} {CRAVING}",
+        f"{HUNGRY} {CRAVING}",
+        f"{BOTH} {CRAVING}",
+        f"{CROWDED} {CRAVING}",
+        f"{HUNGRY} {CROWDED} {CRAVING}",
+    )
+    return next((line for line in body if line in wanted), None)
 
 
 async def pet(server, times, who=ALICE):
@@ -69,9 +80,34 @@ async def pet(server, times, who=ALICE):
         await bot.pet.callback(interaction)
 
 
+# **The literal drop, not `world.FEEDING_FROM_DROP`.** Written through
+# the constant, every test below agreed with whatever the constant said,
+# so the gate sitting seven drops early was invisible here: the house
+# moved to 10 on 26 October and the cans went with it, while this said
+# 3 and passed.
+FEEDING_DROP = 10
+
+
 async def feeding_time(db):
-    """Drop 3, where there is food in the game."""
-    await resolve.set_current_drop(GUILD_A, world.FEEDING_FROM_DROP)
+    """Drop 10, the house, where there is food in the game."""
+    await resolve.set_current_drop(GUILD_A, FEEDING_DROP)
+
+
+def test_the_gate_is_the_drop_the_cans_arrive_on():
+    """The constant and the content have to name the same drop.
+
+    `/stats` promising a hungry cat is a promise that `/use` on a can
+    will answer, so the gate belongs on the drop the cans are in -
+    read out of `things.tsv` rather than restated here, because the
+    writers move them and nothing would tell us.
+    """
+    cans = min(
+        thing.since_drop
+        for thing in content_module.load_files().things
+        if thing.thing_id in world.CAT_FOOD
+    )
+
+    assert world.FEEDING_FROM_DROP == FEEDING_DROP == cans
 
 
 # --------------------------------------------------------------------------
@@ -86,7 +122,7 @@ async def test_expectant_alone(server):
 
 async def test_nothing_at_all(server):
     """Exactly even odds is neither expectant nor crowded, and before
-    drop 3 nobody is hungry - so there is no line, and a standing
+    drop 10 nobody is hungry - so there is no line, and a standing
     sentence that said so would be worse than silence."""
     await pet(server, 3)
 
@@ -172,14 +208,28 @@ def test_the_warning_and_the_standing_condition_are_different_questions():
 
 
 async def test_nobody_is_hungry_before_there_is_food(server):
-    """**The gate that matters.** Every player at drops 0 to 2 has
-    never been fed, so without it `/stats` tells all of them the cat is
-    hungry in a game with nothing to feed her with."""
-    for drop in (0, 1, 2):
+    """**The gate that matters.** A player on any drop before the house
+    has never been fed, so without it `/stats` tells all of them the cat
+    is hungry in a game with nothing to feed her with.
+
+    **Every earlier drop, not a hand-written three.** This read `(0, 1, 2)`
+    and then drop 3, which was the whole of the gate when 3 was the house.
+    The renumbering put five drops in that gap and the list did not grow
+    with it, so it would have gone on passing while drops 3 to 9 all
+    promised dinner.
+    """
+    earlier = sorted(
+        drop.drop_id
+        for drop in content_module.load_files().drops
+        if drop.drop_id < FEEDING_DROP
+    )
+    assert earlier, "a gate with nothing before it is not a gate"
+
+    for drop in earlier:
         await resolve.set_current_drop(GUILD_A, drop)
         assert not await bot._is_hungry(GUILD_A, ALICE), drop
 
-    await resolve.set_current_drop(GUILD_A, 3)
+    await resolve.set_current_drop(GUILD_A, FEEDING_DROP)
     assert await bot._is_hungry(GUILD_A, ALICE)
 
 
@@ -271,3 +321,90 @@ async def _embed(server, who=ALICE):
     interaction = FakeInteraction(who, GUILD_A, guild=guild, channel=halloween)
     await bot.stats.callback(interaction, None)
     return interaction.sent[-1][1]["embed"]
+
+
+# --------------------------------------------------------------------------
+# The craving hint
+#
+# The only place the craving game is ever mentioned. Nothing announces it,
+# so every one of these conditions is about not pointing at a game that is
+# not running - or at one the player has already finished for today.
+# --------------------------------------------------------------------------
+
+
+async def craving_time(who=ALICE):
+    """Drop 3, and a player who has got as far as *Purrsuasive*."""
+    await resolve.set_current_drop(GUILD_A, world.CRAVING_FROM_DROP)
+    await database.award_player_achievement(GUILD_A, who, bot.PURRSUASIVE)
+
+
+def test_the_gating_achievement_is_one_that_exists():
+    """An id that matches nothing would read as a player who has not
+    earned it - so the hint would never appear, on any server, and
+    nothing would say why."""
+    assert bot.PURRSUASIVE in content_module.load_files().achievement_ids
+
+
+async def test_the_hint_appears_once_the_player_has_purrsuaded_her(server):
+    await craving_time()
+
+    assert await status(server) == f"{EXPECTANT} {CRAVING}"
+
+
+async def test_it_comes_last(server):
+    """After the relationship description and after any expectant, hungry
+    or crowded line. It is the least urgent thing on the card."""
+    await craving_time()
+    await pet(server, 5)
+
+    assert await status(server) == f"{CROWDED} {CRAVING}"
+
+
+async def test_it_can_be_the_whole_line(server):
+    """Exactly even odds is neither expectant nor crowded, and there is no
+    food in the game at drop 3 - so without this the craving hint would be
+    a sentence with nothing to append itself to."""
+    await craving_time()
+    await pet(server, 3)
+
+    assert await status(server) == CRAVING
+
+
+async def test_a_player_who_has_not_purrsuaded_her_is_not_told(server):
+    """**The pacing gate.** A player on their first day already has a cat,
+    a bed and an open quest to read; a fourth thing to wonder about is the
+    overwhelm the testers reported."""
+    await resolve.set_current_drop(GUILD_A, world.CRAVING_FROM_DROP)
+
+    assert await status(server) == EXPECTANT
+
+
+async def test_nothing_is_said_before_the_craving_drop(server):
+    """At drop 2 no craving is drawn at all, so the line would be a clue
+    pointing at nothing."""
+    await resolve.set_current_drop(GUILD_A, 2)
+    await database.award_player_achievement(GUILD_A, ALICE, bot.PURRSUASIVE)
+
+    assert await status(server) == EXPECTANT
+
+
+async def test_it_vanishes_once_the_player_finds_it(server):
+    """The 😻 and the award have both said so already. A standing line
+    repeating it would read as a second craving to go and find."""
+    await craving_time()
+    today = await database.server_today(GUILD_A)
+    await craving.judge(GUILD_A, ALICE, await craving.craving_for(GUILD_A, today), today)
+
+    assert await status(server) == EXPECTANT
+
+
+async def test_somebody_elses_win_does_not_take_the_hint_away(server, db):
+    """Per player throughout. One player solving it ends their day, not
+    everybody's - the whole point is that they can tell each other."""
+    await craving_time()
+    await craving_time(who=BOB)
+    await db.ensure_user_exists(BOB, GUILD_A)
+    today = await database.server_today(GUILD_A)
+    await craving.judge(GUILD_A, BOB, await craving.craving_for(GUILD_A, today), today)
+
+    assert CRAVING in (await status(server) or "")

@@ -26,6 +26,11 @@ CONTENT_TABLES = {
     "defaults",
     "drops",
     "restocks",
+    # The craving game's two: which emoji the game files where, and which
+    # face the bot answers each outcome with. Global like all content, so
+    # a writer swapping a reaction emoji is a reload rather than a release.
+    "emoji_groups",
+    "craving_reactions",
 }
 
 WORLD_TABLES = {
@@ -36,6 +41,12 @@ WORLD_TABLES = {
     "server_config",
     "thing_uses",
     "server_restocks",
+    # The craving game's three. All per server, because the craving is one
+    # per server on purpose - the whole point is that players can tell
+    # each other.
+    "craving_days",
+    "craving_messages",
+    "craving_tally",
 }
 
 
@@ -577,3 +588,47 @@ def test_the_alter_list_names_real_columns():
         model = database.Base.metadata.tables.get(table)
         assert model is not None, f"{table} is not a table"
         assert column in model.c, f"{table}.{column} is not on the model"
+
+
+# --------------------------------------------------------------------------
+# The craving game
+# --------------------------------------------------------------------------
+
+
+async def test_a_message_remembers_which_day_its_face_is_from(db):
+    """**Without the day, yesterday's 😻 is a lie.** The craving rolls over
+    at midnight and the reactions do not, so the stored outcome has to say
+    which answer it was about."""
+    assert {"day", "outcome"} <= await columns_of(db, "craving_messages")
+
+
+async def test_a_message_is_keyed_by_guild_and_message(db):
+    async with db._engine.connect() as conn:
+        key = await conn.run_sync(
+            lambda sync: inspect(sync).get_pk_constraint("craving_messages")
+        )
+
+    assert set(key["constrained_columns"]) == {"guild_id", "message_id"}
+
+
+async def test_nothing_counts_reaction_slots(db):
+    """Deliberately absent. A player who also clicked the bot's emoji keeps
+    it on the message after the bot removes its own, so any count stored
+    here would drift from Discord's within a day. The live list is read
+    every time instead."""
+    columns = await columns_of(db, "craving_messages")
+
+    assert not any("react" in name or "slot" in name or "count" in name
+                   for name in columns)
+
+
+async def test_the_ladder_can_have_a_rung_without_a_rank(db):
+    """`out_of_guesses` is not a rung - it is the end of a message - so its
+    progression is null rather than a number that could outrank a win."""
+    async with db._engine.connect() as conn:
+        columns = await conn.run_sync(
+            lambda sync: inspect(sync).get_columns("craving_reactions")
+        )
+    progression = next(c for c in columns if c["name"] == "progression")
+
+    assert progression["nullable"]

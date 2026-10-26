@@ -453,6 +453,50 @@ async def test_a_refused_advance_registers_nothing(started):
 # --------------------------------------------------------------------------
 
 
+async def test_the_next_drop_is_the_next_one_defined(db):
+    """**Not `current + 1`.** The drops stopped being consecutive on 26
+    October - 0, 1, 2, 3, then 10, 20, 30, 40, 50, in tens to leave room
+    between them. Adding one lands between them, so an admin on drop 3
+    could never reach drop 10 and the refusal would say the game had run
+    out of built drops while the next one sat there in the file.
+    """
+    await content_loader.load_content(content_module.load_files())
+
+    assert await resolve.next_drop_after(2) == 3
+    assert await resolve.next_drop_after(3) == 10
+    assert await resolve.next_drop_after(10) == 20
+    assert await resolve.next_drop_after(50) is None
+
+
+async def test_it_skips_the_gap_when_the_ceiling_allows(started, monkeypatch):
+    """Walked with the ceiling lifted, because the gap is above it today.
+
+    This is the test that would have caught the bug: with `current + 1`
+    the server lands on drop 4, which no file defines, and the advance
+    fails with `UnknownDrop` instead of opening the house.
+    """
+    monkeypatch.setattr(resolve, "LAST_PLAYABLE_DROP", 50)
+    await start(started)
+    await resolve.set_current_drop(GUILD_A, 3)
+
+    await advance(started)
+
+    assert await resolve.current_drop(GUILD_A) == 10
+
+
+async def test_it_names_the_drop_it_would_open(started, monkeypatch):
+    """The confirmation says *which* drop, so an admin reads the gap
+    rather than discovering it."""
+    monkeypatch.setattr(resolve, "LAST_PLAYABLE_DROP", 50)
+    await start(started)
+    await resolve.set_current_drop(GUILD_A, 3)
+
+    interaction = await advance(started, confirm=False)
+
+    assert "drop 10" in interaction.reply
+    assert "The Door" in interaction.reply
+
+
 async def test_every_built_drop_is_reachable_by_advancing(started):
     """Walk a server up from nothing, the way an admin does.
 

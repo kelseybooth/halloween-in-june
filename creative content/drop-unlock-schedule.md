@@ -2,6 +2,17 @@
 
 *Refreshed 19 October from `drop-unlock-schedule.md`, the version delivered with the Phase 3a work order. The table, the mechanics and the achievement copy are current. The notes for drops 1 and 2, further down, still predate the bed-and-toy swap and are marked where they start.*
 
+> **Drop numbers changed 26 October.** Drops 0, 1 and 2 keep their numbers. Everything after them is now numbered in tens, leaving room for drops in between, and a new drop 3 holds the craving game. This document still uses the old numbers, so translate as you read:
+>
+> - Old **3**, The Door (first part of the Entryway) → **10**
+> - Old **4**, The Rest of the Entryway → **20**
+> - Old **5**, Downstairs → **30**
+> - Old **6**, Upstairs → **40**
+> - Old **7**, The Secret Library → **50**
+> - New: **3**, the craving game
+>
+> The content files use the new numbers, and `drops.tsv` is the authority on which drops exist.
+
 A drop-by-drop view of what exists for players at each stage. Everything here is a proposal except drop 0, which follows the shape already agreed: cat only, `/pet` and `/stats` and `/help`, no rooms.
 
 **Recalibrated to carry the cat-relationship drops.** Cat toys and cat beds now occupy drops 1 and 2, and everything from the house onward shifts by two. The pre-house phase is no longer a holding pattern before the real game — it is a relationship with one character, built over three drops, which is a better use of the week than waiting.
@@ -21,7 +32,7 @@ Two rules the schedule is built on:
 | --- | --- | --- | --- | --- | --- | --- |
 | **0** | **The Cat.** A Halloween channel with a cat in it. No house, no rooms, no mention of either. | Player: `/pet`, `/stats`, `/help` · Admin: `/start-game <channel>`, `/advance-game`, `/admin_config` | Eunoia only. The daily craving **is not built** and drop 0 ships without it; it belongs here when it exists. | None | What this is · Petting · Your stats | Teach that slash commands exist, across a surface of three. Make the first achievement unmissable. Establish the cat as the voice of the game. |
 | **1** | **A Place to Sleep.** A cat bed appears in the channel. | Player: `/look`, `/use` | `cat_bed` — one, shared, usable but not takeable | The channel itself becomes lookable | — | Teach two verbs on one object that always obeys, in a place with nothing else to confuse it. Give the relationship a second lever, and a reason to come back tomorrow. |
-| **2** | **Something to Play With.** Toys start arriving, and then things nobody in this channel owns. The cat is not easily impressed. | Player: `/take`, `/inventory` | `cat_toy`, maintained at two in the channel; then the household trickle: knit bootie, wooden rattle, photograph, brass key | None | — | Teach carrying things, on an object worth carrying. Seed the existence of a house without naming it — a baby's bootie and a brass key raise a question drop 3 answers. |
+| **2** | **Something to Play With.** Toys start arriving, and then things nobody in this channel owns. The cat is not easily impressed. | Player: `/take`, `/inventory` | `cat_toy`, maintained at two in the channel. The household trickle was cut on 21 October, so drop 2 is toys only | None | — | Teach carrying things, on an object worth carrying. Seed the existence of a house without naming it — a baby's bootie and a brass key raise a question drop 3 answers. |
 | **3** | **The Door.** The cat leads players to a house and into one room. One quest, tightly scoped. | Player: `/enter`, `/look`, `/go`, `/take` | Entryway subset only: coat rack, the salmon cat-food stash behind it, front door, ceiling | Entryway (partial prose) | Looking · Moving · Taking · The house | First room, one quest, highest possible reward-to-action ratio. Teach that descriptions hide findable things. |
 | **4** | **The Rest of the Entryway.** The room fills in. Two or three more quests, same room. | Player: `/drop` | Remaining Entryway things: mirror, bulletin board, Amazon box, Alexa, stroller, shoes, booties, intercom, lumber, the ruined staircase | Entryway (full prose) | Dropping things · The noticeboard | Introduce David properly, with exposition, via the Alexa quest. Start the staircase as a group objective that gates drop 6. |
 | **5** | **Downstairs.** The ground floor opens. | None new. `/stats` may gain server-wide progress | Everything in the four ground-floor rooms, including four cat-food stashes and the cake box | Dining Room, Kitchen, Living Room, Courtyard | The house (expanded) · Cat food · Achievements | Open the map. Start the cat-food economy. Bring most of the achievements into reach. |
@@ -351,6 +362,8 @@ Two consequences worth noting. **The channel needs no `room_text` at all**, whic
 
 The bed comes first and the household trickle follows: a knit bootie, a wooden rattle, a photograph, a brass key. Every one already exists in `things.tsv`; nothing is authored, things are only placed differently.
 
+**Cut 21 October:** drop 2 ships the toys only, and the trickle above does not happen.
+
 **The bed is the better bridge to the house than any of them.** A cat bed implies somewhere the cat sleeps, and the drop's shape is a player accumulating evidence of a home without anyone mentioning one. A brass key and a baby's bootie then raise a question that drop 3 answers.
 
 **Option:** if the cat also brings all five cat-food flavours here, *Charcuterie Board* becomes reachable before the house. Against it: the gourmet can is canonically hidden in the kitchen cake box, so bringing it early spends that reveal.
@@ -395,15 +408,6 @@ Already fully specified in Phase 2e, including the four custom departure and arr
 **Random appearance is already built.** `restocks.tsv` carries `thing_id`, `placement`, `amount`, `times_per_day`, `first_day`, `every_n_days`, `window_start`, `window_end` and `config_key`. Toys and beds are restock rows pointing at the channel. No new scheduling code, and the spawn rate becomes an admin-tunable number on day one rather than a deploy.
 
 **The meter change touches more than the meter.** Starting at 0 inverts the two petting-achievement boundaries, retires the Story Bible's "a perfect relationship is 100", changes the `/stats` display from a bar to a tier, makes the decay function the real balance lever, and sends the 2f pet blurbs back for a voice pass. None of it is expensive; all of it is easy to miss. The Achievement Trigger Spec in particular carries a dated decision whose stated rationale is now false, so it needs editing rather than merely re-reading.
-
-> **Settled and built since this was written; left here as the
-> reasoning that led there.** Four of the five below turned out to have
-> homes already - the bed's fluff date in `thing_uses.last_used_at`
-> once the cooldown stayed rolling, the toy's cooldown in the same
-> column, the feed count in `use_count`, and the cat-interaction date
-> on the player row. The fifth, the toy ramp, is `users.toy_ramp`.
-> Columns, not a key-value table; the full reasoning is in the Phase 3a
-> work order under section 12.
 
 **Five new pieces of per-player state now, and none is a boolean:** the toy ramp counter, the toy cooldown expiry, the last bed fluff, the last cat-interaction date, and the feed count. That is past the point where "a few columns on the player row" is obviously right — three was proportionate, five is the shape of a small per-player key-value table, and a sixth is coming the moment anything else is counted. Worth deciding now rather than after the fifth column is added.
 

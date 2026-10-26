@@ -59,7 +59,7 @@ NO_GAME = None
 # refused to reach the drop that had just been built and the only way
 # in was `/qa-drop` on a test server. `test_every_built_drop_is
 # _reachable` is what stops that happening again.
-LAST_PLAYABLE_DROP = 2
+LAST_PLAYABLE_DROP = 3
 
 
 class UnknownDrop(Exception):
@@ -106,6 +106,19 @@ async def defined_drop_ids() -> set[int]:
     async with session_factory() as session:
         rows = await session.execute(select(database.Drop.drop_id))
     return {row[0] for row in rows}
+
+
+async def next_drop_after(drop_id: int) -> int | None:
+    """The drop an admin advancing from `drop_id` would open, or None.
+
+    **The next one the files define, not `drop_id + 1`.** The drops stopped
+    being consecutive on 26 October: 0, 1, 2, 3, then 10, 20, 30, 40, 50,
+    numbered in tens to leave room between them. Adding one lands on a
+    drop that does not exist, so `/advance-game` from drop 3 would refuse
+    to open the very next drop there is.
+    """
+    later = [d for d in await defined_drop_ids() if d > drop_id]
+    return min(later) if later else None
 
 
 async def drop_name(drop_id: int) -> str | None:

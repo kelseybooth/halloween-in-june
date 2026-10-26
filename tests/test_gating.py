@@ -59,10 +59,33 @@ def test_the_drop_one_verbs_are_absent_at_drop_zero_and_present_at_one(verb):
 @pytest.mark.parametrize("verb", ["take", "drop", "inventory", "enter"])
 def test_the_out_of_scope_verbs_are_absent_from_both_poc_drops(verb):
     """The scope table's own list, and the gating has to prove it. Present
-    at drop 3, so this is a gate rather than a bot with no commands."""
+    once the house opens, so this is a gate rather than a bot with no
+    commands."""
     assert verb not in gating.commands_for(0)
     assert verb not in gating.commands_for(1)
     assert verb in gating.commands_for(HOUSE_DROP)
+
+
+def test_the_craving_drop_adds_no_command():
+    """**Drop 3 is played with reactions.** It has no entry in the table
+    at all, and this is what says that is deliberate rather than a drop
+    somebody forgot: a server there sees exactly what drop 2 showed it.
+
+    Written as an equality rather than as "no `/enter`", because the way
+    this goes wrong is a later drop's set leaking down rather than one
+    verb arriving early.
+    """
+    assert gating.commands_for(3) == gating.commands_for(2)
+    assert "enter" not in gating.commands_for(3)
+
+
+def test_the_house_waits_for_the_drop_it_opens_on():
+    """The 26 October renumbering moved the house from 3 to 10. Keyed at
+    3, a server on the craving drop would have had `/enter` and nine rooms
+    that do not exist yet."""
+    for drop in (3, 4, 9):
+        assert "enter" not in gating.commands_for(drop)
+    assert "enter" in gating.commands_for(HOUSE_DROP)
 
 
 @pytest.mark.parametrize("name", ["initialize-haunted-house"])

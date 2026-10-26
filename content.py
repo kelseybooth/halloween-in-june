@@ -33,6 +33,7 @@ FILES = {
     "drops": "drops.tsv",
     "restocks": "restocks.tsv",
     "emoji_groups": "emoji_groups.tsv",
+    "craving_reactions": "craving_reactions.tsv",
     "achievements": "achievements.tsv",
     "art": "art.tsv",
 }
@@ -84,6 +85,41 @@ KNOWN_DROP_EVENTS: set[str] = set()
 # game: a player reacting with one is reacting with the bot's own answer, and
 # judging it would let them read the ladder backwards.
 BOT_CATEGORY = "Bot"
+
+# What a guess can earn, best last. **The game branches on these
+# strings**, so they are the game's vocabulary rather than the writers' - the
+# emoji beside each one in `craving_reactions.tsv` is theirs to change, and
+# the slug is not. Declared here because this is the module that checks the
+# file, and `craving` imports it rather than keeping a second copy that could
+# drift from the one the validator enforces.
+#
+# `OUT_OF_GUESSES` is deliberately outside `CRAVING_LADDER`. It has no rank:
+# a message that has run out of reaction slots is not a better answer than
+# a win, it is the end of the message.
+#
+# `MESSAGE_FULL` is not an answer at all. It is padding: the bot puts it up
+# only when the ❌ failed to take the twentieth slot, which happens when a
+# player had already reacted with the ❌ themselves and the bot's own add
+# merely joined their reaction. Without it the message would sit at
+# nineteen with the ❌ showing and a slot still free - and the one guess
+# that fits in that slot is the one the bot has no room left to answer.
+#
+# **Optional, and the only outcome that is.** A file without it loads and
+# plays; the bot simply cannot close that last gap.
+CRAVING_LADDER = ("greeting", "wrong_category", "right_category", "right_type", "win")
+OUT_OF_GUESSES = "out_of_guesses"
+MESSAGE_FULL = "message_full"
+REQUIRED_CRAVING_OUTCOMES = CRAVING_LADDER + (OUT_OF_GUESSES,)
+CRAVING_OUTCOMES = REQUIRED_CRAVING_OUTCOMES + (MESSAGE_FULL,)
+
+# What the cat wants on the first five days a server plays, before the draw
+# takes over. **By CLDR short name, which is the catalogue's own column**, so
+# that a writer who renames or removes one of them gets a content error
+# instead of a game that quietly falls back to random on day one.
+#
+# Here rather than in `craving` because this is the module that validates it
+# and `craving` imports this one, not the other way round.
+SCRIPTED_CRAVINGS = ("mouse", "cut of meat", "broccoli", "fish", "egg")
 
 # Where a restock puts what it adds. `container` names one; `room` names one
 # room; `random` draws a slot from every room and every container at equal
@@ -288,6 +324,35 @@ class EmojiGroup:
     type: str
     drawable: bool
     excluded: bool
+    # The emoji this one answers for, or "" if it answers for itself. Two
+    # pairs today: the 🐭 is the 🐁 and the 🐰 is the 🐇. To a player those
+    # are one animal, and being told "right type, wrong emoji" for the
+    # face of the thing the cat wants reads as the game being broken.
+    same_as: str = ""
+
+
+@dataclass(frozen=True)
+class CravingReaction:
+    """One rung of the ladder: what the bot reacts with, and how good it is.
+
+    **In a file so the writers can swap a face without a release.** The
+    outcome slugs are the game's, and the code branches on them; the emoji
+    and the prose beside them are the writers'.
+
+    `progression` is what makes the ladder a ladder. Discord lets the bot put
+    each emoji on a message only once, so its reactions describe the message
+    rather than each guess: a message carries its best answer so far, and a
+    guess only changes it by beating that rank. `out_of_guesses` has no rank
+    at all - it is not a better answer, it is the end of the message - so it
+    is `None` rather than another rung.
+    """
+
+    outcome: str
+    progression: int | None
+    emoji: str
+    code: str
+    meaning: str
+    when: str
 
 
 @dataclass(frozen=True)
@@ -357,6 +422,7 @@ class Content:
     drops: list[Drop] = field(default_factory=list)
     restocks: list[Restock] = field(default_factory=list)
     emoji_groups: list[EmojiGroup] = field(default_factory=list)
+    craving_reactions: list[CravingReaction] = field(default_factory=list)
     achievements: list[Achievement] = field(default_factory=list)
     art: list[Art] = field(default_factory=list)
 
@@ -396,6 +462,10 @@ class Content:
     def craving_pool(self) -> list[EmojiGroup]:
         """The emoji a craving may be drawn from."""
         return [e for e in self.emoji_groups if e.drawable]
+
+    @property
+    def reaction_for_outcome(self) -> dict[str, CravingReaction]:
+        return {r.outcome: r for r in self.craving_reactions}
 
     @property
     def art_by_id(self) -> dict[str, Art]:
@@ -629,6 +699,28 @@ def load_files(directory: Path | None = None) -> Content:
                 type=_text(row.get("type")) or "",
                 drawable=_bool(row.get("drawable"), default=False),
                 excluded=_bool(row.get("excluded"), default=False),
+                same_as=normalise_emoji(row.get("same_as") or ""),
+            )
+        )
+
+    for row in _rows(
+        base / FILES["craving_reactions"], ("outcome", "emoji")
+    ):
+        outcome = _text(row.get("outcome"))
+        if not outcome:
+            continue
+        content.craving_reactions.append(
+            CravingReaction(
+                outcome=outcome,
+                # Blank is a real value here and not a missing one, so it
+                # cannot default to 0: zero would sort `out_of_guesses`
+                # below every rung and make it the thing a message falls
+                # back to rather than the thing that ends it.
+                progression=_int(row.get("progression"), default=None),
+                emoji=normalise_emoji(row.get("emoji") or ""),
+                code=_text(row.get("code")) or "",
+                meaning=_text(row.get("meaning")) or "",
+                when=_text(row.get("when")) or "",
             )
         )
 
@@ -707,6 +799,8 @@ def validate(content: Content) -> list[str]:
     problems += _check_public_lines_name_the_player(content)
     problems += _check_other_lines_are_not_second_person(content)
     problems += _check_emoji_groups(content)
+    problems += _check_craving_reactions(content)
+    problems += _check_scripted_cravings(content)
     problems += _check_achievements(content)
     problems += _check_quests(content)
     problems += _check_art(content)
@@ -1273,6 +1367,170 @@ def _check_emoji_groups(content: Content) -> list[str]:
         problems.append(
             "no emoji is drawable, so the daily craving could never be drawn"
         )
+    return problems + _check_emoji_aliases(content)
+
+
+def _check_emoji_aliases(content: Content) -> list[str]:
+    """An alias has to answer for something real, and answer for it fully.
+
+    All four of these load fine and go wrong only in play: a dangling
+    alias makes one emoji unguessable, a chain makes the answer depend on
+    which row is read first, a cross-type alias makes the 👀 lie about
+    what it narrowed to, and a drawable alias puts the same craving in
+    the pool twice under two faces.
+    """
+    problems = []
+    filed = {row.emoji: row for row in content.emoji_groups}
+
+    for row in content.emoji_groups:
+        if not row.same_as:
+            continue
+        target = filed.get(row.same_as)
+        if target is None:
+            problems.append(
+                f"emoji {row.emoji!r} is the same as {row.same_as!r}, which is "
+                "not in the file"
+            )
+            continue
+        if target.same_as:
+            problems.append(
+                f"emoji {row.emoji!r} is the same as {row.same_as!r}, which is "
+                "itself the same as something else; chains are not resolved"
+            )
+        if (row.category, row.type) != (target.category, target.type):
+            problems.append(
+                f"emoji {row.emoji!r} is the same as {row.same_as!r} but is "
+                f"filed under {row.category}/{row.type} rather than "
+                f"{target.category}/{target.type}, so the ladder would "
+                "disagree with itself about a guess that wins"
+            )
+        if row.drawable:
+            problems.append(
+                f"emoji {row.emoji!r} is drawable and is also the same as "
+                f"{row.same_as!r}, so the cat could want one craving two ways"
+            )
+        if not target.drawable:
+            problems.append(
+                f"emoji {row.emoji!r} answers for {row.same_as!r}, which the "
+                "cat can never want - so neither of them can ever win"
+            )
+    return problems
+
+
+def _check_craving_reactions(content: Content) -> list[str]:
+    """Every outcome present, each with its own emoji, and the ladder in
+    order.
+
+    Every one of these is a way the file can be wrong while still loading,
+    and each of them breaks the game silently rather than loudly: a missing
+    row makes one answer unreachable, a shared emoji makes two answers
+    indistinguishable, and a rank out of order makes a better guess refuse
+    to replace a worse one.
+    """
+    if not content.craving_reactions:
+        return []
+
+    problems = []
+    by_outcome = content.reaction_for_outcome
+
+    missing = [name for name in REQUIRED_CRAVING_OUTCOMES if name not in by_outcome]
+    if missing:
+        problems.append(
+            f"craving_reactions.tsv has no row for {', '.join(missing)}; the "
+            "bot would have nothing to answer that guess with"
+        )
+
+    unknown = sorted(set(by_outcome) - set(CRAVING_OUTCOMES))
+    if unknown:
+        problems.append(
+            f"craving_reactions.tsv names outcome(s) {', '.join(unknown)}, which "
+            "the game has no branch for"
+        )
+
+    seen: dict[str, str] = {}
+    for row in content.craving_reactions:
+        if not row.emoji:
+            problems.append(f"craving outcome {row.outcome} has no emoji to react with")
+        elif row.emoji in seen:
+            problems.append(
+                f"craving outcomes {seen[row.emoji]} and {row.outcome} both react "
+                f"with {row.emoji!r}, so the two answers would be indistinguishable"
+            )
+        else:
+            seen[row.emoji] = row.outcome
+
+    ranks = [
+        by_outcome[name].progression
+        for name in CRAVING_LADDER
+        if name in by_outcome
+    ]
+    if any(rank is None for rank in ranks):
+        problems.append(
+            "every rung of the ladder needs a progression; without one a guess "
+            "cannot be compared to the answer already on the message"
+        )
+    elif ranks != sorted(ranks) or len(set(ranks)) != len(ranks):
+        problems.append(
+            f"the craving ladder's progressions are {ranks}, which is not "
+            "increasing - a better guess would not replace a worse one"
+        )
+
+    for name in (OUT_OF_GUESSES, MESSAGE_FULL):
+        end = by_outcome.get(name)
+        if end is not None and end.progression is not None:
+            problems.append(
+                f"{name} has progression {end.progression}; it is the end of a "
+                "message rather than a rung, and a rank would let it outrank a win"
+            )
+
+    # All of them are in the catalogue as `Bot`, excluded from guessing.
+    # Without this a player could react with the bot's own 😻 and be told
+    # they were right, which is the ladder read backwards off the answers.
+    filed = {row.emoji: row for row in content.emoji_groups}
+    for row in content.craving_reactions:
+        entry = filed.get(row.emoji)
+        if entry is None:
+            problems.append(
+                f"the bot reacts with {row.emoji!r} for {row.outcome}, but the "
+                "emoji file has never heard of it"
+            )
+        elif not entry.excluded:
+            problems.append(
+                f"the bot reacts with {row.emoji!r} for {row.outcome}, but that "
+                "emoji is not excluded, so a player could guess with it"
+            )
+    return problems
+
+
+def _check_scripted_cravings(content: Content) -> list[str]:
+    """The written opening week has to name five emoji the cat can want.
+
+    A name that resolves to nothing, to two rows, or to one that is not
+    drawable is a day the game opens on something unwinnable or on a random
+    draw nobody asked for - and in every one of those cases the file still
+    loads, so nothing else would say so.
+    """
+    if not content.emoji_groups:
+        return []
+
+    problems = []
+    for name in SCRIPTED_CRAVINGS:
+        matches = [row for row in content.emoji_groups if row.name == name]
+        if not matches:
+            problems.append(
+                f"the opening week wants {name!r}, which is not a CLDR short "
+                "name in the emoji file"
+            )
+        elif len(matches) > 1:
+            problems.append(
+                f"the opening week wants {name!r}, and {len(matches)} rows of "
+                "the emoji file are called that"
+            )
+        elif not matches[0].drawable:
+            problems.append(
+                f"the opening week wants {name!r}, which is not drawable - the "
+                "cat would crave something nobody can react with"
+            )
     return problems
 
 

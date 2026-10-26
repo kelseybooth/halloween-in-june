@@ -2,8 +2,9 @@ drop_id	trigger	date	event	name	notes
 0	manual			The Cat	A channel with a cat in it. No house, no rooms, no mention of either. Opened by /start-game.
 1	manual			A Place to Sleep	The cat bed appears in the channel, and with it /look and /use.
 2	manual			Something to Play With	The cat toy, /take and /inventory. Not built yet; defined here because content already waits on it.
-3	manual			The Door	The house opens. Every row carried over from Release 1 waits here - uniformly, because per-row accuracy for drops 3 to 7 belongs to whoever builds them.
-4	manual			The Rest of the Hall	Not built yet; defined here because content already waits on it - the 21 October achievement renumbering put rows at this drop, and a drop the calendar does not define can never arrive. Name is a placeholder for the writers.
-5	manual			The Ground Floor	Not built yet; defined here because content already waits on it - the 21 October achievement renumbering put rows at this drop, and a drop the calendar does not define can never arrive. Name is a placeholder for the writers.
-6	manual			Upstairs	Not built yet; defined here because content already waits on it - the 21 October achievement renumbering put rows at this drop, and a drop the calendar does not define can never arrive. Name is a placeholder for the writers.
-7	manual			The Last Door	Not built yet; defined here because content already waits on it - the 21 October achievement renumbering put rows at this drop, and a drop the calendar does not define can never arrive. Name is a placeholder for the writers.
+3	manual			A Craving	The craving game, and nothing else. The cat wants a particular food today, and players guess it by putting emoji reactions on her messages. Numbered 3 so it can run on the QA servers with /qa-drop before beta. Renumbered 26 October.
+10	manual			The Door	Was drop 3. The cat leads players into the Entryway: coat rack, the salmon stash behind it, front door, ceiling. One quest, feeding the cat. Renumbered 26 October; drops after 3 are numbered in tens to leave room between them.
+20	manual			The Rest of the Hall	Was drop 4. The rest of the Entryway: Alexa, intercom, Amazon box and spice jars, mirror, bulletin board, stroller, shoes, booties, lumber and the ruined staircase. Introduces David; starts the staircase repair that gates drop 40.
+30	manual			The Ground Floor	Was drop 5. Dining Room, Kitchen, Courtyard and Living Room with everything in them, the doors to them from the Entryway, the can opener, three more cat-food flavors, and the bottle and diaper scatter.
+40	manual			Upstairs	Was drop 6. Upstairs Hallway, Bedroom and Nursery, with the stairs and back stairs up to them. Meant to open on the staircase repair rather than by command; until that is built it is advanced like the rest.
+50	manual			The Last Door	Was drop 7. The Secret Library and the two passages into it, per-player discovery as Phase 2e specifies.

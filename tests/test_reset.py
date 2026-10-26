@@ -14,7 +14,7 @@ the question cannot fall behind the answer again.
 
 import pytest
 
-from conftest import ALICE, BOB, GUILD_A, GUILD_B, HOUSE_DROP
+from conftest import ALICE, BOB, GUILD_A, GUILD_B, LAST_DROP
 from fake_discord import FakeChannel, FakeGuild, FakeInteraction, FakeMember
 
 import bot
@@ -210,10 +210,10 @@ async def test_the_content_is_still_loaded(two_games):
     await reset(two_games)
 
     assert len(await resolve.all_rooms()) == 10  # nine rooms and the channel
-    # Fourteen of the forty-five: the rest wait for drops this server
-    # has not reached. The point of the assertion is that the load
+    # Thirty-nine of the forty-six: the seven parked at 99 are
+    # unreachable by design. The point of the assertion is that the load
     # survived the reset, not that every row arrived.
-    assert len(await resolve.achievements(GUILD_A)) == 15
+    assert len(await resolve.achievements(GUILD_A)) == 39
 
 
 async def test_the_art_is_kept_by_default(two_games):
@@ -273,7 +273,7 @@ async def test_the_game_stays_where_it_was(two_games):
     per drop after every reset is friction that grows with the schedule."""
     await reset(two_games)
 
-    assert await resolve.current_drop(GUILD_A) == HOUSE_DROP
+    assert await resolve.current_drop(GUILD_A) == LAST_DROP
 
 
 async def test_the_channel_stays_too(two_games):
@@ -304,17 +304,17 @@ async def test_a_rewind_takes_the_content_back_with_it(two_games):
 async def test_it_only_goes_backwards(two_games):
     """Forward movement belongs to `/advance-game`, which steps once and
     confirms. A reset is not a shortcut around that."""
-    interaction = await reset(two_games, back_to_drop=HOUSE_DROP + 1)
+    interaction = await reset(two_games, back_to_drop=LAST_DROP + 1)
 
-    assert await resolve.current_drop(GUILD_A) == HOUSE_DROP
+    assert await resolve.current_drop(GUILD_A) == LAST_DROP
     assert "/advance-game" in interaction.reply
 
 
 async def test_standing_still_is_allowed(two_games):
     """Naming the drop you are already on is not an error."""
-    await reset(two_games, back_to_drop=HOUSE_DROP)
+    await reset(two_games, back_to_drop=LAST_DROP)
 
-    assert await resolve.current_drop(GUILD_A) == HOUSE_DROP
+    assert await resolve.current_drop(GUILD_A) == LAST_DROP
 
 
 async def test_a_drop_that_does_not_exist_is_refused(two_games):
@@ -322,7 +322,7 @@ async def test_a_drop_that_does_not_exist_is_refused(two_games):
     reaches the one that asks whether the drop is real at all."""
     interaction = await reset(two_games, back_to_drop=-1)
 
-    assert await resolve.current_drop(GUILD_A) == HOUSE_DROP
+    assert await resolve.current_drop(GUILD_A) == LAST_DROP
     assert "no drop -1" in interaction.reply.lower()
 
 

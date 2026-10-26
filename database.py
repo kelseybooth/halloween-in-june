@@ -82,6 +82,12 @@ LOOK = "look"
 HINT = "hint"
 UNKNOWN_NOUN = "unknown_noun"
 RECOVERY = "recovery"
+# A guess at the day's craving, made by reacting rather than by a command.
+# `outcome` is the usual success or refused - a win against everything
+# else - and which rung of the ladder it earned is in `detail`, because
+# the ladder is five-valued and the column that answers "did it work" is
+# two-valued everywhere else in this table.
+CRAVING_GUESS = "craving_guess"
 
 # Why a refusal refused. Open-ended on purpose - a new gate adds a new
 # reason here rather than reusing an approximate one, because the whole
@@ -750,6 +756,28 @@ class EmojiGroup(Base):
     type: Mapped[str] = mapped_column(String(32), nullable=False)
     drawable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     excluded: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # The emoji this one answers for, "" if it answers for itself.
+    same_as: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+
+
+class CravingReaction(Base):
+    """The ladder the bot answers a craving guess with, from
+    craving_reactions.tsv.
+
+    Content, so the writers can swap a face without a release. Six rows: one
+    per outcome, each with the emoji to react with and where it sits on the
+    ladder. `progression` is null for `out_of_guesses`, which is not a rung -
+    it is what the bot says when a message has no reaction slots left.
+    """
+
+    __tablename__ = "craving_reactions"
+
+    outcome: Mapped[str] = mapped_column(String(32), primary_key=True)
+    progression: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    emoji: Mapped[str] = mapped_column(String(32), nullable=False)
+    code: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    meaning: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    notes: Mapped[str] = mapped_column("when_text", Text, nullable=False, default="")
 
 
 class Drop(Base):
@@ -1029,6 +1057,33 @@ class CravingDay(Base):
     found_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class CravingMessage(Base):
+    """The best answer one message has shown, on one day.
+
+    **Per message, because the bot's reactions describe the message.**
+    Discord lets the bot put each emoji on a message only once, so it cannot
+    answer each guess; it carries the best answer so far and replaces it when
+    a guess beats it.
+
+    **Per day, because the answer moves and the reactions do not.** A 😻 left
+    on last night's message points at yesterday's craving, which is a lie
+    told to anybody scrolling up. The day is stored so that the first guess
+    to land on an old message clears what the bot left there before judging.
+
+    What is deliberately *not* here is how many reaction slots the message
+    has left. A player who also clicked the bot's emoji keeps it on the
+    message after the bot removes its own, so any count kept here would drift
+    from Discord's within a day. The live reaction list is read every time.
+    """
+
+    __tablename__ = "craving_messages"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    message_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    day: Mapped[date] = mapped_column(Date, nullable=False)
+    outcome: Mapped[str] = mapped_column(String(32), nullable=False)
+
+
 class CravingTally(Base):
     """How many distinct days a player has guessed the craving on.
 
@@ -1304,7 +1359,7 @@ async def _rebuild_room_text_if_narrow(conn) -> None:
 
 
 async def _rebuild_emoji_groups_if_old(conn) -> None:
-    """Drop `emoji_groups` when it still has the `subgroup` column.
+    """Drop `emoji_groups` when it is missing a column the loader writes.
 
     **Safe for the same reason the `room_text` rebuild is.** This is
     content, not world state: it carries no `guild_id`, nothing mutates
@@ -1312,28 +1367,36 @@ async def _rebuild_emoji_groups_if_old(conn) -> None:
     of it on every boot. The rebuild throws away rows that were about to
     be thrown away.
 
-    The column could not be ALTERed in: `subgroup` is NOT NULL and the
-    new file has nothing to put in it, so the first insert after an
-    upgrade would fail on a table that cannot be fixed forward.
+    The columns cannot be ALTERed in: they are NOT NULL and the old file
+    has nothing to put in them, so the first insert after an upgrade
+    would fail on a table that cannot be fixed forward.
+
+    **The check is every column the loader writes, not a named one.**
+    Written against `category` alone it answered correctly for exactly
+    one upgrade and then silently stopped - `same_as` arrived three days
+    later into a table that already had `category`, and the rebuild
+    skipped it. Comparing the whole set means the next column added to
+    the model is handled by this function without anybody remembering it
+    exists.
 
     Runs before `create_all`, which then creates it in the new shape. A
-    database that already has `category` is untouched, so this is a
-    no-op from the second boot onward and on every fresh install.
+    database that already matches is untouched, so this is a no-op from
+    the second boot onward and on every fresh install.
     """
+    wanted = {col.name for col in EmojiGroup.__table__.columns}
 
     def _old(sync_conn) -> bool:
         insp = inspect(sync_conn)
         if "emoji_groups" not in insp.get_table_names():
             return False
         columns = {col["name"] for col in insp.get_columns("emoji_groups")}
-        return "category" not in columns
+        return not wanted <= columns
 
     if await conn.run_sync(_old):
         await conn.execute(text("DROP TABLE emoji_groups"))
         log.warning(
-            "Schema upgrade: rebuilt emoji_groups for the category and type "
-            "columns. Its rows are rewritten from the content files on this "
-            "same boot."
+            "Schema upgrade: rebuilt emoji_groups to match the model. Its "
+            "rows are rewritten from the content files on this same boot."
         )
 
 
@@ -3210,6 +3273,16 @@ CONFIG_KEYS: dict[str, tuple[int, str]] = {
     # once here rather than invented by whoever builds the drop that
     # needs it. Raising it later must not take the award back from
     # anybody already holding it.
+    # The craving is worth less than a toy play on purpose. Copying
+    # somebody else's correct guess is a reaction away, and that is
+    # fine - the game is a thing to notice, not a thing to solve - so
+    # the figure has to be small enough that copying it is not the
+    # cheapest relationship in the game.
+    "craving_points": (
+        5,
+        "What finding the cat's daily craving is worth, once per player per "
+        "day.",
+    ),
     "toy_set_total": (
         13,
         "How many cat toys the whole game will have. Used by the toy-collection "

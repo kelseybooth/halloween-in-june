@@ -613,9 +613,14 @@ async def passing_a_message_to_david(context: Context) -> bool:
 
 
 async def met_the_craving(context: Context) -> bool:
-    """The reaction matched the day's craving emoji."""
+    """The reaction matched the day's craving emoji.
+
+    Any win, not only a scoring one. A player who already took their five
+    points today and clicks the answer again has still met the craving, and
+    the award is a one-off that cannot fire twice anyway.
+    """
     guess = context.extra.get("guess")
-    return guess is not None and guess.verdict == craving.CORRECT
+    return guess is not None and guess.won
 
 
 # --------------------------------------------------------------------------

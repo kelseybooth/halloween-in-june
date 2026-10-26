@@ -1,1928 +1,1928 @@
-emoji	code	name	category	type	drawable	excluded
-😀	U+1F600	grinning face	Misc	Unrelated	no	no
-😃	U+1F603	grinning face with big eyes	Misc	Unrelated	no	no
-😄	U+1F604	grinning face with smiling eyes	Misc	Unrelated	no	no
-😁	U+1F601	beaming face with smiling eyes	Misc	Unrelated	no	no
-😆	U+1F606	grinning squinting face	Misc	Unrelated	no	no
-😅	U+1F605	grinning face with sweat	Misc	Unrelated	no	no
-🤣	U+1F923	rolling on the floor laughing	Misc	Unrelated	no	no
-😂	U+1F602	face with tears of joy	Misc	Unrelated	no	no
-🙂	U+1F642	slightly smiling face	Misc	Unrelated	no	no
-🙃	U+1F643	upside-down face	Misc	Unrelated	no	no
-🫠	U+1FAE0	melting face	Misc	Unrelated	no	no
-🫫	U+1FAEB	⊛ cracking face	Misc	Unrelated	no	no
-😉	U+1F609	winking face	Misc	Unrelated	no	no
-😊	U+1F60A	smiling face with smiling eyes	Misc	Unrelated	no	no
-😇	U+1F607	smiling face with halo	Misc	Unrelated	no	no
-🥰	U+1F970	smiling face with hearts	Misc	Unrelated	no	no
-😍	U+1F60D	smiling face with heart-eyes	Misc	Unrelated	no	no
-🤩	U+1F929	star-struck	Misc	Unrelated	no	no
-😘	U+1F618	face blowing a kiss	Misc	Unrelated	no	no
-😗	U+1F617	kissing face	Misc	Unrelated	no	no
-☺	U+263A	smiling face	Misc	Unrelated	no	no
-😚	U+1F61A	kissing face with closed eyes	Misc	Unrelated	no	no
-😙	U+1F619	kissing face with smiling eyes	Misc	Unrelated	no	no
-🥲	U+1F972	smiling face with tear	Misc	Unrelated	no	no
-😋	U+1F60B	face savoring food	Misc	Unrelated	no	no
-😛	U+1F61B	face with tongue	Misc	Unrelated	no	no
-😜	U+1F61C	winking face with tongue	Misc	Unrelated	no	no
-🤪	U+1F92A	zany face	Misc	Unrelated	no	no
-😝	U+1F61D	squinting face with tongue	Misc	Unrelated	no	no
-🤑	U+1F911	money-mouth face	Misc	Unrelated	no	no
-🤗	U+1F917	smiling face with open hands	Misc	Unrelated	no	no
-🤭	U+1F92D	face with hand over mouth	Misc	Unrelated	no	no
-🫢	U+1FAE2	face with open eyes and hand over mouth	Misc	Unrelated	no	no
-🫣	U+1FAE3	face with peeking eye	Misc	Unrelated	no	no
-🤫	U+1F92B	shushing face	Misc	Unrelated	no	no
-🤔	U+1F914	thinking face	Misc	Unrelated	no	no
-🫡	U+1FAE1	saluting face	Misc	Unrelated	no	no
-🤐	U+1F910	zipper-mouth face	Misc	Unrelated	no	no
-🤨	U+1F928	face with raised eyebrow	Misc	Unrelated	no	no
-😐	U+1F610	neutral face	Misc	Unrelated	no	no
-😑	U+1F611	expressionless face	Misc	Unrelated	no	no
-😶	U+1F636	face without mouth	Misc	Unrelated	no	no
-🫥	U+1FAE5	dotted line face	Misc	Unrelated	no	no
-😶‍🌫️	U+1F636 U+200D U+1F32B U+FE0F	face in clouds	Misc	Unrelated	no	no
-😏	U+1F60F	smirking face	Misc	Unrelated	no	no
-😒	U+1F612	unamused face	Misc	Unrelated	no	no
-🙄	U+1F644	face with rolling eyes	Misc	Unrelated	no	no
-😬	U+1F62C	grimacing face	Misc	Unrelated	no	no
-😮‍💨	U+1F62E U+200D U+1F4A8	face exhaling	Misc	Unrelated	no	no
-🤥	U+1F925	lying face	Misc	Unrelated	no	no
-🫨	U+1FAE8	shaking face	Misc	Unrelated	no	no
-🙂‍↔️	U+1F642 U+200D U+2194 U+FE0F	head shaking horizontally	Misc	Unrelated	no	no
-🙂‍↕️	U+1F642 U+200D U+2195 U+FE0F	head shaking vertically	Misc	Unrelated	no	no
-😌	U+1F60C	relieved face	Misc	Unrelated	no	no
-😔	U+1F614	pensive face	Misc	Unrelated	no	no
-😪	U+1F62A	sleepy face	Misc	Unrelated	no	no
-🤤	U+1F924	drooling face	Misc	Unrelated	no	no
-😴	U+1F634	sleeping face	Misc	Unrelated	no	no
-🫩	U+1FAE9	face with bags under eyes	Misc	Unrelated	no	no
-😷	U+1F637	face with medical mask	Misc	Unrelated	no	no
-🤒	U+1F912	face with thermometer	Misc	Unrelated	no	no
-🤕	U+1F915	face with head-bandage	Misc	Unrelated	no	no
-🤢	U+1F922	nauseated face	Misc	Unrelated	no	no
-🤮	U+1F92E	face vomiting	Misc	Unrelated	no	no
-🤧	U+1F927	sneezing face	Misc	Unrelated	no	no
-🥵	U+1F975	hot face	Misc	Unrelated	no	no
-🥶	U+1F976	cold face	Misc	Unrelated	no	no
-🥴	U+1F974	woozy face	Misc	Unrelated	no	no
-😵	U+1F635	face with crossed-out eyes	Misc	Unrelated	no	no
-😵‍💫	U+1F635 U+200D U+1F4AB	face with spiral eyes	Misc	Unrelated	no	no
-🤯	U+1F92F	exploding head	Misc	Unrelated	no	no
-🤠	U+1F920	cowboy hat face	Misc	Unrelated	no	no
-🥳	U+1F973	partying face	Misc	Unrelated	no	no
-🥸	U+1F978	disguised face	Misc	Unrelated	no	no
-😎	U+1F60E	smiling face with sunglasses	Misc	Unrelated	no	no
-🤓	U+1F913	nerd face	Misc	Unrelated	no	no
-🧐	U+1F9D0	face with monocle	Misc	Unrelated	no	no
-😕	U+1F615	confused face	Misc	Unrelated	no	no
-🫤	U+1FAE4	face with diagonal mouth	Misc	Unrelated	no	no
-😟	U+1F61F	worried face	Misc	Unrelated	no	no
-🙁	U+1F641	slightly frowning face	Misc	Unrelated	no	no
-☹	U+2639	frowning face	Misc	Unrelated	no	no
-😮	U+1F62E	face with open mouth	Misc	Unrelated	no	no
-😯	U+1F62F	hushed face	Misc	Unrelated	no	no
-😲	U+1F632	astonished face	Misc	Unrelated	no	no
-😳	U+1F633	flushed face	Misc	Unrelated	no	no
-🫪	U+1FAEA	distorted face	Misc	Unrelated	no	no
-🥺	U+1F97A	pleading face	Misc	Unrelated	no	no
-🥹	U+1F979	face holding back tears	Misc	Unrelated	no	no
-😦	U+1F626	frowning face with open mouth	Misc	Unrelated	no	no
-😧	U+1F627	anguished face	Misc	Unrelated	no	no
-😨	U+1F628	fearful face	Misc	Unrelated	no	no
-😰	U+1F630	anxious face with sweat	Misc	Unrelated	no	no
-😥	U+1F625	sad but relieved face	Misc	Unrelated	no	no
-😢	U+1F622	crying face	Misc	Unrelated	no	no
-😭	U+1F62D	loudly crying face	Misc	Unrelated	no	no
-😱	U+1F631	face screaming in fear	Misc	Unrelated	no	no
-😖	U+1F616	confounded face	Misc	Unrelated	no	no
-😣	U+1F623	persevering face	Misc	Unrelated	no	no
-😞	U+1F61E	disappointed face	Misc	Unrelated	no	no
-😓	U+1F613	downcast face with sweat	Misc	Unrelated	no	no
-😩	U+1F629	weary face	Misc	Unrelated	no	no
-😫	U+1F62B	tired face	Misc	Unrelated	no	no
-🥱	U+1F971	yawning face	Misc	Unrelated	no	no
-😤	U+1F624	face with steam from nose	Misc	Unrelated	no	no
-😡	U+1F621	enraged face	Misc	Unrelated	no	no
-😠	U+1F620	angry face	Misc	Unrelated	no	no
-🤬	U+1F92C	face with symbols on mouth	Misc	Unrelated	no	no
-😈	U+1F608	smiling face with horns	Misc	Unrelated	no	no
-👿	U+1F47F	angry face with horns	Misc	Unrelated	no	no
-💀	U+1F480	skull	Misc	Unrelated	no	no
-☠	U+2620	skull and crossbones	Misc	Unrelated	no	no
-💩	U+1F4A9	pile of poo	Misc	Unrelated	no	no
-🤡	U+1F921	clown face	Misc	Unrelated	no	no
-👹	U+1F479	ogre	Misc	Unrelated	no	no
-👺	U+1F47A	goblin	Misc	Unrelated	no	no
-👻	U+1F47B	ghost	Misc	Unrelated	no	no
-👽	U+1F47D	alien	Misc	Unrelated	no	no
-👾	U+1F47E	alien monster	Misc	Unrelated	no	no
-🤖	U+1F916	robot	Misc	Unrelated	no	no
-😺	U+1F63A	grinning cat	Cat	Unrelated	no	no
-😸	U+1F638	grinning cat with smiling eyes	Bot	Right Category	no	yes
-😹	U+1F639	cat with tears of joy	Cat	Unrelated	no	no
-😻	U+1F63B	smiling cat with heart-eyes	Bot	Win	no	yes
-😼	U+1F63C	cat with wry smile	Bot	Game Category	no	yes
-😽	U+1F63D	kissing cat	Cat	Unrelated	no	no
-🙀	U+1F640	weary cat	Cat	Unrelated	no	no
-😿	U+1F63F	crying cat	Cat	Unrelated	no	no
-😾	U+1F63E	pouting cat	Cat	Unrelated	no	no
-🙈	U+1F648	see-no-evil monkey	Misc	Unrelated	no	no
-🙉	U+1F649	hear-no-evil monkey	Misc	Unrelated	no	no
-🙊	U+1F64A	speak-no-evil monkey	Misc	Unrelated	no	no
-💌	U+1F48C	love letter	Misc	Unrelated	no	no
-💘	U+1F498	heart with arrow	Misc	Unrelated	no	no
-💝	U+1F49D	heart with ribbon	Misc	Unrelated	no	no
-💖	U+1F496	sparkling heart	Misc	Unrelated	no	no
-💗	U+1F497	growing heart	Misc	Unrelated	no	no
-💓	U+1F493	beating heart	Misc	Unrelated	no	no
-💞	U+1F49E	revolving hearts	Misc	Unrelated	no	no
-💕	U+1F495	two hearts	Misc	Unrelated	no	no
-💟	U+1F49F	heart decoration	Misc	Unrelated	no	no
-❣	U+2763	heart exclamation	Misc	Unrelated	no	no
-💔	U+1F494	broken heart	Misc	Unrelated	no	no
-❤️‍🔥	U+2764 U+FE0F U+200D U+1F525	heart on fire	Misc	Unrelated	no	no
-❤️‍🩹	U+2764 U+FE0F U+200D U+1FA79	mending heart	Misc	Unrelated	no	no
-❤	U+2764	red heart	Misc	Unrelated	no	no
-🩷	U+1FA77	pink heart	Misc	Unrelated	no	no
-🧡	U+1F9E1	orange heart	Misc	Unrelated	no	no
-💛	U+1F49B	yellow heart	Misc	Unrelated	no	no
-💚	U+1F49A	green heart	Misc	Unrelated	no	no
-💙	U+1F499	blue heart	Misc	Unrelated	no	no
-🩵	U+1FA75	light blue heart	Misc	Unrelated	no	no
-💜	U+1F49C	purple heart	Misc	Unrelated	no	no
-🤎	U+1F90E	brown heart	Misc	Unrelated	no	no
-🖤	U+1F5A4	black heart	Misc	Unrelated	no	no
-🩶	U+1FA76	grey heart	Misc	Unrelated	no	no
-🤍	U+1F90D	white heart	Misc	Unrelated	no	no
-💋	U+1F48B	kiss mark	Misc	Unrelated	no	no
-💯	U+1F4AF	hundred points	Misc	Unrelated	no	no
-💢	U+1F4A2	anger symbol	Misc	Unrelated	no	no
-🫯	U+1FAEF	fight cloud	Misc	Unrelated	no	no
-💥	U+1F4A5	collision	Misc	Unrelated	no	no
-💫	U+1F4AB	dizzy	Misc	Unrelated	no	no
-💦	U+1F4A6	sweat droplets	Misc	Unrelated	no	no
-💨	U+1F4A8	dashing away	Misc	Unrelated	no	no
-🕳	U+1F573	hole	Misc	Unrelated	no	no
-💬	U+1F4AC	speech balloon	Misc	Unrelated	no	no
-👁️‍🗨️	U+1F441 U+FE0F U+200D U+1F5E8 U+FE0F	eye in speech bubble	Misc	Unrelated	no	no
-🗨	U+1F5E8	left speech bubble	Misc	Unrelated	no	no
-🗯	U+1F5EF	right anger bubble	Misc	Unrelated	no	no
-💭	U+1F4AD	thought balloon	Misc	Unrelated	no	no
-💤	U+1F4A4	ZZZ	Misc	Unrelated	no	no
-👋	U+1F44B	waving hand	Misc	Unrelated	no	no
-🤚	U+1F91A	raised back of hand	Misc	Unrelated	no	no
-🖐	U+1F590	hand with fingers splayed	Misc	Unrelated	no	no
-✋	U+270B	raised hand	Misc	Unrelated	no	no
-🖖	U+1F596	vulcan salute	Misc	Unrelated	no	no
-🫱	U+1FAF1	rightwards hand	Misc	Unrelated	no	no
-🫲	U+1FAF2	leftwards hand	Misc	Unrelated	no	no
-🫳	U+1FAF3	palm down hand	Misc	Unrelated	no	no
-🫴	U+1FAF4	palm up hand	Misc	Unrelated	no	no
-🫷	U+1FAF7	leftwards pushing hand	Misc	Unrelated	no	no
-🫸	U+1FAF8	rightwards pushing hand	Misc	Unrelated	no	no
-👌	U+1F44C	OK hand	Misc	Unrelated	no	no
-🤌	U+1F90C	pinched fingers	Misc	Unrelated	no	no
-🤏	U+1F90F	pinching hand	Misc	Unrelated	no	no
-✌	U+270C	victory hand	Misc	Unrelated	no	no
-🤞	U+1F91E	crossed fingers	Misc	Unrelated	no	no
-🫰	U+1FAF0	hand with index finger and thumb crossed	Misc	Unrelated	no	no
-🤟	U+1F91F	love-you gesture	Misc	Unrelated	no	no
-🤘	U+1F918	sign of the horns	Misc	Unrelated	no	no
-🤙	U+1F919	call me hand	Misc	Unrelated	no	no
-👈	U+1F448	backhand index pointing left	Misc	Unrelated	no	no
-👉	U+1F449	backhand index pointing right	Misc	Unrelated	no	no
-👆	U+1F446	backhand index pointing up	Misc	Unrelated	no	no
-🖕	U+1F595	middle finger	Misc	Unrelated	no	no
-👇	U+1F447	backhand index pointing down	Misc	Unrelated	no	no
-☝	U+261D	index pointing up	Misc	Unrelated	no	no
-🫵	U+1FAF5	index pointing at the viewer	Misc	Unrelated	no	no
-👍	U+1F44D	thumbs up	Misc	Unrelated	no	no
-👎	U+1F44E	thumbs down	Misc	Unrelated	no	no
-🫹	U+1FAF9	⊛ leftwards thumb sign	Misc	Unrelated	no	no
-🫺	U+1FAFA	⊛ rightwards thumb sign	Misc	Unrelated	no	no
-✊	U+270A	raised fist	Misc	Unrelated	no	no
-👊	U+1F44A	oncoming fist	Misc	Unrelated	no	no
-🤛	U+1F91B	left-facing fist	Misc	Unrelated	no	no
-🤜	U+1F91C	right-facing fist	Misc	Unrelated	no	no
-👏	U+1F44F	clapping hands	Misc	Unrelated	no	no
-🙌	U+1F64C	raising hands	Misc	Unrelated	no	no
-🫶	U+1FAF6	heart hands	Misc	Unrelated	no	no
-👐	U+1F450	open hands	Misc	Unrelated	no	no
-🤲	U+1F932	palms up together	Misc	Unrelated	no	no
-🤝	U+1F91D	handshake	Misc	Unrelated	no	no
-🙏	U+1F64F	folded hands	Misc	Unrelated	no	no
-✍	U+270D	writing hand	Misc	Unrelated	no	no
-💅	U+1F485	nail polish	Misc	Unrelated	no	no
-🤳	U+1F933	selfie	Misc	Unrelated	no	no
-💪	U+1F4AA	flexed biceps	Misc	Unrelated	no	no
-🦾	U+1F9BE	mechanical arm	Misc	Unrelated	no	no
-🦿	U+1F9BF	mechanical leg	Misc	Unrelated	no	no
-🦵	U+1F9B5	leg	Misc	Unrelated	no	no
-🦶	U+1F9B6	foot	Misc	Unrelated	no	no
-👂	U+1F442	ear	Misc	Unrelated	no	no
-🦻	U+1F9BB	ear with hearing aid	Misc	Unrelated	no	no
-👃	U+1F443	nose	Misc	Unrelated	no	no
-🧠	U+1F9E0	brain	Misc	Unrelated	no	no
-🫀	U+1FAC0	anatomical heart	Misc	Unrelated	no	no
-🫁	U+1FAC1	lungs	Misc	Unrelated	no	no
-🦷	U+1F9B7	tooth	Misc	Unrelated	no	no
-🦴	U+1F9B4	bone	Misc	Unrelated	no	no
-👀	U+1F440	eyes	Bot	Right Type	no	yes
-👁	U+1F441	eye	Misc	Unrelated	no	no
-👅	U+1F445	tongue	Misc	Unrelated	no	no
-👄	U+1F444	mouth	Misc	Unrelated	no	no
-🫦	U+1FAE6	biting lip	Misc	Unrelated	no	no
-👶	U+1F476	baby	Misc	Unrelated	no	no
-🧒	U+1F9D2	child	Misc	Unrelated	no	no
-👦	U+1F466	boy	Misc	Unrelated	no	no
-👧	U+1F467	girl	Misc	Unrelated	no	no
-🧑	U+1F9D1	person	Misc	Unrelated	no	no
-👱	U+1F471	person: blond hair	Misc	Unrelated	no	no
-👨	U+1F468	man	Misc	Unrelated	no	no
-🧔	U+1F9D4	person: beard	Misc	Unrelated	no	no
-🧔‍♂️	U+1F9D4 U+200D U+2642 U+FE0F	man: beard	Misc	Unrelated	no	no
-🧔‍♀️	U+1F9D4 U+200D U+2640 U+FE0F	woman: beard	Misc	Unrelated	no	no
-👨‍🦰	U+1F468 U+200D U+1F9B0	man: red hair	Misc	Unrelated	no	no
-👨‍🦱	U+1F468 U+200D U+1F9B1	man: curly hair	Misc	Unrelated	no	no
-👨‍🦳	U+1F468 U+200D U+1F9B3	man: white hair	Misc	Unrelated	no	no
-👨‍🦲	U+1F468 U+200D U+1F9B2	man: bald	Misc	Unrelated	no	no
-👩	U+1F469	woman	Misc	Unrelated	no	no
-👩‍🦰	U+1F469 U+200D U+1F9B0	woman: red hair	Misc	Unrelated	no	no
-🧑‍🦰	U+1F9D1 U+200D U+1F9B0	person: red hair	Misc	Unrelated	no	no
-👩‍🦱	U+1F469 U+200D U+1F9B1	woman: curly hair	Misc	Unrelated	no	no
-🧑‍🦱	U+1F9D1 U+200D U+1F9B1	person: curly hair	Misc	Unrelated	no	no
-👩‍🦳	U+1F469 U+200D U+1F9B3	woman: white hair	Misc	Unrelated	no	no
-🧑‍🦳	U+1F9D1 U+200D U+1F9B3	person: white hair	Misc	Unrelated	no	no
-👩‍🦲	U+1F469 U+200D U+1F9B2	woman: bald	Misc	Unrelated	no	no
-🧑‍🦲	U+1F9D1 U+200D U+1F9B2	person: bald	Misc	Unrelated	no	no
-👱‍♀️	U+1F471 U+200D U+2640 U+FE0F	woman: blond hair	Misc	Unrelated	no	no
-👱‍♂️	U+1F471 U+200D U+2642 U+FE0F	man: blond hair	Misc	Unrelated	no	no
-🧓	U+1F9D3	older person	Misc	Unrelated	no	no
-👴	U+1F474	old man	Misc	Unrelated	no	no
-👵	U+1F475	old woman	Misc	Unrelated	no	no
-🙍	U+1F64D	person frowning	Misc	Unrelated	no	no
-🙍‍♂️	U+1F64D U+200D U+2642 U+FE0F	man frowning	Misc	Unrelated	no	no
-🙍‍♀️	U+1F64D U+200D U+2640 U+FE0F	woman frowning	Misc	Unrelated	no	no
-🙎	U+1F64E	person pouting	Misc	Unrelated	no	no
-🙎‍♂️	U+1F64E U+200D U+2642 U+FE0F	man pouting	Misc	Unrelated	no	no
-🙎‍♀️	U+1F64E U+200D U+2640 U+FE0F	woman pouting	Misc	Unrelated	no	no
-🙅	U+1F645	person gesturing NO	Misc	Unrelated	no	no
-🙅‍♂️	U+1F645 U+200D U+2642 U+FE0F	man gesturing NO	Misc	Unrelated	no	no
-🙅‍♀️	U+1F645 U+200D U+2640 U+FE0F	woman gesturing NO	Misc	Unrelated	no	no
-🙆	U+1F646	person gesturing OK	Misc	Unrelated	no	no
-🙆‍♂️	U+1F646 U+200D U+2642 U+FE0F	man gesturing OK	Misc	Unrelated	no	no
-🙆‍♀️	U+1F646 U+200D U+2640 U+FE0F	woman gesturing OK	Misc	Unrelated	no	no
-💁	U+1F481	person tipping hand	Misc	Unrelated	no	no
-💁‍♂️	U+1F481 U+200D U+2642 U+FE0F	man tipping hand	Misc	Unrelated	no	no
-💁‍♀️	U+1F481 U+200D U+2640 U+FE0F	woman tipping hand	Misc	Unrelated	no	no
-🙋	U+1F64B	person raising hand	Misc	Unrelated	no	no
-🙋‍♂️	U+1F64B U+200D U+2642 U+FE0F	man raising hand	Misc	Unrelated	no	no
-🙋‍♀️	U+1F64B U+200D U+2640 U+FE0F	woman raising hand	Misc	Unrelated	no	no
-🧏	U+1F9CF	deaf person	Misc	Unrelated	no	no
-🧏‍♂️	U+1F9CF U+200D U+2642 U+FE0F	deaf man	Misc	Unrelated	no	no
-🧏‍♀️	U+1F9CF U+200D U+2640 U+FE0F	deaf woman	Misc	Unrelated	no	no
-🙇	U+1F647	person bowing	Misc	Unrelated	no	no
-🙇‍♂️	U+1F647 U+200D U+2642 U+FE0F	man bowing	Misc	Unrelated	no	no
-🙇‍♀️	U+1F647 U+200D U+2640 U+FE0F	woman bowing	Misc	Unrelated	no	no
-🤦	U+1F926	person facepalming	Misc	Unrelated	no	no
-🤦‍♂️	U+1F926 U+200D U+2642 U+FE0F	man facepalming	Misc	Unrelated	no	no
-🤦‍♀️	U+1F926 U+200D U+2640 U+FE0F	woman facepalming	Misc	Unrelated	no	no
-🤷	U+1F937	person shrugging	Misc	Unrelated	no	no
-🤷‍♂️	U+1F937 U+200D U+2642 U+FE0F	man shrugging	Misc	Unrelated	no	no
-🤷‍♀️	U+1F937 U+200D U+2640 U+FE0F	woman shrugging	Misc	Unrelated	no	no
-🧑‍⚕️	U+1F9D1 U+200D U+2695 U+FE0F	health worker	Misc	Unrelated	no	no
-👨‍⚕️	U+1F468 U+200D U+2695 U+FE0F	man health worker	Misc	Unrelated	no	no
-👩‍⚕️	U+1F469 U+200D U+2695 U+FE0F	woman health worker	Misc	Unrelated	no	no
-🧑‍🎓	U+1F9D1 U+200D U+1F393	student	Misc	Unrelated	no	no
-👨‍🎓	U+1F468 U+200D U+1F393	man student	Misc	Unrelated	no	no
-👩‍🎓	U+1F469 U+200D U+1F393	woman student	Misc	Unrelated	no	no
-🧑‍🏫	U+1F9D1 U+200D U+1F3EB	teacher	Misc	Unrelated	no	no
-👨‍🏫	U+1F468 U+200D U+1F3EB	man teacher	Misc	Unrelated	no	no
-👩‍🏫	U+1F469 U+200D U+1F3EB	woman teacher	Misc	Unrelated	no	no
-🧑‍⚖️	U+1F9D1 U+200D U+2696 U+FE0F	judge	Misc	Unrelated	no	no
-👨‍⚖️	U+1F468 U+200D U+2696 U+FE0F	man judge	Misc	Unrelated	no	no
-👩‍⚖️	U+1F469 U+200D U+2696 U+FE0F	woman judge	Misc	Unrelated	no	no
-🧑‍🌾	U+1F9D1 U+200D U+1F33E	farmer	Misc	Unrelated	no	no
-👨‍🌾	U+1F468 U+200D U+1F33E	man farmer	Misc	Unrelated	no	no
-👩‍🌾	U+1F469 U+200D U+1F33E	woman farmer	Misc	Unrelated	no	no
-🧑‍🍳	U+1F9D1 U+200D U+1F373	cook	Misc	Unrelated	no	no
-👨‍🍳	U+1F468 U+200D U+1F373	man cook	Misc	Unrelated	no	no
-👩‍🍳	U+1F469 U+200D U+1F373	woman cook	Misc	Unrelated	no	no
-🧑‍🔧	U+1F9D1 U+200D U+1F527	mechanic	Misc	Unrelated	no	no
-👨‍🔧	U+1F468 U+200D U+1F527	man mechanic	Misc	Unrelated	no	no
-👩‍🔧	U+1F469 U+200D U+1F527	woman mechanic	Misc	Unrelated	no	no
-🧑‍🏭	U+1F9D1 U+200D U+1F3ED	factory worker	Misc	Unrelated	no	no
-👨‍🏭	U+1F468 U+200D U+1F3ED	man factory worker	Misc	Unrelated	no	no
-👩‍🏭	U+1F469 U+200D U+1F3ED	woman factory worker	Misc	Unrelated	no	no
-🧑‍💼	U+1F9D1 U+200D U+1F4BC	office worker	Misc	Unrelated	no	no
-👨‍💼	U+1F468 U+200D U+1F4BC	man office worker	Misc	Unrelated	no	no
-👩‍💼	U+1F469 U+200D U+1F4BC	woman office worker	Misc	Unrelated	no	no
-🧑‍🔬	U+1F9D1 U+200D U+1F52C	scientist	Misc	Unrelated	no	no
-👨‍🔬	U+1F468 U+200D U+1F52C	man scientist	Misc	Unrelated	no	no
-👩‍🔬	U+1F469 U+200D U+1F52C	woman scientist	Misc	Unrelated	no	no
-🧑‍💻	U+1F9D1 U+200D U+1F4BB	technologist	Misc	Unrelated	no	no
-👨‍💻	U+1F468 U+200D U+1F4BB	man technologist	Misc	Unrelated	no	no
-👩‍💻	U+1F469 U+200D U+1F4BB	woman technologist	Misc	Unrelated	no	no
-🧑‍🎤	U+1F9D1 U+200D U+1F3A4	singer	Misc	Unrelated	no	no
-👨‍🎤	U+1F468 U+200D U+1F3A4	man singer	Misc	Unrelated	no	no
-👩‍🎤	U+1F469 U+200D U+1F3A4	woman singer	Misc	Unrelated	no	no
-🧑‍🎨	U+1F9D1 U+200D U+1F3A8	artist	Misc	Unrelated	no	no
-👨‍🎨	U+1F468 U+200D U+1F3A8	man artist	Misc	Unrelated	no	no
-👩‍🎨	U+1F469 U+200D U+1F3A8	woman artist	Misc	Unrelated	no	no
-🧑‍✈️	U+1F9D1 U+200D U+2708 U+FE0F	pilot	Misc	Unrelated	no	no
-👨‍✈️	U+1F468 U+200D U+2708 U+FE0F	man pilot	Misc	Unrelated	no	no
-👩‍✈️	U+1F469 U+200D U+2708 U+FE0F	woman pilot	Misc	Unrelated	no	no
-🧑‍🚀	U+1F9D1 U+200D U+1F680	astronaut	Misc	Unrelated	no	no
-👨‍🚀	U+1F468 U+200D U+1F680	man astronaut	Misc	Unrelated	no	no
-👩‍🚀	U+1F469 U+200D U+1F680	woman astronaut	Misc	Unrelated	no	no
-🧑‍🚒	U+1F9D1 U+200D U+1F692	firefighter	Misc	Unrelated	no	no
-👨‍🚒	U+1F468 U+200D U+1F692	man firefighter	Misc	Unrelated	no	no
-👩‍🚒	U+1F469 U+200D U+1F692	woman firefighter	Misc	Unrelated	no	no
-👮	U+1F46E	police officer	Misc	Unrelated	no	no
-👮‍♂️	U+1F46E U+200D U+2642 U+FE0F	man police officer	Misc	Unrelated	no	no
-👮‍♀️	U+1F46E U+200D U+2640 U+FE0F	woman police officer	Misc	Unrelated	no	no
-🕵	U+1F575	detective	Misc	Unrelated	no	no
-🕵️‍♂️	U+1F575 U+FE0F U+200D U+2642 U+FE0F	man detective	Misc	Unrelated	no	no
-🕵️‍♀️	U+1F575 U+FE0F U+200D U+2640 U+FE0F	woman detective	Misc	Unrelated	no	no
-💂	U+1F482	guard	Misc	Unrelated	no	no
-💂‍♂️	U+1F482 U+200D U+2642 U+FE0F	man guard	Misc	Unrelated	no	no
-💂‍♀️	U+1F482 U+200D U+2640 U+FE0F	woman guard	Misc	Unrelated	no	no
-🥷	U+1F977	ninja	Misc	Unrelated	no	no
-👷	U+1F477	construction worker	Misc	Unrelated	no	no
-👷‍♂️	U+1F477 U+200D U+2642 U+FE0F	man construction worker	Misc	Unrelated	no	no
-👷‍♀️	U+1F477 U+200D U+2640 U+FE0F	woman construction worker	Misc	Unrelated	no	no
-🫅	U+1FAC5	person with crown	Misc	Unrelated	no	no
-🤴	U+1F934	prince	Misc	Unrelated	no	no
-👸	U+1F478	princess	Misc	Unrelated	no	no
-👳	U+1F473	person wearing turban	Misc	Unrelated	no	no
-👳‍♂️	U+1F473 U+200D U+2642 U+FE0F	man wearing turban	Misc	Unrelated	no	no
-👳‍♀️	U+1F473 U+200D U+2640 U+FE0F	woman wearing turban	Misc	Unrelated	no	no
-👲	U+1F472	person with skullcap	Misc	Unrelated	no	no
-🧕	U+1F9D5	woman with headscarf	Misc	Unrelated	no	no
-🤵	U+1F935	person in tuxedo	Misc	Unrelated	no	no
-🤵‍♂️	U+1F935 U+200D U+2642 U+FE0F	man in tuxedo	Misc	Unrelated	no	no
-🤵‍♀️	U+1F935 U+200D U+2640 U+FE0F	woman in tuxedo	Misc	Unrelated	no	no
-👰	U+1F470	person with veil	Misc	Unrelated	no	no
-👰‍♂️	U+1F470 U+200D U+2642 U+FE0F	man with veil	Misc	Unrelated	no	no
-👰‍♀️	U+1F470 U+200D U+2640 U+FE0F	woman with veil	Misc	Unrelated	no	no
-🤰	U+1F930	pregnant woman	Misc	Unrelated	no	no
-🫃	U+1FAC3	pregnant man	Misc	Unrelated	no	no
-🫄	U+1FAC4	pregnant person	Misc	Unrelated	no	no
-🤱	U+1F931	breast-feeding	Misc	Unrelated	no	no
-👩‍🍼	U+1F469 U+200D U+1F37C	woman feeding baby	Misc	Unrelated	no	no
-👨‍🍼	U+1F468 U+200D U+1F37C	man feeding baby	Misc	Unrelated	no	no
-🧑‍🍼	U+1F9D1 U+200D U+1F37C	person feeding baby	Misc	Unrelated	no	no
-👼	U+1F47C	baby angel	Misc	Unrelated	no	no
-🎅	U+1F385	Santa Claus	Misc	Unrelated	no	no
-🤶	U+1F936	Mrs. Claus	Misc	Unrelated	no	no
-🧑‍🎄	U+1F9D1 U+200D U+1F384	Mx Claus	Misc	Unrelated	no	no
-🦸	U+1F9B8	superhero	Misc	Unrelated	no	no
-🦸‍♂️	U+1F9B8 U+200D U+2642 U+FE0F	man superhero	Misc	Unrelated	no	no
-🦸‍♀️	U+1F9B8 U+200D U+2640 U+FE0F	woman superhero	Misc	Unrelated	no	no
-🦹	U+1F9B9	supervillain	Misc	Unrelated	no	no
-🦹‍♂️	U+1F9B9 U+200D U+2642 U+FE0F	man supervillain	Misc	Unrelated	no	no
-🦹‍♀️	U+1F9B9 U+200D U+2640 U+FE0F	woman supervillain	Misc	Unrelated	no	no
-🧙	U+1F9D9	mage	Misc	Unrelated	no	no
-🧙‍♂️	U+1F9D9 U+200D U+2642 U+FE0F	man mage	Misc	Unrelated	no	no
-🧙‍♀️	U+1F9D9 U+200D U+2640 U+FE0F	woman mage	Misc	Unrelated	no	no
-🧚	U+1F9DA	fairy	Misc	Unrelated	no	no
-🧚‍♂️	U+1F9DA U+200D U+2642 U+FE0F	man fairy	Misc	Unrelated	no	no
-🧚‍♀️	U+1F9DA U+200D U+2640 U+FE0F	woman fairy	Misc	Unrelated	no	no
-🧛	U+1F9DB	vampire	Misc	Unrelated	no	no
-🧛‍♂️	U+1F9DB U+200D U+2642 U+FE0F	man vampire	Misc	Unrelated	no	no
-🧛‍♀️	U+1F9DB U+200D U+2640 U+FE0F	woman vampire	Misc	Unrelated	no	no
-🧜	U+1F9DC	merperson	Misc	Unrelated	no	no
-🧜‍♂️	U+1F9DC U+200D U+2642 U+FE0F	merman	Misc	Unrelated	no	no
-🧜‍♀️	U+1F9DC U+200D U+2640 U+FE0F	mermaid	Misc	Unrelated	no	no
-🧝	U+1F9DD	elf	Misc	Unrelated	no	no
-🧝‍♂️	U+1F9DD U+200D U+2642 U+FE0F	man elf	Misc	Unrelated	no	no
-🧝‍♀️	U+1F9DD U+200D U+2640 U+FE0F	woman elf	Misc	Unrelated	no	no
-🧞	U+1F9DE	genie	Misc	Unrelated	no	no
-🧞‍♂️	U+1F9DE U+200D U+2642 U+FE0F	man genie	Misc	Unrelated	no	no
-🧞‍♀️	U+1F9DE U+200D U+2640 U+FE0F	woman genie	Misc	Unrelated	no	no
-🧟	U+1F9DF	zombie	Misc	Unrelated	no	no
-🧟‍♂️	U+1F9DF U+200D U+2642 U+FE0F	man zombie	Misc	Unrelated	no	no
-🧟‍♀️	U+1F9DF U+200D U+2640 U+FE0F	woman zombie	Misc	Unrelated	no	no
-🧌	U+1F9CC	troll	Misc	Unrelated	no	no
-🫈	U+1FAC8	hairy creature	Misc	Unrelated	no	no
-💆	U+1F486	person getting massage	Misc	Unrelated	no	no
-💆‍♂️	U+1F486 U+200D U+2642 U+FE0F	man getting massage	Misc	Unrelated	no	no
-💆‍♀️	U+1F486 U+200D U+2640 U+FE0F	woman getting massage	Misc	Unrelated	no	no
-💇	U+1F487	person getting haircut	Misc	Unrelated	no	no
-💇‍♂️	U+1F487 U+200D U+2642 U+FE0F	man getting haircut	Misc	Unrelated	no	no
-💇‍♀️	U+1F487 U+200D U+2640 U+FE0F	woman getting haircut	Misc	Unrelated	no	no
-🚶	U+1F6B6	person walking	Misc	Unrelated	no	no
-🚶‍♂️	U+1F6B6 U+200D U+2642 U+FE0F	man walking	Misc	Unrelated	no	no
-🚶‍♀️	U+1F6B6 U+200D U+2640 U+FE0F	woman walking	Misc	Unrelated	no	no
-🚶‍➡️	U+1F6B6 U+200D U+27A1 U+FE0F	person walking: facing right	Misc	Unrelated	no	no
-🚶‍♀️‍➡️	U+1F6B6 U+200D U+2640 U+FE0F U+200D U+27A1 U+FE0F	woman walking: facing right	Misc	Unrelated	no	no
-🚶‍♂️‍➡️	U+1F6B6 U+200D U+2642 U+FE0F U+200D U+27A1 U+FE0F	man walking: facing right	Misc	Unrelated	no	no
-🧍	U+1F9CD	person standing	Misc	Unrelated	no	no
-🧍‍♂️	U+1F9CD U+200D U+2642 U+FE0F	man standing	Misc	Unrelated	no	no
-🧍‍♀️	U+1F9CD U+200D U+2640 U+FE0F	woman standing	Misc	Unrelated	no	no
-🧎	U+1F9CE	person kneeling	Misc	Unrelated	no	no
-🧎‍♂️	U+1F9CE U+200D U+2642 U+FE0F	man kneeling	Misc	Unrelated	no	no
-🧎‍♀️	U+1F9CE U+200D U+2640 U+FE0F	woman kneeling	Misc	Unrelated	no	no
-🧎‍➡️	U+1F9CE U+200D U+27A1 U+FE0F	person kneeling: facing right	Misc	Unrelated	no	no
-🧎‍♀️‍➡️	U+1F9CE U+200D U+2640 U+FE0F U+200D U+27A1 U+FE0F	woman kneeling: facing right	Misc	Unrelated	no	no
-🧎‍♂️‍➡️	U+1F9CE U+200D U+2642 U+FE0F U+200D U+27A1 U+FE0F	man kneeling: facing right	Misc	Unrelated	no	no
-🧑‍🦯	U+1F9D1 U+200D U+1F9AF	person with white cane	Misc	Unrelated	no	no
-🧑‍🦯‍➡️	U+1F9D1 U+200D U+1F9AF U+200D U+27A1 U+FE0F	person with white cane: facing right	Misc	Unrelated	no	no
-👨‍🦯	U+1F468 U+200D U+1F9AF	man with white cane	Misc	Unrelated	no	no
-👨‍🦯‍➡️	U+1F468 U+200D U+1F9AF U+200D U+27A1 U+FE0F	man with white cane: facing right	Misc	Unrelated	no	no
-👩‍🦯	U+1F469 U+200D U+1F9AF	woman with white cane	Misc	Unrelated	no	no
-👩‍🦯‍➡️	U+1F469 U+200D U+1F9AF U+200D U+27A1 U+FE0F	woman with white cane: facing right	Misc	Unrelated	no	no
-🧑‍🦼	U+1F9D1 U+200D U+1F9BC	person in motorized wheelchair	Misc	Unrelated	no	no
-🧑‍🦼‍➡️	U+1F9D1 U+200D U+1F9BC U+200D U+27A1 U+FE0F	person in motorized wheelchair: facing right	Misc	Unrelated	no	no
-👨‍🦼	U+1F468 U+200D U+1F9BC	man in motorized wheelchair	Misc	Unrelated	no	no
-👨‍🦼‍➡️	U+1F468 U+200D U+1F9BC U+200D U+27A1 U+FE0F	man in motorized wheelchair: facing right	Misc	Unrelated	no	no
-👩‍🦼	U+1F469 U+200D U+1F9BC	woman in motorized wheelchair	Misc	Unrelated	no	no
-👩‍🦼‍➡️	U+1F469 U+200D U+1F9BC U+200D U+27A1 U+FE0F	woman in motorized wheelchair: facing right	Misc	Unrelated	no	no
-🧑‍🦽	U+1F9D1 U+200D U+1F9BD	person in manual wheelchair	Misc	Unrelated	no	no
-🧑‍🦽‍➡️	U+1F9D1 U+200D U+1F9BD U+200D U+27A1 U+FE0F	person in manual wheelchair: facing right	Misc	Unrelated	no	no
-👨‍🦽	U+1F468 U+200D U+1F9BD	man in manual wheelchair	Misc	Unrelated	no	no
-👨‍🦽‍➡️	U+1F468 U+200D U+1F9BD U+200D U+27A1 U+FE0F	man in manual wheelchair: facing right	Misc	Unrelated	no	no
-👩‍🦽	U+1F469 U+200D U+1F9BD	woman in manual wheelchair	Misc	Unrelated	no	no
-👩‍🦽‍➡️	U+1F469 U+200D U+1F9BD U+200D U+27A1 U+FE0F	woman in manual wheelchair: facing right	Misc	Unrelated	no	no
-🏃	U+1F3C3	person running	Misc	Unrelated	no	no
-🏃‍♂️	U+1F3C3 U+200D U+2642 U+FE0F	man running	Misc	Unrelated	no	no
-🏃‍♀️	U+1F3C3 U+200D U+2640 U+FE0F	woman running	Misc	Unrelated	no	no
-🏃‍➡️	U+1F3C3 U+200D U+27A1 U+FE0F	person running: facing right	Misc	Unrelated	no	no
-🏃‍♀️‍➡️	U+1F3C3 U+200D U+2640 U+FE0F U+200D U+27A1 U+FE0F	woman running: facing right	Misc	Unrelated	no	no
-🏃‍♂️‍➡️	U+1F3C3 U+200D U+2642 U+FE0F U+200D U+27A1 U+FE0F	man running: facing right	Misc	Unrelated	no	no
-🧑‍🩰	U+1F9D1 U+200D U+1FA70	ballet dancer	Misc	Unrelated	no	no
-💃	U+1F483	woman dancing	Misc	Unrelated	no	no
-🕺	U+1F57A	man dancing	Misc	Unrelated	no	no
-🕴	U+1F574	person in suit levitating	Misc	Unrelated	no	no
-👯	U+1F46F	people with bunny ears	Misc	Unrelated	no	no
-👯‍♂️	U+1F46F U+200D U+2642 U+FE0F	men with bunny ears	Misc	Unrelated	no	no
-👯‍♀️	U+1F46F U+200D U+2640 U+FE0F	women with bunny ears	Misc	Unrelated	no	no
-🧖	U+1F9D6	person in steamy room	Misc	Unrelated	no	no
-🧖‍♂️	U+1F9D6 U+200D U+2642 U+FE0F	man in steamy room	Misc	Unrelated	no	no
-🧖‍♀️	U+1F9D6 U+200D U+2640 U+FE0F	woman in steamy room	Misc	Unrelated	no	no
-🧗	U+1F9D7	person climbing	Misc	Unrelated	no	no
-🧗‍♂️	U+1F9D7 U+200D U+2642 U+FE0F	man climbing	Misc	Unrelated	no	no
-🧗‍♀️	U+1F9D7 U+200D U+2640 U+FE0F	woman climbing	Misc	Unrelated	no	no
-🤺	U+1F93A	person fencing	Misc	Unrelated	no	no
-🏇	U+1F3C7	horse racing	Misc	Unrelated	no	no
-⛷	U+26F7	skier	Misc	Unrelated	no	no
-🏂	U+1F3C2	snowboarder	Misc	Unrelated	no	no
-🏌	U+1F3CC	person golfing	Misc	Unrelated	no	no
-🏌️‍♂️	U+1F3CC U+FE0F U+200D U+2642 U+FE0F	man golfing	Misc	Unrelated	no	no
-🏌️‍♀️	U+1F3CC U+FE0F U+200D U+2640 U+FE0F	woman golfing	Misc	Unrelated	no	no
-🏄	U+1F3C4	person surfing	Misc	Unrelated	no	no
-🏄‍♂️	U+1F3C4 U+200D U+2642 U+FE0F	man surfing	Misc	Unrelated	no	no
-🏄‍♀️	U+1F3C4 U+200D U+2640 U+FE0F	woman surfing	Misc	Unrelated	no	no
-🚣	U+1F6A3	person rowing boat	Misc	Unrelated	no	no
-🚣‍♂️	U+1F6A3 U+200D U+2642 U+FE0F	man rowing boat	Misc	Unrelated	no	no
-🚣‍♀️	U+1F6A3 U+200D U+2640 U+FE0F	woman rowing boat	Misc	Unrelated	no	no
-🏊	U+1F3CA	person swimming	Misc	Unrelated	no	no
-🏊‍♂️	U+1F3CA U+200D U+2642 U+FE0F	man swimming	Misc	Unrelated	no	no
-🏊‍♀️	U+1F3CA U+200D U+2640 U+FE0F	woman swimming	Misc	Unrelated	no	no
-⛹	U+26F9	person bouncing ball	Misc	Unrelated	no	no
-⛹️‍♂️	U+26F9 U+FE0F U+200D U+2642 U+FE0F	man bouncing ball	Misc	Unrelated	no	no
-⛹️‍♀️	U+26F9 U+FE0F U+200D U+2640 U+FE0F	woman bouncing ball	Misc	Unrelated	no	no
-🏋	U+1F3CB	person lifting weights	Misc	Unrelated	no	no
-🏋️‍♂️	U+1F3CB U+FE0F U+200D U+2642 U+FE0F	man lifting weights	Misc	Unrelated	no	no
-🏋️‍♀️	U+1F3CB U+FE0F U+200D U+2640 U+FE0F	woman lifting weights	Misc	Unrelated	no	no
-🚴	U+1F6B4	person biking	Misc	Unrelated	no	no
-🚴‍♂️	U+1F6B4 U+200D U+2642 U+FE0F	man biking	Misc	Unrelated	no	no
-🚴‍♀️	U+1F6B4 U+200D U+2640 U+FE0F	woman biking	Misc	Unrelated	no	no
-🚵	U+1F6B5	person mountain biking	Misc	Unrelated	no	no
-🚵‍♂️	U+1F6B5 U+200D U+2642 U+FE0F	man mountain biking	Misc	Unrelated	no	no
-🚵‍♀️	U+1F6B5 U+200D U+2640 U+FE0F	woman mountain biking	Misc	Unrelated	no	no
-🤸	U+1F938	person cartwheeling	Misc	Unrelated	no	no
-🤸‍♂️	U+1F938 U+200D U+2642 U+FE0F	man cartwheeling	Misc	Unrelated	no	no
-🤸‍♀️	U+1F938 U+200D U+2640 U+FE0F	woman cartwheeling	Misc	Unrelated	no	no
-🤼	U+1F93C	people wrestling	Misc	Unrelated	no	no
-🤼‍♂️	U+1F93C U+200D U+2642 U+FE0F	men wrestling	Misc	Unrelated	no	no
-🤼‍♀️	U+1F93C U+200D U+2640 U+FE0F	women wrestling	Misc	Unrelated	no	no
-🤽	U+1F93D	person playing water polo	Misc	Unrelated	no	no
-🤽‍♂️	U+1F93D U+200D U+2642 U+FE0F	man playing water polo	Misc	Unrelated	no	no
-🤽‍♀️	U+1F93D U+200D U+2640 U+FE0F	woman playing water polo	Misc	Unrelated	no	no
-🤾	U+1F93E	person playing handball	Misc	Unrelated	no	no
-🤾‍♂️	U+1F93E U+200D U+2642 U+FE0F	man playing handball	Misc	Unrelated	no	no
-🤾‍♀️	U+1F93E U+200D U+2640 U+FE0F	woman playing handball	Misc	Unrelated	no	no
-🤹	U+1F939	person juggling	Misc	Unrelated	no	no
-🤹‍♂️	U+1F939 U+200D U+2642 U+FE0F	man juggling	Misc	Unrelated	no	no
-🤹‍♀️	U+1F939 U+200D U+2640 U+FE0F	woman juggling	Misc	Unrelated	no	no
-🧘	U+1F9D8	person in lotus position	Misc	Unrelated	no	no
-🧘‍♂️	U+1F9D8 U+200D U+2642 U+FE0F	man in lotus position	Misc	Unrelated	no	no
-🧘‍♀️	U+1F9D8 U+200D U+2640 U+FE0F	woman in lotus position	Misc	Unrelated	no	no
-🛀	U+1F6C0	person taking bath	Misc	Unrelated	no	no
-🛌	U+1F6CC	person in bed	Misc	Unrelated	no	no
-🧑‍🤝‍🧑	U+1F9D1 U+200D U+1F91D U+200D U+1F9D1	people holding hands	Misc	Unrelated	no	no
-👭	U+1F46D	women holding hands	Misc	Unrelated	no	no
-👫	U+1F46B	woman and man holding hands	Misc	Unrelated	no	no
-👬	U+1F46C	men holding hands	Misc	Unrelated	no	no
-💏	U+1F48F	kiss	Misc	Unrelated	no	no
-👩‍❤️‍💋‍👨	U+1F469 U+200D U+2764 U+FE0F U+200D U+1F48B U+200D U+1F468	kiss: woman, man	Misc	Unrelated	no	no
-👨‍❤️‍💋‍👨	U+1F468 U+200D U+2764 U+FE0F U+200D U+1F48B U+200D U+1F468	kiss: man, man	Misc	Unrelated	no	no
-👩‍❤️‍💋‍👩	U+1F469 U+200D U+2764 U+FE0F U+200D U+1F48B U+200D U+1F469	kiss: woman, woman	Misc	Unrelated	no	no
-💑	U+1F491	couple with heart	Misc	Unrelated	no	no
-👩‍❤️‍👨	U+1F469 U+200D U+2764 U+FE0F U+200D U+1F468	couple with heart: woman, man	Misc	Unrelated	no	no
-👨‍❤️‍👨	U+1F468 U+200D U+2764 U+FE0F U+200D U+1F468	couple with heart: man, man	Misc	Unrelated	no	no
-👩‍❤️‍👩	U+1F469 U+200D U+2764 U+FE0F U+200D U+1F469	couple with heart: woman, woman	Misc	Unrelated	no	no
-👨‍👩‍👦	U+1F468 U+200D U+1F469 U+200D U+1F466	family: man, woman, boy	Misc	Unrelated	no	no
-👨‍👩‍👧	U+1F468 U+200D U+1F469 U+200D U+1F467	family: man, woman, girl	Misc	Unrelated	no	no
-👨‍👩‍👧‍👦	U+1F468 U+200D U+1F469 U+200D U+1F467 U+200D U+1F466	family: man, woman, girl, boy	Misc	Unrelated	no	no
-👨‍👩‍👦‍👦	U+1F468 U+200D U+1F469 U+200D U+1F466 U+200D U+1F466	family: man, woman, boy, boy	Misc	Unrelated	no	no
-👨‍👩‍👧‍👧	U+1F468 U+200D U+1F469 U+200D U+1F467 U+200D U+1F467	family: man, woman, girl, girl	Misc	Unrelated	no	no
-👨‍👨‍👦	U+1F468 U+200D U+1F468 U+200D U+1F466	family: man, man, boy	Misc	Unrelated	no	no
-👨‍👨‍👧	U+1F468 U+200D U+1F468 U+200D U+1F467	family: man, man, girl	Misc	Unrelated	no	no
-👨‍👨‍👧‍👦	U+1F468 U+200D U+1F468 U+200D U+1F467 U+200D U+1F466	family: man, man, girl, boy	Misc	Unrelated	no	no
-👨‍👨‍👦‍👦	U+1F468 U+200D U+1F468 U+200D U+1F466 U+200D U+1F466	family: man, man, boy, boy	Misc	Unrelated	no	no
-👨‍👨‍👧‍👧	U+1F468 U+200D U+1F468 U+200D U+1F467 U+200D U+1F467	family: man, man, girl, girl	Misc	Unrelated	no	no
-👩‍👩‍👦	U+1F469 U+200D U+1F469 U+200D U+1F466	family: woman, woman, boy	Misc	Unrelated	no	no
-👩‍👩‍👧	U+1F469 U+200D U+1F469 U+200D U+1F467	family: woman, woman, girl	Misc	Unrelated	no	no
-👩‍👩‍👧‍👦	U+1F469 U+200D U+1F469 U+200D U+1F467 U+200D U+1F466	family: woman, woman, girl, boy	Misc	Unrelated	no	no
-👩‍👩‍👦‍👦	U+1F469 U+200D U+1F469 U+200D U+1F466 U+200D U+1F466	family: woman, woman, boy, boy	Misc	Unrelated	no	no
-👩‍👩‍👧‍👧	U+1F469 U+200D U+1F469 U+200D U+1F467 U+200D U+1F467	family: woman, woman, girl, girl	Misc	Unrelated	no	no
-👨‍👦	U+1F468 U+200D U+1F466	family: man, boy	Misc	Unrelated	no	no
-👨‍👦‍👦	U+1F468 U+200D U+1F466 U+200D U+1F466	family: man, boy, boy	Misc	Unrelated	no	no
-👨‍👧	U+1F468 U+200D U+1F467	family: man, girl	Misc	Unrelated	no	no
-👨‍👧‍👦	U+1F468 U+200D U+1F467 U+200D U+1F466	family: man, girl, boy	Misc	Unrelated	no	no
-👨‍👧‍👧	U+1F468 U+200D U+1F467 U+200D U+1F467	family: man, girl, girl	Misc	Unrelated	no	no
-👩‍👦	U+1F469 U+200D U+1F466	family: woman, boy	Misc	Unrelated	no	no
-👩‍👦‍👦	U+1F469 U+200D U+1F466 U+200D U+1F466	family: woman, boy, boy	Misc	Unrelated	no	no
-👩‍👧	U+1F469 U+200D U+1F467	family: woman, girl	Misc	Unrelated	no	no
-👩‍👧‍👦	U+1F469 U+200D U+1F467 U+200D U+1F466	family: woman, girl, boy	Misc	Unrelated	no	no
-👩‍👧‍👧	U+1F469 U+200D U+1F467 U+200D U+1F467	family: woman, girl, girl	Misc	Unrelated	no	no
-🗣	U+1F5E3	speaking head	Misc	Unrelated	no	no
-👤	U+1F464	bust in silhouette	Misc	Unrelated	no	no
-👥	U+1F465	busts in silhouette	Misc	Unrelated	no	no
-🫂	U+1FAC2	people hugging	Misc	Unrelated	no	no
-👪	U+1F46A	family	Misc	Unrelated	no	no
-🧑‍🧑‍🧒	U+1F9D1 U+200D U+1F9D1 U+200D U+1F9D2	family: adult, adult, child	Misc	Unrelated	no	no
-🧑‍🧑‍🧒‍🧒	U+1F9D1 U+200D U+1F9D1 U+200D U+1F9D2 U+200D U+1F9D2	family: adult, adult, child, child	Misc	Unrelated	no	no
-🧑‍🧒	U+1F9D1 U+200D U+1F9D2	family: adult, child	Misc	Unrelated	no	no
-🧑‍🧒‍🧒	U+1F9D1 U+200D U+1F9D2 U+200D U+1F9D2	family: adult, child, child	Misc	Unrelated	no	no
-👣	U+1F463	footprints	Misc	Unrelated	no	no
-🫆	U+1FAC6	fingerprint	Misc	Unrelated	no	no
-🦰	U+1F9B0	red hair	Misc	Unrelated	no	no
-🦱	U+1F9B1	curly hair	Misc	Unrelated	no	no
-🦳	U+1F9B3	white hair	Misc	Unrelated	no	no
-🦲	U+1F9B2	bald	Misc	Unrelated	no	no
-🐵	U+1F435	monkey face	Misc	Unrelated	no	no
-🐒	U+1F412	monkey	Misc	Unrelated	no	no
-🦍	U+1F98D	gorilla	Misc	Unrelated	no	no
-🦧	U+1F9A7	orangutan	Misc	Unrelated	no	no
-🐶	U+1F436	dog face	Misc	Unrelated	no	no
-🐕	U+1F415	dog	Misc	Unrelated	no	no
-🦮	U+1F9AE	guide dog	Misc	Unrelated	no	no
-🐕‍🦺	U+1F415 U+200D U+1F9BA	service dog	Misc	Unrelated	no	no
-🐩	U+1F429	poodle	Misc	Unrelated	no	no
-🐺	U+1F43A	wolf	Misc	Unrelated	no	no
-🦊	U+1F98A	fox	Misc	Unrelated	no	no
-🦝	U+1F99D	raccoon	Misc	Unrelated	no	no
-🐱	U+1F431	cat face	Bot	Non-Game Category	no	yes
-🐈	U+1F408	cat	Cat	Unrelated	no	no
-🐈‍⬛	U+1F408 U+200D U+2B1B	black cat	Cat	Unrelated	no	no
-🦁	U+1F981	lion	Misc	Unrelated	no	no
-🐯	U+1F42F	tiger face	Misc	Unrelated	no	no
-🐅	U+1F405	tiger	Misc	Unrelated	no	no
-🐆	U+1F406	leopard	Misc	Unrelated	no	no
-🐴	U+1F434	horse face	Misc	Unrelated	no	no
-🫎	U+1FACE	moose	Misc	Unrelated	no	no
-🫏	U+1FACF	donkey	Misc	Unrelated	no	no
-🐎	U+1F40E	horse	Misc	Unrelated	no	no
-🦄	U+1F984	unicorn	Misc	Unrelated	no	no
-🦓	U+1F993	zebra	Misc	Unrelated	no	no
-🦌	U+1F98C	deer	Misc	Unrelated	no	no
-🦬	U+1F9AC	bison	Misc	Unrelated	no	no
-🐮	U+1F42E	cow face	Misc	Unrelated	no	no
-🐂	U+1F402	ox	Misc	Unrelated	no	no
-🐃	U+1F403	water buffalo	Misc	Unrelated	no	no
-🐄	U+1F404	cow	Misc	Unrelated	no	no
-🐷	U+1F437	pig face	Misc	Unrelated	no	no
-🐖	U+1F416	pig	Misc	Unrelated	no	no
-🐗	U+1F417	boar	Misc	Unrelated	no	no
-🐽	U+1F43D	pig nose	Misc	Unrelated	no	no
-🐏	U+1F40F	ram	Misc	Unrelated	no	no
-🐑	U+1F411	ewe	Misc	Unrelated	no	no
-🐐	U+1F410	goat	Misc	Unrelated	no	no
-🐪	U+1F42A	camel	Misc	Unrelated	no	no
-🐫	U+1F42B	two-hump camel	Misc	Unrelated	no	no
-🦙	U+1F999	llama	Misc	Unrelated	no	no
-🦒	U+1F992	giraffe	Misc	Unrelated	no	no
-🐘	U+1F418	elephant	Misc	Unrelated	no	no
-🦣	U+1F9A3	mammoth	Misc	Unrelated	no	no
-🦏	U+1F98F	rhinoceros	Misc	Unrelated	no	no
-🦛	U+1F99B	hippopotamus	Misc	Unrelated	no	no
-🐭	U+1F42D	mouse face	Prey	Mammal	yes	no
-🐁	U+1F401	mouse	Prey	Mammal	yes	no
-🐀	U+1F400	rat	Prey	Mammal	yes	no
-🐹	U+1F439	hamster	Prey	Mammal	yes	no
-🐰	U+1F430	rabbit face	Prey	Mammal	yes	no
-🐇	U+1F407	rabbit	Prey	Mammal	yes	no
-🐿	U+1F43F	chipmunk	Prey	Mammal	yes	no
-🦫	U+1F9AB	beaver	Misc	Unrelated	no	no
-🦔	U+1F994	hedgehog	Misc	Unrelated	no	no
-🦇	U+1F987	bat	Prey	Bird	yes	no
-🐻	U+1F43B	bear	Misc	Unrelated	no	no
-🐻‍❄️	U+1F43B U+200D U+2744 U+FE0F	polar bear	Misc	Unrelated	no	no
-🐨	U+1F428	koala	Misc	Unrelated	no	no
-🐼	U+1F43C	panda	Misc	Unrelated	no	no
-🦥	U+1F9A5	sloth	Misc	Unrelated	no	no
-🦦	U+1F9A6	otter	Misc	Unrelated	no	no
-🦨	U+1F9A8	skunk	Misc	Unrelated	no	no
-🦘	U+1F998	kangaroo	Misc	Unrelated	no	no
-🦡	U+1F9A1	badger	Misc	Unrelated	no	no
-🐾	U+1F43E	paw prints	Misc	Unrelated	no	no
-🦃	U+1F983	turkey	Prey	Bird	yes	no
-🐔	U+1F414	chicken	Prey	Bird	yes	no
-🐓	U+1F413	rooster	Prey	Bird	yes	no
-🐣	U+1F423	hatching chick	Prey	Bird	yes	no
-🐤	U+1F424	baby chick	Prey	Bird	yes	no
-🐥	U+1F425	front-facing baby chick	Prey	Bird	yes	no
-🐦	U+1F426	bird	Prey	Bird	yes	no
-🐧	U+1F427	penguin	Prey	Bird	yes	no
-🕊	U+1F54A	dove	Prey	Bird	yes	no
-🦅	U+1F985	eagle	Misc	Unrelated	no	no
-🦆	U+1F986	duck	Prey	Bird	yes	no
-🦢	U+1F9A2	swan	Misc	Unrelated	no	no
-🦉	U+1F989	owl	Misc	Unrelated	no	no
-🦤	U+1F9A4	dodo	Prey	Bird	yes	no
-🪶	U+1FAB6	feather	Toy	Conventional	no	no
-🦩	U+1F9A9	flamingo	Misc	Unrelated	no	no
-🦚	U+1F99A	peacock	Misc	Unrelated	no	no
-🦜	U+1F99C	parrot	Prey	Bird	yes	no
-🪽	U+1FABD	wing	Misc	Unrelated	no	no
-🐦‍⬛	U+1F426 U+200D U+2B1B	black bird	Prey	Bird	yes	no
-🪿	U+1FABF	goose	Misc	Unrelated	no	no
-🐦‍🔥	U+1F426 U+200D U+1F525	phoenix	Misc	Unrelated	no	no
-🐸	U+1F438	frog	Prey	Scales	yes	no
-🐊	U+1F40A	crocodile	Misc	Unrelated	no	no
-🐢	U+1F422	turtle	Prey	Scales	yes	no
-🦎	U+1F98E	lizard	Prey	Scales	yes	no
-🐍	U+1F40D	snake	Prey	Scales	yes	no
-🐲	U+1F432	dragon face	Misc	Unrelated	no	no
-🐉	U+1F409	dragon	Misc	Unrelated	no	no
-🦕	U+1F995	sauropod	Misc	Unrelated	no	no
-🦖	U+1F996	T-Rex	Misc	Unrelated	no	no
-🐳	U+1F433	spouting whale	Misc	Unrelated	no	no
-🐋	U+1F40B	whale	Misc	Unrelated	no	no
-🐬	U+1F42C	dolphin	Misc	Unrelated	no	no
-🫍	U+1FACD	orca	Misc	Unrelated	no	no
-🦭	U+1F9AD	seal	Misc	Unrelated	no	no
-🐟	U+1F41F	fish	Prey	Scales	yes	no
-🐠	U+1F420	tropical fish	Prey	Scales	yes	no
-🐡	U+1F421	blowfish	Misc	Unrelated	no	no
-🦈	U+1F988	shark	Misc	Unrelated	no	no
-🐙	U+1F419	octopus	Misc	Unrelated	no	no
-🐚	U+1F41A	spiral shell	Misc	Unrelated	no	no
-🪸	U+1FAB8	coral	Misc	Unrelated	no	no
-🪼	U+1FABC	jellyfish	Misc	Unrelated	no	no
-🦀	U+1F980	crab	Misc	Unrelated	no	no
-🦞	U+1F99E	lobster	Misc	Unrelated	no	no
-🦐	U+1F990	shrimp	Misc	Unrelated	no	no
-🦑	U+1F991	squid	Misc	Unrelated	no	no
-🦪	U+1F9AA	oyster	Misc	Unrelated	no	no
-🐌	U+1F40C	snail	Misc	Unrelated	no	no
-🦋	U+1F98B	butterfly	Prey	Bugs	yes	no
-🫌	U+1FACC	⊛ monarch butterfly	Prey	Bugs	no	no
-🐛	U+1F41B	bug	Prey	Bugs	yes	no
-🐜	U+1F41C	ant	Prey	Bugs	yes	no
-🐝	U+1F41D	honeybee	Prey	Bugs	yes	no
-🪲	U+1FAB2	beetle	Prey	Bugs	yes	no
-🐞	U+1F41E	lady beetle	Prey	Bugs	yes	no
-🦗	U+1F997	cricket	Prey	Bugs	yes	no
-🪳	U+1FAB3	cockroach	Prey	Bugs	yes	no
-🕷	U+1F577	spider	Prey	Bugs	yes	no
-🕸	U+1F578	spider web	Misc	Unrelated	no	no
-🦂	U+1F982	scorpion	Prey	Bugs	yes	no
-🦟	U+1F99F	mosquito	Prey	Bugs	yes	no
-🪰	U+1FAB0	fly	Prey	Bugs	yes	no
-🪱	U+1FAB1	worm	Misc	Unrelated	no	no
-🦠	U+1F9A0	microbe	Misc	Unrelated	no	no
-💐	U+1F490	bouquet	Misc	Unrelated	no	no
-🌸	U+1F338	cherry blossom	Misc	Unrelated	no	no
-💮	U+1F4AE	white flower	Misc	Unrelated	no	no
-🪷	U+1FAB7	lotus	Misc	Unrelated	no	no
-🏵	U+1F3F5	rosette	Misc	Unrelated	no	no
-🌹	U+1F339	rose	Misc	Unrelated	no	no
-🥀	U+1F940	wilted flower	Misc	Unrelated	no	no
-🌺	U+1F33A	hibiscus	Misc	Unrelated	no	no
-🌻	U+1F33B	sunflower	Misc	Unrelated	no	no
-🌼	U+1F33C	blossom	Misc	Unrelated	no	no
-🌷	U+1F337	tulip	Misc	Unrelated	no	no
-🪻	U+1FABB	hyacinth	Misc	Unrelated	no	no
-🌱	U+1F331	seedling	Misc	Unrelated	no	no
-🪴	U+1FAB4	potted plant	Misc	Unrelated	no	no
-🌲	U+1F332	evergreen tree	Misc	Unrelated	no	no
-🌳	U+1F333	deciduous tree	Misc	Unrelated	no	no
-🌴	U+1F334	palm tree	Misc	Unrelated	no	no
-🌵	U+1F335	cactus	Misc	Unrelated	no	no
-🌾	U+1F33E	sheaf of rice	Misc	Unrelated	no	no
-🌿	U+1F33F	herb	Misc	Unrelated	no	no
-☘	U+2618	shamrock	Misc	Unrelated	no	no
-🍀	U+1F340	four leaf clover	Misc	Unrelated	no	no
-🍁	U+1F341	maple leaf	Misc	Unrelated	no	no
-🍂	U+1F342	fallen leaf	Misc	Unrelated	no	no
-🍃	U+1F343	leaf fluttering in wind	Misc	Unrelated	no	no
-🪹	U+1FAB9	empty nest	Misc	Unrelated	no	no
-🪺	U+1FABA	nest with eggs	Misc	Unrelated	no	no
-🍄	U+1F344	mushroom	Food	Veggie	yes	no
-🪾	U+1FABE	leafless tree	Misc	Unrelated	no	no
-🍇	U+1F347	grapes	Food	Fruit	yes	no
-🍈	U+1F348	melon	Food	Fruit	yes	no
-🍉	U+1F349	watermelon	Food	Fruit	yes	no
-🍊	U+1F34A	tangerine	Food	Fruit	yes	no
-🍋	U+1F34B	lemon	Food	Fruit	yes	no
-🍋‍🟩	U+1F34B U+200D U+1F7E9	lime	Food	Fruit	yes	no
-🍌	U+1F34C	banana	Food	Fruit	yes	no
-🍍	U+1F34D	pineapple	Food	Fruit	yes	no
-🥭	U+1F96D	mango	Food	Fruit	yes	no
-🍎	U+1F34E	red apple	Food	Fruit	yes	no
-🍏	U+1F34F	green apple	Food	Fruit	yes	no
-🍐	U+1F350	pear	Food	Fruit	yes	no
-🍑	U+1F351	peach	Food	Fruit	yes	no
-🍒	U+1F352	cherries	Food	Fruit	yes	no
-🍓	U+1F353	strawberry	Food	Fruit	yes	no
-🫐	U+1FAD0	blueberries	Food	Fruit	yes	no
-🥝	U+1F95D	kiwi fruit	Food	Fruit	yes	no
-🍅	U+1F345	tomato	Food	Veggie	yes	no
-🫒	U+1FAD2	olive	Food	Veggie	yes	no
-🥥	U+1F965	coconut	Food	Fruit	yes	no
-🥑	U+1F951	avocado	Food	Veggie	yes	no
-🍆	U+1F346	eggplant	Food	Veggie	yes	no
-🥔	U+1F954	potato	Food	Veggie	yes	no
-🥕	U+1F955	carrot	Food	Veggie	yes	no
-🌽	U+1F33D	ear of corn	Food	Veggie	yes	no
-🌶	U+1F336	hot pepper	Food	Veggie	yes	no
-🫑	U+1FAD1	bell pepper	Food	Veggie	yes	no
-🥒	U+1F952	cucumber	Food	Veggie	yes	no
-🫝	U+1FADD	⊛ pickle	Food	Veggie	no	no
-🥬	U+1F96C	leafy green	Food	Veggie	yes	no
-🥦	U+1F966	broccoli	Food	Veggie	yes	no
-🧄	U+1F9C4	garlic	Food	Veggie	yes	no
-🧅	U+1F9C5	onion	Food	Veggie	yes	no
-🥜	U+1F95C	peanuts	Food	Protein	yes	no
-🫘	U+1FAD8	beans	Food	Protein	yes	no
-🌰	U+1F330	chestnut	Food	Protein	yes	no
-🫚	U+1FADA	ginger root	Food	Veggie	yes	no
-🫛	U+1FADB	pea pod	Food	Veggie	yes	no
-🍄‍🟫	U+1F344 U+200D U+1F7EB	brown mushroom	Food	Veggie	yes	no
-🫜	U+1FADC	root vegetable	Food	Veggie	yes	no
-🍞	U+1F35E	bread	Food	Bakery	yes	no
-🥐	U+1F950	croissant	Food	Bakery	yes	no
-🥖	U+1F956	baguette bread	Food	Bakery	yes	no
-🫓	U+1FAD3	flatbread	Food	Bakery	yes	no
-🥨	U+1F968	pretzel	Food	Bakery	yes	no
-🥯	U+1F96F	bagel	Food	Bakery	yes	no
-🥞	U+1F95E	pancakes	Food	Meal	yes	no
-🧇	U+1F9C7	waffle	Food	Meal	yes	no
-🧀	U+1F9C0	cheese wedge	Food	Protein	yes	no
-🍖	U+1F356	meat on bone	Food	Protein	yes	no
-🍗	U+1F357	poultry leg	Food	Protein	yes	no
-🥩	U+1F969	cut of meat	Food	Protein	yes	no
-🥓	U+1F953	bacon	Food	Protein	yes	no
-🍔	U+1F354	hamburger	Food	Fast Food	yes	no
-🍟	U+1F35F	french fries	Food	Fast Food	yes	no
-🍕	U+1F355	pizza	Food	Fast Food	yes	no
-🌭	U+1F32D	hot dog	Food	Fast Food	yes	no
-🥪	U+1F96A	sandwich	Food	Fast Food	yes	no
-🌮	U+1F32E	taco	Food	Fast Food	yes	no
-🌯	U+1F32F	burrito	Food	Fast Food	yes	no
-🫔	U+1FAD4	tamale	Food	Fast Food	yes	no
-🥙	U+1F959	stuffed flatbread	Food	Fast Food	yes	no
-🧆	U+1F9C6	falafel	Food	Fast Food	yes	no
-🥚	U+1F95A	egg	Food	Protein	yes	no
-🍳	U+1F373	cooking	Adjacent	Cooking	no	no
-🥘	U+1F958	shallow pan of food	Food	Meal	yes	no
-🍲	U+1F372	pot of food	Food	Meal	yes	no
-🫕	U+1FAD5	fondue	Food	Meal	yes	no
-🥣	U+1F963	bowl with spoon	Adjacent	Cooking	no	no
-🥗	U+1F957	green salad	Food	Meal	yes	no
-🍿	U+1F37F	popcorn	Food	Meal	yes	no
-🧈	U+1F9C8	butter	Adjacent	Ingredient	no	no
-🧂	U+1F9C2	salt	Adjacent	Ingredient	no	no
-🥫	U+1F96B	canned food	Adjacent	Ingredient	no	no
-🍱	U+1F371	bento box	Food	Meal	yes	no
-🍘	U+1F358	rice cracker	Food	Meal	yes	no
-🍙	U+1F359	rice ball	Food	Meal	yes	no
-🍚	U+1F35A	cooked rice	Food	Meal	yes	no
-🍛	U+1F35B	curry rice	Food	Meal	yes	no
-🍜	U+1F35C	steaming bowl	Adjacent	Dishes	no	no
-🍝	U+1F35D	spaghetti	Food	Meal	yes	no
-🍠	U+1F360	roasted sweet potato	Food	Veggie	yes	no
-🍢	U+1F362	oden	Food	Meal	yes	no
-🍣	U+1F363	sushi	Food	Meal	yes	no
-🍤	U+1F364	fried shrimp	Food	Protein	yes	no
-🍥	U+1F365	fish cake with swirl	Food	Meal	yes	no
-🥮	U+1F96E	moon cake	Food	Dessert	yes	no
-🍡	U+1F361	dango	Food	Dessert	yes	no
-🥟	U+1F95F	dumpling	Food	Meal	yes	no
-🥠	U+1F960	fortune cookie	Food	Dessert	yes	no
-🥡	U+1F961	takeout box	Adjacent	Dishes	no	no
-🍦	U+1F366	soft ice cream	Food	Dessert	yes	no
-🍧	U+1F367	shaved ice	Food	Dessert	yes	no
-🍨	U+1F368	ice cream	Food	Dessert	yes	no
-🍩	U+1F369	doughnut	Food	Bakery	yes	no
-🍪	U+1F36A	cookie	Food	Bakery	yes	no
-🎂	U+1F382	birthday cake	Food	Bakery	yes	no
-🍰	U+1F370	shortcake	Food	Bakery	yes	no
-🧁	U+1F9C1	cupcake	Food	Bakery	yes	no
-🥧	U+1F967	pie	Food	Bakery	yes	no
-🍫	U+1F36B	chocolate bar	Food	Dessert	yes	no
-🍬	U+1F36C	candy	Food	Dessert	yes	no
-🍭	U+1F36D	lollipop	Food	Dessert	yes	no
-🍮	U+1F36E	custard	Food	Dessert	yes	no
-🍯	U+1F36F	honey pot	Adjacent	Ingredient	no	no
-🍼	U+1F37C	baby bottle	Adjacent	Drinks	no	no
-🥛	U+1F95B	glass of milk	Adjacent	Drinks	no	no
-☕	U+2615	hot beverage	Adjacent	Drinks	no	no
-🫖	U+1FAD6	teapot	Adjacent	Drinks	no	no
-🍵	U+1F375	teacup without handle	Adjacent	Drinks	no	no
-🍶	U+1F376	sake	Adjacent	Drinks	no	no
-🍾	U+1F37E	bottle with popping cork	Adjacent	Drinks	no	no
-🍷	U+1F377	wine glass	Adjacent	Drinks	no	no
-🍸	U+1F378	cocktail glass	Adjacent	Drinks	no	no
-🍹	U+1F379	tropical drink	Adjacent	Drinks	no	no
-🍺	U+1F37A	beer mug	Adjacent	Drinks	no	no
-🍻	U+1F37B	clinking beer mugs	Adjacent	Drinks	no	no
-🥂	U+1F942	clinking glasses	Adjacent	Drinks	no	no
-🥃	U+1F943	tumbler glass	Adjacent	Drinks	no	no
-🫗	U+1FAD7	pouring liquid	Adjacent	Drinks	no	no
-🥤	U+1F964	cup with straw	Adjacent	Drinks	no	no
-🧋	U+1F9CB	bubble tea	Adjacent	Drinks	no	no
-🧃	U+1F9C3	beverage box	Adjacent	Drinks	no	no
-🧉	U+1F9C9	mate	Adjacent	Drinks	no	no
-🧊	U+1F9CA	ice	Adjacent	Drinks	no	no
-🥢	U+1F962	chopsticks	Adjacent	Dishes	no	no
-🍽	U+1F37D	fork and knife with plate	Adjacent	Dishes	no	no
-🍴	U+1F374	fork and knife	Adjacent	Dishes	no	no
-🥄	U+1F944	spoon	Adjacent	Dishes	no	no
-🔪	U+1F52A	kitchen knife	Adjacent	Dishes	no	no
-🫙	U+1FAD9	jar	Misc	Unrelated	no	no
-🏺	U+1F3FA	amphora	Misc	Unrelated	no	no
-🌍	U+1F30D	globe showing Europe-Africa	Misc	Unrelated	no	no
-🌎	U+1F30E	globe showing Americas	Misc	Unrelated	no	no
-🌏	U+1F30F	globe showing Asia-Australia	Misc	Unrelated	no	no
-🌐	U+1F310	globe with meridians	Misc	Unrelated	no	no
-🗺	U+1F5FA	world map	Misc	Unrelated	no	no
-🗾	U+1F5FE	map of Japan	Misc	Unrelated	no	no
-🧭	U+1F9ED	compass	Misc	Unrelated	no	no
-🏔	U+1F3D4	snow-capped mountain	Misc	Unrelated	no	no
-⛰	U+26F0	mountain	Misc	Unrelated	no	no
-🛘	U+1F6D8	landslide	Misc	Unrelated	no	no
-🌋	U+1F30B	volcano	Misc	Unrelated	no	no
-🗻	U+1F5FB	mount fuji	Misc	Unrelated	no	no
-🏕	U+1F3D5	camping	Misc	Unrelated	no	no
-🏖	U+1F3D6	beach with umbrella	Misc	Unrelated	no	no
-🏜	U+1F3DC	desert	Misc	Unrelated	no	no
-🏝	U+1F3DD	desert island	Misc	Unrelated	no	no
-🏞	U+1F3DE	national park	Misc	Unrelated	no	no
-🏟	U+1F3DF	stadium	Misc	Unrelated	no	no
-🏛	U+1F3DB	classical building	Misc	Unrelated	no	no
-🏗	U+1F3D7	building construction	Misc	Unrelated	no	no
-🧱	U+1F9F1	brick	Misc	Unrelated	no	no
-🪨	U+1FAA8	rock	Misc	Unrelated	no	no
-🪵	U+1FAB5	wood	Misc	Unrelated	no	no
-🛖	U+1F6D6	hut	Misc	Unrelated	no	no
-🏘	U+1F3D8	houses	Misc	Unrelated	no	no
-🏚	U+1F3DA	derelict house	Misc	Unrelated	no	no
-🏠	U+1F3E0	house	Misc	Unrelated	no	no
-🏡	U+1F3E1	house with garden	Misc	Unrelated	no	no
-🏢	U+1F3E2	office building	Misc	Unrelated	no	no
-🏣	U+1F3E3	Japanese post office	Misc	Unrelated	no	no
-🏤	U+1F3E4	post office	Misc	Unrelated	no	no
-🏥	U+1F3E5	hospital	Misc	Unrelated	no	no
-🏦	U+1F3E6	bank	Misc	Unrelated	no	no
-🏨	U+1F3E8	hotel	Misc	Unrelated	no	no
-🏩	U+1F3E9	love hotel	Misc	Unrelated	no	no
-🏪	U+1F3EA	convenience store	Misc	Unrelated	no	no
-🏫	U+1F3EB	school	Misc	Unrelated	no	no
-🏬	U+1F3EC	department store	Misc	Unrelated	no	no
-🏭	U+1F3ED	factory	Misc	Unrelated	no	no
-🏯	U+1F3EF	Japanese castle	Misc	Unrelated	no	no
-🏰	U+1F3F0	castle	Misc	Unrelated	no	no
-💒	U+1F492	wedding	Misc	Unrelated	no	no
-🗼	U+1F5FC	Tokyo tower	Misc	Unrelated	no	no
-🗽	U+1F5FD	Statue of Liberty	Misc	Unrelated	no	no
-⛪	U+26EA	church	Misc	Unrelated	no	no
-🕌	U+1F54C	mosque	Misc	Unrelated	no	no
-🛕	U+1F6D5	hindu temple	Misc	Unrelated	no	no
-🕍	U+1F54D	synagogue	Misc	Unrelated	no	no
-⛩	U+26E9	shinto shrine	Misc	Unrelated	no	no
-🕋	U+1F54B	kaaba	Misc	Unrelated	no	no
-⛲	U+26F2	fountain	Misc	Unrelated	no	no
-⛺	U+26FA	tent	Misc	Unrelated	no	no
-🌁	U+1F301	foggy	Misc	Unrelated	no	no
-🌃	U+1F303	night with stars	Misc	Unrelated	no	no
-🏙	U+1F3D9	cityscape	Misc	Unrelated	no	no
-🌄	U+1F304	sunrise over mountains	Misc	Unrelated	no	no
-🌅	U+1F305	sunrise	Misc	Unrelated	no	no
-🌆	U+1F306	cityscape at dusk	Misc	Unrelated	no	no
-🌇	U+1F307	sunset	Misc	Unrelated	no	no
-🌉	U+1F309	bridge at night	Misc	Unrelated	no	no
-♨	U+2668	hot springs	Misc	Unrelated	no	no
-🎠	U+1F3A0	carousel horse	Misc	Unrelated	no	no
-🛝	U+1F6DD	playground slide	Misc	Unrelated	no	no
-🎡	U+1F3A1	ferris wheel	Misc	Unrelated	no	no
-🎢	U+1F3A2	roller coaster	Misc	Unrelated	no	no
-💈	U+1F488	barber pole	Misc	Unrelated	no	no
-🎪	U+1F3AA	circus tent	Misc	Unrelated	no	no
-🚂	U+1F682	locomotive	Misc	Unrelated	no	no
-🚃	U+1F683	railway car	Misc	Unrelated	no	no
-🚄	U+1F684	high-speed train	Misc	Unrelated	no	no
-🚅	U+1F685	bullet train	Misc	Unrelated	no	no
-🚆	U+1F686	train	Misc	Unrelated	no	no
-🚇	U+1F687	metro	Misc	Unrelated	no	no
-🚈	U+1F688	light rail	Misc	Unrelated	no	no
-🚉	U+1F689	station	Misc	Unrelated	no	no
-🚊	U+1F68A	tram	Misc	Unrelated	no	no
-🚝	U+1F69D	monorail	Misc	Unrelated	no	no
-🚞	U+1F69E	mountain railway	Misc	Unrelated	no	no
-🚋	U+1F68B	tram car	Misc	Unrelated	no	no
-🚌	U+1F68C	bus	Misc	Unrelated	no	no
-🚍	U+1F68D	oncoming bus	Misc	Unrelated	no	no
-🚎	U+1F68E	trolleybus	Misc	Unrelated	no	no
-🚐	U+1F690	minibus	Misc	Unrelated	no	no
-🚑	U+1F691	ambulance	Misc	Unrelated	no	no
-🚒	U+1F692	fire engine	Misc	Unrelated	no	no
-🚓	U+1F693	police car	Misc	Unrelated	no	no
-🚔	U+1F694	oncoming police car	Misc	Unrelated	no	no
-🚕	U+1F695	taxi	Misc	Unrelated	no	no
-🚖	U+1F696	oncoming taxi	Misc	Unrelated	no	no
-🚗	U+1F697	automobile	Misc	Unrelated	no	no
-🚘	U+1F698	oncoming automobile	Misc	Unrelated	no	no
-🚙	U+1F699	sport utility vehicle	Misc	Unrelated	no	no
-🛻	U+1F6FB	pickup truck	Misc	Unrelated	no	no
-🚚	U+1F69A	delivery truck	Misc	Unrelated	no	no
-🚛	U+1F69B	articulated lorry	Misc	Unrelated	no	no
-🚜	U+1F69C	tractor	Misc	Unrelated	no	no
-🏎	U+1F3CE	racing car	Misc	Unrelated	no	no
-🏍	U+1F3CD	motorcycle	Misc	Unrelated	no	no
-🛵	U+1F6F5	motor scooter	Misc	Unrelated	no	no
-🦽	U+1F9BD	manual wheelchair	Misc	Unrelated	no	no
-🦼	U+1F9BC	motorized wheelchair	Misc	Unrelated	no	no
-🛺	U+1F6FA	auto rickshaw	Misc	Unrelated	no	no
-🚲	U+1F6B2	bicycle	Misc	Unrelated	no	no
-🛴	U+1F6F4	kick scooter	Misc	Unrelated	no	no
-🛹	U+1F6F9	skateboard	Misc	Unrelated	no	no
-🛼	U+1F6FC	roller skate	Misc	Unrelated	no	no
-🚏	U+1F68F	bus stop	Misc	Unrelated	no	no
-🛣	U+1F6E3	motorway	Misc	Unrelated	no	no
-🛤	U+1F6E4	railway track	Misc	Unrelated	no	no
-🛢	U+1F6E2	oil drum	Misc	Unrelated	no	no
-⛽	U+26FD	fuel pump	Misc	Unrelated	no	no
-🛞	U+1F6DE	wheel	Misc	Unrelated	no	no
-🚨	U+1F6A8	police car light	Misc	Unrelated	no	no
-🚥	U+1F6A5	horizontal traffic light	Misc	Unrelated	no	no
-🚦	U+1F6A6	vertical traffic light	Misc	Unrelated	no	no
-🛑	U+1F6D1	stop sign	Misc	Unrelated	no	no
-🚧	U+1F6A7	construction	Misc	Unrelated	no	no
-🛙	U+1F6D9	⊛ lighthouse	Misc	Unrelated	no	no
-⚓	U+2693	anchor	Misc	Unrelated	no	no
-🛟	U+1F6DF	ring buoy	Misc	Unrelated	no	no
-⛵	U+26F5	sailboat	Misc	Unrelated	no	no
-🛶	U+1F6F6	canoe	Misc	Unrelated	no	no
-🚤	U+1F6A4	speedboat	Misc	Unrelated	no	no
-🛳	U+1F6F3	passenger ship	Misc	Unrelated	no	no
-⛴	U+26F4	ferry	Misc	Unrelated	no	no
-🛥	U+1F6E5	motor boat	Misc	Unrelated	no	no
-🚢	U+1F6A2	ship	Misc	Unrelated	no	no
-✈	U+2708	airplane	Misc	Unrelated	no	no
-🛩	U+1F6E9	small airplane	Misc	Unrelated	no	no
-🛫	U+1F6EB	airplane departure	Misc	Unrelated	no	no
-🛬	U+1F6EC	airplane arrival	Misc	Unrelated	no	no
-🪂	U+1FA82	parachute	Misc	Unrelated	no	no
-💺	U+1F4BA	seat	Misc	Unrelated	no	no
-🚁	U+1F681	helicopter	Misc	Unrelated	no	no
-🚟	U+1F69F	suspension railway	Misc	Unrelated	no	no
-🚠	U+1F6A0	mountain cableway	Misc	Unrelated	no	no
-🚡	U+1F6A1	aerial tramway	Misc	Unrelated	no	no
-🛰	U+1F6F0	satellite	Misc	Unrelated	no	no
-🚀	U+1F680	rocket	Misc	Unrelated	no	no
-🛸	U+1F6F8	flying saucer	Misc	Unrelated	no	no
-🛎	U+1F6CE	bellhop bell	Misc	Unrelated	no	no
-🧳	U+1F9F3	luggage	Misc	Unrelated	no	no
-⌛	U+231B	hourglass done	Misc	Unrelated	no	no
-⏳	U+23F3	hourglass not done	Misc	Unrelated	no	no
-⌚	U+231A	watch	Misc	Unrelated	no	no
-⏰	U+23F0	alarm clock	Misc	Unrelated	no	no
-⏱	U+23F1	stopwatch	Misc	Unrelated	no	no
-⏲	U+23F2	timer clock	Misc	Unrelated	no	no
-🕰	U+1F570	mantelpiece clock	Misc	Unrelated	no	no
-🕛	U+1F55B	twelve o’clock	Misc	Unrelated	no	no
-🕧	U+1F567	twelve-thirty	Misc	Unrelated	no	no
-🕐	U+1F550	one o’clock	Misc	Unrelated	no	no
-🕜	U+1F55C	one-thirty	Misc	Unrelated	no	no
-🕑	U+1F551	two o’clock	Misc	Unrelated	no	no
-🕝	U+1F55D	two-thirty	Misc	Unrelated	no	no
-🕒	U+1F552	three o’clock	Misc	Unrelated	no	no
-🕞	U+1F55E	three-thirty	Misc	Unrelated	no	no
-🕓	U+1F553	four o’clock	Misc	Unrelated	no	no
-🕟	U+1F55F	four-thirty	Misc	Unrelated	no	no
-🕔	U+1F554	five o’clock	Misc	Unrelated	no	no
-🕠	U+1F560	five-thirty	Misc	Unrelated	no	no
-🕕	U+1F555	six o’clock	Misc	Unrelated	no	no
-🕡	U+1F561	six-thirty	Misc	Unrelated	no	no
-🕖	U+1F556	seven o’clock	Misc	Unrelated	no	no
-🕢	U+1F562	seven-thirty	Misc	Unrelated	no	no
-🕗	U+1F557	eight o’clock	Misc	Unrelated	no	no
-🕣	U+1F563	eight-thirty	Misc	Unrelated	no	no
-🕘	U+1F558	nine o’clock	Misc	Unrelated	no	no
-🕤	U+1F564	nine-thirty	Misc	Unrelated	no	no
-🕙	U+1F559	ten o’clock	Misc	Unrelated	no	no
-🕥	U+1F565	ten-thirty	Misc	Unrelated	no	no
-🕚	U+1F55A	eleven o’clock	Misc	Unrelated	no	no
-🕦	U+1F566	eleven-thirty	Misc	Unrelated	no	no
-🌑	U+1F311	new moon	Misc	Unrelated	no	no
-🌒	U+1F312	waxing crescent moon	Misc	Unrelated	no	no
-🌓	U+1F313	first quarter moon	Misc	Unrelated	no	no
-🌔	U+1F314	waxing gibbous moon	Misc	Unrelated	no	no
-🌕	U+1F315	full moon	Misc	Unrelated	no	no
-🌖	U+1F316	waning gibbous moon	Misc	Unrelated	no	no
-🌗	U+1F317	last quarter moon	Misc	Unrelated	no	no
-🌘	U+1F318	waning crescent moon	Misc	Unrelated	no	no
-🌙	U+1F319	crescent moon	Misc	Unrelated	no	no
-🌚	U+1F31A	new moon face	Misc	Unrelated	no	no
-🌛	U+1F31B	first quarter moon face	Misc	Unrelated	no	no
-🌜	U+1F31C	last quarter moon face	Misc	Unrelated	no	no
-🌡	U+1F321	thermometer	Misc	Unrelated	no	no
-☀	U+2600	sun	Misc	Unrelated	no	no
-🌝	U+1F31D	full moon face	Misc	Unrelated	no	no
-🌞	U+1F31E	sun with face	Misc	Unrelated	no	no
-🪐	U+1FA90	ringed planet	Misc	Unrelated	no	no
-⭐	U+2B50	star	Misc	Unrelated	no	no
-🌟	U+1F31F	glowing star	Misc	Unrelated	no	no
-🌠	U+1F320	shooting star	Misc	Unrelated	no	no
-🌌	U+1F30C	milky way	Misc	Unrelated	no	no
-☁	U+2601	cloud	Misc	Unrelated	no	no
-⛅	U+26C5	sun behind cloud	Misc	Unrelated	no	no
-⛈	U+26C8	cloud with lightning and rain	Misc	Unrelated	no	no
-🌤	U+1F324	sun behind small cloud	Misc	Unrelated	no	no
-🌥	U+1F325	sun behind large cloud	Misc	Unrelated	no	no
-🌦	U+1F326	sun behind rain cloud	Misc	Unrelated	no	no
-🌧	U+1F327	cloud with rain	Misc	Unrelated	no	no
-🌨	U+1F328	cloud with snow	Misc	Unrelated	no	no
-🌩	U+1F329	cloud with lightning	Misc	Unrelated	no	no
-🌪	U+1F32A	tornado	Misc	Unrelated	no	no
-🌫	U+1F32B	fog	Misc	Unrelated	no	no
-🌬	U+1F32C	wind face	Misc	Unrelated	no	no
-🌀	U+1F300	cyclone	Misc	Unrelated	no	no
-🌈	U+1F308	rainbow	Misc	Unrelated	no	no
-🌂	U+1F302	closed umbrella	Misc	Unrelated	no	no
-☂	U+2602	umbrella	Misc	Unrelated	no	no
-☔	U+2614	umbrella with rain drops	Misc	Unrelated	no	no
-⛱	U+26F1	umbrella on ground	Misc	Unrelated	no	no
-⚡	U+26A1	high voltage	Misc	Unrelated	no	no
-❄	U+2744	snowflake	Misc	Unrelated	no	no
-☃	U+2603	snowman	Misc	Unrelated	no	no
-⛄	U+26C4	snowman without snow	Misc	Unrelated	no	no
-☄	U+2604	comet	Misc	Unrelated	no	no
-🪋	U+1FA8B	⊛ meteor	Misc	Unrelated	no	no
-🔥	U+1F525	fire	Misc	Unrelated	no	no
-💧	U+1F4A7	droplet	Misc	Unrelated	no	no
-🌊	U+1F30A	water wave	Misc	Unrelated	no	no
-🎃	U+1F383	jack-o-lantern	Misc	Unrelated	no	no
-🎄	U+1F384	Christmas tree	Misc	Unrelated	no	no
-🎆	U+1F386	fireworks	Misc	Unrelated	no	no
-🎇	U+1F387	sparkler	Misc	Unrelated	no	no
-🧨	U+1F9E8	firecracker	Misc	Unrelated	no	no
-✨	U+2728	sparkles	Misc	Unrelated	no	no
-🎈	U+1F388	balloon	Toy	Unconventional	no	no
-🎉	U+1F389	party popper	Misc	Unrelated	no	no
-🎊	U+1F38A	confetti ball	Misc	Unrelated	no	no
-🎋	U+1F38B	tanabata tree	Misc	Unrelated	no	no
-🎍	U+1F38D	pine decoration	Misc	Unrelated	no	no
-🎎	U+1F38E	Japanese dolls	Misc	Unrelated	no	no
-🎏	U+1F38F	carp streamer	Misc	Unrelated	no	no
-🎐	U+1F390	wind chime	Misc	Unrelated	no	no
-🎑	U+1F391	moon viewing ceremony	Misc	Unrelated	no	no
-🧧	U+1F9E7	red envelope	Misc	Unrelated	no	no
-🎀	U+1F380	ribbon	Toy	Unconventional	no	no
-🎁	U+1F381	wrapped gift	Misc	Unrelated	no	no
-🎗	U+1F397	reminder ribbon	Misc	Unrelated	no	no
-🎟	U+1F39F	admission tickets	Misc	Unrelated	no	no
-🎫	U+1F3AB	ticket	Misc	Unrelated	no	no
-🎖	U+1F396	military medal	Misc	Unrelated	no	no
-🏆	U+1F3C6	trophy	Misc	Unrelated	no	no
-🏅	U+1F3C5	sports medal	Misc	Unrelated	no	no
-🥇	U+1F947	1st place medal	Misc	Unrelated	no	no
-🥈	U+1F948	2nd place medal	Misc	Unrelated	no	no
-🥉	U+1F949	3rd place medal	Misc	Unrelated	no	no
-⚽	U+26BD	soccer ball	Misc	Unrelated	no	no
-⚾	U+26BE	baseball	Misc	Unrelated	no	no
-🥎	U+1F94E	softball	Misc	Unrelated	no	no
-🏀	U+1F3C0	basketball	Misc	Unrelated	no	no
-🏐	U+1F3D0	volleyball	Misc	Unrelated	no	no
-🏈	U+1F3C8	american football	Misc	Unrelated	no	no
-🏉	U+1F3C9	rugby football	Misc	Unrelated	no	no
-🎾	U+1F3BE	tennis	Toy	Conventional	no	no
-🥏	U+1F94F	flying disc	Misc	Unrelated	no	no
-🎳	U+1F3B3	bowling	Misc	Unrelated	no	no
-🏏	U+1F3CF	cricket game	Misc	Unrelated	no	no
-🏑	U+1F3D1	field hockey	Misc	Unrelated	no	no
-🏒	U+1F3D2	ice hockey	Misc	Unrelated	no	no
-🥍	U+1F94D	lacrosse	Misc	Unrelated	no	no
-🏓	U+1F3D3	ping pong	Misc	Unrelated	no	no
-🏸	U+1F3F8	badminton	Misc	Unrelated	no	no
-🥊	U+1F94A	boxing glove	Misc	Unrelated	no	no
-🥋	U+1F94B	martial arts uniform	Misc	Unrelated	no	no
-🥅	U+1F945	goal net	Misc	Unrelated	no	no
-⛳	U+26F3	flag in hole	Misc	Unrelated	no	no
-⛸	U+26F8	ice skate	Misc	Unrelated	no	no
-🎣	U+1F3A3	fishing pole	Misc	Unrelated	no	no
-🤿	U+1F93F	diving mask	Misc	Unrelated	no	no
-🎽	U+1F3BD	running shirt	Misc	Unrelated	no	no
-🎿	U+1F3BF	skis	Misc	Unrelated	no	no
-🛷	U+1F6F7	sled	Misc	Unrelated	no	no
-🥌	U+1F94C	curling stone	Misc	Unrelated	no	no
-🎯	U+1F3AF	bullseye	Misc	Unrelated	no	no
-🪀	U+1FA80	yo-yo	Misc	Unrelated	no	no
-🪁	U+1FA81	kite	Misc	Unrelated	no	no
-🔫	U+1F52B	water pistol	Misc	Unrelated	no	no
-🎱	U+1F3B1	pool 8 ball	Misc	Unrelated	no	no
-🔮	U+1F52E	crystal ball	Misc	Unrelated	no	no
-🪄	U+1FA84	magic wand	Misc	Unrelated	no	no
-🎮	U+1F3AE	video game	Misc	Unrelated	no	no
-🕹	U+1F579	joystick	Misc	Unrelated	no	no
-🎰	U+1F3B0	slot machine	Misc	Unrelated	no	no
-🎲	U+1F3B2	game die	Toy	Conventional	no	no
-🧩	U+1F9E9	puzzle piece	Misc	Unrelated	no	no
-🧸	U+1F9F8	teddy bear	Misc	Unrelated	no	no
-🪅	U+1FA85	piñata	Misc	Unrelated	no	no
-🪩	U+1FAA9	mirror ball	Misc	Unrelated	no	no
-🪆	U+1FA86	nesting dolls	Misc	Unrelated	no	no
-♠	U+2660	spade suit	Misc	Unrelated	no	no
-♥	U+2665	heart suit	Misc	Unrelated	no	no
-♦	U+2666	diamond suit	Misc	Unrelated	no	no
-♣	U+2663	club suit	Misc	Unrelated	no	no
-♟	U+265F	chess pawn	Misc	Unrelated	no	no
-🃏	U+1F0CF	joker	Misc	Unrelated	no	no
-🀄	U+1F004	mahjong red dragon	Misc	Unrelated	no	no
-🎴	U+1F3B4	flower playing cards	Misc	Unrelated	no	no
-🎭	U+1F3AD	performing arts	Misc	Unrelated	no	no
-🖼	U+1F5BC	framed picture	Misc	Unrelated	no	no
-🎨	U+1F3A8	artist palette	Misc	Unrelated	no	no
-🧵	U+1F9F5	thread	Misc	Unrelated	no	no
-🪡	U+1FAA1	sewing needle	Misc	Unrelated	no	no
-🧶	U+1F9F6	yarn	Toy	Conventional	no	no
-🪢	U+1FAA2	knot	Misc	Unrelated	no	no
-👓	U+1F453	glasses	Misc	Unrelated	no	no
-🕶	U+1F576	sunglasses	Misc	Unrelated	no	no
-🥽	U+1F97D	goggles	Misc	Unrelated	no	no
-🥼	U+1F97C	lab coat	Misc	Unrelated	no	no
-🦺	U+1F9BA	safety vest	Misc	Unrelated	no	no
-👔	U+1F454	necktie	Misc	Unrelated	no	no
-👕	U+1F455	t-shirt	Misc	Unrelated	no	no
-👖	U+1F456	jeans	Misc	Unrelated	no	no
-🧣	U+1F9E3	scarf	Misc	Unrelated	no	no
-🧤	U+1F9E4	gloves	Misc	Unrelated	no	no
-🧥	U+1F9E5	coat	Misc	Unrelated	no	no
-🧦	U+1F9E6	socks	Toy	Unconventional	no	no
-👗	U+1F457	dress	Misc	Unrelated	no	no
-👘	U+1F458	kimono	Misc	Unrelated	no	no
-🥻	U+1F97B	sari	Misc	Unrelated	no	no
-🩱	U+1FA71	one-piece swimsuit	Misc	Unrelated	no	no
-🩲	U+1FA72	briefs	Misc	Unrelated	no	no
-🩳	U+1FA73	shorts	Misc	Unrelated	no	no
-👙	U+1F459	bikini	Misc	Unrelated	no	no
-👚	U+1F45A	woman’s clothes	Misc	Unrelated	no	no
-🪭	U+1FAAD	folding hand fan	Misc	Unrelated	no	no
-👛	U+1F45B	purse	Misc	Unrelated	no	no
-👜	U+1F45C	handbag	Misc	Unrelated	no	no
-👝	U+1F45D	clutch bag	Misc	Unrelated	no	no
-🛍	U+1F6CD	shopping bags	Toy	Unconventional	no	no
-🎒	U+1F392	backpack	Misc	Unrelated	no	no
-🩴	U+1FA74	thong sandal	Misc	Unrelated	no	no
-👞	U+1F45E	man’s shoe	Toy	Unconventional	no	no
-👟	U+1F45F	running shoe	Toy	Unconventional	no	no
-🥾	U+1F97E	hiking boot	Misc	Unrelated	no	no
-🥿	U+1F97F	flat shoe	Misc	Unrelated	no	no
-👠	U+1F460	high-heeled shoe	Misc	Unrelated	no	no
-👡	U+1F461	woman’s sandal	Misc	Unrelated	no	no
-🩰	U+1FA70	ballet shoes	Misc	Unrelated	no	no
-👢	U+1F462	woman’s boot	Misc	Unrelated	no	no
-🪮	U+1FAAE	hair pick	Misc	Unrelated	no	no
-👑	U+1F451	crown	Misc	Unrelated	no	no
-👒	U+1F452	woman’s hat	Misc	Unrelated	no	no
-🎩	U+1F3A9	top hat	Misc	Unrelated	no	no
-🎓	U+1F393	graduation cap	Misc	Unrelated	no	no
-🧢	U+1F9E2	billed cap	Misc	Unrelated	no	no
-🪖	U+1FA96	military helmet	Misc	Unrelated	no	no
-⛑	U+26D1	rescue worker’s helmet	Misc	Unrelated	no	no
-📿	U+1F4FF	prayer beads	Misc	Unrelated	no	no
-💄	U+1F484	lipstick	Misc	Unrelated	no	no
-💍	U+1F48D	ring	Misc	Unrelated	no	no
-💎	U+1F48E	gem stone	Misc	Unrelated	no	no
-🔇	U+1F507	muted speaker	Misc	Unrelated	no	no
-🔈	U+1F508	speaker low volume	Misc	Unrelated	no	no
-🔉	U+1F509	speaker medium volume	Misc	Unrelated	no	no
-🔊	U+1F50A	speaker high volume	Misc	Unrelated	no	no
-📢	U+1F4E2	loudspeaker	Misc	Unrelated	no	no
-📣	U+1F4E3	megaphone	Misc	Unrelated	no	no
-📯	U+1F4EF	postal horn	Misc	Unrelated	no	no
-🔔	U+1F514	bell	Toy	Conventional	no	no
-🔕	U+1F515	bell with slash	Misc	Unrelated	no	no
-🎼	U+1F3BC	musical score	Misc	Unrelated	no	no
-🎵	U+1F3B5	musical note	Misc	Unrelated	no	no
-🎶	U+1F3B6	musical notes	Misc	Unrelated	no	no
-🎙	U+1F399	studio microphone	Misc	Unrelated	no	no
-🎚	U+1F39A	level slider	Misc	Unrelated	no	no
-🎛	U+1F39B	control knobs	Misc	Unrelated	no	no
-🎤	U+1F3A4	microphone	Misc	Unrelated	no	no
-🎧	U+1F3A7	headphone	Misc	Unrelated	no	no
-📻	U+1F4FB	radio	Misc	Unrelated	no	no
-🎷	U+1F3B7	saxophone	Misc	Unrelated	no	no
-🎺	U+1F3BA	trumpet	Misc	Unrelated	no	no
-🪊	U+1FA8A	trombone	Misc	Unrelated	no	no
-🪗	U+1FA97	accordion	Misc	Unrelated	no	no
-🎸	U+1F3B8	guitar	Misc	Unrelated	no	no
-🎹	U+1F3B9	musical keyboard	Misc	Unrelated	no	no
-🎻	U+1F3BB	violin	Misc	Unrelated	no	no
-🪕	U+1FA95	banjo	Misc	Unrelated	no	no
-🥁	U+1F941	drum	Misc	Unrelated	no	no
-🪘	U+1FA98	long drum	Misc	Unrelated	no	no
-🪇	U+1FA87	maracas	Misc	Unrelated	no	no
-🪈	U+1FA88	flute	Misc	Unrelated	no	no
-🪉	U+1FA89	harp	Misc	Unrelated	no	no
-📱	U+1F4F1	mobile phone	Misc	Unrelated	no	no
-📲	U+1F4F2	mobile phone with arrow	Misc	Unrelated	no	no
-☎	U+260E	telephone	Misc	Unrelated	no	no
-📞	U+1F4DE	telephone receiver	Misc	Unrelated	no	no
-📟	U+1F4DF	pager	Misc	Unrelated	no	no
-📠	U+1F4E0	fax machine	Misc	Unrelated	no	no
-🔋	U+1F50B	battery	Misc	Unrelated	no	no
-🪫	U+1FAAB	low battery	Misc	Unrelated	no	no
-🔌	U+1F50C	electric plug	Misc	Unrelated	no	no
-💻	U+1F4BB	laptop	Misc	Unrelated	no	no
-🖥	U+1F5A5	desktop computer	Misc	Unrelated	no	no
-🖨	U+1F5A8	printer	Misc	Unrelated	no	no
-⌨	U+2328	keyboard	Misc	Unrelated	no	no
-🖱	U+1F5B1	computer mouse	Misc	Unrelated	no	no
-🖲	U+1F5B2	trackball	Misc	Unrelated	no	no
-💽	U+1F4BD	computer disk	Misc	Unrelated	no	no
-💾	U+1F4BE	floppy disk	Misc	Unrelated	no	no
-💿	U+1F4BF	optical disk	Misc	Unrelated	no	no
-📀	U+1F4C0	dvd	Misc	Unrelated	no	no
-🧮	U+1F9EE	abacus	Misc	Unrelated	no	no
-🎥	U+1F3A5	movie camera	Misc	Unrelated	no	no
-🎞	U+1F39E	film frames	Misc	Unrelated	no	no
-📽	U+1F4FD	film projector	Misc	Unrelated	no	no
-🎬	U+1F3AC	clapper board	Misc	Unrelated	no	no
-📺	U+1F4FA	television	Misc	Unrelated	no	no
-📷	U+1F4F7	camera	Misc	Unrelated	no	no
-📸	U+1F4F8	camera with flash	Misc	Unrelated	no	no
-📹	U+1F4F9	video camera	Misc	Unrelated	no	no
-📼	U+1F4FC	videocassette	Misc	Unrelated	no	no
-🔍	U+1F50D	magnifying glass tilted left	Misc	Unrelated	no	no
-🔎	U+1F50E	magnifying glass tilted right	Misc	Unrelated	no	no
-🕯	U+1F56F	candle	Misc	Unrelated	no	no
-💡	U+1F4A1	light bulb	Misc	Unrelated	no	no
-🔦	U+1F526	flashlight	Toy	Conventional	no	no
-🏮	U+1F3EE	red paper lantern	Misc	Unrelated	no	no
-🪔	U+1FA94	diya lamp	Misc	Unrelated	no	no
-📔	U+1F4D4	notebook with decorative cover	Misc	Unrelated	no	no
-📕	U+1F4D5	closed book	Misc	Unrelated	no	no
-📖	U+1F4D6	open book	Misc	Unrelated	no	no
-📗	U+1F4D7	green book	Misc	Unrelated	no	no
-📘	U+1F4D8	blue book	Misc	Unrelated	no	no
-📙	U+1F4D9	orange book	Misc	Unrelated	no	no
-📚	U+1F4DA	books	Misc	Unrelated	no	no
-📓	U+1F4D3	notebook	Misc	Unrelated	no	no
-📒	U+1F4D2	ledger	Misc	Unrelated	no	no
-📃	U+1F4C3	page with curl	Misc	Unrelated	no	no
-📜	U+1F4DC	scroll	Misc	Unrelated	no	no
-📄	U+1F4C4	page facing up	Misc	Unrelated	no	no
-📰	U+1F4F0	newspaper	Misc	Unrelated	no	no
-🗞	U+1F5DE	rolled-up newspaper	Misc	Unrelated	no	no
-📑	U+1F4D1	bookmark tabs	Misc	Unrelated	no	no
-🔖	U+1F516	bookmark	Misc	Unrelated	no	no
-🏷	U+1F3F7	label	Misc	Unrelated	no	no
-🪙	U+1FA99	coin	Toy	Unconventional	no	no
-💰	U+1F4B0	money bag	Misc	Unrelated	no	no
-🪎	U+1FA8E	treasure chest	Misc	Unrelated	no	no
-💴	U+1F4B4	yen banknote	Misc	Unrelated	no	no
-💵	U+1F4B5	dollar banknote	Misc	Unrelated	no	no
-💶	U+1F4B6	euro banknote	Misc	Unrelated	no	no
-💷	U+1F4B7	pound banknote	Misc	Unrelated	no	no
-💸	U+1F4B8	money with wings	Misc	Unrelated	no	no
-💳	U+1F4B3	credit card	Misc	Unrelated	no	no
-🧾	U+1F9FE	receipt	Misc	Unrelated	no	no
-💹	U+1F4B9	chart increasing with yen	Misc	Unrelated	no	no
-✉	U+2709	envelope	Misc	Unrelated	no	no
-📧	U+1F4E7	e-mail	Misc	Unrelated	no	no
-📨	U+1F4E8	incoming envelope	Misc	Unrelated	no	no
-📩	U+1F4E9	envelope with arrow	Misc	Unrelated	no	no
-📤	U+1F4E4	outbox tray	Misc	Unrelated	no	no
-📥	U+1F4E5	inbox tray	Misc	Unrelated	no	no
-📦	U+1F4E6	package	Toy	Unconventional	no	no
-📫	U+1F4EB	closed mailbox with raised flag	Misc	Unrelated	no	no
-📪	U+1F4EA	closed mailbox with lowered flag	Misc	Unrelated	no	no
-📬	U+1F4EC	open mailbox with raised flag	Misc	Unrelated	no	no
-📭	U+1F4ED	open mailbox with lowered flag	Misc	Unrelated	no	no
-📮	U+1F4EE	postbox	Misc	Unrelated	no	no
-🗳	U+1F5F3	ballot box with ballot	Misc	Unrelated	no	no
-✏	U+270F	pencil	Misc	Unrelated	no	no
-✒	U+2712	black nib	Misc	Unrelated	no	no
-🖋	U+1F58B	fountain pen	Misc	Unrelated	no	no
-🖊	U+1F58A	pen	Misc	Unrelated	no	no
-🖌	U+1F58C	paintbrush	Misc	Unrelated	no	no
-🖍	U+1F58D	crayon	Misc	Unrelated	no	no
-📝	U+1F4DD	memo	Misc	Unrelated	no	no
-🪌	U+1FA8C	⊛ eraser	Misc	Unrelated	no	no
-💼	U+1F4BC	briefcase	Misc	Unrelated	no	no
-📁	U+1F4C1	file folder	Misc	Unrelated	no	no
-📂	U+1F4C2	open file folder	Misc	Unrelated	no	no
-🗂	U+1F5C2	card index dividers	Misc	Unrelated	no	no
-📅	U+1F4C5	calendar	Misc	Unrelated	no	no
-📆	U+1F4C6	tear-off calendar	Misc	Unrelated	no	no
-🗒	U+1F5D2	spiral notepad	Misc	Unrelated	no	no
-🗓	U+1F5D3	spiral calendar	Misc	Unrelated	no	no
-📇	U+1F4C7	card index	Misc	Unrelated	no	no
-📈	U+1F4C8	chart increasing	Misc	Unrelated	no	no
-📉	U+1F4C9	chart decreasing	Misc	Unrelated	no	no
-📊	U+1F4CA	bar chart	Misc	Unrelated	no	no
-📋	U+1F4CB	clipboard	Misc	Unrelated	no	no
-📌	U+1F4CC	pushpin	Misc	Unrelated	no	no
-📍	U+1F4CD	round pushpin	Misc	Unrelated	no	no
-📎	U+1F4CE	paperclip	Misc	Unrelated	no	no
-🖇	U+1F587	linked paperclips	Misc	Unrelated	no	no
-📏	U+1F4CF	straight ruler	Misc	Unrelated	no	no
-📐	U+1F4D0	triangular ruler	Misc	Unrelated	no	no
-✂	U+2702	scissors	Misc	Unrelated	no	no
-🗃	U+1F5C3	card file box	Misc	Unrelated	no	no
-🗄	U+1F5C4	file cabinet	Misc	Unrelated	no	no
-🗑	U+1F5D1	wastebasket	Misc	Unrelated	no	no
-🔒	U+1F512	locked	Misc	Unrelated	no	no
-🔓	U+1F513	unlocked	Misc	Unrelated	no	no
-🔏	U+1F50F	locked with pen	Misc	Unrelated	no	no
-🔐	U+1F510	locked with key	Misc	Unrelated	no	no
-🔑	U+1F511	key	Misc	Unrelated	no	no
-🗝	U+1F5DD	old key	Misc	Unrelated	no	no
-🪍	U+1FA8D	⊛ net with handle	Misc	Unrelated	no	no
-🔨	U+1F528	hammer	Misc	Unrelated	no	no
-🪓	U+1FA93	axe	Misc	Unrelated	no	no
-⛏	U+26CF	pick	Misc	Unrelated	no	no
-⚒	U+2692	hammer and pick	Misc	Unrelated	no	no
-🛠	U+1F6E0	hammer and wrench	Misc	Unrelated	no	no
-🗡	U+1F5E1	dagger	Misc	Unrelated	no	no
-⚔	U+2694	crossed swords	Misc	Unrelated	no	no
-💣	U+1F4A3	bomb	Misc	Unrelated	no	no
-🪃	U+1FA83	boomerang	Misc	Unrelated	no	no
-🏹	U+1F3F9	bow and arrow	Misc	Unrelated	no	no
-🛡	U+1F6E1	shield	Misc	Unrelated	no	no
-🪚	U+1FA9A	carpentry saw	Misc	Unrelated	no	no
-🔧	U+1F527	wrench	Misc	Unrelated	no	no
-🪛	U+1FA9B	screwdriver	Misc	Unrelated	no	no
-🔩	U+1F529	nut and bolt	Misc	Unrelated	no	no
-⚙	U+2699	gear	Misc	Unrelated	no	no
-🗜	U+1F5DC	clamp	Misc	Unrelated	no	no
-⚖	U+2696	balance scale	Misc	Unrelated	no	no
-🦯	U+1F9AF	white cane	Misc	Unrelated	no	no
-🔗	U+1F517	link	Misc	Unrelated	no	no
-⛓️‍💥	U+26D3 U+FE0F U+200D U+1F4A5	broken chain	Misc	Unrelated	no	no
-⛓	U+26D3	chains	Misc	Unrelated	no	no
-🪝	U+1FA9D	hook	Misc	Unrelated	no	no
-🧰	U+1F9F0	toolbox	Misc	Unrelated	no	no
-🧲	U+1F9F2	magnet	Misc	Unrelated	no	no
-🪜	U+1FA9C	ladder	Misc	Unrelated	no	no
-🪏	U+1FA8F	shovel	Misc	Unrelated	no	no
-⚗	U+2697	alembic	Misc	Unrelated	no	no
-🧪	U+1F9EA	test tube	Misc	Unrelated	no	no
-🧫	U+1F9EB	petri dish	Misc	Unrelated	no	no
-🧬	U+1F9EC	dna	Misc	Unrelated	no	no
-🔬	U+1F52C	microscope	Misc	Unrelated	no	no
-🔭	U+1F52D	telescope	Misc	Unrelated	no	no
-📡	U+1F4E1	satellite antenna	Misc	Unrelated	no	no
-💉	U+1F489	syringe	Misc	Unrelated	no	no
-🩸	U+1FA78	drop of blood	Misc	Unrelated	no	no
-💊	U+1F48A	pill	Misc	Unrelated	no	no
-🩹	U+1FA79	adhesive bandage	Misc	Unrelated	no	no
-🩼	U+1FA7C	crutch	Misc	Unrelated	no	no
-🩺	U+1FA7A	stethoscope	Misc	Unrelated	no	no
-🩻	U+1FA7B	x-ray	Misc	Unrelated	no	no
-🚪	U+1F6AA	door	Misc	Unrelated	no	no
-🛗	U+1F6D7	elevator	Misc	Unrelated	no	no
-🪞	U+1FA9E	mirror	Misc	Unrelated	no	no
-🪟	U+1FA9F	window	Misc	Unrelated	no	no
-🛏	U+1F6CF	bed	Misc	Unrelated	no	no
-🛋	U+1F6CB	couch and lamp	Misc	Unrelated	no	no
-🪑	U+1FA91	chair	Misc	Unrelated	no	no
-🚽	U+1F6BD	toilet	Misc	Unrelated	no	no
-🪠	U+1FAA0	plunger	Misc	Unrelated	no	no
-🚿	U+1F6BF	shower	Misc	Unrelated	no	no
-🛁	U+1F6C1	bathtub	Misc	Unrelated	no	no
-🪤	U+1FAA4	mouse trap	Misc	Unrelated	no	no
-🪒	U+1FA92	razor	Misc	Unrelated	no	no
-🧴	U+1F9F4	lotion bottle	Misc	Unrelated	no	no
-🧷	U+1F9F7	safety pin	Misc	Unrelated	no	no
-🧹	U+1F9F9	broom	Misc	Unrelated	no	no
-🧺	U+1F9FA	basket	Misc	Unrelated	no	no
-🧻	U+1F9FB	roll of paper	Toy	Unconventional	no	no
-🪣	U+1FAA3	bucket	Misc	Unrelated	no	no
-🧼	U+1F9FC	soap	Misc	Unrelated	no	no
-🫧	U+1FAE7	bubbles	Misc	Unrelated	no	no
-🪥	U+1FAA5	toothbrush	Misc	Unrelated	no	no
-🧽	U+1F9FD	sponge	Misc	Unrelated	no	no
-🧯	U+1F9EF	fire extinguisher	Misc	Unrelated	no	no
-🛒	U+1F6D2	shopping cart	Misc	Unrelated	no	no
-🚬	U+1F6AC	cigarette	Misc	Unrelated	no	no
-⚰	U+26B0	coffin	Misc	Unrelated	no	no
-🪦	U+1FAA6	headstone	Misc	Unrelated	no	no
-⚱	U+26B1	funeral urn	Misc	Unrelated	no	no
-🧿	U+1F9FF	nazar amulet	Misc	Unrelated	no	no
-🪬	U+1FAAC	hamsa	Misc	Unrelated	no	no
-🗿	U+1F5FF	moai	Misc	Unrelated	no	no
-🪧	U+1FAA7	placard	Misc	Unrelated	no	no
-🪪	U+1FAAA	identification card	Misc	Unrelated	no	no
-🏧	U+1F3E7	ATM sign	Misc	Unrelated	no	no
-🚮	U+1F6AE	litter in bin sign	Misc	Unrelated	no	no
-🚰	U+1F6B0	potable water	Misc	Unrelated	no	no
-♿	U+267F	wheelchair symbol	Misc	Unrelated	no	no
-🚹	U+1F6B9	men’s room	Misc	Unrelated	no	no
-🚺	U+1F6BA	women’s room	Misc	Unrelated	no	no
-🚻	U+1F6BB	restroom	Misc	Unrelated	no	no
-🚼	U+1F6BC	baby symbol	Misc	Unrelated	no	no
-🚾	U+1F6BE	water closet	Misc	Unrelated	no	no
-🛂	U+1F6C2	passport control	Misc	Unrelated	no	no
-🛃	U+1F6C3	customs	Misc	Unrelated	no	no
-🛄	U+1F6C4	baggage claim	Misc	Unrelated	no	no
-🛅	U+1F6C5	left luggage	Misc	Unrelated	no	no
-⚠	U+26A0	warning	Misc	Unrelated	no	no
-🚸	U+1F6B8	children crossing	Misc	Unrelated	no	no
-⛔	U+26D4	no entry	Misc	Unrelated	no	no
-🚫	U+1F6AB	prohibited	Misc	Unrelated	no	no
-🚳	U+1F6B3	no bicycles	Misc	Unrelated	no	no
-🚭	U+1F6AD	no smoking	Misc	Unrelated	no	no
-🚯	U+1F6AF	no littering	Misc	Unrelated	no	no
-🚱	U+1F6B1	non-potable water	Misc	Unrelated	no	no
-🚷	U+1F6B7	no pedestrians	Misc	Unrelated	no	no
-📵	U+1F4F5	no mobile phones	Misc	Unrelated	no	no
-🔞	U+1F51E	no one under eighteen	Misc	Unrelated	no	no
-☢	U+2622	radioactive	Misc	Unrelated	no	no
-☣	U+2623	biohazard	Misc	Unrelated	no	no
-⬆	U+2B06	up arrow	Misc	Unrelated	no	no
-↗	U+2197	up-right arrow	Misc	Unrelated	no	no
-➡	U+27A1	right arrow	Misc	Unrelated	no	no
-↘	U+2198	down-right arrow	Misc	Unrelated	no	no
-⬇	U+2B07	down arrow	Misc	Unrelated	no	no
-↙	U+2199	down-left arrow	Misc	Unrelated	no	no
-⬅	U+2B05	left arrow	Misc	Unrelated	no	no
-↖	U+2196	up-left arrow	Misc	Unrelated	no	no
-↕	U+2195	up-down arrow	Misc	Unrelated	no	no
-↔	U+2194	left-right arrow	Misc	Unrelated	no	no
-↩	U+21A9	right arrow curving left	Misc	Unrelated	no	no
-↪	U+21AA	left arrow curving right	Misc	Unrelated	no	no
-⤴	U+2934	right arrow curving up	Misc	Unrelated	no	no
-⤵	U+2935	right arrow curving down	Misc	Unrelated	no	no
-🔃	U+1F503	clockwise vertical arrows	Misc	Unrelated	no	no
-🔄	U+1F504	counterclockwise arrows button	Misc	Unrelated	no	no
-🔙	U+1F519	BACK arrow	Misc	Unrelated	no	no
-🔚	U+1F51A	END arrow	Misc	Unrelated	no	no
-🔛	U+1F51B	ON! arrow	Misc	Unrelated	no	no
-🔜	U+1F51C	SOON arrow	Misc	Unrelated	no	no
-🔝	U+1F51D	TOP arrow	Misc	Unrelated	no	no
-🛐	U+1F6D0	place of worship	Misc	Unrelated	no	no
-⚛	U+269B	atom symbol	Misc	Unrelated	no	no
-🕉	U+1F549	om	Misc	Unrelated	no	no
-✡	U+2721	star of David	Misc	Unrelated	no	no
-☸	U+2638	wheel of dharma	Misc	Unrelated	no	no
-☯	U+262F	yin yang	Misc	Unrelated	no	no
-✝	U+271D	latin cross	Misc	Unrelated	no	no
-☦	U+2626	orthodox cross	Misc	Unrelated	no	no
-☪	U+262A	star and crescent	Misc	Unrelated	no	no
-☮	U+262E	peace symbol	Misc	Unrelated	no	no
-🕎	U+1F54E	menorah	Misc	Unrelated	no	no
-🔯	U+1F52F	dotted six-pointed star	Misc	Unrelated	no	no
-🪯	U+1FAAF	khanda	Misc	Unrelated	no	no
-♈	U+2648	Aries	Misc	Unrelated	no	no
-♉	U+2649	Taurus	Misc	Unrelated	no	no
-♊	U+264A	Gemini	Misc	Unrelated	no	no
-♋	U+264B	Cancer	Misc	Unrelated	no	no
-♌	U+264C	Leo	Misc	Unrelated	no	no
-♍	U+264D	Virgo	Misc	Unrelated	no	no
-♎	U+264E	Libra	Misc	Unrelated	no	no
-♏	U+264F	Scorpio	Misc	Unrelated	no	no
-♐	U+2650	Sagittarius	Misc	Unrelated	no	no
-♑	U+2651	Capricorn	Misc	Unrelated	no	no
-♒	U+2652	Aquarius	Misc	Unrelated	no	no
-♓	U+2653	Pisces	Misc	Unrelated	no	no
-⛎	U+26CE	Ophiuchus	Misc	Unrelated	no	no
-🔀	U+1F500	shuffle tracks button	Misc	Unrelated	no	no
-🔁	U+1F501	repeat button	Misc	Unrelated	no	no
-🔂	U+1F502	repeat single button	Misc	Unrelated	no	no
-▶	U+25B6	play button	Misc	Unrelated	no	no
-⏩	U+23E9	fast-forward button	Misc	Unrelated	no	no
-⏭	U+23ED	next track button	Misc	Unrelated	no	no
-⏯	U+23EF	play or pause button	Misc	Unrelated	no	no
-◀	U+25C0	reverse button	Misc	Unrelated	no	no
-⏪	U+23EA	fast reverse button	Misc	Unrelated	no	no
-⏮	U+23EE	last track button	Misc	Unrelated	no	no
-🔼	U+1F53C	upwards button	Misc	Unrelated	no	no
-⏫	U+23EB	fast up button	Misc	Unrelated	no	no
-🔽	U+1F53D	downwards button	Misc	Unrelated	no	no
-⏬	U+23EC	fast down button	Misc	Unrelated	no	no
-⏸	U+23F8	pause button	Misc	Unrelated	no	no
-⏹	U+23F9	stop button	Misc	Unrelated	no	no
-⏺	U+23FA	record button	Misc	Unrelated	no	no
-⏏	U+23CF	eject button	Misc	Unrelated	no	no
-🎦	U+1F3A6	cinema	Misc	Unrelated	no	no
-🔅	U+1F505	dim button	Misc	Unrelated	no	no
-🔆	U+1F506	bright button	Misc	Unrelated	no	no
-📶	U+1F4F6	antenna bars	Misc	Unrelated	no	no
-🛜	U+1F6DC	wireless	Misc	Unrelated	no	no
-📳	U+1F4F3	vibration mode	Misc	Unrelated	no	no
-📴	U+1F4F4	mobile phone off	Misc	Unrelated	no	no
-♀	U+2640	female sign	Misc	Unrelated	no	no
-♂	U+2642	male sign	Misc	Unrelated	no	no
-⚧	U+26A7	transgender symbol	Misc	Unrelated	no	no
-✖	U+2716	multiply	Misc	Unrelated	no	no
-➕	U+2795	plus	Misc	Unrelated	no	no
-➖	U+2796	minus	Misc	Unrelated	no	no
-➗	U+2797	divide	Misc	Unrelated	no	no
-🟰	U+1F7F0	heavy equals sign	Misc	Unrelated	no	no
-♾	U+267E	infinity	Misc	Unrelated	no	no
-‼	U+203C	double exclamation mark	Misc	Unrelated	no	no
-⁉	U+2049	exclamation question mark	Misc	Unrelated	no	no
-❓	U+2753	red question mark	Misc	Unrelated	no	no
-❔	U+2754	white question mark	Misc	Unrelated	no	no
-❕	U+2755	white exclamation mark	Misc	Unrelated	no	no
-❗	U+2757	red exclamation mark	Misc	Unrelated	no	no
-〰	U+3030	wavy dash	Misc	Unrelated	no	no
-💱	U+1F4B1	currency exchange	Misc	Unrelated	no	no
-💲	U+1F4B2	heavy dollar sign	Misc	Unrelated	no	no
-⚕	U+2695	medical symbol	Misc	Unrelated	no	no
-♻	U+267B	recycling symbol	Misc	Unrelated	no	no
-⚜	U+269C	fleur-de-lis	Misc	Unrelated	no	no
-🔱	U+1F531	trident emblem	Misc	Unrelated	no	no
-📛	U+1F4DB	name badge	Misc	Unrelated	no	no
-🔰	U+1F530	Japanese symbol for beginner	Misc	Unrelated	no	no
-⭕	U+2B55	hollow red circle	Misc	Unrelated	no	no
-✅	U+2705	check mark button	Misc	Unrelated	no	no
-☑	U+2611	check box with check	Misc	Unrelated	no	no
-✔	U+2714	check mark	Misc	Unrelated	no	no
-❌	U+274C	cross mark	Bot	Out of Guesses	no	yes
-❎	U+274E	cross mark button	Misc	Unrelated	no	no
-➰	U+27B0	curly loop	Misc	Unrelated	no	no
-➿	U+27BF	double curly loop	Misc	Unrelated	no	no
-〽	U+303D	part alternation mark	Misc	Unrelated	no	no
-✳	U+2733	eight-spoked asterisk	Misc	Unrelated	no	no
-✴	U+2734	eight-pointed star	Misc	Unrelated	no	no
-❇	U+2747	sparkle	Misc	Unrelated	no	no
-©	U+00A9	copyright	Misc	Unrelated	no	no
-®	U+00AE	registered	Misc	Unrelated	no	no
-™	U+2122	trade mark	Misc	Unrelated	no	no
-🫟	U+1FADF	splatter	Misc	Unrelated	no	no
-#️⃣	U+0023 U+FE0F U+20E3	keycap: #	Misc	Unrelated	no	no
-*️⃣	U+002A U+FE0F U+20E3	keycap: *	Misc	Unrelated	no	no
-0️⃣	U+0030 U+FE0F U+20E3	keycap: 0	Misc	Unrelated	no	no
-1️⃣	U+0031 U+FE0F U+20E3	keycap: 1	Misc	Unrelated	no	no
-2️⃣	U+0032 U+FE0F U+20E3	keycap: 2	Misc	Unrelated	no	no
-3️⃣	U+0033 U+FE0F U+20E3	keycap: 3	Misc	Unrelated	no	no
-4️⃣	U+0034 U+FE0F U+20E3	keycap: 4	Misc	Unrelated	no	no
-5️⃣	U+0035 U+FE0F U+20E3	keycap: 5	Misc	Unrelated	no	no
-6️⃣	U+0036 U+FE0F U+20E3	keycap: 6	Misc	Unrelated	no	no
-7️⃣	U+0037 U+FE0F U+20E3	keycap: 7	Misc	Unrelated	no	no
-8️⃣	U+0038 U+FE0F U+20E3	keycap: 8	Misc	Unrelated	no	no
-9️⃣	U+0039 U+FE0F U+20E3	keycap: 9	Misc	Unrelated	no	no
-🔟	U+1F51F	keycap: 10	Misc	Unrelated	no	no
-🔠	U+1F520	input latin uppercase	Misc	Unrelated	no	no
-🔡	U+1F521	input latin lowercase	Misc	Unrelated	no	no
-🔢	U+1F522	input numbers	Misc	Unrelated	no	no
-🔣	U+1F523	input symbols	Misc	Unrelated	no	no
-🔤	U+1F524	input latin letters	Misc	Unrelated	no	no
-🅰	U+1F170	A button (blood type)	Misc	Unrelated	no	no
-🆎	U+1F18E	AB button (blood type)	Misc	Unrelated	no	no
-🅱	U+1F171	B button (blood type)	Misc	Unrelated	no	no
-🆑	U+1F191	CL button	Misc	Unrelated	no	no
-🆒	U+1F192	COOL button	Misc	Unrelated	no	no
-🆓	U+1F193	FREE button	Misc	Unrelated	no	no
-ℹ	U+2139	information	Misc	Unrelated	no	no
-🆔	U+1F194	ID button	Misc	Unrelated	no	no
-Ⓜ	U+24C2	circled M	Misc	Unrelated	no	no
-🆕	U+1F195	NEW button	Misc	Unrelated	no	no
-🆖	U+1F196	NG button	Misc	Unrelated	no	no
-🅾	U+1F17E	O button (blood type)	Misc	Unrelated	no	no
-🆗	U+1F197	OK button	Misc	Unrelated	no	no
-🅿	U+1F17F	P button	Misc	Unrelated	no	no
-🆘	U+1F198	SOS button	Misc	Unrelated	no	no
-🆙	U+1F199	UP! button	Misc	Unrelated	no	no
-🆚	U+1F19A	VS button	Misc	Unrelated	no	no
-🈁	U+1F201	Japanese “here” button	Misc	Unrelated	no	no
-🈂	U+1F202	Japanese “service charge” button	Misc	Unrelated	no	no
-🈷	U+1F237	Japanese “monthly amount” button	Misc	Unrelated	no	no
-🈶	U+1F236	Japanese “not free of charge” button	Misc	Unrelated	no	no
-🈯	U+1F22F	Japanese “reserved” button	Misc	Unrelated	no	no
-🉐	U+1F250	Japanese “bargain” button	Misc	Unrelated	no	no
-🈹	U+1F239	Japanese “discount” button	Misc	Unrelated	no	no
-🈚	U+1F21A	Japanese “free of charge” button	Misc	Unrelated	no	no
-🈲	U+1F232	Japanese “prohibited” button	Misc	Unrelated	no	no
-🉑	U+1F251	Japanese “acceptable” button	Misc	Unrelated	no	no
-🈸	U+1F238	Japanese “application” button	Misc	Unrelated	no	no
-🈴	U+1F234	Japanese “passing grade” button	Misc	Unrelated	no	no
-🈳	U+1F233	Japanese “vacancy” button	Misc	Unrelated	no	no
-㊗	U+3297	Japanese “congratulations” button	Misc	Unrelated	no	no
-㊙	U+3299	Japanese “secret” button	Misc	Unrelated	no	no
-🈺	U+1F23A	Japanese “open for business” button	Misc	Unrelated	no	no
-🈵	U+1F235	Japanese “no vacancy” button	Misc	Unrelated	no	no
-🔴	U+1F534	red circle	Misc	Unrelated	no	no
-🟠	U+1F7E0	orange circle	Misc	Unrelated	no	no
-🟡	U+1F7E1	yellow circle	Misc	Unrelated	no	no
-🟢	U+1F7E2	green circle	Misc	Unrelated	no	no
-🔵	U+1F535	blue circle	Misc	Unrelated	no	no
-🟣	U+1F7E3	purple circle	Misc	Unrelated	no	no
-🟤	U+1F7E4	brown circle	Misc	Unrelated	no	no
-⚫	U+26AB	black circle	Misc	Unrelated	no	no
-⚪	U+26AA	white circle	Misc	Unrelated	no	no
-🟥	U+1F7E5	red square	Misc	Unrelated	no	no
-🟧	U+1F7E7	orange square	Misc	Unrelated	no	no
-🟨	U+1F7E8	yellow square	Misc	Unrelated	no	no
-🟩	U+1F7E9	green square	Misc	Unrelated	no	no
-🟦	U+1F7E6	blue square	Misc	Unrelated	no	no
-🟪	U+1F7EA	purple square	Misc	Unrelated	no	no
-🟫	U+1F7EB	brown square	Misc	Unrelated	no	no
-⬛	U+2B1B	black large square	Misc	Unrelated	no	no
-⬜	U+2B1C	white large square	Misc	Unrelated	no	no
-◼	U+25FC	black medium square	Misc	Unrelated	no	no
-◻	U+25FB	white medium square	Misc	Unrelated	no	no
-◾	U+25FE	black medium-small square	Misc	Unrelated	no	no
-◽	U+25FD	white medium-small square	Misc	Unrelated	no	no
-▪	U+25AA	black small square	Misc	Unrelated	no	no
-▫	U+25AB	white small square	Misc	Unrelated	no	no
-🔶	U+1F536	large orange diamond	Misc	Unrelated	no	no
-🔷	U+1F537	large blue diamond	Misc	Unrelated	no	no
-🔸	U+1F538	small orange diamond	Misc	Unrelated	no	no
-🔹	U+1F539	small blue diamond	Misc	Unrelated	no	no
-🔺	U+1F53A	red triangle pointed up	Misc	Unrelated	no	no
-🔻	U+1F53B	red triangle pointed down	Misc	Unrelated	no	no
-💠	U+1F4A0	diamond with a dot	Misc	Unrelated	no	no
-🔘	U+1F518	radio button	Misc	Unrelated	no	no
-🔳	U+1F533	white square button	Misc	Unrelated	no	no
-🔲	U+1F532	black square button	Misc	Unrelated	no	no
-🏁	U+1F3C1	chequered flag	Misc	Unrelated	no	no
-🚩	U+1F6A9	triangular flag	Misc	Unrelated	no	no
-🎌	U+1F38C	crossed flags	Misc	Unrelated	no	no
-🏴	U+1F3F4	black flag	Misc	Unrelated	no	no
-🏳	U+1F3F3	white flag	Misc	Unrelated	no	no
-🏳️‍🌈	U+1F3F3 U+FE0F U+200D U+1F308	rainbow flag	Misc	Unrelated	no	no
-🏳️‍⚧️	U+1F3F3 U+FE0F U+200D U+26A7 U+FE0F	transgender flag	Misc	Unrelated	no	no
-🏴‍☠️	U+1F3F4 U+200D U+2620 U+FE0F	pirate flag	Misc	Unrelated	no	no
-🇦🇨	U+1F1E6 U+1F1E8	flag: Ascension Island	Misc	Unrelated	no	no
-🇦🇩	U+1F1E6 U+1F1E9	flag: Andorra	Misc	Unrelated	no	no
-🇦🇪	U+1F1E6 U+1F1EA	flag: United Arab Emirates	Misc	Unrelated	no	no
-🇦🇫	U+1F1E6 U+1F1EB	flag: Afghanistan	Misc	Unrelated	no	no
-🇦🇬	U+1F1E6 U+1F1EC	flag: Antigua & Barbuda	Misc	Unrelated	no	no
-🇦🇮	U+1F1E6 U+1F1EE	flag: Anguilla	Misc	Unrelated	no	no
-🇦🇱	U+1F1E6 U+1F1F1	flag: Albania	Misc	Unrelated	no	no
-🇦🇲	U+1F1E6 U+1F1F2	flag: Armenia	Misc	Unrelated	no	no
-🇦🇴	U+1F1E6 U+1F1F4	flag: Angola	Misc	Unrelated	no	no
-🇦🇶	U+1F1E6 U+1F1F6	flag: Antarctica	Misc	Unrelated	no	no
-🇦🇷	U+1F1E6 U+1F1F7	flag: Argentina	Misc	Unrelated	no	no
-🇦🇸	U+1F1E6 U+1F1F8	flag: American Samoa	Misc	Unrelated	no	no
-🇦🇹	U+1F1E6 U+1F1F9	flag: Austria	Misc	Unrelated	no	no
-🇦🇺	U+1F1E6 U+1F1FA	flag: Australia	Misc	Unrelated	no	no
-🇦🇼	U+1F1E6 U+1F1FC	flag: Aruba	Misc	Unrelated	no	no
-🇦🇽	U+1F1E6 U+1F1FD	flag: Åland Islands	Misc	Unrelated	no	no
-🇦🇿	U+1F1E6 U+1F1FF	flag: Azerbaijan	Misc	Unrelated	no	no
-🇧🇦	U+1F1E7 U+1F1E6	flag: Bosnia & Herzegovina	Misc	Unrelated	no	no
-🇧🇧	U+1F1E7 U+1F1E7	flag: Barbados	Misc	Unrelated	no	no
-🇧🇩	U+1F1E7 U+1F1E9	flag: Bangladesh	Misc	Unrelated	no	no
-🇧🇪	U+1F1E7 U+1F1EA	flag: Belgium	Misc	Unrelated	no	no
-🇧🇫	U+1F1E7 U+1F1EB	flag: Burkina Faso	Misc	Unrelated	no	no
-🇧🇬	U+1F1E7 U+1F1EC	flag: Bulgaria	Misc	Unrelated	no	no
-🇧🇭	U+1F1E7 U+1F1ED	flag: Bahrain	Misc	Unrelated	no	no
-🇧🇮	U+1F1E7 U+1F1EE	flag: Burundi	Misc	Unrelated	no	no
-🇧🇯	U+1F1E7 U+1F1EF	flag: Benin	Misc	Unrelated	no	no
-🇧🇱	U+1F1E7 U+1F1F1	flag: St. Barthélemy	Misc	Unrelated	no	no
-🇧🇲	U+1F1E7 U+1F1F2	flag: Bermuda	Misc	Unrelated	no	no
-🇧🇳	U+1F1E7 U+1F1F3	flag: Brunei	Misc	Unrelated	no	no
-🇧🇴	U+1F1E7 U+1F1F4	flag: Bolivia	Misc	Unrelated	no	no
-🇧🇶	U+1F1E7 U+1F1F6	flag: Caribbean Netherlands	Misc	Unrelated	no	no
-🇧🇷	U+1F1E7 U+1F1F7	flag: Brazil	Misc	Unrelated	no	no
-🇧🇸	U+1F1E7 U+1F1F8	flag: Bahamas	Misc	Unrelated	no	no
-🇧🇹	U+1F1E7 U+1F1F9	flag: Bhutan	Misc	Unrelated	no	no
-🇧🇻	U+1F1E7 U+1F1FB	flag: Bouvet Island	Misc	Unrelated	no	no
-🇧🇼	U+1F1E7 U+1F1FC	flag: Botswana	Misc	Unrelated	no	no
-🇧🇾	U+1F1E7 U+1F1FE	flag: Belarus	Misc	Unrelated	no	no
-🇧🇿	U+1F1E7 U+1F1FF	flag: Belize	Misc	Unrelated	no	no
-🇨🇦	U+1F1E8 U+1F1E6	flag: Canada	Misc	Unrelated	no	no
-🇨🇨	U+1F1E8 U+1F1E8	flag: Cocos (Keeling) Islands	Misc	Unrelated	no	no
-🇨🇩	U+1F1E8 U+1F1E9	flag: Congo - Kinshasa	Misc	Unrelated	no	no
-🇨🇫	U+1F1E8 U+1F1EB	flag: Central African Republic	Misc	Unrelated	no	no
-🇨🇬	U+1F1E8 U+1F1EC	flag: Congo - Brazzaville	Misc	Unrelated	no	no
-🇨🇭	U+1F1E8 U+1F1ED	flag: Switzerland	Misc	Unrelated	no	no
-🇨🇮	U+1F1E8 U+1F1EE	flag: Côte d’Ivoire	Misc	Unrelated	no	no
-🇨🇰	U+1F1E8 U+1F1F0	flag: Cook Islands	Misc	Unrelated	no	no
-🇨🇱	U+1F1E8 U+1F1F1	flag: Chile	Misc	Unrelated	no	no
-🇨🇲	U+1F1E8 U+1F1F2	flag: Cameroon	Misc	Unrelated	no	no
-🇨🇳	U+1F1E8 U+1F1F3	flag: China	Misc	Unrelated	no	no
-🇨🇴	U+1F1E8 U+1F1F4	flag: Colombia	Misc	Unrelated	no	no
-🇨🇵	U+1F1E8 U+1F1F5	flag: Clipperton Island	Misc	Unrelated	no	no
-🇨🇶	U+1F1E8 U+1F1F6	flag: Sark	Misc	Unrelated	no	no
-🇨🇷	U+1F1E8 U+1F1F7	flag: Costa Rica	Misc	Unrelated	no	no
-🇨🇺	U+1F1E8 U+1F1FA	flag: Cuba	Misc	Unrelated	no	no
-🇨🇻	U+1F1E8 U+1F1FB	flag: Cape Verde	Misc	Unrelated	no	no
-🇨🇼	U+1F1E8 U+1F1FC	flag: Curaçao	Misc	Unrelated	no	no
-🇨🇽	U+1F1E8 U+1F1FD	flag: Christmas Island	Misc	Unrelated	no	no
-🇨🇾	U+1F1E8 U+1F1FE	flag: Cyprus	Misc	Unrelated	no	no
-🇨🇿	U+1F1E8 U+1F1FF	flag: Czechia	Misc	Unrelated	no	no
-🇩🇪	U+1F1E9 U+1F1EA	flag: Germany	Misc	Unrelated	no	no
-🇩🇬	U+1F1E9 U+1F1EC	flag: Diego Garcia	Misc	Unrelated	no	no
-🇩🇯	U+1F1E9 U+1F1EF	flag: Djibouti	Misc	Unrelated	no	no
-🇩🇰	U+1F1E9 U+1F1F0	flag: Denmark	Misc	Unrelated	no	no
-🇩🇲	U+1F1E9 U+1F1F2	flag: Dominica	Misc	Unrelated	no	no
-🇩🇴	U+1F1E9 U+1F1F4	flag: Dominican Republic	Misc	Unrelated	no	no
-🇩🇿	U+1F1E9 U+1F1FF	flag: Algeria	Misc	Unrelated	no	no
-🇪🇦	U+1F1EA U+1F1E6	flag: Ceuta & Melilla	Misc	Unrelated	no	no
-🇪🇨	U+1F1EA U+1F1E8	flag: Ecuador	Misc	Unrelated	no	no
-🇪🇪	U+1F1EA U+1F1EA	flag: Estonia	Misc	Unrelated	no	no
-🇪🇬	U+1F1EA U+1F1EC	flag: Egypt	Misc	Unrelated	no	no
-🇪🇭	U+1F1EA U+1F1ED	flag: Western Sahara	Misc	Unrelated	no	no
-🇪🇷	U+1F1EA U+1F1F7	flag: Eritrea	Misc	Unrelated	no	no
-🇪🇸	U+1F1EA U+1F1F8	flag: Spain	Misc	Unrelated	no	no
-🇪🇹	U+1F1EA U+1F1F9	flag: Ethiopia	Misc	Unrelated	no	no
-🇪🇺	U+1F1EA U+1F1FA	flag: European Union	Misc	Unrelated	no	no
-🇫🇮	U+1F1EB U+1F1EE	flag: Finland	Misc	Unrelated	no	no
-🇫🇯	U+1F1EB U+1F1EF	flag: Fiji	Misc	Unrelated	no	no
-🇫🇰	U+1F1EB U+1F1F0	flag: Falkland Islands	Misc	Unrelated	no	no
-🇫🇲	U+1F1EB U+1F1F2	flag: Micronesia	Misc	Unrelated	no	no
-🇫🇴	U+1F1EB U+1F1F4	flag: Faroe Islands	Misc	Unrelated	no	no
-🇫🇷	U+1F1EB U+1F1F7	flag: France	Misc	Unrelated	no	no
-🇬🇦	U+1F1EC U+1F1E6	flag: Gabon	Misc	Unrelated	no	no
-🇬🇧	U+1F1EC U+1F1E7	flag: United Kingdom	Misc	Unrelated	no	no
-🇬🇩	U+1F1EC U+1F1E9	flag: Grenada	Misc	Unrelated	no	no
-🇬🇪	U+1F1EC U+1F1EA	flag: Georgia	Misc	Unrelated	no	no
-🇬🇫	U+1F1EC U+1F1EB	flag: French Guiana	Misc	Unrelated	no	no
-🇬🇬	U+1F1EC U+1F1EC	flag: Guernsey	Misc	Unrelated	no	no
-🇬🇭	U+1F1EC U+1F1ED	flag: Ghana	Misc	Unrelated	no	no
-🇬🇮	U+1F1EC U+1F1EE	flag: Gibraltar	Misc	Unrelated	no	no
-🇬🇱	U+1F1EC U+1F1F1	flag: Greenland	Misc	Unrelated	no	no
-🇬🇲	U+1F1EC U+1F1F2	flag: Gambia	Misc	Unrelated	no	no
-🇬🇳	U+1F1EC U+1F1F3	flag: Guinea	Misc	Unrelated	no	no
-🇬🇵	U+1F1EC U+1F1F5	flag: Guadeloupe	Misc	Unrelated	no	no
-🇬🇶	U+1F1EC U+1F1F6	flag: Equatorial Guinea	Misc	Unrelated	no	no
-🇬🇷	U+1F1EC U+1F1F7	flag: Greece	Misc	Unrelated	no	no
-🇬🇸	U+1F1EC U+1F1F8	flag: South Georgia & South Sandwich Islands	Misc	Unrelated	no	no
-🇬🇹	U+1F1EC U+1F1F9	flag: Guatemala	Misc	Unrelated	no	no
-🇬🇺	U+1F1EC U+1F1FA	flag: Guam	Misc	Unrelated	no	no
-🇬🇼	U+1F1EC U+1F1FC	flag: Guinea-Bissau	Misc	Unrelated	no	no
-🇬🇾	U+1F1EC U+1F1FE	flag: Guyana	Misc	Unrelated	no	no
-🇭🇰	U+1F1ED U+1F1F0	flag: Hong Kong SAR China	Misc	Unrelated	no	no
-🇭🇲	U+1F1ED U+1F1F2	flag: Heard Island & McDonald Islands	Misc	Unrelated	no	no
-🇭🇳	U+1F1ED U+1F1F3	flag: Honduras	Misc	Unrelated	no	no
-🇭🇷	U+1F1ED U+1F1F7	flag: Croatia	Misc	Unrelated	no	no
-🇭🇹	U+1F1ED U+1F1F9	flag: Haiti	Misc	Unrelated	no	no
-🇭🇺	U+1F1ED U+1F1FA	flag: Hungary	Misc	Unrelated	no	no
-🇮🇨	U+1F1EE U+1F1E8	flag: Canary Islands	Misc	Unrelated	no	no
-🇮🇩	U+1F1EE U+1F1E9	flag: Indonesia	Misc	Unrelated	no	no
-🇮🇪	U+1F1EE U+1F1EA	flag: Ireland	Misc	Unrelated	no	no
-🇮🇱	U+1F1EE U+1F1F1	flag: Israel	Misc	Unrelated	no	no
-🇮🇲	U+1F1EE U+1F1F2	flag: Isle of Man	Misc	Unrelated	no	no
-🇮🇳	U+1F1EE U+1F1F3	flag: India	Misc	Unrelated	no	no
-🇮🇴	U+1F1EE U+1F1F4	flag: British Indian Ocean Territory	Misc	Unrelated	no	no
-🇮🇶	U+1F1EE U+1F1F6	flag: Iraq	Misc	Unrelated	no	no
-🇮🇷	U+1F1EE U+1F1F7	flag: Iran	Misc	Unrelated	no	no
-🇮🇸	U+1F1EE U+1F1F8	flag: Iceland	Misc	Unrelated	no	no
-🇮🇹	U+1F1EE U+1F1F9	flag: Italy	Misc	Unrelated	no	no
-🇯🇪	U+1F1EF U+1F1EA	flag: Jersey	Misc	Unrelated	no	no
-🇯🇲	U+1F1EF U+1F1F2	flag: Jamaica	Misc	Unrelated	no	no
-🇯🇴	U+1F1EF U+1F1F4	flag: Jordan	Misc	Unrelated	no	no
-🇯🇵	U+1F1EF U+1F1F5	flag: Japan	Misc	Unrelated	no	no
-🇰🇪	U+1F1F0 U+1F1EA	flag: Kenya	Misc	Unrelated	no	no
-🇰🇬	U+1F1F0 U+1F1EC	flag: Kyrgyzstan	Misc	Unrelated	no	no
-🇰🇭	U+1F1F0 U+1F1ED	flag: Cambodia	Misc	Unrelated	no	no
-🇰🇮	U+1F1F0 U+1F1EE	flag: Kiribati	Misc	Unrelated	no	no
-🇰🇲	U+1F1F0 U+1F1F2	flag: Comoros	Misc	Unrelated	no	no
-🇰🇳	U+1F1F0 U+1F1F3	flag: St. Kitts & Nevis	Misc	Unrelated	no	no
-🇰🇵	U+1F1F0 U+1F1F5	flag: North Korea	Misc	Unrelated	no	no
-🇰🇷	U+1F1F0 U+1F1F7	flag: South Korea	Misc	Unrelated	no	no
-🇰🇼	U+1F1F0 U+1F1FC	flag: Kuwait	Misc	Unrelated	no	no
-🇰🇾	U+1F1F0 U+1F1FE	flag: Cayman Islands	Misc	Unrelated	no	no
-🇰🇿	U+1F1F0 U+1F1FF	flag: Kazakhstan	Misc	Unrelated	no	no
-🇱🇦	U+1F1F1 U+1F1E6	flag: Laos	Misc	Unrelated	no	no
-🇱🇧	U+1F1F1 U+1F1E7	flag: Lebanon	Misc	Unrelated	no	no
-🇱🇨	U+1F1F1 U+1F1E8	flag: St. Lucia	Misc	Unrelated	no	no
-🇱🇮	U+1F1F1 U+1F1EE	flag: Liechtenstein	Misc	Unrelated	no	no
-🇱🇰	U+1F1F1 U+1F1F0	flag: Sri Lanka	Misc	Unrelated	no	no
-🇱🇷	U+1F1F1 U+1F1F7	flag: Liberia	Misc	Unrelated	no	no
-🇱🇸	U+1F1F1 U+1F1F8	flag: Lesotho	Misc	Unrelated	no	no
-🇱🇹	U+1F1F1 U+1F1F9	flag: Lithuania	Misc	Unrelated	no	no
-🇱🇺	U+1F1F1 U+1F1FA	flag: Luxembourg	Misc	Unrelated	no	no
-🇱🇻	U+1F1F1 U+1F1FB	flag: Latvia	Misc	Unrelated	no	no
-🇱🇾	U+1F1F1 U+1F1FE	flag: Libya	Misc	Unrelated	no	no
-🇲🇦	U+1F1F2 U+1F1E6	flag: Morocco	Misc	Unrelated	no	no
-🇲🇨	U+1F1F2 U+1F1E8	flag: Monaco	Misc	Unrelated	no	no
-🇲🇩	U+1F1F2 U+1F1E9	flag: Moldova	Misc	Unrelated	no	no
-🇲🇪	U+1F1F2 U+1F1EA	flag: Montenegro	Misc	Unrelated	no	no
-🇲🇫	U+1F1F2 U+1F1EB	flag: St. Martin	Misc	Unrelated	no	no
-🇲🇬	U+1F1F2 U+1F1EC	flag: Madagascar	Misc	Unrelated	no	no
-🇲🇭	U+1F1F2 U+1F1ED	flag: Marshall Islands	Misc	Unrelated	no	no
-🇲🇰	U+1F1F2 U+1F1F0	flag: North Macedonia	Misc	Unrelated	no	no
-🇲🇱	U+1F1F2 U+1F1F1	flag: Mali	Misc	Unrelated	no	no
-🇲🇲	U+1F1F2 U+1F1F2	flag: Myanmar (Burma)	Misc	Unrelated	no	no
-🇲🇳	U+1F1F2 U+1F1F3	flag: Mongolia	Misc	Unrelated	no	no
-🇲🇴	U+1F1F2 U+1F1F4	flag: Macao SAR China	Misc	Unrelated	no	no
-🇲🇵	U+1F1F2 U+1F1F5	flag: Northern Mariana Islands	Misc	Unrelated	no	no
-🇲🇶	U+1F1F2 U+1F1F6	flag: Martinique	Misc	Unrelated	no	no
-🇲🇷	U+1F1F2 U+1F1F7	flag: Mauritania	Misc	Unrelated	no	no
-🇲🇸	U+1F1F2 U+1F1F8	flag: Montserrat	Misc	Unrelated	no	no
-🇲🇹	U+1F1F2 U+1F1F9	flag: Malta	Misc	Unrelated	no	no
-🇲🇺	U+1F1F2 U+1F1FA	flag: Mauritius	Misc	Unrelated	no	no
-🇲🇻	U+1F1F2 U+1F1FB	flag: Maldives	Misc	Unrelated	no	no
-🇲🇼	U+1F1F2 U+1F1FC	flag: Malawi	Misc	Unrelated	no	no
-🇲🇽	U+1F1F2 U+1F1FD	flag: Mexico	Misc	Unrelated	no	no
-🇲🇾	U+1F1F2 U+1F1FE	flag: Malaysia	Misc	Unrelated	no	no
-🇲🇿	U+1F1F2 U+1F1FF	flag: Mozambique	Misc	Unrelated	no	no
-🇳🇦	U+1F1F3 U+1F1E6	flag: Namibia	Misc	Unrelated	no	no
-🇳🇨	U+1F1F3 U+1F1E8	flag: New Caledonia	Misc	Unrelated	no	no
-🇳🇪	U+1F1F3 U+1F1EA	flag: Niger	Misc	Unrelated	no	no
-🇳🇫	U+1F1F3 U+1F1EB	flag: Norfolk Island	Misc	Unrelated	no	no
-🇳🇬	U+1F1F3 U+1F1EC	flag: Nigeria	Misc	Unrelated	no	no
-🇳🇮	U+1F1F3 U+1F1EE	flag: Nicaragua	Misc	Unrelated	no	no
-🇳🇱	U+1F1F3 U+1F1F1	flag: Netherlands	Misc	Unrelated	no	no
-🇳🇴	U+1F1F3 U+1F1F4	flag: Norway	Misc	Unrelated	no	no
-🇳🇵	U+1F1F3 U+1F1F5	flag: Nepal	Misc	Unrelated	no	no
-🇳🇷	U+1F1F3 U+1F1F7	flag: Nauru	Misc	Unrelated	no	no
-🇳🇺	U+1F1F3 U+1F1FA	flag: Niue	Misc	Unrelated	no	no
-🇳🇿	U+1F1F3 U+1F1FF	flag: New Zealand	Misc	Unrelated	no	no
-🇴🇲	U+1F1F4 U+1F1F2	flag: Oman	Misc	Unrelated	no	no
-🇵🇦	U+1F1F5 U+1F1E6	flag: Panama	Misc	Unrelated	no	no
-🇵🇪	U+1F1F5 U+1F1EA	flag: Peru	Misc	Unrelated	no	no
-🇵🇫	U+1F1F5 U+1F1EB	flag: French Polynesia	Misc	Unrelated	no	no
-🇵🇬	U+1F1F5 U+1F1EC	flag: Papua New Guinea	Misc	Unrelated	no	no
-🇵🇭	U+1F1F5 U+1F1ED	flag: Philippines	Misc	Unrelated	no	no
-🇵🇰	U+1F1F5 U+1F1F0	flag: Pakistan	Misc	Unrelated	no	no
-🇵🇱	U+1F1F5 U+1F1F1	flag: Poland	Misc	Unrelated	no	no
-🇵🇲	U+1F1F5 U+1F1F2	flag: St. Pierre & Miquelon	Misc	Unrelated	no	no
-🇵🇳	U+1F1F5 U+1F1F3	flag: Pitcairn Islands	Misc	Unrelated	no	no
-🇵🇷	U+1F1F5 U+1F1F7	flag: Puerto Rico	Misc	Unrelated	no	no
-🇵🇸	U+1F1F5 U+1F1F8	flag: Palestinian Territories	Misc	Unrelated	no	no
-🇵🇹	U+1F1F5 U+1F1F9	flag: Portugal	Misc	Unrelated	no	no
-🇵🇼	U+1F1F5 U+1F1FC	flag: Palau	Misc	Unrelated	no	no
-🇵🇾	U+1F1F5 U+1F1FE	flag: Paraguay	Misc	Unrelated	no	no
-🇶🇦	U+1F1F6 U+1F1E6	flag: Qatar	Misc	Unrelated	no	no
-🇷🇪	U+1F1F7 U+1F1EA	flag: Réunion	Misc	Unrelated	no	no
-🇷🇴	U+1F1F7 U+1F1F4	flag: Romania	Misc	Unrelated	no	no
-🇷🇸	U+1F1F7 U+1F1F8	flag: Serbia	Misc	Unrelated	no	no
-🇷🇺	U+1F1F7 U+1F1FA	flag: Russia	Misc	Unrelated	no	no
-🇷🇼	U+1F1F7 U+1F1FC	flag: Rwanda	Misc	Unrelated	no	no
-🇸🇦	U+1F1F8 U+1F1E6	flag: Saudi Arabia	Misc	Unrelated	no	no
-🇸🇧	U+1F1F8 U+1F1E7	flag: Solomon Islands	Misc	Unrelated	no	no
-🇸🇨	U+1F1F8 U+1F1E8	flag: Seychelles	Misc	Unrelated	no	no
-🇸🇩	U+1F1F8 U+1F1E9	flag: Sudan	Misc	Unrelated	no	no
-🇸🇪	U+1F1F8 U+1F1EA	flag: Sweden	Misc	Unrelated	no	no
-🇸🇬	U+1F1F8 U+1F1EC	flag: Singapore	Misc	Unrelated	no	no
-🇸🇭	U+1F1F8 U+1F1ED	flag: St. Helena, Ascension & Tristan da Cunha	Misc	Unrelated	no	no
-🇸🇮	U+1F1F8 U+1F1EE	flag: Slovenia	Misc	Unrelated	no	no
-🇸🇯	U+1F1F8 U+1F1EF	flag: Svalbard & Jan Mayen	Misc	Unrelated	no	no
-🇸🇰	U+1F1F8 U+1F1F0	flag: Slovakia	Misc	Unrelated	no	no
-🇸🇱	U+1F1F8 U+1F1F1	flag: Sierra Leone	Misc	Unrelated	no	no
-🇸🇲	U+1F1F8 U+1F1F2	flag: San Marino	Misc	Unrelated	no	no
-🇸🇳	U+1F1F8 U+1F1F3	flag: Senegal	Misc	Unrelated	no	no
-🇸🇴	U+1F1F8 U+1F1F4	flag: Somalia	Misc	Unrelated	no	no
-🇸🇷	U+1F1F8 U+1F1F7	flag: Suriname	Misc	Unrelated	no	no
-🇸🇸	U+1F1F8 U+1F1F8	flag: South Sudan	Misc	Unrelated	no	no
-🇸🇹	U+1F1F8 U+1F1F9	flag: São Tomé & Príncipe	Misc	Unrelated	no	no
-🇸🇻	U+1F1F8 U+1F1FB	flag: El Salvador	Misc	Unrelated	no	no
-🇸🇽	U+1F1F8 U+1F1FD	flag: Sint Maarten	Misc	Unrelated	no	no
-🇸🇾	U+1F1F8 U+1F1FE	flag: Syria	Misc	Unrelated	no	no
-🇸🇿	U+1F1F8 U+1F1FF	flag: Eswatini	Misc	Unrelated	no	no
-🇹🇦	U+1F1F9 U+1F1E6	flag: Tristan da Cunha	Misc	Unrelated	no	no
-🇹🇨	U+1F1F9 U+1F1E8	flag: Turks & Caicos Islands	Misc	Unrelated	no	no
-🇹🇩	U+1F1F9 U+1F1E9	flag: Chad	Misc	Unrelated	no	no
-🇹🇫	U+1F1F9 U+1F1EB	flag: French Southern and Antarctic Lands	Misc	Unrelated	no	no
-🇹🇬	U+1F1F9 U+1F1EC	flag: Togo	Misc	Unrelated	no	no
-🇹🇭	U+1F1F9 U+1F1ED	flag: Thailand	Misc	Unrelated	no	no
-🇹🇯	U+1F1F9 U+1F1EF	flag: Tajikistan	Misc	Unrelated	no	no
-🇹🇰	U+1F1F9 U+1F1F0	flag: Tokelau	Misc	Unrelated	no	no
-🇹🇱	U+1F1F9 U+1F1F1	flag: Timor-Leste	Misc	Unrelated	no	no
-🇹🇲	U+1F1F9 U+1F1F2	flag: Turkmenistan	Misc	Unrelated	no	no
-🇹🇳	U+1F1F9 U+1F1F3	flag: Tunisia	Misc	Unrelated	no	no
-🇹🇴	U+1F1F9 U+1F1F4	flag: Tonga	Misc	Unrelated	no	no
-🇹🇷	U+1F1F9 U+1F1F7	flag: Türkiye	Misc	Unrelated	no	no
-🇹🇹	U+1F1F9 U+1F1F9	flag: Trinidad & Tobago	Misc	Unrelated	no	no
-🇹🇻	U+1F1F9 U+1F1FB	flag: Tuvalu	Misc	Unrelated	no	no
-🇹🇼	U+1F1F9 U+1F1FC	flag: Taiwan	Misc	Unrelated	no	no
-🇹🇿	U+1F1F9 U+1F1FF	flag: Tanzania	Misc	Unrelated	no	no
-🇺🇦	U+1F1FA U+1F1E6	flag: Ukraine	Misc	Unrelated	no	no
-🇺🇬	U+1F1FA U+1F1EC	flag: Uganda	Misc	Unrelated	no	no
-🇺🇲	U+1F1FA U+1F1F2	flag: U.S. Outlying Islands	Misc	Unrelated	no	no
-🇺🇳	U+1F1FA U+1F1F3	flag: United Nations	Misc	Unrelated	no	no
-🇺🇸	U+1F1FA U+1F1F8	flag: United States	Misc	Unrelated	no	no
-🇺🇾	U+1F1FA U+1F1FE	flag: Uruguay	Misc	Unrelated	no	no
-🇺🇿	U+1F1FA U+1F1FF	flag: Uzbekistan	Misc	Unrelated	no	no
-🇻🇦	U+1F1FB U+1F1E6	flag: Vatican City	Misc	Unrelated	no	no
-🇻🇨	U+1F1FB U+1F1E8	flag: St. Vincent & Grenadines	Misc	Unrelated	no	no
-🇻🇪	U+1F1FB U+1F1EA	flag: Venezuela	Misc	Unrelated	no	no
-🇻🇬	U+1F1FB U+1F1EC	flag: British Virgin Islands	Misc	Unrelated	no	no
-🇻🇮	U+1F1FB U+1F1EE	flag: U.S. Virgin Islands	Misc	Unrelated	no	no
-🇻🇳	U+1F1FB U+1F1F3	flag: Vietnam	Misc	Unrelated	no	no
-🇻🇺	U+1F1FB U+1F1FA	flag: Vanuatu	Misc	Unrelated	no	no
-🇼🇫	U+1F1FC U+1F1EB	flag: Wallis & Futuna	Misc	Unrelated	no	no
-🇼🇸	U+1F1FC U+1F1F8	flag: Samoa	Misc	Unrelated	no	no
-🇽🇰	U+1F1FD U+1F1F0	flag: Kosovo	Misc	Unrelated	no	no
-🇾🇪	U+1F1FE U+1F1EA	flag: Yemen	Misc	Unrelated	no	no
-🇾🇹	U+1F1FE U+1F1F9	flag: Mayotte	Misc	Unrelated	no	no
-🇿🇦	U+1F1FF U+1F1E6	flag: South Africa	Misc	Unrelated	no	no
-🇿🇲	U+1F1FF U+1F1F2	flag: Zambia	Misc	Unrelated	no	no
-🇿🇼	U+1F1FF U+1F1FC	flag: Zimbabwe	Misc	Unrelated	no	no
-🏴󠁧󠁢󠁥󠁮󠁧󠁿	U+1F3F4 U+E0067 U+E0062 U+E0065 U+E006E U+E0067 U+E007F	flag: England	Misc	Unrelated	no	no
-🏴󠁧󠁢󠁳󠁣󠁴󠁿	U+1F3F4 U+E0067 U+E0062 U+E0073 U+E0063 U+E0074 U+E007F	flag: Scotland	Misc	Unrelated	no	no
-🏴󠁧󠁢󠁷󠁬󠁳󠁿	U+1F3F4 U+E0067 U+E0062 U+E0077 U+E006C U+E0073 U+E007F	flag: Wales	Misc	Unrelated	no	no
+emoji	code	name	category	type	drawable	excluded	same_as
+😀	U+1F600	grinning face	Misc	Unrelated	no	no	
+😃	U+1F603	grinning face with big eyes	Misc	Unrelated	no	no	
+😄	U+1F604	grinning face with smiling eyes	Misc	Unrelated	no	no	
+😁	U+1F601	beaming face with smiling eyes	Misc	Unrelated	no	no	
+😆	U+1F606	grinning squinting face	Misc	Unrelated	no	no	
+😅	U+1F605	grinning face with sweat	Misc	Unrelated	no	no	
+🤣	U+1F923	rolling on the floor laughing	Misc	Unrelated	no	no	
+😂	U+1F602	face with tears of joy	Misc	Unrelated	no	no	
+🙂	U+1F642	slightly smiling face	Misc	Unrelated	no	no	
+🙃	U+1F643	upside-down face	Misc	Unrelated	no	no	
+🫠	U+1FAE0	melting face	Misc	Unrelated	no	no	
+🫫	U+1FAEB	⊛ cracking face	Misc	Unrelated	no	no	
+😉	U+1F609	winking face	Misc	Unrelated	no	no	
+😊	U+1F60A	smiling face with smiling eyes	Misc	Unrelated	no	no	
+😇	U+1F607	smiling face with halo	Misc	Unrelated	no	no	
+🥰	U+1F970	smiling face with hearts	Misc	Unrelated	no	no	
+😍	U+1F60D	smiling face with heart-eyes	Misc	Unrelated	no	no	
+🤩	U+1F929	star-struck	Misc	Unrelated	no	no	
+😘	U+1F618	face blowing a kiss	Misc	Unrelated	no	no	
+😗	U+1F617	kissing face	Misc	Unrelated	no	no	
+☺	U+263A	smiling face	Misc	Unrelated	no	no	
+😚	U+1F61A	kissing face with closed eyes	Misc	Unrelated	no	no	
+😙	U+1F619	kissing face with smiling eyes	Misc	Unrelated	no	no	
+🥲	U+1F972	smiling face with tear	Misc	Unrelated	no	no	
+😋	U+1F60B	face savoring food	Misc	Unrelated	no	no	
+😛	U+1F61B	face with tongue	Misc	Unrelated	no	no	
+😜	U+1F61C	winking face with tongue	Misc	Unrelated	no	no	
+🤪	U+1F92A	zany face	Misc	Unrelated	no	no	
+😝	U+1F61D	squinting face with tongue	Misc	Unrelated	no	no	
+🤑	U+1F911	money-mouth face	Misc	Unrelated	no	no	
+🤗	U+1F917	smiling face with open hands	Misc	Unrelated	no	no	
+🤭	U+1F92D	face with hand over mouth	Misc	Unrelated	no	no	
+🫢	U+1FAE2	face with open eyes and hand over mouth	Misc	Unrelated	no	no	
+🫣	U+1FAE3	face with peeking eye	Misc	Unrelated	no	no	
+🤫	U+1F92B	shushing face	Misc	Unrelated	no	no	
+🤔	U+1F914	thinking face	Misc	Unrelated	no	no	
+🫡	U+1FAE1	saluting face	Misc	Unrelated	no	no	
+🤐	U+1F910	zipper-mouth face	Misc	Unrelated	no	no	
+🤨	U+1F928	face with raised eyebrow	Misc	Unrelated	no	no	
+😐	U+1F610	neutral face	Misc	Unrelated	no	no	
+😑	U+1F611	expressionless face	Misc	Unrelated	no	no	
+😶	U+1F636	face without mouth	Misc	Unrelated	no	no	
+🫥	U+1FAE5	dotted line face	Misc	Unrelated	no	no	
+😶‍🌫️	U+1F636 U+200D U+1F32B U+FE0F	face in clouds	Misc	Unrelated	no	no	
+😏	U+1F60F	smirking face	Misc	Unrelated	no	no	
+😒	U+1F612	unamused face	Misc	Unrelated	no	no	
+🙄	U+1F644	face with rolling eyes	Misc	Unrelated	no	no	
+😬	U+1F62C	grimacing face	Misc	Unrelated	no	no	
+😮‍💨	U+1F62E U+200D U+1F4A8	face exhaling	Misc	Unrelated	no	no	
+🤥	U+1F925	lying face	Misc	Unrelated	no	no	
+🫨	U+1FAE8	shaking face	Misc	Unrelated	no	no	
+🙂‍↔️	U+1F642 U+200D U+2194 U+FE0F	head shaking horizontally	Misc	Unrelated	no	no	
+🙂‍↕️	U+1F642 U+200D U+2195 U+FE0F	head shaking vertically	Misc	Unrelated	no	no	
+😌	U+1F60C	relieved face	Misc	Unrelated	no	no	
+😔	U+1F614	pensive face	Misc	Unrelated	no	no	
+😪	U+1F62A	sleepy face	Misc	Unrelated	no	no	
+🤤	U+1F924	drooling face	Misc	Unrelated	no	no	
+😴	U+1F634	sleeping face	Misc	Unrelated	no	no	
+🫩	U+1FAE9	face with bags under eyes	Misc	Unrelated	no	no	
+😷	U+1F637	face with medical mask	Misc	Unrelated	no	no	
+🤒	U+1F912	face with thermometer	Misc	Unrelated	no	no	
+🤕	U+1F915	face with head-bandage	Misc	Unrelated	no	no	
+🤢	U+1F922	nauseated face	Misc	Unrelated	no	no	
+🤮	U+1F92E	face vomiting	Misc	Unrelated	no	no	
+🤧	U+1F927	sneezing face	Misc	Unrelated	no	no	
+🥵	U+1F975	hot face	Misc	Unrelated	no	no	
+🥶	U+1F976	cold face	Misc	Unrelated	no	no	
+🥴	U+1F974	woozy face	Misc	Unrelated	no	no	
+😵	U+1F635	face with crossed-out eyes	Misc	Unrelated	no	no	
+😵‍💫	U+1F635 U+200D U+1F4AB	face with spiral eyes	Misc	Unrelated	no	no	
+🤯	U+1F92F	exploding head	Misc	Unrelated	no	no	
+🤠	U+1F920	cowboy hat face	Misc	Unrelated	no	no	
+🥳	U+1F973	partying face	Misc	Unrelated	no	no	
+🥸	U+1F978	disguised face	Misc	Unrelated	no	no	
+😎	U+1F60E	smiling face with sunglasses	Misc	Unrelated	no	no	
+🤓	U+1F913	nerd face	Misc	Unrelated	no	no	
+🧐	U+1F9D0	face with monocle	Misc	Unrelated	no	no	
+😕	U+1F615	confused face	Misc	Unrelated	no	no	
+🫤	U+1FAE4	face with diagonal mouth	Misc	Unrelated	no	no	
+😟	U+1F61F	worried face	Misc	Unrelated	no	no	
+🙁	U+1F641	slightly frowning face	Misc	Unrelated	no	no	
+☹	U+2639	frowning face	Misc	Unrelated	no	no	
+😮	U+1F62E	face with open mouth	Misc	Unrelated	no	no	
+😯	U+1F62F	hushed face	Misc	Unrelated	no	no	
+😲	U+1F632	astonished face	Misc	Unrelated	no	no	
+😳	U+1F633	flushed face	Misc	Unrelated	no	no	
+🫪	U+1FAEA	distorted face	Misc	Unrelated	no	no	
+🥺	U+1F97A	pleading face	Misc	Unrelated	no	no	
+🥹	U+1F979	face holding back tears	Misc	Unrelated	no	no	
+😦	U+1F626	frowning face with open mouth	Misc	Unrelated	no	no	
+😧	U+1F627	anguished face	Misc	Unrelated	no	no	
+😨	U+1F628	fearful face	Misc	Unrelated	no	no	
+😰	U+1F630	anxious face with sweat	Misc	Unrelated	no	no	
+😥	U+1F625	sad but relieved face	Misc	Unrelated	no	no	
+😢	U+1F622	crying face	Misc	Unrelated	no	no	
+😭	U+1F62D	loudly crying face	Misc	Unrelated	no	no	
+😱	U+1F631	face screaming in fear	Misc	Unrelated	no	no	
+😖	U+1F616	confounded face	Misc	Unrelated	no	no	
+😣	U+1F623	persevering face	Misc	Unrelated	no	no	
+😞	U+1F61E	disappointed face	Misc	Unrelated	no	no	
+😓	U+1F613	downcast face with sweat	Misc	Unrelated	no	no	
+😩	U+1F629	weary face	Misc	Unrelated	no	no	
+😫	U+1F62B	tired face	Misc	Unrelated	no	no	
+🥱	U+1F971	yawning face	Misc	Unrelated	no	no	
+😤	U+1F624	face with steam from nose	Misc	Unrelated	no	no	
+😡	U+1F621	enraged face	Misc	Unrelated	no	no	
+😠	U+1F620	angry face	Misc	Unrelated	no	no	
+🤬	U+1F92C	face with symbols on mouth	Misc	Unrelated	no	no	
+😈	U+1F608	smiling face with horns	Misc	Unrelated	no	no	
+👿	U+1F47F	angry face with horns	Misc	Unrelated	no	no	
+💀	U+1F480	skull	Misc	Unrelated	no	no	
+☠	U+2620	skull and crossbones	Misc	Unrelated	no	no	
+💩	U+1F4A9	pile of poo	Misc	Unrelated	no	no	
+🤡	U+1F921	clown face	Misc	Unrelated	no	no	
+👹	U+1F479	ogre	Misc	Unrelated	no	no	
+👺	U+1F47A	goblin	Misc	Unrelated	no	no	
+👻	U+1F47B	ghost	Misc	Unrelated	no	no	
+👽	U+1F47D	alien	Misc	Unrelated	no	no	
+👾	U+1F47E	alien monster	Misc	Unrelated	no	no	
+🤖	U+1F916	robot	Misc	Unrelated	no	no	
+😺	U+1F63A	grinning cat	Cat	Unrelated	no	no	
+😸	U+1F638	grinning cat with smiling eyes	Bot	Right Category	no	yes	
+😹	U+1F639	cat with tears of joy	Cat	Unrelated	no	no	
+😻	U+1F63B	smiling cat with heart-eyes	Bot	Win	no	yes	
+😼	U+1F63C	cat with wry smile	Bot	Game Category	no	yes	
+😽	U+1F63D	kissing cat	Cat	Unrelated	no	no	
+🙀	U+1F640	weary cat	Cat	Unrelated	no	no	
+😿	U+1F63F	crying cat	Cat	Unrelated	no	no	
+😾	U+1F63E	pouting cat	Cat	Unrelated	no	no	
+🙈	U+1F648	see-no-evil monkey	Misc	Unrelated	no	no	
+🙉	U+1F649	hear-no-evil monkey	Misc	Unrelated	no	no	
+🙊	U+1F64A	speak-no-evil monkey	Misc	Unrelated	no	no	
+💌	U+1F48C	love letter	Misc	Unrelated	no	no	
+💘	U+1F498	heart with arrow	Misc	Unrelated	no	no	
+💝	U+1F49D	heart with ribbon	Misc	Unrelated	no	no	
+💖	U+1F496	sparkling heart	Misc	Unrelated	no	no	
+💗	U+1F497	growing heart	Misc	Unrelated	no	no	
+💓	U+1F493	beating heart	Misc	Unrelated	no	no	
+💞	U+1F49E	revolving hearts	Misc	Unrelated	no	no	
+💕	U+1F495	two hearts	Misc	Unrelated	no	no	
+💟	U+1F49F	heart decoration	Misc	Unrelated	no	no	
+❣	U+2763	heart exclamation	Misc	Unrelated	no	no	
+💔	U+1F494	broken heart	Misc	Unrelated	no	no	
+❤️‍🔥	U+2764 U+FE0F U+200D U+1F525	heart on fire	Misc	Unrelated	no	no	
+❤️‍🩹	U+2764 U+FE0F U+200D U+1FA79	mending heart	Misc	Unrelated	no	no	
+❤	U+2764	red heart	Misc	Unrelated	no	no	
+🩷	U+1FA77	pink heart	Misc	Unrelated	no	no	
+🧡	U+1F9E1	orange heart	Misc	Unrelated	no	no	
+💛	U+1F49B	yellow heart	Misc	Unrelated	no	no	
+💚	U+1F49A	green heart	Misc	Unrelated	no	no	
+💙	U+1F499	blue heart	Misc	Unrelated	no	no	
+🩵	U+1FA75	light blue heart	Misc	Unrelated	no	no	
+💜	U+1F49C	purple heart	Misc	Unrelated	no	no	
+🤎	U+1F90E	brown heart	Misc	Unrelated	no	no	
+🖤	U+1F5A4	black heart	Misc	Unrelated	no	no	
+🩶	U+1FA76	grey heart	Misc	Unrelated	no	no	
+🤍	U+1F90D	white heart	Misc	Unrelated	no	no	
+💋	U+1F48B	kiss mark	Misc	Unrelated	no	no	
+💯	U+1F4AF	hundred points	Misc	Unrelated	no	no	
+💢	U+1F4A2	anger symbol	Misc	Unrelated	no	no	
+🫯	U+1FAEF	fight cloud	Misc	Unrelated	no	no	
+💥	U+1F4A5	collision	Misc	Unrelated	no	no	
+💫	U+1F4AB	dizzy	Misc	Unrelated	no	no	
+💦	U+1F4A6	sweat droplets	Misc	Unrelated	no	no	
+💨	U+1F4A8	dashing away	Misc	Unrelated	no	no	
+🕳	U+1F573	hole	Misc	Unrelated	no	no	
+💬	U+1F4AC	speech balloon	Misc	Unrelated	no	no	
+👁️‍🗨️	U+1F441 U+FE0F U+200D U+1F5E8 U+FE0F	eye in speech bubble	Misc	Unrelated	no	no	
+🗨	U+1F5E8	left speech bubble	Misc	Unrelated	no	no	
+🗯	U+1F5EF	right anger bubble	Misc	Unrelated	no	no	
+💭	U+1F4AD	thought balloon	Misc	Unrelated	no	no	
+💤	U+1F4A4	ZZZ	Misc	Unrelated	no	no	
+👋	U+1F44B	waving hand	Misc	Unrelated	no	no	
+🤚	U+1F91A	raised back of hand	Misc	Unrelated	no	no	
+🖐	U+1F590	hand with fingers splayed	Misc	Unrelated	no	no	
+✋	U+270B	raised hand	Misc	Unrelated	no	no	
+🖖	U+1F596	vulcan salute	Misc	Unrelated	no	no	
+🫱	U+1FAF1	rightwards hand	Misc	Unrelated	no	no	
+🫲	U+1FAF2	leftwards hand	Misc	Unrelated	no	no	
+🫳	U+1FAF3	palm down hand	Misc	Unrelated	no	no	
+🫴	U+1FAF4	palm up hand	Misc	Unrelated	no	no	
+🫷	U+1FAF7	leftwards pushing hand	Misc	Unrelated	no	no	
+🫸	U+1FAF8	rightwards pushing hand	Misc	Unrelated	no	no	
+👌	U+1F44C	OK hand	Misc	Unrelated	no	no	
+🤌	U+1F90C	pinched fingers	Misc	Unrelated	no	no	
+🤏	U+1F90F	pinching hand	Misc	Unrelated	no	no	
+✌	U+270C	victory hand	Misc	Unrelated	no	no	
+🤞	U+1F91E	crossed fingers	Misc	Unrelated	no	no	
+🫰	U+1FAF0	hand with index finger and thumb crossed	Misc	Unrelated	no	no	
+🤟	U+1F91F	love-you gesture	Misc	Unrelated	no	no	
+🤘	U+1F918	sign of the horns	Misc	Unrelated	no	no	
+🤙	U+1F919	call me hand	Misc	Unrelated	no	no	
+👈	U+1F448	backhand index pointing left	Misc	Unrelated	no	no	
+👉	U+1F449	backhand index pointing right	Misc	Unrelated	no	no	
+👆	U+1F446	backhand index pointing up	Misc	Unrelated	no	no	
+🖕	U+1F595	middle finger	Misc	Unrelated	no	no	
+👇	U+1F447	backhand index pointing down	Misc	Unrelated	no	no	
+☝	U+261D	index pointing up	Misc	Unrelated	no	no	
+🫵	U+1FAF5	index pointing at the viewer	Misc	Unrelated	no	no	
+👍	U+1F44D	thumbs up	Misc	Unrelated	no	no	
+👎	U+1F44E	thumbs down	Misc	Unrelated	no	no	
+🫹	U+1FAF9	⊛ leftwards thumb sign	Misc	Unrelated	no	no	
+🫺	U+1FAFA	⊛ rightwards thumb sign	Misc	Unrelated	no	no	
+✊	U+270A	raised fist	Misc	Unrelated	no	no	
+👊	U+1F44A	oncoming fist	Misc	Unrelated	no	no	
+🤛	U+1F91B	left-facing fist	Misc	Unrelated	no	no	
+🤜	U+1F91C	right-facing fist	Misc	Unrelated	no	no	
+👏	U+1F44F	clapping hands	Misc	Unrelated	no	no	
+🙌	U+1F64C	raising hands	Misc	Unrelated	no	no	
+🫶	U+1FAF6	heart hands	Misc	Unrelated	no	no	
+👐	U+1F450	open hands	Misc	Unrelated	no	no	
+🤲	U+1F932	palms up together	Misc	Unrelated	no	no	
+🤝	U+1F91D	handshake	Misc	Unrelated	no	no	
+🙏	U+1F64F	folded hands	Misc	Unrelated	no	no	
+✍	U+270D	writing hand	Misc	Unrelated	no	no	
+💅	U+1F485	nail polish	Misc	Unrelated	no	no	
+🤳	U+1F933	selfie	Misc	Unrelated	no	no	
+💪	U+1F4AA	flexed biceps	Misc	Unrelated	no	no	
+🦾	U+1F9BE	mechanical arm	Misc	Unrelated	no	no	
+🦿	U+1F9BF	mechanical leg	Misc	Unrelated	no	no	
+🦵	U+1F9B5	leg	Misc	Unrelated	no	no	
+🦶	U+1F9B6	foot	Misc	Unrelated	no	no	
+👂	U+1F442	ear	Misc	Unrelated	no	no	
+🦻	U+1F9BB	ear with hearing aid	Misc	Unrelated	no	no	
+👃	U+1F443	nose	Misc	Unrelated	no	no	
+🧠	U+1F9E0	brain	Misc	Unrelated	no	no	
+🫀	U+1FAC0	anatomical heart	Misc	Unrelated	no	no	
+🫁	U+1FAC1	lungs	Misc	Unrelated	no	no	
+🦷	U+1F9B7	tooth	Misc	Unrelated	no	no	
+🦴	U+1F9B4	bone	Misc	Unrelated	no	no	
+👀	U+1F440	eyes	Bot	Right Type	no	yes	
+👁	U+1F441	eye	Misc	Unrelated	no	no	
+👅	U+1F445	tongue	Misc	Unrelated	no	no	
+👄	U+1F444	mouth	Misc	Unrelated	no	no	
+🫦	U+1FAE6	biting lip	Misc	Unrelated	no	no	
+👶	U+1F476	baby	Misc	Unrelated	no	no	
+🧒	U+1F9D2	child	Misc	Unrelated	no	no	
+👦	U+1F466	boy	Misc	Unrelated	no	no	
+👧	U+1F467	girl	Misc	Unrelated	no	no	
+🧑	U+1F9D1	person	Misc	Unrelated	no	no	
+👱	U+1F471	person: blond hair	Misc	Unrelated	no	no	
+👨	U+1F468	man	Misc	Unrelated	no	no	
+🧔	U+1F9D4	person: beard	Misc	Unrelated	no	no	
+🧔‍♂️	U+1F9D4 U+200D U+2642 U+FE0F	man: beard	Misc	Unrelated	no	no	
+🧔‍♀️	U+1F9D4 U+200D U+2640 U+FE0F	woman: beard	Misc	Unrelated	no	no	
+👨‍🦰	U+1F468 U+200D U+1F9B0	man: red hair	Misc	Unrelated	no	no	
+👨‍🦱	U+1F468 U+200D U+1F9B1	man: curly hair	Misc	Unrelated	no	no	
+👨‍🦳	U+1F468 U+200D U+1F9B3	man: white hair	Misc	Unrelated	no	no	
+👨‍🦲	U+1F468 U+200D U+1F9B2	man: bald	Misc	Unrelated	no	no	
+👩	U+1F469	woman	Misc	Unrelated	no	no	
+👩‍🦰	U+1F469 U+200D U+1F9B0	woman: red hair	Misc	Unrelated	no	no	
+🧑‍🦰	U+1F9D1 U+200D U+1F9B0	person: red hair	Misc	Unrelated	no	no	
+👩‍🦱	U+1F469 U+200D U+1F9B1	woman: curly hair	Misc	Unrelated	no	no	
+🧑‍🦱	U+1F9D1 U+200D U+1F9B1	person: curly hair	Misc	Unrelated	no	no	
+👩‍🦳	U+1F469 U+200D U+1F9B3	woman: white hair	Misc	Unrelated	no	no	
+🧑‍🦳	U+1F9D1 U+200D U+1F9B3	person: white hair	Misc	Unrelated	no	no	
+👩‍🦲	U+1F469 U+200D U+1F9B2	woman: bald	Misc	Unrelated	no	no	
+🧑‍🦲	U+1F9D1 U+200D U+1F9B2	person: bald	Misc	Unrelated	no	no	
+👱‍♀️	U+1F471 U+200D U+2640 U+FE0F	woman: blond hair	Misc	Unrelated	no	no	
+👱‍♂️	U+1F471 U+200D U+2642 U+FE0F	man: blond hair	Misc	Unrelated	no	no	
+🧓	U+1F9D3	older person	Misc	Unrelated	no	no	
+👴	U+1F474	old man	Misc	Unrelated	no	no	
+👵	U+1F475	old woman	Misc	Unrelated	no	no	
+🙍	U+1F64D	person frowning	Misc	Unrelated	no	no	
+🙍‍♂️	U+1F64D U+200D U+2642 U+FE0F	man frowning	Misc	Unrelated	no	no	
+🙍‍♀️	U+1F64D U+200D U+2640 U+FE0F	woman frowning	Misc	Unrelated	no	no	
+🙎	U+1F64E	person pouting	Misc	Unrelated	no	no	
+🙎‍♂️	U+1F64E U+200D U+2642 U+FE0F	man pouting	Misc	Unrelated	no	no	
+🙎‍♀️	U+1F64E U+200D U+2640 U+FE0F	woman pouting	Misc	Unrelated	no	no	
+🙅	U+1F645	person gesturing NO	Misc	Unrelated	no	no	
+🙅‍♂️	U+1F645 U+200D U+2642 U+FE0F	man gesturing NO	Misc	Unrelated	no	no	
+🙅‍♀️	U+1F645 U+200D U+2640 U+FE0F	woman gesturing NO	Misc	Unrelated	no	no	
+🙆	U+1F646	person gesturing OK	Misc	Unrelated	no	no	
+🙆‍♂️	U+1F646 U+200D U+2642 U+FE0F	man gesturing OK	Misc	Unrelated	no	no	
+🙆‍♀️	U+1F646 U+200D U+2640 U+FE0F	woman gesturing OK	Misc	Unrelated	no	no	
+💁	U+1F481	person tipping hand	Misc	Unrelated	no	no	
+💁‍♂️	U+1F481 U+200D U+2642 U+FE0F	man tipping hand	Misc	Unrelated	no	no	
+💁‍♀️	U+1F481 U+200D U+2640 U+FE0F	woman tipping hand	Misc	Unrelated	no	no	
+🙋	U+1F64B	person raising hand	Misc	Unrelated	no	no	
+🙋‍♂️	U+1F64B U+200D U+2642 U+FE0F	man raising hand	Misc	Unrelated	no	no	
+🙋‍♀️	U+1F64B U+200D U+2640 U+FE0F	woman raising hand	Misc	Unrelated	no	no	
+🧏	U+1F9CF	deaf person	Misc	Unrelated	no	no	
+🧏‍♂️	U+1F9CF U+200D U+2642 U+FE0F	deaf man	Misc	Unrelated	no	no	
+🧏‍♀️	U+1F9CF U+200D U+2640 U+FE0F	deaf woman	Misc	Unrelated	no	no	
+🙇	U+1F647	person bowing	Misc	Unrelated	no	no	
+🙇‍♂️	U+1F647 U+200D U+2642 U+FE0F	man bowing	Misc	Unrelated	no	no	
+🙇‍♀️	U+1F647 U+200D U+2640 U+FE0F	woman bowing	Misc	Unrelated	no	no	
+🤦	U+1F926	person facepalming	Misc	Unrelated	no	no	
+🤦‍♂️	U+1F926 U+200D U+2642 U+FE0F	man facepalming	Misc	Unrelated	no	no	
+🤦‍♀️	U+1F926 U+200D U+2640 U+FE0F	woman facepalming	Misc	Unrelated	no	no	
+🤷	U+1F937	person shrugging	Misc	Unrelated	no	no	
+🤷‍♂️	U+1F937 U+200D U+2642 U+FE0F	man shrugging	Misc	Unrelated	no	no	
+🤷‍♀️	U+1F937 U+200D U+2640 U+FE0F	woman shrugging	Misc	Unrelated	no	no	
+🧑‍⚕️	U+1F9D1 U+200D U+2695 U+FE0F	health worker	Misc	Unrelated	no	no	
+👨‍⚕️	U+1F468 U+200D U+2695 U+FE0F	man health worker	Misc	Unrelated	no	no	
+👩‍⚕️	U+1F469 U+200D U+2695 U+FE0F	woman health worker	Misc	Unrelated	no	no	
+🧑‍🎓	U+1F9D1 U+200D U+1F393	student	Misc	Unrelated	no	no	
+👨‍🎓	U+1F468 U+200D U+1F393	man student	Misc	Unrelated	no	no	
+👩‍🎓	U+1F469 U+200D U+1F393	woman student	Misc	Unrelated	no	no	
+🧑‍🏫	U+1F9D1 U+200D U+1F3EB	teacher	Misc	Unrelated	no	no	
+👨‍🏫	U+1F468 U+200D U+1F3EB	man teacher	Misc	Unrelated	no	no	
+👩‍🏫	U+1F469 U+200D U+1F3EB	woman teacher	Misc	Unrelated	no	no	
+🧑‍⚖️	U+1F9D1 U+200D U+2696 U+FE0F	judge	Misc	Unrelated	no	no	
+👨‍⚖️	U+1F468 U+200D U+2696 U+FE0F	man judge	Misc	Unrelated	no	no	
+👩‍⚖️	U+1F469 U+200D U+2696 U+FE0F	woman judge	Misc	Unrelated	no	no	
+🧑‍🌾	U+1F9D1 U+200D U+1F33E	farmer	Misc	Unrelated	no	no	
+👨‍🌾	U+1F468 U+200D U+1F33E	man farmer	Misc	Unrelated	no	no	
+👩‍🌾	U+1F469 U+200D U+1F33E	woman farmer	Misc	Unrelated	no	no	
+🧑‍🍳	U+1F9D1 U+200D U+1F373	cook	Misc	Unrelated	no	no	
+👨‍🍳	U+1F468 U+200D U+1F373	man cook	Misc	Unrelated	no	no	
+👩‍🍳	U+1F469 U+200D U+1F373	woman cook	Misc	Unrelated	no	no	
+🧑‍🔧	U+1F9D1 U+200D U+1F527	mechanic	Misc	Unrelated	no	no	
+👨‍🔧	U+1F468 U+200D U+1F527	man mechanic	Misc	Unrelated	no	no	
+👩‍🔧	U+1F469 U+200D U+1F527	woman mechanic	Misc	Unrelated	no	no	
+🧑‍🏭	U+1F9D1 U+200D U+1F3ED	factory worker	Misc	Unrelated	no	no	
+👨‍🏭	U+1F468 U+200D U+1F3ED	man factory worker	Misc	Unrelated	no	no	
+👩‍🏭	U+1F469 U+200D U+1F3ED	woman factory worker	Misc	Unrelated	no	no	
+🧑‍💼	U+1F9D1 U+200D U+1F4BC	office worker	Misc	Unrelated	no	no	
+👨‍💼	U+1F468 U+200D U+1F4BC	man office worker	Misc	Unrelated	no	no	
+👩‍💼	U+1F469 U+200D U+1F4BC	woman office worker	Misc	Unrelated	no	no	
+🧑‍🔬	U+1F9D1 U+200D U+1F52C	scientist	Misc	Unrelated	no	no	
+👨‍🔬	U+1F468 U+200D U+1F52C	man scientist	Misc	Unrelated	no	no	
+👩‍🔬	U+1F469 U+200D U+1F52C	woman scientist	Misc	Unrelated	no	no	
+🧑‍💻	U+1F9D1 U+200D U+1F4BB	technologist	Misc	Unrelated	no	no	
+👨‍💻	U+1F468 U+200D U+1F4BB	man technologist	Misc	Unrelated	no	no	
+👩‍💻	U+1F469 U+200D U+1F4BB	woman technologist	Misc	Unrelated	no	no	
+🧑‍🎤	U+1F9D1 U+200D U+1F3A4	singer	Misc	Unrelated	no	no	
+👨‍🎤	U+1F468 U+200D U+1F3A4	man singer	Misc	Unrelated	no	no	
+👩‍🎤	U+1F469 U+200D U+1F3A4	woman singer	Misc	Unrelated	no	no	
+🧑‍🎨	U+1F9D1 U+200D U+1F3A8	artist	Misc	Unrelated	no	no	
+👨‍🎨	U+1F468 U+200D U+1F3A8	man artist	Misc	Unrelated	no	no	
+👩‍🎨	U+1F469 U+200D U+1F3A8	woman artist	Misc	Unrelated	no	no	
+🧑‍✈️	U+1F9D1 U+200D U+2708 U+FE0F	pilot	Misc	Unrelated	no	no	
+👨‍✈️	U+1F468 U+200D U+2708 U+FE0F	man pilot	Misc	Unrelated	no	no	
+👩‍✈️	U+1F469 U+200D U+2708 U+FE0F	woman pilot	Misc	Unrelated	no	no	
+🧑‍🚀	U+1F9D1 U+200D U+1F680	astronaut	Misc	Unrelated	no	no	
+👨‍🚀	U+1F468 U+200D U+1F680	man astronaut	Misc	Unrelated	no	no	
+👩‍🚀	U+1F469 U+200D U+1F680	woman astronaut	Misc	Unrelated	no	no	
+🧑‍🚒	U+1F9D1 U+200D U+1F692	firefighter	Misc	Unrelated	no	no	
+👨‍🚒	U+1F468 U+200D U+1F692	man firefighter	Misc	Unrelated	no	no	
+👩‍🚒	U+1F469 U+200D U+1F692	woman firefighter	Misc	Unrelated	no	no	
+👮	U+1F46E	police officer	Misc	Unrelated	no	no	
+👮‍♂️	U+1F46E U+200D U+2642 U+FE0F	man police officer	Misc	Unrelated	no	no	
+👮‍♀️	U+1F46E U+200D U+2640 U+FE0F	woman police officer	Misc	Unrelated	no	no	
+🕵	U+1F575	detective	Misc	Unrelated	no	no	
+🕵️‍♂️	U+1F575 U+FE0F U+200D U+2642 U+FE0F	man detective	Misc	Unrelated	no	no	
+🕵️‍♀️	U+1F575 U+FE0F U+200D U+2640 U+FE0F	woman detective	Misc	Unrelated	no	no	
+💂	U+1F482	guard	Misc	Unrelated	no	no	
+💂‍♂️	U+1F482 U+200D U+2642 U+FE0F	man guard	Misc	Unrelated	no	no	
+💂‍♀️	U+1F482 U+200D U+2640 U+FE0F	woman guard	Misc	Unrelated	no	no	
+🥷	U+1F977	ninja	Misc	Unrelated	no	no	
+👷	U+1F477	construction worker	Misc	Unrelated	no	no	
+👷‍♂️	U+1F477 U+200D U+2642 U+FE0F	man construction worker	Misc	Unrelated	no	no	
+👷‍♀️	U+1F477 U+200D U+2640 U+FE0F	woman construction worker	Misc	Unrelated	no	no	
+🫅	U+1FAC5	person with crown	Misc	Unrelated	no	no	
+🤴	U+1F934	prince	Misc	Unrelated	no	no	
+👸	U+1F478	princess	Misc	Unrelated	no	no	
+👳	U+1F473	person wearing turban	Misc	Unrelated	no	no	
+👳‍♂️	U+1F473 U+200D U+2642 U+FE0F	man wearing turban	Misc	Unrelated	no	no	
+👳‍♀️	U+1F473 U+200D U+2640 U+FE0F	woman wearing turban	Misc	Unrelated	no	no	
+👲	U+1F472	person with skullcap	Misc	Unrelated	no	no	
+🧕	U+1F9D5	woman with headscarf	Misc	Unrelated	no	no	
+🤵	U+1F935	person in tuxedo	Misc	Unrelated	no	no	
+🤵‍♂️	U+1F935 U+200D U+2642 U+FE0F	man in tuxedo	Misc	Unrelated	no	no	
+🤵‍♀️	U+1F935 U+200D U+2640 U+FE0F	woman in tuxedo	Misc	Unrelated	no	no	
+👰	U+1F470	person with veil	Misc	Unrelated	no	no	
+👰‍♂️	U+1F470 U+200D U+2642 U+FE0F	man with veil	Misc	Unrelated	no	no	
+👰‍♀️	U+1F470 U+200D U+2640 U+FE0F	woman with veil	Misc	Unrelated	no	no	
+🤰	U+1F930	pregnant woman	Misc	Unrelated	no	no	
+🫃	U+1FAC3	pregnant man	Misc	Unrelated	no	no	
+🫄	U+1FAC4	pregnant person	Misc	Unrelated	no	no	
+🤱	U+1F931	breast-feeding	Misc	Unrelated	no	no	
+👩‍🍼	U+1F469 U+200D U+1F37C	woman feeding baby	Misc	Unrelated	no	no	
+👨‍🍼	U+1F468 U+200D U+1F37C	man feeding baby	Misc	Unrelated	no	no	
+🧑‍🍼	U+1F9D1 U+200D U+1F37C	person feeding baby	Misc	Unrelated	no	no	
+👼	U+1F47C	baby angel	Misc	Unrelated	no	no	
+🎅	U+1F385	Santa Claus	Misc	Unrelated	no	no	
+🤶	U+1F936	Mrs. Claus	Misc	Unrelated	no	no	
+🧑‍🎄	U+1F9D1 U+200D U+1F384	Mx Claus	Misc	Unrelated	no	no	
+🦸	U+1F9B8	superhero	Misc	Unrelated	no	no	
+🦸‍♂️	U+1F9B8 U+200D U+2642 U+FE0F	man superhero	Misc	Unrelated	no	no	
+🦸‍♀️	U+1F9B8 U+200D U+2640 U+FE0F	woman superhero	Misc	Unrelated	no	no	
+🦹	U+1F9B9	supervillain	Misc	Unrelated	no	no	
+🦹‍♂️	U+1F9B9 U+200D U+2642 U+FE0F	man supervillain	Misc	Unrelated	no	no	
+🦹‍♀️	U+1F9B9 U+200D U+2640 U+FE0F	woman supervillain	Misc	Unrelated	no	no	
+🧙	U+1F9D9	mage	Misc	Unrelated	no	no	
+🧙‍♂️	U+1F9D9 U+200D U+2642 U+FE0F	man mage	Misc	Unrelated	no	no	
+🧙‍♀️	U+1F9D9 U+200D U+2640 U+FE0F	woman mage	Misc	Unrelated	no	no	
+🧚	U+1F9DA	fairy	Misc	Unrelated	no	no	
+🧚‍♂️	U+1F9DA U+200D U+2642 U+FE0F	man fairy	Misc	Unrelated	no	no	
+🧚‍♀️	U+1F9DA U+200D U+2640 U+FE0F	woman fairy	Misc	Unrelated	no	no	
+🧛	U+1F9DB	vampire	Misc	Unrelated	no	no	
+🧛‍♂️	U+1F9DB U+200D U+2642 U+FE0F	man vampire	Misc	Unrelated	no	no	
+🧛‍♀️	U+1F9DB U+200D U+2640 U+FE0F	woman vampire	Misc	Unrelated	no	no	
+🧜	U+1F9DC	merperson	Misc	Unrelated	no	no	
+🧜‍♂️	U+1F9DC U+200D U+2642 U+FE0F	merman	Misc	Unrelated	no	no	
+🧜‍♀️	U+1F9DC U+200D U+2640 U+FE0F	mermaid	Misc	Unrelated	no	no	
+🧝	U+1F9DD	elf	Misc	Unrelated	no	no	
+🧝‍♂️	U+1F9DD U+200D U+2642 U+FE0F	man elf	Misc	Unrelated	no	no	
+🧝‍♀️	U+1F9DD U+200D U+2640 U+FE0F	woman elf	Misc	Unrelated	no	no	
+🧞	U+1F9DE	genie	Misc	Unrelated	no	no	
+🧞‍♂️	U+1F9DE U+200D U+2642 U+FE0F	man genie	Misc	Unrelated	no	no	
+🧞‍♀️	U+1F9DE U+200D U+2640 U+FE0F	woman genie	Misc	Unrelated	no	no	
+🧟	U+1F9DF	zombie	Misc	Unrelated	no	no	
+🧟‍♂️	U+1F9DF U+200D U+2642 U+FE0F	man zombie	Misc	Unrelated	no	no	
+🧟‍♀️	U+1F9DF U+200D U+2640 U+FE0F	woman zombie	Misc	Unrelated	no	no	
+🧌	U+1F9CC	troll	Misc	Unrelated	no	no	
+🫈	U+1FAC8	hairy creature	Misc	Unrelated	no	no	
+💆	U+1F486	person getting massage	Misc	Unrelated	no	no	
+💆‍♂️	U+1F486 U+200D U+2642 U+FE0F	man getting massage	Misc	Unrelated	no	no	
+💆‍♀️	U+1F486 U+200D U+2640 U+FE0F	woman getting massage	Misc	Unrelated	no	no	
+💇	U+1F487	person getting haircut	Misc	Unrelated	no	no	
+💇‍♂️	U+1F487 U+200D U+2642 U+FE0F	man getting haircut	Misc	Unrelated	no	no	
+💇‍♀️	U+1F487 U+200D U+2640 U+FE0F	woman getting haircut	Misc	Unrelated	no	no	
+🚶	U+1F6B6	person walking	Misc	Unrelated	no	no	
+🚶‍♂️	U+1F6B6 U+200D U+2642 U+FE0F	man walking	Misc	Unrelated	no	no	
+🚶‍♀️	U+1F6B6 U+200D U+2640 U+FE0F	woman walking	Misc	Unrelated	no	no	
+🚶‍➡️	U+1F6B6 U+200D U+27A1 U+FE0F	person walking: facing right	Misc	Unrelated	no	no	
+🚶‍♀️‍➡️	U+1F6B6 U+200D U+2640 U+FE0F U+200D U+27A1 U+FE0F	woman walking: facing right	Misc	Unrelated	no	no	
+🚶‍♂️‍➡️	U+1F6B6 U+200D U+2642 U+FE0F U+200D U+27A1 U+FE0F	man walking: facing right	Misc	Unrelated	no	no	
+🧍	U+1F9CD	person standing	Misc	Unrelated	no	no	
+🧍‍♂️	U+1F9CD U+200D U+2642 U+FE0F	man standing	Misc	Unrelated	no	no	
+🧍‍♀️	U+1F9CD U+200D U+2640 U+FE0F	woman standing	Misc	Unrelated	no	no	
+🧎	U+1F9CE	person kneeling	Misc	Unrelated	no	no	
+🧎‍♂️	U+1F9CE U+200D U+2642 U+FE0F	man kneeling	Misc	Unrelated	no	no	
+🧎‍♀️	U+1F9CE U+200D U+2640 U+FE0F	woman kneeling	Misc	Unrelated	no	no	
+🧎‍➡️	U+1F9CE U+200D U+27A1 U+FE0F	person kneeling: facing right	Misc	Unrelated	no	no	
+🧎‍♀️‍➡️	U+1F9CE U+200D U+2640 U+FE0F U+200D U+27A1 U+FE0F	woman kneeling: facing right	Misc	Unrelated	no	no	
+🧎‍♂️‍➡️	U+1F9CE U+200D U+2642 U+FE0F U+200D U+27A1 U+FE0F	man kneeling: facing right	Misc	Unrelated	no	no	
+🧑‍🦯	U+1F9D1 U+200D U+1F9AF	person with white cane	Misc	Unrelated	no	no	
+🧑‍🦯‍➡️	U+1F9D1 U+200D U+1F9AF U+200D U+27A1 U+FE0F	person with white cane: facing right	Misc	Unrelated	no	no	
+👨‍🦯	U+1F468 U+200D U+1F9AF	man with white cane	Misc	Unrelated	no	no	
+👨‍🦯‍➡️	U+1F468 U+200D U+1F9AF U+200D U+27A1 U+FE0F	man with white cane: facing right	Misc	Unrelated	no	no	
+👩‍🦯	U+1F469 U+200D U+1F9AF	woman with white cane	Misc	Unrelated	no	no	
+👩‍🦯‍➡️	U+1F469 U+200D U+1F9AF U+200D U+27A1 U+FE0F	woman with white cane: facing right	Misc	Unrelated	no	no	
+🧑‍🦼	U+1F9D1 U+200D U+1F9BC	person in motorized wheelchair	Misc	Unrelated	no	no	
+🧑‍🦼‍➡️	U+1F9D1 U+200D U+1F9BC U+200D U+27A1 U+FE0F	person in motorized wheelchair: facing right	Misc	Unrelated	no	no	
+👨‍🦼	U+1F468 U+200D U+1F9BC	man in motorized wheelchair	Misc	Unrelated	no	no	
+👨‍🦼‍➡️	U+1F468 U+200D U+1F9BC U+200D U+27A1 U+FE0F	man in motorized wheelchair: facing right	Misc	Unrelated	no	no	
+👩‍🦼	U+1F469 U+200D U+1F9BC	woman in motorized wheelchair	Misc	Unrelated	no	no	
+👩‍🦼‍➡️	U+1F469 U+200D U+1F9BC U+200D U+27A1 U+FE0F	woman in motorized wheelchair: facing right	Misc	Unrelated	no	no	
+🧑‍🦽	U+1F9D1 U+200D U+1F9BD	person in manual wheelchair	Misc	Unrelated	no	no	
+🧑‍🦽‍➡️	U+1F9D1 U+200D U+1F9BD U+200D U+27A1 U+FE0F	person in manual wheelchair: facing right	Misc	Unrelated	no	no	
+👨‍🦽	U+1F468 U+200D U+1F9BD	man in manual wheelchair	Misc	Unrelated	no	no	
+👨‍🦽‍➡️	U+1F468 U+200D U+1F9BD U+200D U+27A1 U+FE0F	man in manual wheelchair: facing right	Misc	Unrelated	no	no	
+👩‍🦽	U+1F469 U+200D U+1F9BD	woman in manual wheelchair	Misc	Unrelated	no	no	
+👩‍🦽‍➡️	U+1F469 U+200D U+1F9BD U+200D U+27A1 U+FE0F	woman in manual wheelchair: facing right	Misc	Unrelated	no	no	
+🏃	U+1F3C3	person running	Misc	Unrelated	no	no	
+🏃‍♂️	U+1F3C3 U+200D U+2642 U+FE0F	man running	Misc	Unrelated	no	no	
+🏃‍♀️	U+1F3C3 U+200D U+2640 U+FE0F	woman running	Misc	Unrelated	no	no	
+🏃‍➡️	U+1F3C3 U+200D U+27A1 U+FE0F	person running: facing right	Misc	Unrelated	no	no	
+🏃‍♀️‍➡️	U+1F3C3 U+200D U+2640 U+FE0F U+200D U+27A1 U+FE0F	woman running: facing right	Misc	Unrelated	no	no	
+🏃‍♂️‍➡️	U+1F3C3 U+200D U+2642 U+FE0F U+200D U+27A1 U+FE0F	man running: facing right	Misc	Unrelated	no	no	
+🧑‍🩰	U+1F9D1 U+200D U+1FA70	ballet dancer	Misc	Unrelated	no	no	
+💃	U+1F483	woman dancing	Misc	Unrelated	no	no	
+🕺	U+1F57A	man dancing	Misc	Unrelated	no	no	
+🕴	U+1F574	person in suit levitating	Misc	Unrelated	no	no	
+👯	U+1F46F	people with bunny ears	Misc	Unrelated	no	no	
+👯‍♂️	U+1F46F U+200D U+2642 U+FE0F	men with bunny ears	Misc	Unrelated	no	no	
+👯‍♀️	U+1F46F U+200D U+2640 U+FE0F	women with bunny ears	Misc	Unrelated	no	no	
+🧖	U+1F9D6	person in steamy room	Misc	Unrelated	no	no	
+🧖‍♂️	U+1F9D6 U+200D U+2642 U+FE0F	man in steamy room	Misc	Unrelated	no	no	
+🧖‍♀️	U+1F9D6 U+200D U+2640 U+FE0F	woman in steamy room	Misc	Unrelated	no	no	
+🧗	U+1F9D7	person climbing	Misc	Unrelated	no	no	
+🧗‍♂️	U+1F9D7 U+200D U+2642 U+FE0F	man climbing	Misc	Unrelated	no	no	
+🧗‍♀️	U+1F9D7 U+200D U+2640 U+FE0F	woman climbing	Misc	Unrelated	no	no	
+🤺	U+1F93A	person fencing	Misc	Unrelated	no	no	
+🏇	U+1F3C7	horse racing	Misc	Unrelated	no	no	
+⛷	U+26F7	skier	Misc	Unrelated	no	no	
+🏂	U+1F3C2	snowboarder	Misc	Unrelated	no	no	
+🏌	U+1F3CC	person golfing	Misc	Unrelated	no	no	
+🏌️‍♂️	U+1F3CC U+FE0F U+200D U+2642 U+FE0F	man golfing	Misc	Unrelated	no	no	
+🏌️‍♀️	U+1F3CC U+FE0F U+200D U+2640 U+FE0F	woman golfing	Misc	Unrelated	no	no	
+🏄	U+1F3C4	person surfing	Misc	Unrelated	no	no	
+🏄‍♂️	U+1F3C4 U+200D U+2642 U+FE0F	man surfing	Misc	Unrelated	no	no	
+🏄‍♀️	U+1F3C4 U+200D U+2640 U+FE0F	woman surfing	Misc	Unrelated	no	no	
+🚣	U+1F6A3	person rowing boat	Misc	Unrelated	no	no	
+🚣‍♂️	U+1F6A3 U+200D U+2642 U+FE0F	man rowing boat	Misc	Unrelated	no	no	
+🚣‍♀️	U+1F6A3 U+200D U+2640 U+FE0F	woman rowing boat	Misc	Unrelated	no	no	
+🏊	U+1F3CA	person swimming	Misc	Unrelated	no	no	
+🏊‍♂️	U+1F3CA U+200D U+2642 U+FE0F	man swimming	Misc	Unrelated	no	no	
+🏊‍♀️	U+1F3CA U+200D U+2640 U+FE0F	woman swimming	Misc	Unrelated	no	no	
+⛹	U+26F9	person bouncing ball	Misc	Unrelated	no	no	
+⛹️‍♂️	U+26F9 U+FE0F U+200D U+2642 U+FE0F	man bouncing ball	Misc	Unrelated	no	no	
+⛹️‍♀️	U+26F9 U+FE0F U+200D U+2640 U+FE0F	woman bouncing ball	Misc	Unrelated	no	no	
+🏋	U+1F3CB	person lifting weights	Misc	Unrelated	no	no	
+🏋️‍♂️	U+1F3CB U+FE0F U+200D U+2642 U+FE0F	man lifting weights	Misc	Unrelated	no	no	
+🏋️‍♀️	U+1F3CB U+FE0F U+200D U+2640 U+FE0F	woman lifting weights	Misc	Unrelated	no	no	
+🚴	U+1F6B4	person biking	Misc	Unrelated	no	no	
+🚴‍♂️	U+1F6B4 U+200D U+2642 U+FE0F	man biking	Misc	Unrelated	no	no	
+🚴‍♀️	U+1F6B4 U+200D U+2640 U+FE0F	woman biking	Misc	Unrelated	no	no	
+🚵	U+1F6B5	person mountain biking	Misc	Unrelated	no	no	
+🚵‍♂️	U+1F6B5 U+200D U+2642 U+FE0F	man mountain biking	Misc	Unrelated	no	no	
+🚵‍♀️	U+1F6B5 U+200D U+2640 U+FE0F	woman mountain biking	Misc	Unrelated	no	no	
+🤸	U+1F938	person cartwheeling	Misc	Unrelated	no	no	
+🤸‍♂️	U+1F938 U+200D U+2642 U+FE0F	man cartwheeling	Misc	Unrelated	no	no	
+🤸‍♀️	U+1F938 U+200D U+2640 U+FE0F	woman cartwheeling	Misc	Unrelated	no	no	
+🤼	U+1F93C	people wrestling	Misc	Unrelated	no	no	
+🤼‍♂️	U+1F93C U+200D U+2642 U+FE0F	men wrestling	Misc	Unrelated	no	no	
+🤼‍♀️	U+1F93C U+200D U+2640 U+FE0F	women wrestling	Misc	Unrelated	no	no	
+🤽	U+1F93D	person playing water polo	Misc	Unrelated	no	no	
+🤽‍♂️	U+1F93D U+200D U+2642 U+FE0F	man playing water polo	Misc	Unrelated	no	no	
+🤽‍♀️	U+1F93D U+200D U+2640 U+FE0F	woman playing water polo	Misc	Unrelated	no	no	
+🤾	U+1F93E	person playing handball	Misc	Unrelated	no	no	
+🤾‍♂️	U+1F93E U+200D U+2642 U+FE0F	man playing handball	Misc	Unrelated	no	no	
+🤾‍♀️	U+1F93E U+200D U+2640 U+FE0F	woman playing handball	Misc	Unrelated	no	no	
+🤹	U+1F939	person juggling	Misc	Unrelated	no	no	
+🤹‍♂️	U+1F939 U+200D U+2642 U+FE0F	man juggling	Misc	Unrelated	no	no	
+🤹‍♀️	U+1F939 U+200D U+2640 U+FE0F	woman juggling	Misc	Unrelated	no	no	
+🧘	U+1F9D8	person in lotus position	Misc	Unrelated	no	no	
+🧘‍♂️	U+1F9D8 U+200D U+2642 U+FE0F	man in lotus position	Misc	Unrelated	no	no	
+🧘‍♀️	U+1F9D8 U+200D U+2640 U+FE0F	woman in lotus position	Misc	Unrelated	no	no	
+🛀	U+1F6C0	person taking bath	Misc	Unrelated	no	no	
+🛌	U+1F6CC	person in bed	Misc	Unrelated	no	no	
+🧑‍🤝‍🧑	U+1F9D1 U+200D U+1F91D U+200D U+1F9D1	people holding hands	Misc	Unrelated	no	no	
+👭	U+1F46D	women holding hands	Misc	Unrelated	no	no	
+👫	U+1F46B	woman and man holding hands	Misc	Unrelated	no	no	
+👬	U+1F46C	men holding hands	Misc	Unrelated	no	no	
+💏	U+1F48F	kiss	Misc	Unrelated	no	no	
+👩‍❤️‍💋‍👨	U+1F469 U+200D U+2764 U+FE0F U+200D U+1F48B U+200D U+1F468	kiss: woman, man	Misc	Unrelated	no	no	
+👨‍❤️‍💋‍👨	U+1F468 U+200D U+2764 U+FE0F U+200D U+1F48B U+200D U+1F468	kiss: man, man	Misc	Unrelated	no	no	
+👩‍❤️‍💋‍👩	U+1F469 U+200D U+2764 U+FE0F U+200D U+1F48B U+200D U+1F469	kiss: woman, woman	Misc	Unrelated	no	no	
+💑	U+1F491	couple with heart	Misc	Unrelated	no	no	
+👩‍❤️‍👨	U+1F469 U+200D U+2764 U+FE0F U+200D U+1F468	couple with heart: woman, man	Misc	Unrelated	no	no	
+👨‍❤️‍👨	U+1F468 U+200D U+2764 U+FE0F U+200D U+1F468	couple with heart: man, man	Misc	Unrelated	no	no	
+👩‍❤️‍👩	U+1F469 U+200D U+2764 U+FE0F U+200D U+1F469	couple with heart: woman, woman	Misc	Unrelated	no	no	
+👨‍👩‍👦	U+1F468 U+200D U+1F469 U+200D U+1F466	family: man, woman, boy	Misc	Unrelated	no	no	
+👨‍👩‍👧	U+1F468 U+200D U+1F469 U+200D U+1F467	family: man, woman, girl	Misc	Unrelated	no	no	
+👨‍👩‍👧‍👦	U+1F468 U+200D U+1F469 U+200D U+1F467 U+200D U+1F466	family: man, woman, girl, boy	Misc	Unrelated	no	no	
+👨‍👩‍👦‍👦	U+1F468 U+200D U+1F469 U+200D U+1F466 U+200D U+1F466	family: man, woman, boy, boy	Misc	Unrelated	no	no	
+👨‍👩‍👧‍👧	U+1F468 U+200D U+1F469 U+200D U+1F467 U+200D U+1F467	family: man, woman, girl, girl	Misc	Unrelated	no	no	
+👨‍👨‍👦	U+1F468 U+200D U+1F468 U+200D U+1F466	family: man, man, boy	Misc	Unrelated	no	no	
+👨‍👨‍👧	U+1F468 U+200D U+1F468 U+200D U+1F467	family: man, man, girl	Misc	Unrelated	no	no	
+👨‍👨‍👧‍👦	U+1F468 U+200D U+1F468 U+200D U+1F467 U+200D U+1F466	family: man, man, girl, boy	Misc	Unrelated	no	no	
+👨‍👨‍👦‍👦	U+1F468 U+200D U+1F468 U+200D U+1F466 U+200D U+1F466	family: man, man, boy, boy	Misc	Unrelated	no	no	
+👨‍👨‍👧‍👧	U+1F468 U+200D U+1F468 U+200D U+1F467 U+200D U+1F467	family: man, man, girl, girl	Misc	Unrelated	no	no	
+👩‍👩‍👦	U+1F469 U+200D U+1F469 U+200D U+1F466	family: woman, woman, boy	Misc	Unrelated	no	no	
+👩‍👩‍👧	U+1F469 U+200D U+1F469 U+200D U+1F467	family: woman, woman, girl	Misc	Unrelated	no	no	
+👩‍👩‍👧‍👦	U+1F469 U+200D U+1F469 U+200D U+1F467 U+200D U+1F466	family: woman, woman, girl, boy	Misc	Unrelated	no	no	
+👩‍👩‍👦‍👦	U+1F469 U+200D U+1F469 U+200D U+1F466 U+200D U+1F466	family: woman, woman, boy, boy	Misc	Unrelated	no	no	
+👩‍👩‍👧‍👧	U+1F469 U+200D U+1F469 U+200D U+1F467 U+200D U+1F467	family: woman, woman, girl, girl	Misc	Unrelated	no	no	
+👨‍👦	U+1F468 U+200D U+1F466	family: man, boy	Misc	Unrelated	no	no	
+👨‍👦‍👦	U+1F468 U+200D U+1F466 U+200D U+1F466	family: man, boy, boy	Misc	Unrelated	no	no	
+👨‍👧	U+1F468 U+200D U+1F467	family: man, girl	Misc	Unrelated	no	no	
+👨‍👧‍👦	U+1F468 U+200D U+1F467 U+200D U+1F466	family: man, girl, boy	Misc	Unrelated	no	no	
+👨‍👧‍👧	U+1F468 U+200D U+1F467 U+200D U+1F467	family: man, girl, girl	Misc	Unrelated	no	no	
+👩‍👦	U+1F469 U+200D U+1F466	family: woman, boy	Misc	Unrelated	no	no	
+👩‍👦‍👦	U+1F469 U+200D U+1F466 U+200D U+1F466	family: woman, boy, boy	Misc	Unrelated	no	no	
+👩‍👧	U+1F469 U+200D U+1F467	family: woman, girl	Misc	Unrelated	no	no	
+👩‍👧‍👦	U+1F469 U+200D U+1F467 U+200D U+1F466	family: woman, girl, boy	Misc	Unrelated	no	no	
+👩‍👧‍👧	U+1F469 U+200D U+1F467 U+200D U+1F467	family: woman, girl, girl	Misc	Unrelated	no	no	
+🗣	U+1F5E3	speaking head	Misc	Unrelated	no	no	
+👤	U+1F464	bust in silhouette	Misc	Unrelated	no	no	
+👥	U+1F465	busts in silhouette	Misc	Unrelated	no	no	
+🫂	U+1FAC2	people hugging	Misc	Unrelated	no	no	
+👪	U+1F46A	family	Misc	Unrelated	no	no	
+🧑‍🧑‍🧒	U+1F9D1 U+200D U+1F9D1 U+200D U+1F9D2	family: adult, adult, child	Misc	Unrelated	no	no	
+🧑‍🧑‍🧒‍🧒	U+1F9D1 U+200D U+1F9D1 U+200D U+1F9D2 U+200D U+1F9D2	family: adult, adult, child, child	Misc	Unrelated	no	no	
+🧑‍🧒	U+1F9D1 U+200D U+1F9D2	family: adult, child	Misc	Unrelated	no	no	
+🧑‍🧒‍🧒	U+1F9D1 U+200D U+1F9D2 U+200D U+1F9D2	family: adult, child, child	Misc	Unrelated	no	no	
+👣	U+1F463	footprints	Misc	Unrelated	no	no	
+🫆	U+1FAC6	fingerprint	Misc	Unrelated	no	no	
+🦰	U+1F9B0	red hair	Misc	Unrelated	no	no	
+🦱	U+1F9B1	curly hair	Misc	Unrelated	no	no	
+🦳	U+1F9B3	white hair	Misc	Unrelated	no	no	
+🦲	U+1F9B2	bald	Misc	Unrelated	no	no	
+🐵	U+1F435	monkey face	Misc	Unrelated	no	no	
+🐒	U+1F412	monkey	Misc	Unrelated	no	no	
+🦍	U+1F98D	gorilla	Misc	Unrelated	no	no	
+🦧	U+1F9A7	orangutan	Misc	Unrelated	no	no	
+🐶	U+1F436	dog face	Misc	Unrelated	no	no	
+🐕	U+1F415	dog	Misc	Unrelated	no	no	
+🦮	U+1F9AE	guide dog	Misc	Unrelated	no	no	
+🐕‍🦺	U+1F415 U+200D U+1F9BA	service dog	Misc	Unrelated	no	no	
+🐩	U+1F429	poodle	Misc	Unrelated	no	no	
+🐺	U+1F43A	wolf	Misc	Unrelated	no	no	
+🦊	U+1F98A	fox	Misc	Unrelated	no	no	
+🦝	U+1F99D	raccoon	Misc	Unrelated	no	no	
+🐱	U+1F431	cat face	Bot	Non-Game Category	no	yes	
+🐈	U+1F408	cat	Cat	Unrelated	no	no	
+🐈‍⬛	U+1F408 U+200D U+2B1B	black cat	Cat	Unrelated	no	no	
+🦁	U+1F981	lion	Misc	Unrelated	no	no	
+🐯	U+1F42F	tiger face	Misc	Unrelated	no	no	
+🐅	U+1F405	tiger	Misc	Unrelated	no	no	
+🐆	U+1F406	leopard	Misc	Unrelated	no	no	
+🐴	U+1F434	horse face	Misc	Unrelated	no	no	
+🫎	U+1FACE	moose	Misc	Unrelated	no	no	
+🫏	U+1FACF	donkey	Misc	Unrelated	no	no	
+🐎	U+1F40E	horse	Misc	Unrelated	no	no	
+🦄	U+1F984	unicorn	Misc	Unrelated	no	no	
+🦓	U+1F993	zebra	Misc	Unrelated	no	no	
+🦌	U+1F98C	deer	Misc	Unrelated	no	no	
+🦬	U+1F9AC	bison	Misc	Unrelated	no	no	
+🐮	U+1F42E	cow face	Misc	Unrelated	no	no	
+🐂	U+1F402	ox	Misc	Unrelated	no	no	
+🐃	U+1F403	water buffalo	Misc	Unrelated	no	no	
+🐄	U+1F404	cow	Misc	Unrelated	no	no	
+🐷	U+1F437	pig face	Misc	Unrelated	no	no	
+🐖	U+1F416	pig	Misc	Unrelated	no	no	
+🐗	U+1F417	boar	Misc	Unrelated	no	no	
+🐽	U+1F43D	pig nose	Misc	Unrelated	no	no	
+🐏	U+1F40F	ram	Misc	Unrelated	no	no	
+🐑	U+1F411	ewe	Misc	Unrelated	no	no	
+🐐	U+1F410	goat	Misc	Unrelated	no	no	
+🐪	U+1F42A	camel	Misc	Unrelated	no	no	
+🐫	U+1F42B	two-hump camel	Misc	Unrelated	no	no	
+🦙	U+1F999	llama	Misc	Unrelated	no	no	
+🦒	U+1F992	giraffe	Misc	Unrelated	no	no	
+🐘	U+1F418	elephant	Misc	Unrelated	no	no	
+🦣	U+1F9A3	mammoth	Misc	Unrelated	no	no	
+🦏	U+1F98F	rhinoceros	Misc	Unrelated	no	no	
+🦛	U+1F99B	hippopotamus	Misc	Unrelated	no	no	
+🐭	U+1F42D	mouse face	Prey	Mammal	no	no	🐁
+🐁	U+1F401	mouse	Prey	Mammal	yes	no	
+🐀	U+1F400	rat	Prey	Mammal	yes	no	
+🐹	U+1F439	hamster	Prey	Mammal	yes	no	
+🐰	U+1F430	rabbit face	Prey	Mammal	no	no	🐇
+🐇	U+1F407	rabbit	Prey	Mammal	yes	no	
+🐿	U+1F43F	chipmunk	Prey	Mammal	yes	no	
+🦫	U+1F9AB	beaver	Misc	Unrelated	no	no	
+🦔	U+1F994	hedgehog	Misc	Unrelated	no	no	
+🦇	U+1F987	bat	Prey	Bird	yes	no	
+🐻	U+1F43B	bear	Misc	Unrelated	no	no	
+🐻‍❄️	U+1F43B U+200D U+2744 U+FE0F	polar bear	Misc	Unrelated	no	no	
+🐨	U+1F428	koala	Misc	Unrelated	no	no	
+🐼	U+1F43C	panda	Misc	Unrelated	no	no	
+🦥	U+1F9A5	sloth	Misc	Unrelated	no	no	
+🦦	U+1F9A6	otter	Misc	Unrelated	no	no	
+🦨	U+1F9A8	skunk	Misc	Unrelated	no	no	
+🦘	U+1F998	kangaroo	Misc	Unrelated	no	no	
+🦡	U+1F9A1	badger	Misc	Unrelated	no	no	
+🐾	U+1F43E	paw prints	Misc	Unrelated	no	no	
+🦃	U+1F983	turkey	Prey	Bird	yes	no	
+🐔	U+1F414	chicken	Prey	Bird	yes	no	
+🐓	U+1F413	rooster	Prey	Bird	yes	no	
+🐣	U+1F423	hatching chick	Prey	Bird	yes	no	
+🐤	U+1F424	baby chick	Prey	Bird	yes	no	
+🐥	U+1F425	front-facing baby chick	Prey	Bird	yes	no	
+🐦	U+1F426	bird	Prey	Bird	yes	no	
+🐧	U+1F427	penguin	Prey	Bird	yes	no	
+🕊	U+1F54A	dove	Prey	Bird	yes	no	
+🦅	U+1F985	eagle	Misc	Unrelated	no	no	
+🦆	U+1F986	duck	Prey	Bird	yes	no	
+🦢	U+1F9A2	swan	Misc	Unrelated	no	no	
+🦉	U+1F989	owl	Misc	Unrelated	no	no	
+🦤	U+1F9A4	dodo	Prey	Bird	yes	no	
+🪶	U+1FAB6	feather	Toy	Conventional	no	no	
+🦩	U+1F9A9	flamingo	Misc	Unrelated	no	no	
+🦚	U+1F99A	peacock	Misc	Unrelated	no	no	
+🦜	U+1F99C	parrot	Prey	Bird	yes	no	
+🪽	U+1FABD	wing	Misc	Unrelated	no	no	
+🐦‍⬛	U+1F426 U+200D U+2B1B	black bird	Prey	Bird	yes	no	
+🪿	U+1FABF	goose	Misc	Unrelated	no	no	
+🐦‍🔥	U+1F426 U+200D U+1F525	phoenix	Misc	Unrelated	no	no	
+🐸	U+1F438	frog	Prey	Scales	yes	no	
+🐊	U+1F40A	crocodile	Misc	Unrelated	no	no	
+🐢	U+1F422	turtle	Prey	Scales	yes	no	
+🦎	U+1F98E	lizard	Prey	Scales	yes	no	
+🐍	U+1F40D	snake	Prey	Scales	yes	no	
+🐲	U+1F432	dragon face	Misc	Unrelated	no	no	
+🐉	U+1F409	dragon	Misc	Unrelated	no	no	
+🦕	U+1F995	sauropod	Misc	Unrelated	no	no	
+🦖	U+1F996	T-Rex	Misc	Unrelated	no	no	
+🐳	U+1F433	spouting whale	Misc	Unrelated	no	no	
+🐋	U+1F40B	whale	Misc	Unrelated	no	no	
+🐬	U+1F42C	dolphin	Misc	Unrelated	no	no	
+🫍	U+1FACD	orca	Misc	Unrelated	no	no	
+🦭	U+1F9AD	seal	Misc	Unrelated	no	no	
+🐟	U+1F41F	fish	Prey	Scales	yes	no	
+🐠	U+1F420	tropical fish	Prey	Scales	yes	no	
+🐡	U+1F421	blowfish	Misc	Unrelated	no	no	
+🦈	U+1F988	shark	Misc	Unrelated	no	no	
+🐙	U+1F419	octopus	Misc	Unrelated	no	no	
+🐚	U+1F41A	spiral shell	Misc	Unrelated	no	no	
+🪸	U+1FAB8	coral	Misc	Unrelated	no	no	
+🪼	U+1FABC	jellyfish	Misc	Unrelated	no	no	
+🦀	U+1F980	crab	Misc	Unrelated	no	no	
+🦞	U+1F99E	lobster	Misc	Unrelated	no	no	
+🦐	U+1F990	shrimp	Misc	Unrelated	no	no	
+🦑	U+1F991	squid	Misc	Unrelated	no	no	
+🦪	U+1F9AA	oyster	Misc	Unrelated	no	no	
+🐌	U+1F40C	snail	Misc	Unrelated	no	no	
+🦋	U+1F98B	butterfly	Prey	Bugs	yes	no	
+🫌	U+1FACC	⊛ monarch butterfly	Prey	Bugs	no	no	
+🐛	U+1F41B	bug	Prey	Bugs	yes	no	
+🐜	U+1F41C	ant	Prey	Bugs	yes	no	
+🐝	U+1F41D	honeybee	Prey	Bugs	yes	no	
+🪲	U+1FAB2	beetle	Prey	Bugs	yes	no	
+🐞	U+1F41E	lady beetle	Prey	Bugs	yes	no	
+🦗	U+1F997	cricket	Prey	Bugs	yes	no	
+🪳	U+1FAB3	cockroach	Prey	Bugs	yes	no	
+🕷	U+1F577	spider	Prey	Bugs	yes	no	
+🕸	U+1F578	spider web	Misc	Unrelated	no	no	
+🦂	U+1F982	scorpion	Prey	Bugs	yes	no	
+🦟	U+1F99F	mosquito	Prey	Bugs	yes	no	
+🪰	U+1FAB0	fly	Prey	Bugs	yes	no	
+🪱	U+1FAB1	worm	Misc	Unrelated	no	no	
+🦠	U+1F9A0	microbe	Misc	Unrelated	no	no	
+💐	U+1F490	bouquet	Misc	Unrelated	no	no	
+🌸	U+1F338	cherry blossom	Misc	Unrelated	no	no	
+💮	U+1F4AE	white flower	Misc	Unrelated	no	no	
+🪷	U+1FAB7	lotus	Misc	Unrelated	no	no	
+🏵	U+1F3F5	rosette	Misc	Unrelated	no	no	
+🌹	U+1F339	rose	Misc	Unrelated	no	no	
+🥀	U+1F940	wilted flower	Misc	Unrelated	no	no	
+🌺	U+1F33A	hibiscus	Misc	Unrelated	no	no	
+🌻	U+1F33B	sunflower	Misc	Unrelated	no	no	
+🌼	U+1F33C	blossom	Misc	Unrelated	no	no	
+🌷	U+1F337	tulip	Misc	Unrelated	no	no	
+🪻	U+1FABB	hyacinth	Misc	Unrelated	no	no	
+🌱	U+1F331	seedling	Misc	Unrelated	no	no	
+🪴	U+1FAB4	potted plant	Misc	Unrelated	no	no	
+🌲	U+1F332	evergreen tree	Misc	Unrelated	no	no	
+🌳	U+1F333	deciduous tree	Misc	Unrelated	no	no	
+🌴	U+1F334	palm tree	Misc	Unrelated	no	no	
+🌵	U+1F335	cactus	Misc	Unrelated	no	no	
+🌾	U+1F33E	sheaf of rice	Misc	Unrelated	no	no	
+🌿	U+1F33F	herb	Misc	Unrelated	no	no	
+☘	U+2618	shamrock	Misc	Unrelated	no	no	
+🍀	U+1F340	four leaf clover	Misc	Unrelated	no	no	
+🍁	U+1F341	maple leaf	Misc	Unrelated	no	no	
+🍂	U+1F342	fallen leaf	Misc	Unrelated	no	no	
+🍃	U+1F343	leaf fluttering in wind	Misc	Unrelated	no	no	
+🪹	U+1FAB9	empty nest	Misc	Unrelated	no	no	
+🪺	U+1FABA	nest with eggs	Misc	Unrelated	no	no	
+🍄	U+1F344	mushroom	Food	Veggie	yes	no	
+🪾	U+1FABE	leafless tree	Misc	Unrelated	no	no	
+🍇	U+1F347	grapes	Food	Fruit	yes	no	
+🍈	U+1F348	melon	Food	Fruit	yes	no	
+🍉	U+1F349	watermelon	Food	Fruit	yes	no	
+🍊	U+1F34A	tangerine	Food	Fruit	yes	no	
+🍋	U+1F34B	lemon	Food	Fruit	yes	no	
+🍋‍🟩	U+1F34B U+200D U+1F7E9	lime	Food	Fruit	yes	no	
+🍌	U+1F34C	banana	Food	Fruit	yes	no	
+🍍	U+1F34D	pineapple	Food	Fruit	yes	no	
+🥭	U+1F96D	mango	Food	Fruit	yes	no	
+🍎	U+1F34E	red apple	Food	Fruit	yes	no	
+🍏	U+1F34F	green apple	Food	Fruit	yes	no	
+🍐	U+1F350	pear	Food	Fruit	yes	no	
+🍑	U+1F351	peach	Food	Fruit	yes	no	
+🍒	U+1F352	cherries	Food	Fruit	yes	no	
+🍓	U+1F353	strawberry	Food	Fruit	yes	no	
+🫐	U+1FAD0	blueberries	Food	Fruit	yes	no	
+🥝	U+1F95D	kiwi fruit	Food	Fruit	yes	no	
+🍅	U+1F345	tomato	Food	Veggie	yes	no	
+🫒	U+1FAD2	olive	Food	Veggie	yes	no	
+🥥	U+1F965	coconut	Food	Fruit	yes	no	
+🥑	U+1F951	avocado	Food	Veggie	yes	no	
+🍆	U+1F346	eggplant	Food	Veggie	yes	no	
+🥔	U+1F954	potato	Food	Veggie	yes	no	
+🥕	U+1F955	carrot	Food	Veggie	yes	no	
+🌽	U+1F33D	ear of corn	Food	Veggie	yes	no	
+🌶	U+1F336	hot pepper	Food	Veggie	yes	no	
+🫑	U+1FAD1	bell pepper	Food	Veggie	yes	no	
+🥒	U+1F952	cucumber	Food	Veggie	yes	no	
+🫝	U+1FADD	⊛ pickle	Food	Veggie	no	no	
+🥬	U+1F96C	leafy green	Food	Veggie	yes	no	
+🥦	U+1F966	broccoli	Food	Veggie	yes	no	
+🧄	U+1F9C4	garlic	Food	Veggie	yes	no	
+🧅	U+1F9C5	onion	Food	Veggie	yes	no	
+🥜	U+1F95C	peanuts	Food	Protein	yes	no	
+🫘	U+1FAD8	beans	Food	Protein	yes	no	
+🌰	U+1F330	chestnut	Food	Protein	yes	no	
+🫚	U+1FADA	ginger root	Food	Veggie	yes	no	
+🫛	U+1FADB	pea pod	Food	Veggie	yes	no	
+🍄‍🟫	U+1F344 U+200D U+1F7EB	brown mushroom	Food	Veggie	yes	no	
+🫜	U+1FADC	root vegetable	Food	Veggie	yes	no	
+🍞	U+1F35E	bread	Food	Bakery	yes	no	
+🥐	U+1F950	croissant	Food	Bakery	yes	no	
+🥖	U+1F956	baguette bread	Food	Bakery	yes	no	
+🫓	U+1FAD3	flatbread	Food	Bakery	yes	no	
+🥨	U+1F968	pretzel	Food	Bakery	yes	no	
+🥯	U+1F96F	bagel	Food	Bakery	yes	no	
+🥞	U+1F95E	pancakes	Food	Meal	yes	no	
+🧇	U+1F9C7	waffle	Food	Meal	yes	no	
+🧀	U+1F9C0	cheese wedge	Food	Protein	yes	no	
+🍖	U+1F356	meat on bone	Food	Protein	yes	no	
+🍗	U+1F357	poultry leg	Food	Protein	yes	no	
+🥩	U+1F969	cut of meat	Food	Protein	yes	no	
+🥓	U+1F953	bacon	Food	Protein	yes	no	
+🍔	U+1F354	hamburger	Food	Fast Food	yes	no	
+🍟	U+1F35F	french fries	Food	Fast Food	yes	no	
+🍕	U+1F355	pizza	Food	Fast Food	yes	no	
+🌭	U+1F32D	hot dog	Food	Fast Food	yes	no	
+🥪	U+1F96A	sandwich	Food	Fast Food	yes	no	
+🌮	U+1F32E	taco	Food	Fast Food	yes	no	
+🌯	U+1F32F	burrito	Food	Fast Food	yes	no	
+🫔	U+1FAD4	tamale	Food	Fast Food	yes	no	
+🥙	U+1F959	stuffed flatbread	Food	Fast Food	yes	no	
+🧆	U+1F9C6	falafel	Food	Fast Food	yes	no	
+🥚	U+1F95A	egg	Food	Protein	yes	no	
+🍳	U+1F373	cooking	Adjacent	Cooking	no	no	
+🥘	U+1F958	shallow pan of food	Food	Meal	yes	no	
+🍲	U+1F372	pot of food	Food	Meal	yes	no	
+🫕	U+1FAD5	fondue	Food	Meal	yes	no	
+🥣	U+1F963	bowl with spoon	Adjacent	Cooking	no	no	
+🥗	U+1F957	green salad	Food	Meal	yes	no	
+🍿	U+1F37F	popcorn	Food	Meal	yes	no	
+🧈	U+1F9C8	butter	Adjacent	Ingredient	no	no	
+🧂	U+1F9C2	salt	Adjacent	Ingredient	no	no	
+🥫	U+1F96B	canned food	Adjacent	Ingredient	no	no	
+🍱	U+1F371	bento box	Food	Meal	yes	no	
+🍘	U+1F358	rice cracker	Food	Meal	yes	no	
+🍙	U+1F359	rice ball	Food	Meal	yes	no	
+🍚	U+1F35A	cooked rice	Food	Meal	yes	no	
+🍛	U+1F35B	curry rice	Food	Meal	yes	no	
+🍜	U+1F35C	steaming bowl	Adjacent	Dishes	no	no	
+🍝	U+1F35D	spaghetti	Food	Meal	yes	no	
+🍠	U+1F360	roasted sweet potato	Food	Veggie	yes	no	
+🍢	U+1F362	oden	Food	Meal	yes	no	
+🍣	U+1F363	sushi	Food	Meal	yes	no	
+🍤	U+1F364	fried shrimp	Food	Protein	yes	no	
+🍥	U+1F365	fish cake with swirl	Food	Meal	yes	no	
+🥮	U+1F96E	moon cake	Food	Dessert	yes	no	
+🍡	U+1F361	dango	Food	Dessert	yes	no	
+🥟	U+1F95F	dumpling	Food	Meal	yes	no	
+🥠	U+1F960	fortune cookie	Food	Dessert	yes	no	
+🥡	U+1F961	takeout box	Adjacent	Dishes	no	no	
+🍦	U+1F366	soft ice cream	Food	Dessert	yes	no	
+🍧	U+1F367	shaved ice	Food	Dessert	yes	no	
+🍨	U+1F368	ice cream	Food	Dessert	yes	no	
+🍩	U+1F369	doughnut	Food	Bakery	yes	no	
+🍪	U+1F36A	cookie	Food	Bakery	yes	no	
+🎂	U+1F382	birthday cake	Food	Bakery	yes	no	
+🍰	U+1F370	shortcake	Food	Bakery	yes	no	
+🧁	U+1F9C1	cupcake	Food	Bakery	yes	no	
+🥧	U+1F967	pie	Food	Bakery	yes	no	
+🍫	U+1F36B	chocolate bar	Food	Dessert	yes	no	
+🍬	U+1F36C	candy	Food	Dessert	yes	no	
+🍭	U+1F36D	lollipop	Food	Dessert	yes	no	
+🍮	U+1F36E	custard	Food	Dessert	yes	no	
+🍯	U+1F36F	honey pot	Adjacent	Ingredient	no	no	
+🍼	U+1F37C	baby bottle	Adjacent	Drinks	no	no	
+🥛	U+1F95B	glass of milk	Adjacent	Drinks	no	no	
+☕	U+2615	hot beverage	Adjacent	Drinks	no	no	
+🫖	U+1FAD6	teapot	Adjacent	Drinks	no	no	
+🍵	U+1F375	teacup without handle	Adjacent	Drinks	no	no	
+🍶	U+1F376	sake	Adjacent	Drinks	no	no	
+🍾	U+1F37E	bottle with popping cork	Adjacent	Drinks	no	no	
+🍷	U+1F377	wine glass	Adjacent	Drinks	no	no	
+🍸	U+1F378	cocktail glass	Adjacent	Drinks	no	no	
+🍹	U+1F379	tropical drink	Adjacent	Drinks	no	no	
+🍺	U+1F37A	beer mug	Adjacent	Drinks	no	no	
+🍻	U+1F37B	clinking beer mugs	Adjacent	Drinks	no	no	
+🥂	U+1F942	clinking glasses	Adjacent	Drinks	no	no	
+🥃	U+1F943	tumbler glass	Adjacent	Drinks	no	no	
+🫗	U+1FAD7	pouring liquid	Adjacent	Drinks	no	no	
+🥤	U+1F964	cup with straw	Adjacent	Drinks	no	no	
+🧋	U+1F9CB	bubble tea	Adjacent	Drinks	no	no	
+🧃	U+1F9C3	beverage box	Adjacent	Drinks	no	no	
+🧉	U+1F9C9	mate	Adjacent	Drinks	no	no	
+🧊	U+1F9CA	ice	Adjacent	Drinks	no	no	
+🥢	U+1F962	chopsticks	Adjacent	Dishes	no	no	
+🍽	U+1F37D	fork and knife with plate	Adjacent	Dishes	no	no	
+🍴	U+1F374	fork and knife	Adjacent	Dishes	no	no	
+🥄	U+1F944	spoon	Adjacent	Dishes	no	no	
+🔪	U+1F52A	kitchen knife	Adjacent	Dishes	no	no	
+🫙	U+1FAD9	jar	Misc	Unrelated	no	no	
+🏺	U+1F3FA	amphora	Misc	Unrelated	no	no	
+🌍	U+1F30D	globe showing Europe-Africa	Misc	Unrelated	no	no	
+🌎	U+1F30E	globe showing Americas	Misc	Unrelated	no	no	
+🌏	U+1F30F	globe showing Asia-Australia	Misc	Unrelated	no	no	
+🌐	U+1F310	globe with meridians	Misc	Unrelated	no	no	
+🗺	U+1F5FA	world map	Misc	Unrelated	no	no	
+🗾	U+1F5FE	map of Japan	Misc	Unrelated	no	no	
+🧭	U+1F9ED	compass	Misc	Unrelated	no	no	
+🏔	U+1F3D4	snow-capped mountain	Misc	Unrelated	no	no	
+⛰	U+26F0	mountain	Misc	Unrelated	no	no	
+🛘	U+1F6D8	landslide	Misc	Unrelated	no	no	
+🌋	U+1F30B	volcano	Misc	Unrelated	no	no	
+🗻	U+1F5FB	mount fuji	Misc	Unrelated	no	no	
+🏕	U+1F3D5	camping	Misc	Unrelated	no	no	
+🏖	U+1F3D6	beach with umbrella	Misc	Unrelated	no	no	
+🏜	U+1F3DC	desert	Misc	Unrelated	no	no	
+🏝	U+1F3DD	desert island	Misc	Unrelated	no	no	
+🏞	U+1F3DE	national park	Misc	Unrelated	no	no	
+🏟	U+1F3DF	stadium	Misc	Unrelated	no	no	
+🏛	U+1F3DB	classical building	Misc	Unrelated	no	no	
+🏗	U+1F3D7	building construction	Misc	Unrelated	no	no	
+🧱	U+1F9F1	brick	Misc	Unrelated	no	no	
+🪨	U+1FAA8	rock	Misc	Unrelated	no	no	
+🪵	U+1FAB5	wood	Misc	Unrelated	no	no	
+🛖	U+1F6D6	hut	Misc	Unrelated	no	no	
+🏘	U+1F3D8	houses	Misc	Unrelated	no	no	
+🏚	U+1F3DA	derelict house	Misc	Unrelated	no	no	
+🏠	U+1F3E0	house	Misc	Unrelated	no	no	
+🏡	U+1F3E1	house with garden	Misc	Unrelated	no	no	
+🏢	U+1F3E2	office building	Misc	Unrelated	no	no	
+🏣	U+1F3E3	Japanese post office	Misc	Unrelated	no	no	
+🏤	U+1F3E4	post office	Misc	Unrelated	no	no	
+🏥	U+1F3E5	hospital	Misc	Unrelated	no	no	
+🏦	U+1F3E6	bank	Misc	Unrelated	no	no	
+🏨	U+1F3E8	hotel	Misc	Unrelated	no	no	
+🏩	U+1F3E9	love hotel	Misc	Unrelated	no	no	
+🏪	U+1F3EA	convenience store	Misc	Unrelated	no	no	
+🏫	U+1F3EB	school	Misc	Unrelated	no	no	
+🏬	U+1F3EC	department store	Misc	Unrelated	no	no	
+🏭	U+1F3ED	factory	Misc	Unrelated	no	no	
+🏯	U+1F3EF	Japanese castle	Misc	Unrelated	no	no	
+🏰	U+1F3F0	castle	Misc	Unrelated	no	no	
+💒	U+1F492	wedding	Misc	Unrelated	no	no	
+🗼	U+1F5FC	Tokyo tower	Misc	Unrelated	no	no	
+🗽	U+1F5FD	Statue of Liberty	Misc	Unrelated	no	no	
+⛪	U+26EA	church	Misc	Unrelated	no	no	
+🕌	U+1F54C	mosque	Misc	Unrelated	no	no	
+🛕	U+1F6D5	hindu temple	Misc	Unrelated	no	no	
+🕍	U+1F54D	synagogue	Misc	Unrelated	no	no	
+⛩	U+26E9	shinto shrine	Misc	Unrelated	no	no	
+🕋	U+1F54B	kaaba	Misc	Unrelated	no	no	
+⛲	U+26F2	fountain	Misc	Unrelated	no	no	
+⛺	U+26FA	tent	Misc	Unrelated	no	no	
+🌁	U+1F301	foggy	Misc	Unrelated	no	no	
+🌃	U+1F303	night with stars	Misc	Unrelated	no	no	
+🏙	U+1F3D9	cityscape	Misc	Unrelated	no	no	
+🌄	U+1F304	sunrise over mountains	Misc	Unrelated	no	no	
+🌅	U+1F305	sunrise	Misc	Unrelated	no	no	
+🌆	U+1F306	cityscape at dusk	Misc	Unrelated	no	no	
+🌇	U+1F307	sunset	Misc	Unrelated	no	no	
+🌉	U+1F309	bridge at night	Misc	Unrelated	no	no	
+♨	U+2668	hot springs	Misc	Unrelated	no	no	
+🎠	U+1F3A0	carousel horse	Misc	Unrelated	no	no	
+🛝	U+1F6DD	playground slide	Misc	Unrelated	no	no	
+🎡	U+1F3A1	ferris wheel	Misc	Unrelated	no	no	
+🎢	U+1F3A2	roller coaster	Misc	Unrelated	no	no	
+💈	U+1F488	barber pole	Misc	Unrelated	no	no	
+🎪	U+1F3AA	circus tent	Misc	Unrelated	no	no	
+🚂	U+1F682	locomotive	Misc	Unrelated	no	no	
+🚃	U+1F683	railway car	Misc	Unrelated	no	no	
+🚄	U+1F684	high-speed train	Misc	Unrelated	no	no	
+🚅	U+1F685	bullet train	Misc	Unrelated	no	no	
+🚆	U+1F686	train	Misc	Unrelated	no	no	
+🚇	U+1F687	metro	Misc	Unrelated	no	no	
+🚈	U+1F688	light rail	Misc	Unrelated	no	no	
+🚉	U+1F689	station	Misc	Unrelated	no	no	
+🚊	U+1F68A	tram	Misc	Unrelated	no	no	
+🚝	U+1F69D	monorail	Misc	Unrelated	no	no	
+🚞	U+1F69E	mountain railway	Misc	Unrelated	no	no	
+🚋	U+1F68B	tram car	Misc	Unrelated	no	no	
+🚌	U+1F68C	bus	Misc	Unrelated	no	no	
+🚍	U+1F68D	oncoming bus	Misc	Unrelated	no	no	
+🚎	U+1F68E	trolleybus	Misc	Unrelated	no	no	
+🚐	U+1F690	minibus	Misc	Unrelated	no	no	
+🚑	U+1F691	ambulance	Misc	Unrelated	no	no	
+🚒	U+1F692	fire engine	Misc	Unrelated	no	no	
+🚓	U+1F693	police car	Misc	Unrelated	no	no	
+🚔	U+1F694	oncoming police car	Misc	Unrelated	no	no	
+🚕	U+1F695	taxi	Misc	Unrelated	no	no	
+🚖	U+1F696	oncoming taxi	Misc	Unrelated	no	no	
+🚗	U+1F697	automobile	Misc	Unrelated	no	no	
+🚘	U+1F698	oncoming automobile	Misc	Unrelated	no	no	
+🚙	U+1F699	sport utility vehicle	Misc	Unrelated	no	no	
+🛻	U+1F6FB	pickup truck	Misc	Unrelated	no	no	
+🚚	U+1F69A	delivery truck	Misc	Unrelated	no	no	
+🚛	U+1F69B	articulated lorry	Misc	Unrelated	no	no	
+🚜	U+1F69C	tractor	Misc	Unrelated	no	no	
+🏎	U+1F3CE	racing car	Misc	Unrelated	no	no	
+🏍	U+1F3CD	motorcycle	Misc	Unrelated	no	no	
+🛵	U+1F6F5	motor scooter	Misc	Unrelated	no	no	
+🦽	U+1F9BD	manual wheelchair	Misc	Unrelated	no	no	
+🦼	U+1F9BC	motorized wheelchair	Misc	Unrelated	no	no	
+🛺	U+1F6FA	auto rickshaw	Misc	Unrelated	no	no	
+🚲	U+1F6B2	bicycle	Misc	Unrelated	no	no	
+🛴	U+1F6F4	kick scooter	Misc	Unrelated	no	no	
+🛹	U+1F6F9	skateboard	Misc	Unrelated	no	no	
+🛼	U+1F6FC	roller skate	Misc	Unrelated	no	no	
+🚏	U+1F68F	bus stop	Misc	Unrelated	no	no	
+🛣	U+1F6E3	motorway	Misc	Unrelated	no	no	
+🛤	U+1F6E4	railway track	Misc	Unrelated	no	no	
+🛢	U+1F6E2	oil drum	Misc	Unrelated	no	no	
+⛽	U+26FD	fuel pump	Misc	Unrelated	no	no	
+🛞	U+1F6DE	wheel	Misc	Unrelated	no	no	
+🚨	U+1F6A8	police car light	Misc	Unrelated	no	no	
+🚥	U+1F6A5	horizontal traffic light	Misc	Unrelated	no	no	
+🚦	U+1F6A6	vertical traffic light	Misc	Unrelated	no	no	
+🛑	U+1F6D1	stop sign	Misc	Unrelated	no	no	
+🚧	U+1F6A7	construction	Misc	Unrelated	no	no	
+🛙	U+1F6D9	⊛ lighthouse	Misc	Unrelated	no	no	
+⚓	U+2693	anchor	Misc	Unrelated	no	no	
+🛟	U+1F6DF	ring buoy	Misc	Unrelated	no	no	
+⛵	U+26F5	sailboat	Misc	Unrelated	no	no	
+🛶	U+1F6F6	canoe	Misc	Unrelated	no	no	
+🚤	U+1F6A4	speedboat	Misc	Unrelated	no	no	
+🛳	U+1F6F3	passenger ship	Misc	Unrelated	no	no	
+⛴	U+26F4	ferry	Misc	Unrelated	no	no	
+🛥	U+1F6E5	motor boat	Misc	Unrelated	no	no	
+🚢	U+1F6A2	ship	Misc	Unrelated	no	no	
+✈	U+2708	airplane	Misc	Unrelated	no	no	
+🛩	U+1F6E9	small airplane	Misc	Unrelated	no	no	
+🛫	U+1F6EB	airplane departure	Misc	Unrelated	no	no	
+🛬	U+1F6EC	airplane arrival	Misc	Unrelated	no	no	
+🪂	U+1FA82	parachute	Misc	Unrelated	no	no	
+💺	U+1F4BA	seat	Misc	Unrelated	no	no	
+🚁	U+1F681	helicopter	Misc	Unrelated	no	no	
+🚟	U+1F69F	suspension railway	Misc	Unrelated	no	no	
+🚠	U+1F6A0	mountain cableway	Misc	Unrelated	no	no	
+🚡	U+1F6A1	aerial tramway	Misc	Unrelated	no	no	
+🛰	U+1F6F0	satellite	Misc	Unrelated	no	no	
+🚀	U+1F680	rocket	Misc	Unrelated	no	no	
+🛸	U+1F6F8	flying saucer	Misc	Unrelated	no	no	
+🛎	U+1F6CE	bellhop bell	Misc	Unrelated	no	no	
+🧳	U+1F9F3	luggage	Misc	Unrelated	no	no	
+⌛	U+231B	hourglass done	Misc	Unrelated	no	no	
+⏳	U+23F3	hourglass not done	Misc	Unrelated	no	no	
+⌚	U+231A	watch	Misc	Unrelated	no	no	
+⏰	U+23F0	alarm clock	Misc	Unrelated	no	no	
+⏱	U+23F1	stopwatch	Misc	Unrelated	no	no	
+⏲	U+23F2	timer clock	Misc	Unrelated	no	no	
+🕰	U+1F570	mantelpiece clock	Misc	Unrelated	no	no	
+🕛	U+1F55B	twelve o’clock	Misc	Unrelated	no	no	
+🕧	U+1F567	twelve-thirty	Misc	Unrelated	no	no	
+🕐	U+1F550	one o’clock	Misc	Unrelated	no	no	
+🕜	U+1F55C	one-thirty	Misc	Unrelated	no	no	
+🕑	U+1F551	two o’clock	Misc	Unrelated	no	no	
+🕝	U+1F55D	two-thirty	Misc	Unrelated	no	no	
+🕒	U+1F552	three o’clock	Misc	Unrelated	no	no	
+🕞	U+1F55E	three-thirty	Misc	Unrelated	no	no	
+🕓	U+1F553	four o’clock	Misc	Unrelated	no	no	
+🕟	U+1F55F	four-thirty	Misc	Unrelated	no	no	
+🕔	U+1F554	five o’clock	Misc	Unrelated	no	no	
+🕠	U+1F560	five-thirty	Misc	Unrelated	no	no	
+🕕	U+1F555	six o’clock	Misc	Unrelated	no	no	
+🕡	U+1F561	six-thirty	Misc	Unrelated	no	no	
+🕖	U+1F556	seven o’clock	Misc	Unrelated	no	no	
+🕢	U+1F562	seven-thirty	Misc	Unrelated	no	no	
+🕗	U+1F557	eight o’clock	Misc	Unrelated	no	no	
+🕣	U+1F563	eight-thirty	Misc	Unrelated	no	no	
+🕘	U+1F558	nine o’clock	Misc	Unrelated	no	no	
+🕤	U+1F564	nine-thirty	Misc	Unrelated	no	no	
+🕙	U+1F559	ten o’clock	Misc	Unrelated	no	no	
+🕥	U+1F565	ten-thirty	Misc	Unrelated	no	no	
+🕚	U+1F55A	eleven o’clock	Misc	Unrelated	no	no	
+🕦	U+1F566	eleven-thirty	Misc	Unrelated	no	no	
+🌑	U+1F311	new moon	Misc	Unrelated	no	no	
+🌒	U+1F312	waxing crescent moon	Misc	Unrelated	no	no	
+🌓	U+1F313	first quarter moon	Misc	Unrelated	no	no	
+🌔	U+1F314	waxing gibbous moon	Misc	Unrelated	no	no	
+🌕	U+1F315	full moon	Misc	Unrelated	no	no	
+🌖	U+1F316	waning gibbous moon	Misc	Unrelated	no	no	
+🌗	U+1F317	last quarter moon	Misc	Unrelated	no	no	
+🌘	U+1F318	waning crescent moon	Misc	Unrelated	no	no	
+🌙	U+1F319	crescent moon	Misc	Unrelated	no	no	
+🌚	U+1F31A	new moon face	Misc	Unrelated	no	no	
+🌛	U+1F31B	first quarter moon face	Misc	Unrelated	no	no	
+🌜	U+1F31C	last quarter moon face	Misc	Unrelated	no	no	
+🌡	U+1F321	thermometer	Misc	Unrelated	no	no	
+☀	U+2600	sun	Misc	Unrelated	no	no	
+🌝	U+1F31D	full moon face	Misc	Unrelated	no	no	
+🌞	U+1F31E	sun with face	Misc	Unrelated	no	no	
+🪐	U+1FA90	ringed planet	Misc	Unrelated	no	no	
+⭐	U+2B50	star	Misc	Unrelated	no	no	
+🌟	U+1F31F	glowing star	Misc	Unrelated	no	no	
+🌠	U+1F320	shooting star	Misc	Unrelated	no	no	
+🌌	U+1F30C	milky way	Misc	Unrelated	no	no	
+☁	U+2601	cloud	Misc	Unrelated	no	no	
+⛅	U+26C5	sun behind cloud	Misc	Unrelated	no	no	
+⛈	U+26C8	cloud with lightning and rain	Misc	Unrelated	no	no	
+🌤	U+1F324	sun behind small cloud	Misc	Unrelated	no	no	
+🌥	U+1F325	sun behind large cloud	Misc	Unrelated	no	no	
+🌦	U+1F326	sun behind rain cloud	Misc	Unrelated	no	no	
+🌧	U+1F327	cloud with rain	Misc	Unrelated	no	no	
+🌨	U+1F328	cloud with snow	Misc	Unrelated	no	no	
+🌩	U+1F329	cloud with lightning	Misc	Unrelated	no	no	
+🌪	U+1F32A	tornado	Misc	Unrelated	no	no	
+🌫	U+1F32B	fog	Misc	Unrelated	no	no	
+🌬	U+1F32C	wind face	Misc	Unrelated	no	no	
+🌀	U+1F300	cyclone	Misc	Unrelated	no	no	
+🌈	U+1F308	rainbow	Misc	Unrelated	no	no	
+🌂	U+1F302	closed umbrella	Misc	Unrelated	no	no	
+☂	U+2602	umbrella	Misc	Unrelated	no	no	
+☔	U+2614	umbrella with rain drops	Misc	Unrelated	no	no	
+⛱	U+26F1	umbrella on ground	Misc	Unrelated	no	no	
+⚡	U+26A1	high voltage	Misc	Unrelated	no	no	
+❄	U+2744	snowflake	Misc	Unrelated	no	no	
+☃	U+2603	snowman	Misc	Unrelated	no	no	
+⛄	U+26C4	snowman without snow	Misc	Unrelated	no	no	
+☄	U+2604	comet	Misc	Unrelated	no	no	
+🪋	U+1FA8B	⊛ meteor	Misc	Unrelated	no	no	
+🔥	U+1F525	fire	Misc	Unrelated	no	no	
+💧	U+1F4A7	droplet	Misc	Unrelated	no	no	
+🌊	U+1F30A	water wave	Misc	Unrelated	no	no	
+🎃	U+1F383	jack-o-lantern	Misc	Unrelated	no	no	
+🎄	U+1F384	Christmas tree	Misc	Unrelated	no	no	
+🎆	U+1F386	fireworks	Misc	Unrelated	no	no	
+🎇	U+1F387	sparkler	Misc	Unrelated	no	no	
+🧨	U+1F9E8	firecracker	Misc	Unrelated	no	no	
+✨	U+2728	sparkles	Misc	Unrelated	no	no	
+🎈	U+1F388	balloon	Toy	Unconventional	no	no	
+🎉	U+1F389	party popper	Misc	Unrelated	no	no	
+🎊	U+1F38A	confetti ball	Misc	Unrelated	no	no	
+🎋	U+1F38B	tanabata tree	Misc	Unrelated	no	no	
+🎍	U+1F38D	pine decoration	Misc	Unrelated	no	no	
+🎎	U+1F38E	Japanese dolls	Misc	Unrelated	no	no	
+🎏	U+1F38F	carp streamer	Misc	Unrelated	no	no	
+🎐	U+1F390	wind chime	Misc	Unrelated	no	no	
+🎑	U+1F391	moon viewing ceremony	Misc	Unrelated	no	no	
+🧧	U+1F9E7	red envelope	Misc	Unrelated	no	no	
+🎀	U+1F380	ribbon	Toy	Unconventional	no	no	
+🎁	U+1F381	wrapped gift	Misc	Unrelated	no	no	
+🎗	U+1F397	reminder ribbon	Misc	Unrelated	no	no	
+🎟	U+1F39F	admission tickets	Misc	Unrelated	no	no	
+🎫	U+1F3AB	ticket	Misc	Unrelated	no	no	
+🎖	U+1F396	military medal	Misc	Unrelated	no	no	
+🏆	U+1F3C6	trophy	Misc	Unrelated	no	no	
+🏅	U+1F3C5	sports medal	Misc	Unrelated	no	no	
+🥇	U+1F947	1st place medal	Misc	Unrelated	no	no	
+🥈	U+1F948	2nd place medal	Misc	Unrelated	no	no	
+🥉	U+1F949	3rd place medal	Misc	Unrelated	no	no	
+⚽	U+26BD	soccer ball	Misc	Unrelated	no	no	
+⚾	U+26BE	baseball	Misc	Unrelated	no	no	
+🥎	U+1F94E	softball	Misc	Unrelated	no	no	
+🏀	U+1F3C0	basketball	Misc	Unrelated	no	no	
+🏐	U+1F3D0	volleyball	Misc	Unrelated	no	no	
+🏈	U+1F3C8	american football	Misc	Unrelated	no	no	
+🏉	U+1F3C9	rugby football	Misc	Unrelated	no	no	
+🎾	U+1F3BE	tennis	Toy	Conventional	no	no	
+🥏	U+1F94F	flying disc	Misc	Unrelated	no	no	
+🎳	U+1F3B3	bowling	Misc	Unrelated	no	no	
+🏏	U+1F3CF	cricket game	Misc	Unrelated	no	no	
+🏑	U+1F3D1	field hockey	Misc	Unrelated	no	no	
+🏒	U+1F3D2	ice hockey	Misc	Unrelated	no	no	
+🥍	U+1F94D	lacrosse	Misc	Unrelated	no	no	
+🏓	U+1F3D3	ping pong	Misc	Unrelated	no	no	
+🏸	U+1F3F8	badminton	Misc	Unrelated	no	no	
+🥊	U+1F94A	boxing glove	Misc	Unrelated	no	no	
+🥋	U+1F94B	martial arts uniform	Misc	Unrelated	no	no	
+🥅	U+1F945	goal net	Misc	Unrelated	no	no	
+⛳	U+26F3	flag in hole	Misc	Unrelated	no	no	
+⛸	U+26F8	ice skate	Misc	Unrelated	no	no	
+🎣	U+1F3A3	fishing pole	Misc	Unrelated	no	no	
+🤿	U+1F93F	diving mask	Misc	Unrelated	no	no	
+🎽	U+1F3BD	running shirt	Misc	Unrelated	no	no	
+🎿	U+1F3BF	skis	Misc	Unrelated	no	no	
+🛷	U+1F6F7	sled	Misc	Unrelated	no	no	
+🥌	U+1F94C	curling stone	Misc	Unrelated	no	no	
+🎯	U+1F3AF	bullseye	Misc	Unrelated	no	no	
+🪀	U+1FA80	yo-yo	Misc	Unrelated	no	no	
+🪁	U+1FA81	kite	Misc	Unrelated	no	no	
+🔫	U+1F52B	water pistol	Misc	Unrelated	no	no	
+🎱	U+1F3B1	pool 8 ball	Misc	Unrelated	no	no	
+🔮	U+1F52E	crystal ball	Misc	Unrelated	no	no	
+🪄	U+1FA84	magic wand	Misc	Unrelated	no	no	
+🎮	U+1F3AE	video game	Misc	Unrelated	no	no	
+🕹	U+1F579	joystick	Misc	Unrelated	no	no	
+🎰	U+1F3B0	slot machine	Misc	Unrelated	no	no	
+🎲	U+1F3B2	game die	Toy	Conventional	no	no	
+🧩	U+1F9E9	puzzle piece	Misc	Unrelated	no	no	
+🧸	U+1F9F8	teddy bear	Misc	Unrelated	no	no	
+🪅	U+1FA85	piñata	Misc	Unrelated	no	no	
+🪩	U+1FAA9	mirror ball	Misc	Unrelated	no	no	
+🪆	U+1FA86	nesting dolls	Misc	Unrelated	no	no	
+♠	U+2660	spade suit	Misc	Unrelated	no	no	
+♥	U+2665	heart suit	Misc	Unrelated	no	no	
+♦	U+2666	diamond suit	Misc	Unrelated	no	no	
+♣	U+2663	club suit	Misc	Unrelated	no	no	
+♟	U+265F	chess pawn	Misc	Unrelated	no	no	
+🃏	U+1F0CF	joker	Misc	Unrelated	no	no	
+🀄	U+1F004	mahjong red dragon	Misc	Unrelated	no	no	
+🎴	U+1F3B4	flower playing cards	Misc	Unrelated	no	no	
+🎭	U+1F3AD	performing arts	Misc	Unrelated	no	no	
+🖼	U+1F5BC	framed picture	Misc	Unrelated	no	no	
+🎨	U+1F3A8	artist palette	Misc	Unrelated	no	no	
+🧵	U+1F9F5	thread	Misc	Unrelated	no	no	
+🪡	U+1FAA1	sewing needle	Misc	Unrelated	no	no	
+🧶	U+1F9F6	yarn	Toy	Conventional	no	no	
+🪢	U+1FAA2	knot	Misc	Unrelated	no	no	
+👓	U+1F453	glasses	Misc	Unrelated	no	no	
+🕶	U+1F576	sunglasses	Misc	Unrelated	no	no	
+🥽	U+1F97D	goggles	Misc	Unrelated	no	no	
+🥼	U+1F97C	lab coat	Misc	Unrelated	no	no	
+🦺	U+1F9BA	safety vest	Misc	Unrelated	no	no	
+👔	U+1F454	necktie	Misc	Unrelated	no	no	
+👕	U+1F455	t-shirt	Misc	Unrelated	no	no	
+👖	U+1F456	jeans	Misc	Unrelated	no	no	
+🧣	U+1F9E3	scarf	Misc	Unrelated	no	no	
+🧤	U+1F9E4	gloves	Misc	Unrelated	no	no	
+🧥	U+1F9E5	coat	Misc	Unrelated	no	no	
+🧦	U+1F9E6	socks	Toy	Unconventional	no	no	
+👗	U+1F457	dress	Misc	Unrelated	no	no	
+👘	U+1F458	kimono	Misc	Unrelated	no	no	
+🥻	U+1F97B	sari	Misc	Unrelated	no	no	
+🩱	U+1FA71	one-piece swimsuit	Misc	Unrelated	no	no	
+🩲	U+1FA72	briefs	Misc	Unrelated	no	no	
+🩳	U+1FA73	shorts	Misc	Unrelated	no	no	
+👙	U+1F459	bikini	Misc	Unrelated	no	no	
+👚	U+1F45A	woman’s clothes	Misc	Unrelated	no	no	
+🪭	U+1FAAD	folding hand fan	Misc	Unrelated	no	no	
+👛	U+1F45B	purse	Misc	Unrelated	no	no	
+👜	U+1F45C	handbag	Misc	Unrelated	no	no	
+👝	U+1F45D	clutch bag	Misc	Unrelated	no	no	
+🛍	U+1F6CD	shopping bags	Toy	Unconventional	no	no	
+🎒	U+1F392	backpack	Misc	Unrelated	no	no	
+🩴	U+1FA74	thong sandal	Misc	Unrelated	no	no	
+👞	U+1F45E	man’s shoe	Toy	Unconventional	no	no	
+👟	U+1F45F	running shoe	Toy	Unconventional	no	no	
+🥾	U+1F97E	hiking boot	Misc	Unrelated	no	no	
+🥿	U+1F97F	flat shoe	Misc	Unrelated	no	no	
+👠	U+1F460	high-heeled shoe	Misc	Unrelated	no	no	
+👡	U+1F461	woman’s sandal	Misc	Unrelated	no	no	
+🩰	U+1FA70	ballet shoes	Misc	Unrelated	no	no	
+👢	U+1F462	woman’s boot	Misc	Unrelated	no	no	
+🪮	U+1FAAE	hair pick	Misc	Unrelated	no	no	
+👑	U+1F451	crown	Misc	Unrelated	no	no	
+👒	U+1F452	woman’s hat	Misc	Unrelated	no	no	
+🎩	U+1F3A9	top hat	Misc	Unrelated	no	no	
+🎓	U+1F393	graduation cap	Misc	Unrelated	no	no	
+🧢	U+1F9E2	billed cap	Misc	Unrelated	no	no	
+🪖	U+1FA96	military helmet	Misc	Unrelated	no	no	
+⛑	U+26D1	rescue worker’s helmet	Misc	Unrelated	no	no	
+📿	U+1F4FF	prayer beads	Misc	Unrelated	no	no	
+💄	U+1F484	lipstick	Misc	Unrelated	no	no	
+💍	U+1F48D	ring	Misc	Unrelated	no	no	
+💎	U+1F48E	gem stone	Misc	Unrelated	no	no	
+🔇	U+1F507	muted speaker	Misc	Unrelated	no	no	
+🔈	U+1F508	speaker low volume	Misc	Unrelated	no	no	
+🔉	U+1F509	speaker medium volume	Misc	Unrelated	no	no	
+🔊	U+1F50A	speaker high volume	Misc	Unrelated	no	no	
+📢	U+1F4E2	loudspeaker	Misc	Unrelated	no	no	
+📣	U+1F4E3	megaphone	Misc	Unrelated	no	no	
+📯	U+1F4EF	postal horn	Misc	Unrelated	no	no	
+🔔	U+1F514	bell	Toy	Conventional	no	no	
+🔕	U+1F515	bell with slash	Misc	Unrelated	no	no	
+🎼	U+1F3BC	musical score	Misc	Unrelated	no	no	
+🎵	U+1F3B5	musical note	Misc	Unrelated	no	no	
+🎶	U+1F3B6	musical notes	Misc	Unrelated	no	no	
+🎙	U+1F399	studio microphone	Misc	Unrelated	no	no	
+🎚	U+1F39A	level slider	Misc	Unrelated	no	no	
+🎛	U+1F39B	control knobs	Misc	Unrelated	no	no	
+🎤	U+1F3A4	microphone	Misc	Unrelated	no	no	
+🎧	U+1F3A7	headphone	Misc	Unrelated	no	no	
+📻	U+1F4FB	radio	Misc	Unrelated	no	no	
+🎷	U+1F3B7	saxophone	Misc	Unrelated	no	no	
+🎺	U+1F3BA	trumpet	Misc	Unrelated	no	no	
+🪊	U+1FA8A	trombone	Misc	Unrelated	no	no	
+🪗	U+1FA97	accordion	Misc	Unrelated	no	no	
+🎸	U+1F3B8	guitar	Misc	Unrelated	no	no	
+🎹	U+1F3B9	musical keyboard	Misc	Unrelated	no	no	
+🎻	U+1F3BB	violin	Misc	Unrelated	no	no	
+🪕	U+1FA95	banjo	Misc	Unrelated	no	no	
+🥁	U+1F941	drum	Misc	Unrelated	no	no	
+🪘	U+1FA98	long drum	Misc	Unrelated	no	no	
+🪇	U+1FA87	maracas	Misc	Unrelated	no	no	
+🪈	U+1FA88	flute	Misc	Unrelated	no	no	
+🪉	U+1FA89	harp	Misc	Unrelated	no	no	
+📱	U+1F4F1	mobile phone	Misc	Unrelated	no	no	
+📲	U+1F4F2	mobile phone with arrow	Misc	Unrelated	no	no	
+☎	U+260E	telephone	Misc	Unrelated	no	no	
+📞	U+1F4DE	telephone receiver	Misc	Unrelated	no	no	
+📟	U+1F4DF	pager	Misc	Unrelated	no	no	
+📠	U+1F4E0	fax machine	Misc	Unrelated	no	no	
+🔋	U+1F50B	battery	Misc	Unrelated	no	no	
+🪫	U+1FAAB	low battery	Misc	Unrelated	no	no	
+🔌	U+1F50C	electric plug	Misc	Unrelated	no	no	
+💻	U+1F4BB	laptop	Misc	Unrelated	no	no	
+🖥	U+1F5A5	desktop computer	Misc	Unrelated	no	no	
+🖨	U+1F5A8	printer	Misc	Unrelated	no	no	
+⌨	U+2328	keyboard	Misc	Unrelated	no	no	
+🖱	U+1F5B1	computer mouse	Misc	Unrelated	no	no	
+🖲	U+1F5B2	trackball	Misc	Unrelated	no	no	
+💽	U+1F4BD	computer disk	Misc	Unrelated	no	no	
+💾	U+1F4BE	floppy disk	Misc	Unrelated	no	no	
+💿	U+1F4BF	optical disk	Misc	Unrelated	no	no	
+📀	U+1F4C0	dvd	Misc	Unrelated	no	no	
+🧮	U+1F9EE	abacus	Misc	Unrelated	no	no	
+🎥	U+1F3A5	movie camera	Misc	Unrelated	no	no	
+🎞	U+1F39E	film frames	Misc	Unrelated	no	no	
+📽	U+1F4FD	film projector	Misc	Unrelated	no	no	
+🎬	U+1F3AC	clapper board	Misc	Unrelated	no	no	
+📺	U+1F4FA	television	Misc	Unrelated	no	no	
+📷	U+1F4F7	camera	Misc	Unrelated	no	no	
+📸	U+1F4F8	camera with flash	Misc	Unrelated	no	no	
+📹	U+1F4F9	video camera	Misc	Unrelated	no	no	
+📼	U+1F4FC	videocassette	Misc	Unrelated	no	no	
+🔍	U+1F50D	magnifying glass tilted left	Misc	Unrelated	no	no	
+🔎	U+1F50E	magnifying glass tilted right	Misc	Unrelated	no	no	
+🕯	U+1F56F	candle	Misc	Unrelated	no	no	
+💡	U+1F4A1	light bulb	Misc	Unrelated	no	no	
+🔦	U+1F526	flashlight	Toy	Conventional	no	no	
+🏮	U+1F3EE	red paper lantern	Misc	Unrelated	no	no	
+🪔	U+1FA94	diya lamp	Misc	Unrelated	no	no	
+📔	U+1F4D4	notebook with decorative cover	Misc	Unrelated	no	no	
+📕	U+1F4D5	closed book	Misc	Unrelated	no	no	
+📖	U+1F4D6	open book	Misc	Unrelated	no	no	
+📗	U+1F4D7	green book	Misc	Unrelated	no	no	
+📘	U+1F4D8	blue book	Misc	Unrelated	no	no	
+📙	U+1F4D9	orange book	Misc	Unrelated	no	no	
+📚	U+1F4DA	books	Misc	Unrelated	no	no	
+📓	U+1F4D3	notebook	Misc	Unrelated	no	no	
+📒	U+1F4D2	ledger	Misc	Unrelated	no	no	
+📃	U+1F4C3	page with curl	Misc	Unrelated	no	no	
+📜	U+1F4DC	scroll	Misc	Unrelated	no	no	
+📄	U+1F4C4	page facing up	Misc	Unrelated	no	no	
+📰	U+1F4F0	newspaper	Misc	Unrelated	no	no	
+🗞	U+1F5DE	rolled-up newspaper	Misc	Unrelated	no	no	
+📑	U+1F4D1	bookmark tabs	Misc	Unrelated	no	no	
+🔖	U+1F516	bookmark	Misc	Unrelated	no	no	
+🏷	U+1F3F7	label	Misc	Unrelated	no	no	
+🪙	U+1FA99	coin	Toy	Unconventional	no	no	
+💰	U+1F4B0	money bag	Misc	Unrelated	no	no	
+🪎	U+1FA8E	treasure chest	Misc	Unrelated	no	no	
+💴	U+1F4B4	yen banknote	Misc	Unrelated	no	no	
+💵	U+1F4B5	dollar banknote	Misc	Unrelated	no	no	
+💶	U+1F4B6	euro banknote	Misc	Unrelated	no	no	
+💷	U+1F4B7	pound banknote	Misc	Unrelated	no	no	
+💸	U+1F4B8	money with wings	Misc	Unrelated	no	no	
+💳	U+1F4B3	credit card	Misc	Unrelated	no	no	
+🧾	U+1F9FE	receipt	Misc	Unrelated	no	no	
+💹	U+1F4B9	chart increasing with yen	Misc	Unrelated	no	no	
+✉	U+2709	envelope	Misc	Unrelated	no	no	
+📧	U+1F4E7	e-mail	Misc	Unrelated	no	no	
+📨	U+1F4E8	incoming envelope	Misc	Unrelated	no	no	
+📩	U+1F4E9	envelope with arrow	Misc	Unrelated	no	no	
+📤	U+1F4E4	outbox tray	Misc	Unrelated	no	no	
+📥	U+1F4E5	inbox tray	Misc	Unrelated	no	no	
+📦	U+1F4E6	package	Toy	Unconventional	no	no	
+📫	U+1F4EB	closed mailbox with raised flag	Misc	Unrelated	no	no	
+📪	U+1F4EA	closed mailbox with lowered flag	Misc	Unrelated	no	no	
+📬	U+1F4EC	open mailbox with raised flag	Misc	Unrelated	no	no	
+📭	U+1F4ED	open mailbox with lowered flag	Misc	Unrelated	no	no	
+📮	U+1F4EE	postbox	Misc	Unrelated	no	no	
+🗳	U+1F5F3	ballot box with ballot	Misc	Unrelated	no	no	
+✏	U+270F	pencil	Misc	Unrelated	no	no	
+✒	U+2712	black nib	Misc	Unrelated	no	no	
+🖋	U+1F58B	fountain pen	Misc	Unrelated	no	no	
+🖊	U+1F58A	pen	Misc	Unrelated	no	no	
+🖌	U+1F58C	paintbrush	Misc	Unrelated	no	no	
+🖍	U+1F58D	crayon	Misc	Unrelated	no	no	
+📝	U+1F4DD	memo	Misc	Unrelated	no	no	
+🪌	U+1FA8C	⊛ eraser	Misc	Unrelated	no	no	
+💼	U+1F4BC	briefcase	Misc	Unrelated	no	no	
+📁	U+1F4C1	file folder	Misc	Unrelated	no	no	
+📂	U+1F4C2	open file folder	Misc	Unrelated	no	no	
+🗂	U+1F5C2	card index dividers	Misc	Unrelated	no	no	
+📅	U+1F4C5	calendar	Misc	Unrelated	no	no	
+📆	U+1F4C6	tear-off calendar	Misc	Unrelated	no	no	
+🗒	U+1F5D2	spiral notepad	Misc	Unrelated	no	no	
+🗓	U+1F5D3	spiral calendar	Misc	Unrelated	no	no	
+📇	U+1F4C7	card index	Misc	Unrelated	no	no	
+📈	U+1F4C8	chart increasing	Misc	Unrelated	no	no	
+📉	U+1F4C9	chart decreasing	Misc	Unrelated	no	no	
+📊	U+1F4CA	bar chart	Misc	Unrelated	no	no	
+📋	U+1F4CB	clipboard	Misc	Unrelated	no	no	
+📌	U+1F4CC	pushpin	Misc	Unrelated	no	no	
+📍	U+1F4CD	round pushpin	Misc	Unrelated	no	no	
+📎	U+1F4CE	paperclip	Misc	Unrelated	no	no	
+🖇	U+1F587	linked paperclips	Misc	Unrelated	no	no	
+📏	U+1F4CF	straight ruler	Misc	Unrelated	no	no	
+📐	U+1F4D0	triangular ruler	Misc	Unrelated	no	no	
+✂	U+2702	scissors	Misc	Unrelated	no	no	
+🗃	U+1F5C3	card file box	Misc	Unrelated	no	no	
+🗄	U+1F5C4	file cabinet	Misc	Unrelated	no	no	
+🗑	U+1F5D1	wastebasket	Misc	Unrelated	no	no	
+🔒	U+1F512	locked	Misc	Unrelated	no	no	
+🔓	U+1F513	unlocked	Misc	Unrelated	no	no	
+🔏	U+1F50F	locked with pen	Misc	Unrelated	no	no	
+🔐	U+1F510	locked with key	Misc	Unrelated	no	no	
+🔑	U+1F511	key	Misc	Unrelated	no	no	
+🗝	U+1F5DD	old key	Misc	Unrelated	no	no	
+🪍	U+1FA8D	⊛ net with handle	Misc	Unrelated	no	no	
+🔨	U+1F528	hammer	Misc	Unrelated	no	no	
+🪓	U+1FA93	axe	Misc	Unrelated	no	no	
+⛏	U+26CF	pick	Misc	Unrelated	no	no	
+⚒	U+2692	hammer and pick	Misc	Unrelated	no	no	
+🛠	U+1F6E0	hammer and wrench	Misc	Unrelated	no	no	
+🗡	U+1F5E1	dagger	Misc	Unrelated	no	no	
+⚔	U+2694	crossed swords	Misc	Unrelated	no	no	
+💣	U+1F4A3	bomb	Misc	Unrelated	no	no	
+🪃	U+1FA83	boomerang	Misc	Unrelated	no	no	
+🏹	U+1F3F9	bow and arrow	Misc	Unrelated	no	no	
+🛡	U+1F6E1	shield	Misc	Unrelated	no	no	
+🪚	U+1FA9A	carpentry saw	Misc	Unrelated	no	no	
+🔧	U+1F527	wrench	Misc	Unrelated	no	no	
+🪛	U+1FA9B	screwdriver	Misc	Unrelated	no	no	
+🔩	U+1F529	nut and bolt	Misc	Unrelated	no	no	
+⚙	U+2699	gear	Misc	Unrelated	no	no	
+🗜	U+1F5DC	clamp	Misc	Unrelated	no	no	
+⚖	U+2696	balance scale	Misc	Unrelated	no	no	
+🦯	U+1F9AF	white cane	Misc	Unrelated	no	no	
+🔗	U+1F517	link	Misc	Unrelated	no	no	
+⛓️‍💥	U+26D3 U+FE0F U+200D U+1F4A5	broken chain	Misc	Unrelated	no	no	
+⛓	U+26D3	chains	Misc	Unrelated	no	no	
+🪝	U+1FA9D	hook	Misc	Unrelated	no	no	
+🧰	U+1F9F0	toolbox	Misc	Unrelated	no	no	
+🧲	U+1F9F2	magnet	Misc	Unrelated	no	no	
+🪜	U+1FA9C	ladder	Misc	Unrelated	no	no	
+🪏	U+1FA8F	shovel	Misc	Unrelated	no	no	
+⚗	U+2697	alembic	Misc	Unrelated	no	no	
+🧪	U+1F9EA	test tube	Misc	Unrelated	no	no	
+🧫	U+1F9EB	petri dish	Misc	Unrelated	no	no	
+🧬	U+1F9EC	dna	Misc	Unrelated	no	no	
+🔬	U+1F52C	microscope	Misc	Unrelated	no	no	
+🔭	U+1F52D	telescope	Misc	Unrelated	no	no	
+📡	U+1F4E1	satellite antenna	Misc	Unrelated	no	no	
+💉	U+1F489	syringe	Misc	Unrelated	no	no	
+🩸	U+1FA78	drop of blood	Misc	Unrelated	no	no	
+💊	U+1F48A	pill	Misc	Unrelated	no	no	
+🩹	U+1FA79	adhesive bandage	Misc	Unrelated	no	no	
+🩼	U+1FA7C	crutch	Misc	Unrelated	no	no	
+🩺	U+1FA7A	stethoscope	Misc	Unrelated	no	no	
+🩻	U+1FA7B	x-ray	Misc	Unrelated	no	no	
+🚪	U+1F6AA	door	Misc	Unrelated	no	no	
+🛗	U+1F6D7	elevator	Misc	Unrelated	no	no	
+🪞	U+1FA9E	mirror	Misc	Unrelated	no	no	
+🪟	U+1FA9F	window	Misc	Unrelated	no	no	
+🛏	U+1F6CF	bed	Misc	Unrelated	no	no	
+🛋	U+1F6CB	couch and lamp	Misc	Unrelated	no	no	
+🪑	U+1FA91	chair	Misc	Unrelated	no	no	
+🚽	U+1F6BD	toilet	Misc	Unrelated	no	no	
+🪠	U+1FAA0	plunger	Misc	Unrelated	no	no	
+🚿	U+1F6BF	shower	Misc	Unrelated	no	no	
+🛁	U+1F6C1	bathtub	Misc	Unrelated	no	no	
+🪤	U+1FAA4	mouse trap	Misc	Unrelated	no	no	
+🪒	U+1FA92	razor	Misc	Unrelated	no	no	
+🧴	U+1F9F4	lotion bottle	Misc	Unrelated	no	no	
+🧷	U+1F9F7	safety pin	Misc	Unrelated	no	no	
+🧹	U+1F9F9	broom	Misc	Unrelated	no	no	
+🧺	U+1F9FA	basket	Misc	Unrelated	no	no	
+🧻	U+1F9FB	roll of paper	Toy	Unconventional	no	no	
+🪣	U+1FAA3	bucket	Misc	Unrelated	no	no	
+🧼	U+1F9FC	soap	Misc	Unrelated	no	no	
+🫧	U+1FAE7	bubbles	Misc	Unrelated	no	no	
+🪥	U+1FAA5	toothbrush	Misc	Unrelated	no	no	
+🧽	U+1F9FD	sponge	Misc	Unrelated	no	no	
+🧯	U+1F9EF	fire extinguisher	Misc	Unrelated	no	no	
+🛒	U+1F6D2	shopping cart	Misc	Unrelated	no	no	
+🚬	U+1F6AC	cigarette	Misc	Unrelated	no	no	
+⚰	U+26B0	coffin	Misc	Unrelated	no	no	
+🪦	U+1FAA6	headstone	Misc	Unrelated	no	no	
+⚱	U+26B1	funeral urn	Misc	Unrelated	no	no	
+🧿	U+1F9FF	nazar amulet	Misc	Unrelated	no	no	
+🪬	U+1FAAC	hamsa	Misc	Unrelated	no	no	
+🗿	U+1F5FF	moai	Misc	Unrelated	no	no	
+🪧	U+1FAA7	placard	Misc	Unrelated	no	no	
+🪪	U+1FAAA	identification card	Misc	Unrelated	no	no	
+🏧	U+1F3E7	ATM sign	Misc	Unrelated	no	no	
+🚮	U+1F6AE	litter in bin sign	Misc	Unrelated	no	no	
+🚰	U+1F6B0	potable water	Misc	Unrelated	no	no	
+♿	U+267F	wheelchair symbol	Misc	Unrelated	no	no	
+🚹	U+1F6B9	men’s room	Misc	Unrelated	no	no	
+🚺	U+1F6BA	women’s room	Misc	Unrelated	no	no	
+🚻	U+1F6BB	restroom	Misc	Unrelated	no	no	
+🚼	U+1F6BC	baby symbol	Misc	Unrelated	no	no	
+🚾	U+1F6BE	water closet	Misc	Unrelated	no	no	
+🛂	U+1F6C2	passport control	Misc	Unrelated	no	no	
+🛃	U+1F6C3	customs	Misc	Unrelated	no	no	
+🛄	U+1F6C4	baggage claim	Misc	Unrelated	no	no	
+🛅	U+1F6C5	left luggage	Misc	Unrelated	no	no	
+⚠	U+26A0	warning	Misc	Unrelated	no	no	
+🚸	U+1F6B8	children crossing	Misc	Unrelated	no	no	
+⛔	U+26D4	no entry	Misc	Unrelated	no	no	
+🚫	U+1F6AB	prohibited	Misc	Unrelated	no	no	
+🚳	U+1F6B3	no bicycles	Misc	Unrelated	no	no	
+🚭	U+1F6AD	no smoking	Misc	Unrelated	no	no	
+🚯	U+1F6AF	no littering	Misc	Unrelated	no	no	
+🚱	U+1F6B1	non-potable water	Misc	Unrelated	no	no	
+🚷	U+1F6B7	no pedestrians	Misc	Unrelated	no	no	
+📵	U+1F4F5	no mobile phones	Misc	Unrelated	no	no	
+🔞	U+1F51E	no one under eighteen	Misc	Unrelated	no	no	
+☢	U+2622	radioactive	Misc	Unrelated	no	no	
+☣	U+2623	biohazard	Misc	Unrelated	no	no	
+⬆	U+2B06	up arrow	Misc	Unrelated	no	no	
+↗	U+2197	up-right arrow	Misc	Unrelated	no	no	
+➡	U+27A1	right arrow	Misc	Unrelated	no	no	
+↘	U+2198	down-right arrow	Misc	Unrelated	no	no	
+⬇	U+2B07	down arrow	Misc	Unrelated	no	no	
+↙	U+2199	down-left arrow	Misc	Unrelated	no	no	
+⬅	U+2B05	left arrow	Misc	Unrelated	no	no	
+↖	U+2196	up-left arrow	Misc	Unrelated	no	no	
+↕	U+2195	up-down arrow	Misc	Unrelated	no	no	
+↔	U+2194	left-right arrow	Misc	Unrelated	no	no	
+↩	U+21A9	right arrow curving left	Misc	Unrelated	no	no	
+↪	U+21AA	left arrow curving right	Misc	Unrelated	no	no	
+⤴	U+2934	right arrow curving up	Misc	Unrelated	no	no	
+⤵	U+2935	right arrow curving down	Misc	Unrelated	no	no	
+🔃	U+1F503	clockwise vertical arrows	Misc	Unrelated	no	no	
+🔄	U+1F504	counterclockwise arrows button	Misc	Unrelated	no	no	
+🔙	U+1F519	BACK arrow	Misc	Unrelated	no	no	
+🔚	U+1F51A	END arrow	Misc	Unrelated	no	no	
+🔛	U+1F51B	ON! arrow	Misc	Unrelated	no	no	
+🔜	U+1F51C	SOON arrow	Misc	Unrelated	no	no	
+🔝	U+1F51D	TOP arrow	Misc	Unrelated	no	no	
+🛐	U+1F6D0	place of worship	Misc	Unrelated	no	no	
+⚛	U+269B	atom symbol	Misc	Unrelated	no	no	
+🕉	U+1F549	om	Misc	Unrelated	no	no	
+✡	U+2721	star of David	Misc	Unrelated	no	no	
+☸	U+2638	wheel of dharma	Misc	Unrelated	no	no	
+☯	U+262F	yin yang	Misc	Unrelated	no	no	
+✝	U+271D	latin cross	Misc	Unrelated	no	no	
+☦	U+2626	orthodox cross	Misc	Unrelated	no	no	
+☪	U+262A	star and crescent	Misc	Unrelated	no	no	
+☮	U+262E	peace symbol	Misc	Unrelated	no	no	
+🕎	U+1F54E	menorah	Misc	Unrelated	no	no	
+🔯	U+1F52F	dotted six-pointed star	Misc	Unrelated	no	no	
+🪯	U+1FAAF	khanda	Misc	Unrelated	no	no	
+♈	U+2648	Aries	Misc	Unrelated	no	no	
+♉	U+2649	Taurus	Misc	Unrelated	no	no	
+♊	U+264A	Gemini	Misc	Unrelated	no	no	
+♋	U+264B	Cancer	Misc	Unrelated	no	no	
+♌	U+264C	Leo	Misc	Unrelated	no	no	
+♍	U+264D	Virgo	Misc	Unrelated	no	no	
+♎	U+264E	Libra	Misc	Unrelated	no	no	
+♏	U+264F	Scorpio	Misc	Unrelated	no	no	
+♐	U+2650	Sagittarius	Misc	Unrelated	no	no	
+♑	U+2651	Capricorn	Misc	Unrelated	no	no	
+♒	U+2652	Aquarius	Misc	Unrelated	no	no	
+♓	U+2653	Pisces	Misc	Unrelated	no	no	
+⛎	U+26CE	Ophiuchus	Misc	Unrelated	no	no	
+🔀	U+1F500	shuffle tracks button	Misc	Unrelated	no	no	
+🔁	U+1F501	repeat button	Misc	Unrelated	no	no	
+🔂	U+1F502	repeat single button	Misc	Unrelated	no	no	
+▶	U+25B6	play button	Misc	Unrelated	no	no	
+⏩	U+23E9	fast-forward button	Misc	Unrelated	no	no	
+⏭	U+23ED	next track button	Misc	Unrelated	no	no	
+⏯	U+23EF	play or pause button	Misc	Unrelated	no	no	
+◀	U+25C0	reverse button	Misc	Unrelated	no	no	
+⏪	U+23EA	fast reverse button	Misc	Unrelated	no	no	
+⏮	U+23EE	last track button	Misc	Unrelated	no	no	
+🔼	U+1F53C	upwards button	Misc	Unrelated	no	no	
+⏫	U+23EB	fast up button	Misc	Unrelated	no	no	
+🔽	U+1F53D	downwards button	Misc	Unrelated	no	no	
+⏬	U+23EC	fast down button	Misc	Unrelated	no	no	
+⏸	U+23F8	pause button	Misc	Unrelated	no	no	
+⏹	U+23F9	stop button	Misc	Unrelated	no	no	
+⏺	U+23FA	record button	Misc	Unrelated	no	no	
+⏏	U+23CF	eject button	Misc	Unrelated	no	no	
+🎦	U+1F3A6	cinema	Misc	Unrelated	no	no	
+🔅	U+1F505	dim button	Misc	Unrelated	no	no	
+🔆	U+1F506	bright button	Misc	Unrelated	no	no	
+📶	U+1F4F6	antenna bars	Misc	Unrelated	no	no	
+🛜	U+1F6DC	wireless	Misc	Unrelated	no	no	
+📳	U+1F4F3	vibration mode	Misc	Unrelated	no	no	
+📴	U+1F4F4	mobile phone off	Misc	Unrelated	no	no	
+♀	U+2640	female sign	Misc	Unrelated	no	no	
+♂	U+2642	male sign	Misc	Unrelated	no	no	
+⚧	U+26A7	transgender symbol	Misc	Unrelated	no	no	
+✖	U+2716	multiply	Bot	Message Full	no	yes	
+➕	U+2795	plus	Misc	Unrelated	no	no	
+➖	U+2796	minus	Misc	Unrelated	no	no	
+➗	U+2797	divide	Misc	Unrelated	no	no	
+🟰	U+1F7F0	heavy equals sign	Misc	Unrelated	no	no	
+♾	U+267E	infinity	Misc	Unrelated	no	no	
+‼	U+203C	double exclamation mark	Misc	Unrelated	no	no	
+⁉	U+2049	exclamation question mark	Misc	Unrelated	no	no	
+❓	U+2753	red question mark	Misc	Unrelated	no	no	
+❔	U+2754	white question mark	Misc	Unrelated	no	no	
+❕	U+2755	white exclamation mark	Misc	Unrelated	no	no	
+❗	U+2757	red exclamation mark	Misc	Unrelated	no	no	
+〰	U+3030	wavy dash	Misc	Unrelated	no	no	
+💱	U+1F4B1	currency exchange	Misc	Unrelated	no	no	
+💲	U+1F4B2	heavy dollar sign	Misc	Unrelated	no	no	
+⚕	U+2695	medical symbol	Misc	Unrelated	no	no	
+♻	U+267B	recycling symbol	Misc	Unrelated	no	no	
+⚜	U+269C	fleur-de-lis	Misc	Unrelated	no	no	
+🔱	U+1F531	trident emblem	Misc	Unrelated	no	no	
+📛	U+1F4DB	name badge	Misc	Unrelated	no	no	
+🔰	U+1F530	Japanese symbol for beginner	Misc	Unrelated	no	no	
+⭕	U+2B55	hollow red circle	Misc	Unrelated	no	no	
+✅	U+2705	check mark button	Misc	Unrelated	no	no	
+☑	U+2611	check box with check	Misc	Unrelated	no	no	
+✔	U+2714	check mark	Misc	Unrelated	no	no	
+❌	U+274C	cross mark	Bot	Out of Guesses	no	yes	
+❎	U+274E	cross mark button	Misc	Unrelated	no	no	
+➰	U+27B0	curly loop	Misc	Unrelated	no	no	
+➿	U+27BF	double curly loop	Misc	Unrelated	no	no	
+〽	U+303D	part alternation mark	Misc	Unrelated	no	no	
+✳	U+2733	eight-spoked asterisk	Misc	Unrelated	no	no	
+✴	U+2734	eight-pointed star	Misc	Unrelated	no	no	
+❇	U+2747	sparkle	Misc	Unrelated	no	no	
+©	U+00A9	copyright	Misc	Unrelated	no	no	
+®	U+00AE	registered	Misc	Unrelated	no	no	
+™	U+2122	trade mark	Misc	Unrelated	no	no	
+🫟	U+1FADF	splatter	Misc	Unrelated	no	no	
+#️⃣	U+0023 U+FE0F U+20E3	keycap: #	Misc	Unrelated	no	no	
+*️⃣	U+002A U+FE0F U+20E3	keycap: *	Misc	Unrelated	no	no	
+0️⃣	U+0030 U+FE0F U+20E3	keycap: 0	Misc	Unrelated	no	no	
+1️⃣	U+0031 U+FE0F U+20E3	keycap: 1	Misc	Unrelated	no	no	
+2️⃣	U+0032 U+FE0F U+20E3	keycap: 2	Misc	Unrelated	no	no	
+3️⃣	U+0033 U+FE0F U+20E3	keycap: 3	Misc	Unrelated	no	no	
+4️⃣	U+0034 U+FE0F U+20E3	keycap: 4	Misc	Unrelated	no	no	
+5️⃣	U+0035 U+FE0F U+20E3	keycap: 5	Misc	Unrelated	no	no	
+6️⃣	U+0036 U+FE0F U+20E3	keycap: 6	Misc	Unrelated	no	no	
+7️⃣	U+0037 U+FE0F U+20E3	keycap: 7	Misc	Unrelated	no	no	
+8️⃣	U+0038 U+FE0F U+20E3	keycap: 8	Misc	Unrelated	no	no	
+9️⃣	U+0039 U+FE0F U+20E3	keycap: 9	Misc	Unrelated	no	no	
+🔟	U+1F51F	keycap: 10	Misc	Unrelated	no	no	
+🔠	U+1F520	input latin uppercase	Misc	Unrelated	no	no	
+🔡	U+1F521	input latin lowercase	Misc	Unrelated	no	no	
+🔢	U+1F522	input numbers	Misc	Unrelated	no	no	
+🔣	U+1F523	input symbols	Misc	Unrelated	no	no	
+🔤	U+1F524	input latin letters	Misc	Unrelated	no	no	
+🅰	U+1F170	A button (blood type)	Misc	Unrelated	no	no	
+🆎	U+1F18E	AB button (blood type)	Misc	Unrelated	no	no	
+🅱	U+1F171	B button (blood type)	Misc	Unrelated	no	no	
+🆑	U+1F191	CL button	Misc	Unrelated	no	no	
+🆒	U+1F192	COOL button	Misc	Unrelated	no	no	
+🆓	U+1F193	FREE button	Misc	Unrelated	no	no	
+ℹ	U+2139	information	Misc	Unrelated	no	no	
+🆔	U+1F194	ID button	Misc	Unrelated	no	no	
+Ⓜ	U+24C2	circled M	Misc	Unrelated	no	no	
+🆕	U+1F195	NEW button	Misc	Unrelated	no	no	
+🆖	U+1F196	NG button	Misc	Unrelated	no	no	
+🅾	U+1F17E	O button (blood type)	Misc	Unrelated	no	no	
+🆗	U+1F197	OK button	Misc	Unrelated	no	no	
+🅿	U+1F17F	P button	Misc	Unrelated	no	no	
+🆘	U+1F198	SOS button	Misc	Unrelated	no	no	
+🆙	U+1F199	UP! button	Misc	Unrelated	no	no	
+🆚	U+1F19A	VS button	Misc	Unrelated	no	no	
+🈁	U+1F201	Japanese “here” button	Misc	Unrelated	no	no	
+🈂	U+1F202	Japanese “service charge” button	Misc	Unrelated	no	no	
+🈷	U+1F237	Japanese “monthly amount” button	Misc	Unrelated	no	no	
+🈶	U+1F236	Japanese “not free of charge” button	Misc	Unrelated	no	no	
+🈯	U+1F22F	Japanese “reserved” button	Misc	Unrelated	no	no	
+🉐	U+1F250	Japanese “bargain” button	Misc	Unrelated	no	no	
+🈹	U+1F239	Japanese “discount” button	Misc	Unrelated	no	no	
+🈚	U+1F21A	Japanese “free of charge” button	Misc	Unrelated	no	no	
+🈲	U+1F232	Japanese “prohibited” button	Misc	Unrelated	no	no	
+🉑	U+1F251	Japanese “acceptable” button	Misc	Unrelated	no	no	
+🈸	U+1F238	Japanese “application” button	Misc	Unrelated	no	no	
+🈴	U+1F234	Japanese “passing grade” button	Misc	Unrelated	no	no	
+🈳	U+1F233	Japanese “vacancy” button	Misc	Unrelated	no	no	
+㊗	U+3297	Japanese “congratulations” button	Misc	Unrelated	no	no	
+㊙	U+3299	Japanese “secret” button	Misc	Unrelated	no	no	
+🈺	U+1F23A	Japanese “open for business” button	Misc	Unrelated	no	no	
+🈵	U+1F235	Japanese “no vacancy” button	Misc	Unrelated	no	no	
+🔴	U+1F534	red circle	Misc	Unrelated	no	no	
+🟠	U+1F7E0	orange circle	Misc	Unrelated	no	no	
+🟡	U+1F7E1	yellow circle	Misc	Unrelated	no	no	
+🟢	U+1F7E2	green circle	Misc	Unrelated	no	no	
+🔵	U+1F535	blue circle	Misc	Unrelated	no	no	
+🟣	U+1F7E3	purple circle	Misc	Unrelated	no	no	
+🟤	U+1F7E4	brown circle	Misc	Unrelated	no	no	
+⚫	U+26AB	black circle	Misc	Unrelated	no	no	
+⚪	U+26AA	white circle	Misc	Unrelated	no	no	
+🟥	U+1F7E5	red square	Misc	Unrelated	no	no	
+🟧	U+1F7E7	orange square	Misc	Unrelated	no	no	
+🟨	U+1F7E8	yellow square	Misc	Unrelated	no	no	
+🟩	U+1F7E9	green square	Misc	Unrelated	no	no	
+🟦	U+1F7E6	blue square	Misc	Unrelated	no	no	
+🟪	U+1F7EA	purple square	Misc	Unrelated	no	no	
+🟫	U+1F7EB	brown square	Misc	Unrelated	no	no	
+⬛	U+2B1B	black large square	Misc	Unrelated	no	no	
+⬜	U+2B1C	white large square	Misc	Unrelated	no	no	
+◼	U+25FC	black medium square	Misc	Unrelated	no	no	
+◻	U+25FB	white medium square	Misc	Unrelated	no	no	
+◾	U+25FE	black medium-small square	Misc	Unrelated	no	no	
+◽	U+25FD	white medium-small square	Misc	Unrelated	no	no	
+▪	U+25AA	black small square	Misc	Unrelated	no	no	
+▫	U+25AB	white small square	Misc	Unrelated	no	no	
+🔶	U+1F536	large orange diamond	Misc	Unrelated	no	no	
+🔷	U+1F537	large blue diamond	Misc	Unrelated	no	no	
+🔸	U+1F538	small orange diamond	Misc	Unrelated	no	no	
+🔹	U+1F539	small blue diamond	Misc	Unrelated	no	no	
+🔺	U+1F53A	red triangle pointed up	Misc	Unrelated	no	no	
+🔻	U+1F53B	red triangle pointed down	Misc	Unrelated	no	no	
+💠	U+1F4A0	diamond with a dot	Misc	Unrelated	no	no	
+🔘	U+1F518	radio button	Misc	Unrelated	no	no	
+🔳	U+1F533	white square button	Misc	Unrelated	no	no	
+🔲	U+1F532	black square button	Misc	Unrelated	no	no	
+🏁	U+1F3C1	chequered flag	Misc	Unrelated	no	no	
+🚩	U+1F6A9	triangular flag	Misc	Unrelated	no	no	
+🎌	U+1F38C	crossed flags	Misc	Unrelated	no	no	
+🏴	U+1F3F4	black flag	Misc	Unrelated	no	no	
+🏳	U+1F3F3	white flag	Misc	Unrelated	no	no	
+🏳️‍🌈	U+1F3F3 U+FE0F U+200D U+1F308	rainbow flag	Misc	Unrelated	no	no	
+🏳️‍⚧️	U+1F3F3 U+FE0F U+200D U+26A7 U+FE0F	transgender flag	Misc	Unrelated	no	no	
+🏴‍☠️	U+1F3F4 U+200D U+2620 U+FE0F	pirate flag	Misc	Unrelated	no	no	
+🇦🇨	U+1F1E6 U+1F1E8	flag: Ascension Island	Misc	Unrelated	no	no	
+🇦🇩	U+1F1E6 U+1F1E9	flag: Andorra	Misc	Unrelated	no	no	
+🇦🇪	U+1F1E6 U+1F1EA	flag: United Arab Emirates	Misc	Unrelated	no	no	
+🇦🇫	U+1F1E6 U+1F1EB	flag: Afghanistan	Misc	Unrelated	no	no	
+🇦🇬	U+1F1E6 U+1F1EC	flag: Antigua & Barbuda	Misc	Unrelated	no	no	
+🇦🇮	U+1F1E6 U+1F1EE	flag: Anguilla	Misc	Unrelated	no	no	
+🇦🇱	U+1F1E6 U+1F1F1	flag: Albania	Misc	Unrelated	no	no	
+🇦🇲	U+1F1E6 U+1F1F2	flag: Armenia	Misc	Unrelated	no	no	
+🇦🇴	U+1F1E6 U+1F1F4	flag: Angola	Misc	Unrelated	no	no	
+🇦🇶	U+1F1E6 U+1F1F6	flag: Antarctica	Misc	Unrelated	no	no	
+🇦🇷	U+1F1E6 U+1F1F7	flag: Argentina	Misc	Unrelated	no	no	
+🇦🇸	U+1F1E6 U+1F1F8	flag: American Samoa	Misc	Unrelated	no	no	
+🇦🇹	U+1F1E6 U+1F1F9	flag: Austria	Misc	Unrelated	no	no	
+🇦🇺	U+1F1E6 U+1F1FA	flag: Australia	Misc	Unrelated	no	no	
+🇦🇼	U+1F1E6 U+1F1FC	flag: Aruba	Misc	Unrelated	no	no	
+🇦🇽	U+1F1E6 U+1F1FD	flag: Åland Islands	Misc	Unrelated	no	no	
+🇦🇿	U+1F1E6 U+1F1FF	flag: Azerbaijan	Misc	Unrelated	no	no	
+🇧🇦	U+1F1E7 U+1F1E6	flag: Bosnia & Herzegovina	Misc	Unrelated	no	no	
+🇧🇧	U+1F1E7 U+1F1E7	flag: Barbados	Misc	Unrelated	no	no	
+🇧🇩	U+1F1E7 U+1F1E9	flag: Bangladesh	Misc	Unrelated	no	no	
+🇧🇪	U+1F1E7 U+1F1EA	flag: Belgium	Misc	Unrelated	no	no	
+🇧🇫	U+1F1E7 U+1F1EB	flag: Burkina Faso	Misc	Unrelated	no	no	
+🇧🇬	U+1F1E7 U+1F1EC	flag: Bulgaria	Misc	Unrelated	no	no	
+🇧🇭	U+1F1E7 U+1F1ED	flag: Bahrain	Misc	Unrelated	no	no	
+🇧🇮	U+1F1E7 U+1F1EE	flag: Burundi	Misc	Unrelated	no	no	
+🇧🇯	U+1F1E7 U+1F1EF	flag: Benin	Misc	Unrelated	no	no	
+🇧🇱	U+1F1E7 U+1F1F1	flag: St. Barthélemy	Misc	Unrelated	no	no	
+🇧🇲	U+1F1E7 U+1F1F2	flag: Bermuda	Misc	Unrelated	no	no	
+🇧🇳	U+1F1E7 U+1F1F3	flag: Brunei	Misc	Unrelated	no	no	
+🇧🇴	U+1F1E7 U+1F1F4	flag: Bolivia	Misc	Unrelated	no	no	
+🇧🇶	U+1F1E7 U+1F1F6	flag: Caribbean Netherlands	Misc	Unrelated	no	no	
+🇧🇷	U+1F1E7 U+1F1F7	flag: Brazil	Misc	Unrelated	no	no	
+🇧🇸	U+1F1E7 U+1F1F8	flag: Bahamas	Misc	Unrelated	no	no	
+🇧🇹	U+1F1E7 U+1F1F9	flag: Bhutan	Misc	Unrelated	no	no	
+🇧🇻	U+1F1E7 U+1F1FB	flag: Bouvet Island	Misc	Unrelated	no	no	
+🇧🇼	U+1F1E7 U+1F1FC	flag: Botswana	Misc	Unrelated	no	no	
+🇧🇾	U+1F1E7 U+1F1FE	flag: Belarus	Misc	Unrelated	no	no	
+🇧🇿	U+1F1E7 U+1F1FF	flag: Belize	Misc	Unrelated	no	no	
+🇨🇦	U+1F1E8 U+1F1E6	flag: Canada	Misc	Unrelated	no	no	
+🇨🇨	U+1F1E8 U+1F1E8	flag: Cocos (Keeling) Islands	Misc	Unrelated	no	no	
+🇨🇩	U+1F1E8 U+1F1E9	flag: Congo - Kinshasa	Misc	Unrelated	no	no	
+🇨🇫	U+1F1E8 U+1F1EB	flag: Central African Republic	Misc	Unrelated	no	no	
+🇨🇬	U+1F1E8 U+1F1EC	flag: Congo - Brazzaville	Misc	Unrelated	no	no	
+🇨🇭	U+1F1E8 U+1F1ED	flag: Switzerland	Misc	Unrelated	no	no	
+🇨🇮	U+1F1E8 U+1F1EE	flag: Côte d’Ivoire	Misc	Unrelated	no	no	
+🇨🇰	U+1F1E8 U+1F1F0	flag: Cook Islands	Misc	Unrelated	no	no	
+🇨🇱	U+1F1E8 U+1F1F1	flag: Chile	Misc	Unrelated	no	no	
+🇨🇲	U+1F1E8 U+1F1F2	flag: Cameroon	Misc	Unrelated	no	no	
+🇨🇳	U+1F1E8 U+1F1F3	flag: China	Misc	Unrelated	no	no	
+🇨🇴	U+1F1E8 U+1F1F4	flag: Colombia	Misc	Unrelated	no	no	
+🇨🇵	U+1F1E8 U+1F1F5	flag: Clipperton Island	Misc	Unrelated	no	no	
+🇨🇶	U+1F1E8 U+1F1F6	flag: Sark	Misc	Unrelated	no	no	
+🇨🇷	U+1F1E8 U+1F1F7	flag: Costa Rica	Misc	Unrelated	no	no	
+🇨🇺	U+1F1E8 U+1F1FA	flag: Cuba	Misc	Unrelated	no	no	
+🇨🇻	U+1F1E8 U+1F1FB	flag: Cape Verde	Misc	Unrelated	no	no	
+🇨🇼	U+1F1E8 U+1F1FC	flag: Curaçao	Misc	Unrelated	no	no	
+🇨🇽	U+1F1E8 U+1F1FD	flag: Christmas Island	Misc	Unrelated	no	no	
+🇨🇾	U+1F1E8 U+1F1FE	flag: Cyprus	Misc	Unrelated	no	no	
+🇨🇿	U+1F1E8 U+1F1FF	flag: Czechia	Misc	Unrelated	no	no	
+🇩🇪	U+1F1E9 U+1F1EA	flag: Germany	Misc	Unrelated	no	no	
+🇩🇬	U+1F1E9 U+1F1EC	flag: Diego Garcia	Misc	Unrelated	no	no	
+🇩🇯	U+1F1E9 U+1F1EF	flag: Djibouti	Misc	Unrelated	no	no	
+🇩🇰	U+1F1E9 U+1F1F0	flag: Denmark	Misc	Unrelated	no	no	
+🇩🇲	U+1F1E9 U+1F1F2	flag: Dominica	Misc	Unrelated	no	no	
+🇩🇴	U+1F1E9 U+1F1F4	flag: Dominican Republic	Misc	Unrelated	no	no	
+🇩🇿	U+1F1E9 U+1F1FF	flag: Algeria	Misc	Unrelated	no	no	
+🇪🇦	U+1F1EA U+1F1E6	flag: Ceuta & Melilla	Misc	Unrelated	no	no	
+🇪🇨	U+1F1EA U+1F1E8	flag: Ecuador	Misc	Unrelated	no	no	
+🇪🇪	U+1F1EA U+1F1EA	flag: Estonia	Misc	Unrelated	no	no	
+🇪🇬	U+1F1EA U+1F1EC	flag: Egypt	Misc	Unrelated	no	no	
+🇪🇭	U+1F1EA U+1F1ED	flag: Western Sahara	Misc	Unrelated	no	no	
+🇪🇷	U+1F1EA U+1F1F7	flag: Eritrea	Misc	Unrelated	no	no	
+🇪🇸	U+1F1EA U+1F1F8	flag: Spain	Misc	Unrelated	no	no	
+🇪🇹	U+1F1EA U+1F1F9	flag: Ethiopia	Misc	Unrelated	no	no	
+🇪🇺	U+1F1EA U+1F1FA	flag: European Union	Misc	Unrelated	no	no	
+🇫🇮	U+1F1EB U+1F1EE	flag: Finland	Misc	Unrelated	no	no	
+🇫🇯	U+1F1EB U+1F1EF	flag: Fiji	Misc	Unrelated	no	no	
+🇫🇰	U+1F1EB U+1F1F0	flag: Falkland Islands	Misc	Unrelated	no	no	
+🇫🇲	U+1F1EB U+1F1F2	flag: Micronesia	Misc	Unrelated	no	no	
+🇫🇴	U+1F1EB U+1F1F4	flag: Faroe Islands	Misc	Unrelated	no	no	
+🇫🇷	U+1F1EB U+1F1F7	flag: France	Misc	Unrelated	no	no	
+🇬🇦	U+1F1EC U+1F1E6	flag: Gabon	Misc	Unrelated	no	no	
+🇬🇧	U+1F1EC U+1F1E7	flag: United Kingdom	Misc	Unrelated	no	no	
+🇬🇩	U+1F1EC U+1F1E9	flag: Grenada	Misc	Unrelated	no	no	
+🇬🇪	U+1F1EC U+1F1EA	flag: Georgia	Misc	Unrelated	no	no	
+🇬🇫	U+1F1EC U+1F1EB	flag: French Guiana	Misc	Unrelated	no	no	
+🇬🇬	U+1F1EC U+1F1EC	flag: Guernsey	Misc	Unrelated	no	no	
+🇬🇭	U+1F1EC U+1F1ED	flag: Ghana	Misc	Unrelated	no	no	
+🇬🇮	U+1F1EC U+1F1EE	flag: Gibraltar	Misc	Unrelated	no	no	
+🇬🇱	U+1F1EC U+1F1F1	flag: Greenland	Misc	Unrelated	no	no	
+🇬🇲	U+1F1EC U+1F1F2	flag: Gambia	Misc	Unrelated	no	no	
+🇬🇳	U+1F1EC U+1F1F3	flag: Guinea	Misc	Unrelated	no	no	
+🇬🇵	U+1F1EC U+1F1F5	flag: Guadeloupe	Misc	Unrelated	no	no	
+🇬🇶	U+1F1EC U+1F1F6	flag: Equatorial Guinea	Misc	Unrelated	no	no	
+🇬🇷	U+1F1EC U+1F1F7	flag: Greece	Misc	Unrelated	no	no	
+🇬🇸	U+1F1EC U+1F1F8	flag: South Georgia & South Sandwich Islands	Misc	Unrelated	no	no	
+🇬🇹	U+1F1EC U+1F1F9	flag: Guatemala	Misc	Unrelated	no	no	
+🇬🇺	U+1F1EC U+1F1FA	flag: Guam	Misc	Unrelated	no	no	
+🇬🇼	U+1F1EC U+1F1FC	flag: Guinea-Bissau	Misc	Unrelated	no	no	
+🇬🇾	U+1F1EC U+1F1FE	flag: Guyana	Misc	Unrelated	no	no	
+🇭🇰	U+1F1ED U+1F1F0	flag: Hong Kong SAR China	Misc	Unrelated	no	no	
+🇭🇲	U+1F1ED U+1F1F2	flag: Heard Island & McDonald Islands	Misc	Unrelated	no	no	
+🇭🇳	U+1F1ED U+1F1F3	flag: Honduras	Misc	Unrelated	no	no	
+🇭🇷	U+1F1ED U+1F1F7	flag: Croatia	Misc	Unrelated	no	no	
+🇭🇹	U+1F1ED U+1F1F9	flag: Haiti	Misc	Unrelated	no	no	
+🇭🇺	U+1F1ED U+1F1FA	flag: Hungary	Misc	Unrelated	no	no	
+🇮🇨	U+1F1EE U+1F1E8	flag: Canary Islands	Misc	Unrelated	no	no	
+🇮🇩	U+1F1EE U+1F1E9	flag: Indonesia	Misc	Unrelated	no	no	
+🇮🇪	U+1F1EE U+1F1EA	flag: Ireland	Misc	Unrelated	no	no	
+🇮🇱	U+1F1EE U+1F1F1	flag: Israel	Misc	Unrelated	no	no	
+🇮🇲	U+1F1EE U+1F1F2	flag: Isle of Man	Misc	Unrelated	no	no	
+🇮🇳	U+1F1EE U+1F1F3	flag: India	Misc	Unrelated	no	no	
+🇮🇴	U+1F1EE U+1F1F4	flag: British Indian Ocean Territory	Misc	Unrelated	no	no	
+🇮🇶	U+1F1EE U+1F1F6	flag: Iraq	Misc	Unrelated	no	no	
+🇮🇷	U+1F1EE U+1F1F7	flag: Iran	Misc	Unrelated	no	no	
+🇮🇸	U+1F1EE U+1F1F8	flag: Iceland	Misc	Unrelated	no	no	
+🇮🇹	U+1F1EE U+1F1F9	flag: Italy	Misc	Unrelated	no	no	
+🇯🇪	U+1F1EF U+1F1EA	flag: Jersey	Misc	Unrelated	no	no	
+🇯🇲	U+1F1EF U+1F1F2	flag: Jamaica	Misc	Unrelated	no	no	
+🇯🇴	U+1F1EF U+1F1F4	flag: Jordan	Misc	Unrelated	no	no	
+🇯🇵	U+1F1EF U+1F1F5	flag: Japan	Misc	Unrelated	no	no	
+🇰🇪	U+1F1F0 U+1F1EA	flag: Kenya	Misc	Unrelated	no	no	
+🇰🇬	U+1F1F0 U+1F1EC	flag: Kyrgyzstan	Misc	Unrelated	no	no	
+🇰🇭	U+1F1F0 U+1F1ED	flag: Cambodia	Misc	Unrelated	no	no	
+🇰🇮	U+1F1F0 U+1F1EE	flag: Kiribati	Misc	Unrelated	no	no	
+🇰🇲	U+1F1F0 U+1F1F2	flag: Comoros	Misc	Unrelated	no	no	
+🇰🇳	U+1F1F0 U+1F1F3	flag: St. Kitts & Nevis	Misc	Unrelated	no	no	
+🇰🇵	U+1F1F0 U+1F1F5	flag: North Korea	Misc	Unrelated	no	no	
+🇰🇷	U+1F1F0 U+1F1F7	flag: South Korea	Misc	Unrelated	no	no	
+🇰🇼	U+1F1F0 U+1F1FC	flag: Kuwait	Misc	Unrelated	no	no	
+🇰🇾	U+1F1F0 U+1F1FE	flag: Cayman Islands	Misc	Unrelated	no	no	
+🇰🇿	U+1F1F0 U+1F1FF	flag: Kazakhstan	Misc	Unrelated	no	no	
+🇱🇦	U+1F1F1 U+1F1E6	flag: Laos	Misc	Unrelated	no	no	
+🇱🇧	U+1F1F1 U+1F1E7	flag: Lebanon	Misc	Unrelated	no	no	
+🇱🇨	U+1F1F1 U+1F1E8	flag: St. Lucia	Misc	Unrelated	no	no	
+🇱🇮	U+1F1F1 U+1F1EE	flag: Liechtenstein	Misc	Unrelated	no	no	
+🇱🇰	U+1F1F1 U+1F1F0	flag: Sri Lanka	Misc	Unrelated	no	no	
+🇱🇷	U+1F1F1 U+1F1F7	flag: Liberia	Misc	Unrelated	no	no	
+🇱🇸	U+1F1F1 U+1F1F8	flag: Lesotho	Misc	Unrelated	no	no	
+🇱🇹	U+1F1F1 U+1F1F9	flag: Lithuania	Misc	Unrelated	no	no	
+🇱🇺	U+1F1F1 U+1F1FA	flag: Luxembourg	Misc	Unrelated	no	no	
+🇱🇻	U+1F1F1 U+1F1FB	flag: Latvia	Misc	Unrelated	no	no	
+🇱🇾	U+1F1F1 U+1F1FE	flag: Libya	Misc	Unrelated	no	no	
+🇲🇦	U+1F1F2 U+1F1E6	flag: Morocco	Misc	Unrelated	no	no	
+🇲🇨	U+1F1F2 U+1F1E8	flag: Monaco	Misc	Unrelated	no	no	
+🇲🇩	U+1F1F2 U+1F1E9	flag: Moldova	Misc	Unrelated	no	no	
+🇲🇪	U+1F1F2 U+1F1EA	flag: Montenegro	Misc	Unrelated	no	no	
+🇲🇫	U+1F1F2 U+1F1EB	flag: St. Martin	Misc	Unrelated	no	no	
+🇲🇬	U+1F1F2 U+1F1EC	flag: Madagascar	Misc	Unrelated	no	no	
+🇲🇭	U+1F1F2 U+1F1ED	flag: Marshall Islands	Misc	Unrelated	no	no	
+🇲🇰	U+1F1F2 U+1F1F0	flag: North Macedonia	Misc	Unrelated	no	no	
+🇲🇱	U+1F1F2 U+1F1F1	flag: Mali	Misc	Unrelated	no	no	
+🇲🇲	U+1F1F2 U+1F1F2	flag: Myanmar (Burma)	Misc	Unrelated	no	no	
+🇲🇳	U+1F1F2 U+1F1F3	flag: Mongolia	Misc	Unrelated	no	no	
+🇲🇴	U+1F1F2 U+1F1F4	flag: Macao SAR China	Misc	Unrelated	no	no	
+🇲🇵	U+1F1F2 U+1F1F5	flag: Northern Mariana Islands	Misc	Unrelated	no	no	
+🇲🇶	U+1F1F2 U+1F1F6	flag: Martinique	Misc	Unrelated	no	no	
+🇲🇷	U+1F1F2 U+1F1F7	flag: Mauritania	Misc	Unrelated	no	no	
+🇲🇸	U+1F1F2 U+1F1F8	flag: Montserrat	Misc	Unrelated	no	no	
+🇲🇹	U+1F1F2 U+1F1F9	flag: Malta	Misc	Unrelated	no	no	
+🇲🇺	U+1F1F2 U+1F1FA	flag: Mauritius	Misc	Unrelated	no	no	
+🇲🇻	U+1F1F2 U+1F1FB	flag: Maldives	Misc	Unrelated	no	no	
+🇲🇼	U+1F1F2 U+1F1FC	flag: Malawi	Misc	Unrelated	no	no	
+🇲🇽	U+1F1F2 U+1F1FD	flag: Mexico	Misc	Unrelated	no	no	
+🇲🇾	U+1F1F2 U+1F1FE	flag: Malaysia	Misc	Unrelated	no	no	
+🇲🇿	U+1F1F2 U+1F1FF	flag: Mozambique	Misc	Unrelated	no	no	
+🇳🇦	U+1F1F3 U+1F1E6	flag: Namibia	Misc	Unrelated	no	no	
+🇳🇨	U+1F1F3 U+1F1E8	flag: New Caledonia	Misc	Unrelated	no	no	
+🇳🇪	U+1F1F3 U+1F1EA	flag: Niger	Misc	Unrelated	no	no	
+🇳🇫	U+1F1F3 U+1F1EB	flag: Norfolk Island	Misc	Unrelated	no	no	
+🇳🇬	U+1F1F3 U+1F1EC	flag: Nigeria	Misc	Unrelated	no	no	
+🇳🇮	U+1F1F3 U+1F1EE	flag: Nicaragua	Misc	Unrelated	no	no	
+🇳🇱	U+1F1F3 U+1F1F1	flag: Netherlands	Misc	Unrelated	no	no	
+🇳🇴	U+1F1F3 U+1F1F4	flag: Norway	Misc	Unrelated	no	no	
+🇳🇵	U+1F1F3 U+1F1F5	flag: Nepal	Misc	Unrelated	no	no	
+🇳🇷	U+1F1F3 U+1F1F7	flag: Nauru	Misc	Unrelated	no	no	
+🇳🇺	U+1F1F3 U+1F1FA	flag: Niue	Misc	Unrelated	no	no	
+🇳🇿	U+1F1F3 U+1F1FF	flag: New Zealand	Misc	Unrelated	no	no	
+🇴🇲	U+1F1F4 U+1F1F2	flag: Oman	Misc	Unrelated	no	no	
+🇵🇦	U+1F1F5 U+1F1E6	flag: Panama	Misc	Unrelated	no	no	
+🇵🇪	U+1F1F5 U+1F1EA	flag: Peru	Misc	Unrelated	no	no	
+🇵🇫	U+1F1F5 U+1F1EB	flag: French Polynesia	Misc	Unrelated	no	no	
+🇵🇬	U+1F1F5 U+1F1EC	flag: Papua New Guinea	Misc	Unrelated	no	no	
+🇵🇭	U+1F1F5 U+1F1ED	flag: Philippines	Misc	Unrelated	no	no	
+🇵🇰	U+1F1F5 U+1F1F0	flag: Pakistan	Misc	Unrelated	no	no	
+🇵🇱	U+1F1F5 U+1F1F1	flag: Poland	Misc	Unrelated	no	no	
+🇵🇲	U+1F1F5 U+1F1F2	flag: St. Pierre & Miquelon	Misc	Unrelated	no	no	
+🇵🇳	U+1F1F5 U+1F1F3	flag: Pitcairn Islands	Misc	Unrelated	no	no	
+🇵🇷	U+1F1F5 U+1F1F7	flag: Puerto Rico	Misc	Unrelated	no	no	
+🇵🇸	U+1F1F5 U+1F1F8	flag: Palestinian Territories	Misc	Unrelated	no	no	
+🇵🇹	U+1F1F5 U+1F1F9	flag: Portugal	Misc	Unrelated	no	no	
+🇵🇼	U+1F1F5 U+1F1FC	flag: Palau	Misc	Unrelated	no	no	
+🇵🇾	U+1F1F5 U+1F1FE	flag: Paraguay	Misc	Unrelated	no	no	
+🇶🇦	U+1F1F6 U+1F1E6	flag: Qatar	Misc	Unrelated	no	no	
+🇷🇪	U+1F1F7 U+1F1EA	flag: Réunion	Misc	Unrelated	no	no	
+🇷🇴	U+1F1F7 U+1F1F4	flag: Romania	Misc	Unrelated	no	no	
+🇷🇸	U+1F1F7 U+1F1F8	flag: Serbia	Misc	Unrelated	no	no	
+🇷🇺	U+1F1F7 U+1F1FA	flag: Russia	Misc	Unrelated	no	no	
+🇷🇼	U+1F1F7 U+1F1FC	flag: Rwanda	Misc	Unrelated	no	no	
+🇸🇦	U+1F1F8 U+1F1E6	flag: Saudi Arabia	Misc	Unrelated	no	no	
+🇸🇧	U+1F1F8 U+1F1E7	flag: Solomon Islands	Misc	Unrelated	no	no	
+🇸🇨	U+1F1F8 U+1F1E8	flag: Seychelles	Misc	Unrelated	no	no	
+🇸🇩	U+1F1F8 U+1F1E9	flag: Sudan	Misc	Unrelated	no	no	
+🇸🇪	U+1F1F8 U+1F1EA	flag: Sweden	Misc	Unrelated	no	no	
+🇸🇬	U+1F1F8 U+1F1EC	flag: Singapore	Misc	Unrelated	no	no	
+🇸🇭	U+1F1F8 U+1F1ED	flag: St. Helena, Ascension & Tristan da Cunha	Misc	Unrelated	no	no	
+🇸🇮	U+1F1F8 U+1F1EE	flag: Slovenia	Misc	Unrelated	no	no	
+🇸🇯	U+1F1F8 U+1F1EF	flag: Svalbard & Jan Mayen	Misc	Unrelated	no	no	
+🇸🇰	U+1F1F8 U+1F1F0	flag: Slovakia	Misc	Unrelated	no	no	
+🇸🇱	U+1F1F8 U+1F1F1	flag: Sierra Leone	Misc	Unrelated	no	no	
+🇸🇲	U+1F1F8 U+1F1F2	flag: San Marino	Misc	Unrelated	no	no	
+🇸🇳	U+1F1F8 U+1F1F3	flag: Senegal	Misc	Unrelated	no	no	
+🇸🇴	U+1F1F8 U+1F1F4	flag: Somalia	Misc	Unrelated	no	no	
+🇸🇷	U+1F1F8 U+1F1F7	flag: Suriname	Misc	Unrelated	no	no	
+🇸🇸	U+1F1F8 U+1F1F8	flag: South Sudan	Misc	Unrelated	no	no	
+🇸🇹	U+1F1F8 U+1F1F9	flag: São Tomé & Príncipe	Misc	Unrelated	no	no	
+🇸🇻	U+1F1F8 U+1F1FB	flag: El Salvador	Misc	Unrelated	no	no	
+🇸🇽	U+1F1F8 U+1F1FD	flag: Sint Maarten	Misc	Unrelated	no	no	
+🇸🇾	U+1F1F8 U+1F1FE	flag: Syria	Misc	Unrelated	no	no	
+🇸🇿	U+1F1F8 U+1F1FF	flag: Eswatini	Misc	Unrelated	no	no	
+🇹🇦	U+1F1F9 U+1F1E6	flag: Tristan da Cunha	Misc	Unrelated	no	no	
+🇹🇨	U+1F1F9 U+1F1E8	flag: Turks & Caicos Islands	Misc	Unrelated	no	no	
+🇹🇩	U+1F1F9 U+1F1E9	flag: Chad	Misc	Unrelated	no	no	
+🇹🇫	U+1F1F9 U+1F1EB	flag: French Southern and Antarctic Lands	Misc	Unrelated	no	no	
+🇹🇬	U+1F1F9 U+1F1EC	flag: Togo	Misc	Unrelated	no	no	
+🇹🇭	U+1F1F9 U+1F1ED	flag: Thailand	Misc	Unrelated	no	no	
+🇹🇯	U+1F1F9 U+1F1EF	flag: Tajikistan	Misc	Unrelated	no	no	
+🇹🇰	U+1F1F9 U+1F1F0	flag: Tokelau	Misc	Unrelated	no	no	
+🇹🇱	U+1F1F9 U+1F1F1	flag: Timor-Leste	Misc	Unrelated	no	no	
+🇹🇲	U+1F1F9 U+1F1F2	flag: Turkmenistan	Misc	Unrelated	no	no	
+🇹🇳	U+1F1F9 U+1F1F3	flag: Tunisia	Misc	Unrelated	no	no	
+🇹🇴	U+1F1F9 U+1F1F4	flag: Tonga	Misc	Unrelated	no	no	
+🇹🇷	U+1F1F9 U+1F1F7	flag: Türkiye	Misc	Unrelated	no	no	
+🇹🇹	U+1F1F9 U+1F1F9	flag: Trinidad & Tobago	Misc	Unrelated	no	no	
+🇹🇻	U+1F1F9 U+1F1FB	flag: Tuvalu	Misc	Unrelated	no	no	
+🇹🇼	U+1F1F9 U+1F1FC	flag: Taiwan	Misc	Unrelated	no	no	
+🇹🇿	U+1F1F9 U+1F1FF	flag: Tanzania	Misc	Unrelated	no	no	
+🇺🇦	U+1F1FA U+1F1E6	flag: Ukraine	Misc	Unrelated	no	no	
+🇺🇬	U+1F1FA U+1F1EC	flag: Uganda	Misc	Unrelated	no	no	
+🇺🇲	U+1F1FA U+1F1F2	flag: U.S. Outlying Islands	Misc	Unrelated	no	no	
+🇺🇳	U+1F1FA U+1F1F3	flag: United Nations	Misc	Unrelated	no	no	
+🇺🇸	U+1F1FA U+1F1F8	flag: United States	Misc	Unrelated	no	no	
+🇺🇾	U+1F1FA U+1F1FE	flag: Uruguay	Misc	Unrelated	no	no	
+🇺🇿	U+1F1FA U+1F1FF	flag: Uzbekistan	Misc	Unrelated	no	no	
+🇻🇦	U+1F1FB U+1F1E6	flag: Vatican City	Misc	Unrelated	no	no	
+🇻🇨	U+1F1FB U+1F1E8	flag: St. Vincent & Grenadines	Misc	Unrelated	no	no	
+🇻🇪	U+1F1FB U+1F1EA	flag: Venezuela	Misc	Unrelated	no	no	
+🇻🇬	U+1F1FB U+1F1EC	flag: British Virgin Islands	Misc	Unrelated	no	no	
+🇻🇮	U+1F1FB U+1F1EE	flag: U.S. Virgin Islands	Misc	Unrelated	no	no	
+🇻🇳	U+1F1FB U+1F1F3	flag: Vietnam	Misc	Unrelated	no	no	
+🇻🇺	U+1F1FB U+1F1FA	flag: Vanuatu	Misc	Unrelated	no	no	
+🇼🇫	U+1F1FC U+1F1EB	flag: Wallis & Futuna	Misc	Unrelated	no	no	
+🇼🇸	U+1F1FC U+1F1F8	flag: Samoa	Misc	Unrelated	no	no	
+🇽🇰	U+1F1FD U+1F1F0	flag: Kosovo	Misc	Unrelated	no	no	
+🇾🇪	U+1F1FE U+1F1EA	flag: Yemen	Misc	Unrelated	no	no	
+🇾🇹	U+1F1FE U+1F1F9	flag: Mayotte	Misc	Unrelated	no	no	
+🇿🇦	U+1F1FF U+1F1E6	flag: South Africa	Misc	Unrelated	no	no	
+🇿🇲	U+1F1FF U+1F1F2	flag: Zambia	Misc	Unrelated	no	no	
+🇿🇼	U+1F1FF U+1F1FC	flag: Zimbabwe	Misc	Unrelated	no	no	
+🏴󠁧󠁢󠁥󠁮󠁧󠁿	U+1F3F4 U+E0067 U+E0062 U+E0065 U+E006E U+E0067 U+E007F	flag: England	Misc	Unrelated	no	no	
+🏴󠁧󠁢󠁳󠁣󠁴󠁿	U+1F3F4 U+E0067 U+E0062 U+E0073 U+E0063 U+E0074 U+E007F	flag: Scotland	Misc	Unrelated	no	no	
+🏴󠁧󠁢󠁷󠁬󠁳󠁿	U+1F3F4 U+E0067 U+E0062 U+E0077 U+E006C U+E0073 U+E007F	flag: Wales	Misc	Unrelated	no	no	

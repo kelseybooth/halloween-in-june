@@ -206,19 +206,47 @@ This needs the Message Content intent, which is already enabled. It changes what
 
 ### The daily craving
 
-One food emoji per day, **the same for every player on a server**, so the guessing is collaborative. Drawn from the Unicode Food & Drink group minus its dishware subgroup — around 120 options. Dishware (🍽🥢🧂 and the rest) is in the group but is not food, and a plate as the cat's craving of the day is a strange day. It stays a legal guess and simply never earns a 👀, since it can never be the answer's subgroup. Custom server emoji are excluded, and variation selectors are normalized before comparing or some guesses silently will not match.
+Drop 3, and nothing else is in drop 3. One food or prey emoji per day, **the same for every player on a server**, so the guessing is collaborative. Nothing announces the game; the first clue is a 🐱 coming back at a heart on somebody's achievement.
 
-Players guess by reacting to any message the bot posted. The bot answers with reactions on that same message:
+**The pool is the writers' catalogue, not Unicode's grouping.** `emoji-catalogue-v18.csv` sorts all 1,927 emoji into a **category** (Food, Prey, Adjacent, Toy, Cat, Misc, Bot) and a **type** within it. The craving is drawn from the 134 Food and Prey rows marked drawable — which excludes anything new in the current Unicode release, because Discord's picker lags the standard and a craving nobody can type is unwinnable. Adjacent (drinks, dishes, ingredients, cooking) and Toy are real game categories that can never be the answer. Custom server emoji and skin-tone variants are not in the file at all, and variation selectors are normalized on both sides or some guesses silently will not match.
 
-| Bot reaction | Means |
-| --- | --- |
-| 👀 | the guess is in the right Unicode food subgroup |
-| ❌ | 19 slots are used with no correct guess; this is the 20th |
-| 😻 | the craving has been found |
+The two TSVs the game loads are **generated** from that catalogue by `generate_emoji_files.py`, and the pre-push hook fails if what is on disk is not what the catalogue makes. Never hand-edit them: the edit loads fine and disappears at the next export.
 
-The ❌ exists because Discord caps a message at 20 distinct reactions. Without it a correct guess in the last slot would leave the bot no room to answer.
+Players guess by reacting to any message the bot posted. The bot answers with reactions on that same message, one rung per outcome, from `craving_reactions.tsv`:
 
-Three implementation notes that are each a day lost if missed. Use `on_raw_reaction_add`, not `on_reaction_add` — the latter only fires for messages still in the bot's cache, so guesses on anything posted before the last restart do nothing. Check whether **the bot itself** is among a reaction's users rather than whether the emoji is present, because a player can add any of the three by hand and Discord merges identical emoji into one reaction with a count. And **there is no private confirmation available**: a reaction carries no interaction token and ephemeral messages require one. The 😻 is the confirmation, public by design.
+| Bot reaction | Rank | Means |
+| --- | --- | --- |
+| 🐱 | 1 | Misc or Cat, or not in the file at all |
+| 😼 | 2 | a game category, but not today's |
+| 😸 | 3 | today's category, wrong type |
+| 👀 | 4 | today's type, wrong emoji |
+| 😻 | 5 | today's craving |
+| ❌ | — | the message has 19 distinct emoji and this guess is not the craving |
+| ✖ | — | padding: the ❌ failed to take the twentieth slot, because a player had already reacted with it |
+
+**The reactions describe the message, not the guess.** Discord allows the bot each emoji once per message, so a message carries its best answer so far and a guess only changes it by beating that rank. That makes the displayed outcome state, stored per message **per day**: the craving rolls over at midnight and the reactions do not, so the first guess to land on an old message clears what the bot left there before judging.
+
+**Never count reaction slots from memory.** Removing the bot's reaction frees a slot only when the bot was the only one who clicked it; a player who also clicked keeps the emoji there with their count. Read the live list every time. The twentieth slot is the ❌'s — the bot will not spend it on a 👀, because the next guess would fill it with the player's own emoji and leave nothing to answer with. A win is the exception.
+
+**❌ is a promise, so it has to be true.** Adding it does not always take a slot: a player can react with ❌ themselves, and the bot's add then merely joins their reaction. The message would read "no more guesses" at nineteen with one slot open — and the single guess that fits there is the one the bot has no room to answer. So when the ❌ is up and the message is not full, the bot pads the last slot with ✖. One is enough; a player who pre-empts both has spent two of the twenty slots to buy one unanswered reaction.
+
+The one gap left is deliberate: a **win** can swap out a face the bot owned alone and end at nineteen, with no ❌ because a win returns first. That message already shows the 😻, which is the best answer there is, so a guess into the last slot learns nothing it could not read — and it is still judged, scored and logged. Padding it would put a ✖ beside a 😻 and claim the message ran out of guesses, which is not what happened to it.
+
+**Two emoji can be one animal.** A `Same As` column pairs the 🐭 with the 🐁 and the 🐰 with the 🐇: guessing either wins, and only the canonical one is ever drawn. To a player the face of the thing the cat wants *is* the thing the cat wants, and a 👀 answering "right type, wrong emoji" there reads as the game being broken. It is a column rather than a special case for the same reason dishware is — whoever decides the 🐷 and the 🐖 are one pig should not need a release.
+
+**The opening week is written**: mouse, cut of meat, broccoli, fish, egg — and **each stays up until somebody finds it**, however many days that takes. A server that opens on a Friday and goes quiet until Tuesday is still looking for the mouse on Tuesday.
+
+These five are the game teaching itself. A player who has never seen the ladder work needs to watch one craving get found, and rolling them past at midnight would let a quiet server burn the written week without playing it and reach the random draw having never had a win. It also makes the hour of the drop stop mattering: a short first evening is a short evening, not a craving spent.
+
+**The five only.** After them the craving rolls at midnight regardless, because a random draw can be genuinely hard — a type with thirty members, or a category line the writers and the players read differently — and a game that cannot move past a bad day is worse than one that forgets it.
+
+The position is counted as *cravings found*, not stored as an index: that is what makes a reset put a server back at the mouse, and what means there is no second place it could drift out of step with.
+
+**Scoring.** A win pays `craving_points` — five — once per player per day. Small on purpose: copying somebody else's correct guess is a reaction away and that is fine, so the figure has to be small enough that copying it is not the cheapest relationship in the game. A second win the same day still shows the 😻 and pays nothing; the display is a function of the emoji and the day, because Discord cannot show one message two ways. **A guess is not a cat interaction**: it does not stop the overnight drift and does not count toward *Lucky Black Cat*.
+
+**`/stats` says one sentence**, the game's only announcement, gated three ways: drop 3, *Purrsuasive* earned, and the player not having found today's. It comes last, after the relationship description and any expectant, hungry or crowded line.
+
+Three implementation notes that are each a day lost if missed. Use `on_raw_reaction_add`, not `on_reaction_add` — the latter only fires for messages still in the bot's cache, so guesses on anything posted before the last restart do nothing. Check whether **the bot itself** is among a reaction's users rather than whether the emoji is present, because a player can add any of them by hand and Discord merges identical emoji into one reaction with a count. And **there is no private confirmation available**: a reaction carries no interaction token and ephemeral messages require one. The 😻 is the confirmation, public by design.
 
 **Crediting the tally.** Every player whose reaction matches the craving scores that day, once, whether they were first or twentieth. `on_raw_reaction_add` fires per user even when the emoji is already on the message and Discord is only incrementing its count, so a latecomer clicking the existing reaction is seen; and because it is the same emoji, it costs none of the 20 distinct-reaction slots. Store a last-credited date per player and compare before incrementing, so a player who removes and re-adds the reaction, or reacts correctly on a second bot message the same day, is counted once.
 
@@ -307,6 +335,6 @@ Three things a developer will hit that this document does not settle.
 
 **What are the drop dates, and who sets them?** Half of this is now settled: releases and drops are separate, and the runtime keys on drops and the calendar rather than on a release number nobody maintains (see States). What is left is the calendar itself. `drops.tsv` has one row, `launch`; every later drop needs a date before its content can be written. A `server_config` override, or a manual drop, can force one early for testing, while the calendar stays the source of truth for dated ones. Needed before the second drop's content is written, not before 2c ships. Event-driven drops are wanted and the schema now carries them; what nobody has written yet is the list of conditions the registry will offer.
 
-**The craving's narrowing signal — settled for launch.** At \~130 options with no information, an honest player is guessing 1-in-130 and the daily loop will not sustain. For launch, 👀 means the right Unicode **subgroup** rather than the whole Food & Drink group: food-fruit, food-vegetable, food-prepared, food-asian, food-marine, food-sweet and drink. Dishware is excluded from the pool the craving is drawn from. Those run from roughly a dozen to thirty each, so a 👀 turns a 1-in-130 guess into something a room full of people closes out in a few tries. Build the grouping as a lookup the loader reads, not a hard-coded table — a writer may replace it before launch with smaller hand-made groups, and that should be a content change rather than a code change. Optional, and good enough for launch either way.
+**The craving's narrowing signal — built, and no longer Unicode's.** At \~136 options with no information, an honest player is guessing 1-in-136 and the daily loop will not sustain. The launch plan was to make 👀 mean the right Unicode subgroup; the writers' catalogue replaced that on 26 October with a category and a type of their own, which is what the ladder above judges by. The difference is not cosmetic: Unicode's grouping decided the game by accident — dishware sat inside Food & Drink, so plates had to be special-cased out of the pool — and it could only ever give one near-miss signal where the catalogue gives three. The grouping is a lookup the loader reads, as planned, so a writer can still change it without a release.
 
 **Achievement triggers are a separate spec** and 2d waits on it. Nine of the 34 still have no name. It is independent of everything here, so it can be written in parallel with 2c.

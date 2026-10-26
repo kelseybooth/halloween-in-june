@@ -55,6 +55,14 @@ _WORLD_TABLES = (
     # Uploaded images are world state: the URLs belong to one server's
     # channel, and a `--fresh` rebuild wants them uploaded again.
     "server_art",
+    # The craving game. All three are per server, and all three have to go
+    # together: `craving_days` without `craving_messages` would leave the
+    # bot's old reactions on messages it no longer has a day for, and
+    # `craving_days` is also what counts the scripted opening - a reset that
+    # kept it would drop a fresh server into the random draw.
+    "craving_days",
+    "craving_messages",
+    "craving_tally",
 )
 
 
@@ -299,8 +307,20 @@ def _rows_for(parsed: Content) -> dict[str, list[dict]]:
                 "type": e.type,
                 "drawable": e.drawable,
                 "excluded": e.excluded,
+                "same_as": e.same_as,
             }
             for e in parsed.emoji_groups
+        ],
+        "craving_reactions": [
+            {
+                "outcome": r.outcome,
+                "progression": r.progression,
+                "emoji": r.emoji,
+                "code": r.code,
+                "meaning": r.meaning,
+                "notes": r.when,
+            }
+            for r in parsed.craving_reactions
         ],
         "art": [
             {"art_id": a.art_id, "file": a.file, "alt": a.alt, "notes": a.notes}
@@ -477,6 +497,7 @@ async def _replace_content(session, rows: dict[str, list[dict]]) -> dict[str, in
         "drops",
         "defaults",
         "emoji_groups",
+        "craving_reactions",
         "achievements",
         "art",
     )

@@ -30,19 +30,22 @@ from sqlalchemy.ext.asyncio import (  # noqa: E402
 GUILD_A = 900000000000000001
 GUILD_B = 900000000000000002
 
-# The drop the house opens on. Everything carried over from Release 1 waits
-# here, so a test that wants nine rooms wants a server sitting on this drop -
-# which is why the `db` fixture puts both test guilds on it. A test about the
-# drops themselves moves its own server and says so.
-HOUSE_DROP = 3
+# The drop the house opens on: the Entryway and the five things in it.
+# **Not the drop the whole house is open on**, which it was until 26 October
+# - every Release 1 row used to wait at drop 3 together. The renumbering
+# spread them across 10 to 50 against the room each one is in, so a test
+# that wants nine furnished rooms wants `LAST_DROP`, and this one is for
+# tests about the house *opening*.
+HOUSE_DROP = 10
 
-# The last drop anything real waits for. **Achievements no longer all arrive
-# with the house**: the 21 October renumbering spread them from drop 0 to
-# drop 7 against the drop each one can first be earned at, so a server on
-# `HOUSE_DROP` is missing two thirds of them. A test about what can be
-# *earned* wants this instead - the eight parked at 99 are unreachable by
-# design and stay that way.
-LAST_DROP = 7
+# Everything that exists, exists here. The `db` fixture puts both test
+# guilds on it, because almost every test in the suite wants a world with
+# its content in it rather than a world part-way through its calendar - and
+# a test that is about the calendar moves its own server and says so.
+#
+# The eight achievements parked at 99 are unreachable by design, and stay
+# that way.
+LAST_DROP = 50
 
 ALICE = 100000000000000001
 BOB = 100000000000000002
@@ -108,7 +111,7 @@ async def db(tmp_path, monkeypatch, schema_template):
     # the suite would be asserting against a server where the game has not
     # started and nothing exists.
     for guild_id in (GUILD_A, GUILD_B):
-        await database.set_setting(guild_id, resolve.DROP_KEY, HOUSE_DROP)
+        await database.set_setting(guild_id, resolve.DROP_KEY, LAST_DROP)
 
     try:
         yield database
