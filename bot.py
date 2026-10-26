@@ -4555,41 +4555,106 @@ async def qa_cooldown(
     )
 
 
-@bot.tree.command(name="qa-state", description="(QA) Set a player's play ramp.")
+@bot.tree.command(name="qa-state", description="(QA) Set a player's toy state.")
 @app_commands.guild_only()
 @app_commands.describe(
-    member="Whose ramp to set.",
+    member="Whose state to set.",
     ramp="Refusals since their last success. 4 makes the next attempt certain.",
+    plays="Lifetime successful toy plays. 24 puts the next one on *Tireless*.",
+    today="Successful plays so far today. 11 makes the next one pay nothing.",
 )
 async def qa_state(
-    interaction: discord.Interaction, member: discord.Member, ramp: int
+    interaction: discord.Interaction,
+    member: discord.Member,
+    ramp: int | None = None,
+    plays: int | None = None,
+    today: int | None = None,
 ) -> None:
-    """Put the ramp where you need it, without playing to get there.
+    """Put a player's toy state where you need it, without playing to get there.
 
-    This is the argument for a generic state command rather than a
-    fixed list of flags: 4 makes the next attempt a guaranteed success,
+    Three levers, each answering a question that otherwise costs an
+    afternoon:
+
+    `ramp` is the odds. 4 makes the next attempt a guaranteed success,
     0 replays the guaranteed first refusal, and 4 followed by a failure
-    is *Impressively Bad Luck* in one call. The whole mechanic, without
-    farming it.
+    is *Impressively Bad Luck* in one call.
+
+    `plays` is the lifetime count *Tireless* reads. Twenty-five
+    successful plays is four hours of cooldowns at the very least,
+    which made the achievement untestable by hand - so this writes the
+    figure rather than earning it.
+
+    `today` is where the player sits on the day's paying curve. Eleven
+    puts the next success at nothing, which is the state *Purrsistent*
+    is about and which eleven real plays and an hour of waiting would
+    otherwise be the only way to reach.
+
+    All three are optional and at least one is required, which is what
+    makes this a generic state command rather than a fixed list of
+    flags: the next thing worth setting is a fourth argument rather
+    than a fourth command.
     """
     if await qa.refuse(interaction):
         return
     await interaction.response.defer(ephemeral=True, thinking=True)
 
-    if ramp < 0:
+    asked = {"ramp": ramp, "plays": plays, "today": today}
+    given = {name: value for name, value in asked.items() if value is not None}
+    if not given:
         await interaction.followup.send(
-            "The ramp counts refusals, so it does not go below zero.",
+            "Nothing to set. Pass at least one of `ramp`, `plays` or `today`.",
+            ephemeral=True,
+        )
+        return
+
+    negative = sorted(name for name, value in given.items() if value < 0)
+    if negative:
+        await interaction.followup.send(
+            f"{', '.join(f'`{name}`' for name in negative)} counts something, so "
+            "it does not go below zero.",
             ephemeral=True,
         )
         return
 
     await database.ensure_user_exists(member.id, interaction.guild_id)
-    await database.set_play_ramp(interaction.guild_id, member.id, ramp)
-    await qa.record(interaction, f"{member.id} ramp -> {ramp}")
+    lines = []
+
+    if ramp is not None:
+        await database.set_play_ramp(interaction.guild_id, member.id, ramp)
+        lines.append(
+            f"- ramp **{ramp}**: the next attempt lands "
+            f"{world.play_chance(ramp)}% of the time."
+        )
+
+    if plays is not None:
+        toy = await database.set_toy_plays(interaction.guild_id, member.id, plays)
+        if toy is None:
+            lines.append(
+                "- plays **unchanged**: the content has no toys to count against."
+            )
+        else:
+            lines.append(
+                f"- lifetime plays **{plays}**, written against `{toy}`."
+            )
+
+    if today is not None:
+        await database.set_toy_plays_today(interaction.guild_id, member.id, today)
+        worth = world.play_value(
+            today + 1,
+            await world.toy_base_points(interaction.guild_id),
+            await world.toy_decay_percent(interaction.guild_id),
+        )
+        lines.append(
+            f"- **{today}** plays today: the next success is worth {worth}."
+        )
+
+    await qa.record(
+        interaction,
+        f"{member.id} state -> "
+        + ", ".join(f"{name}={value}" for name, value in sorted(given.items())),
+    )
     await interaction.followup.send(
-        f"**{member.display_name}**'s ramp is {ramp}: the next attempt lands "
-        f"{world.play_chance(ramp)}% of the time.",
-        ephemeral=True,
+        chr(10).join([f"**{member.display_name}**"] + lines), ephemeral=True
     )
 
 

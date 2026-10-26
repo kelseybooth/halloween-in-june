@@ -633,3 +633,127 @@ async def test_somebody_without_the_role_cannot(testing):
 
     assert await resolve.current_drop(TEST_GUILD) == 1
 
+
+
+# --------------------------------------------------------------------------
+# The other two levers on /qa-state
+#
+# Both exist because an achievement was untestable by hand: twenty-five
+# successful plays is four hours of cooldowns at the very least, and
+# eleven plays down the day's curve is another hour on top.
+# --------------------------------------------------------------------------
+
+
+async def test_the_lifetime_play_count_can_be_written(testing):
+    """*Tireless* reads this, and twenty-five real plays per test run
+    was the reason it had never been exercised."""
+    _, guild, _, _ = testing
+
+    await bot.qa_state.callback(
+        qa_call(guild, "qa-state"), member(guild), None, 24, None
+    )
+
+    assert await database.toy_plays(TEST_GUILD, BOB) == 24
+
+
+async def test_writing_the_count_names_the_toy_it_landed_on(testing):
+    """`toy_plays` sums the player's toy rows, so the figure has to sit
+    on a real one - and saying which keeps it from looking like magic."""
+    _, guild, _, _ = testing
+    interaction = qa_call(guild, "qa-state")
+
+    await bot.qa_state.callback(interaction, member(guild), None, 5, None)
+
+    assert "lifetime plays **5**" in interaction.reply
+
+
+async def test_the_days_curve_position_can_be_written(testing):
+    """*Purrsistent* is about the plays worth nothing, which are eleven
+    plays and an hour of cooldowns into a day."""
+    _, guild, _, _ = testing
+
+    await bot.qa_state.callback(
+        qa_call(guild, "qa-state"), member(guild), None, None, 11
+    )
+
+    today = await database.server_today(TEST_GUILD)
+    assert await database.toy_plays_today(TEST_GUILD, BOB, today) == 11
+
+
+async def test_it_says_what_the_next_play_would_be_worth(testing):
+    """The useful half of setting it: the number tells you whether you
+    have landed where you meant to."""
+    _, guild, _, _ = testing
+    interaction = qa_call(guild, "qa-state")
+
+    await bot.qa_state.callback(interaction, member(guild), None, None, 11)
+
+    assert "worth 0" in interaction.reply
+
+
+async def test_all_three_can_be_set_at_once(testing):
+    _, guild, _, _ = testing
+
+    await bot.qa_state.callback(qa_call(guild, "qa-state"), member(guild), 4, 24, 11)
+
+    today = await database.server_today(TEST_GUILD)
+    assert (await database.play_state(TEST_GUILD, BOB))[0] == 4
+    assert await database.toy_plays(TEST_GUILD, BOB) == 24
+    assert await database.toy_plays_today(TEST_GUILD, BOB, today) == 11
+
+
+async def test_setting_nothing_is_refused_rather_than_silent(testing):
+    """Every argument is optional, so the no-op is reachable by
+    accident - and a command that reports success having done nothing
+    is how a tester loses an hour."""
+    _, guild, _, _ = testing
+    interaction = qa_call(guild, "qa-state")
+
+    await bot.qa_state.callback(interaction, member(guild), None, None, None)
+
+    assert "at least one" in interaction.reply
+
+
+async def test_a_negative_anything_is_refused(testing):
+    _, guild, _, _ = testing
+    interaction = qa_call(guild, "qa-state")
+
+    await bot.qa_state.callback(interaction, member(guild), None, -1, None)
+
+    assert "does not go below zero" in interaction.reply
+    assert "`plays`" in interaction.reply
+
+
+async def test_the_lifetime_count_and_the_days_count_are_different_questions(testing):
+    """Writing one must not move the other: a player can be twenty-four
+    plays into the game and nowhere into today."""
+    _, guild, _, _ = testing
+
+    await bot.qa_state.callback(
+        qa_call(guild, "qa-state"), member(guild), None, 24, None
+    )
+
+    today = await database.server_today(TEST_GUILD)
+    assert await database.toy_plays(TEST_GUILD, BOB) == 24
+    assert await database.toy_plays_today(TEST_GUILD, BOB, today) == 0
+
+
+# --------------------------------------------------------------------------
+# The declared toy total
+# --------------------------------------------------------------------------
+
+
+async def test_the_toy_total_is_declared_rather_than_counted(db):
+    """**Thirteen, not the number of toys that exist.** The collection
+    achievement that will read this counts toward every toy planned for
+    the game; a count of the toy rows in `things.tsv` reads as 2 today
+    and would award it on a player's first successful play."""
+    assert await database.get_setting(GUILD_A, "toy_set_total") == 13
+
+
+async def test_it_is_tunable_like_every_other_number(db):
+    """Raising it later is a content decision, so it goes through the
+    same dated history as the rest."""
+    await database.set_config(GUILD_A, "toy_set_total", 20)
+
+    assert await database.get_setting(GUILD_A, "toy_set_total") == 20
