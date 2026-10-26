@@ -1,9 +1,20 @@
 #!/bin/sh
-# Run the test suite before anything leaves this machine.
+# Check the content files before anything leaves this machine.
 #
-# Branch protection is not available on a private repository under this
-# account's plan, so CI reports a failure but cannot block a merge. This hook
-# is the substitute: it catches a red suite before the push rather than after.
+# **The test suite does not run here any more.** A ruleset on the default
+# branch requires the `pytest` check from GitHub Actions, which runs the same
+# suite against the pushed commit rather than against this working tree - so
+# running it here was both redundant and the less accurate of the two.
+#
+# It was also costly in a way that bit: at twenty to thirty-five minutes a
+# push, a branch merged and deleted inside that window leaves the push with
+# nowhere to land and the commit is dropped without anybody noticing. That
+# happened on 25 October.
+#
+# What is left is the one check CI is too slow to be useful for. A writer
+# editing a TSV through GitHub's web editor cannot insert a tab, and one
+# mangled cell stops the whole content set loading - worth a second here
+# rather than ten minutes of CI and a branch that looks broken.
 #
 # Enable it once per clone:
 #     git config core.hooksPath .githooks
@@ -14,7 +25,7 @@
 
 set -e
 
-# Prefer the project virtualenv, since that is where the test dependencies are
+# Prefer the project virtualenv, since that is where the dependencies are
 # installed; fall back to whatever python is on PATH.
 if [ -x ".venv/Scripts/python.exe" ]; then
     PYTHON=".venv/Scripts/python.exe"      # Windows
@@ -26,19 +37,21 @@ else
     PYTHON="python"
 fi
 
-if ! "$PYTHON" -c "import pytest" >/dev/null 2>&1; then
-    echo "pre-push: pytest is not installed for $PYTHON."
+# `load_content.py` imports the database layer at module scope, so the check
+# needs the project's dependencies even though it writes nothing.
+if ! "$PYTHON" -c "import database" >/dev/null 2>&1; then
+    echo "pre-push: the project dependencies are not installed for $PYTHON."
     echo "          Run: $PYTHON -m pip install -r requirements-dev.txt"
     echo "          Or skip this check once with: git push --no-verify"
     exit 1
 fi
 
-echo "pre-push: running the test suite..."
-if ! "$PYTHON" -m pytest -q; then
+echo "pre-push: checking the content files..."
+if ! "$PYTHON" load_content.py --check; then
     echo
-    echo "pre-push: tests failed - push aborted."
+    echo "pre-push: the content files did not load - push aborted."
     echo "          Fix them, or push anyway with: git push --no-verify"
     exit 1
 fi
 
-echo "pre-push: all tests passed."
+echo "pre-push: content is valid. The suite itself runs in CI."
