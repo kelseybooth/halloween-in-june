@@ -366,14 +366,26 @@ async def test_one_hint_per_action_not_per_message(channel, monkeypatch):
 
 async def test_the_hint_rides_the_achievement_not_the_pet(channel, monkeypatch):
     """Where the line sits, which is what QA asked to change: under the
-    message announcing the award, not under the pet that earned it."""
+    message announcing the award, not under the pet that earned it.
+
+    **The two messages are found by role, not by counting them.** A pet
+    inside a date-gated achievement's window earns two awards rather
+    than one, so a third message goes out and an unpack of exactly two
+    raises. That is not hypothetical: it broke CI on every branch at
+    once on 26 October, the morning Black Cat Day's window opens, for a
+    reason nothing in this file mentions.
+
+    How many messages a pet sends is this test's scenery. What it is
+    about is which one carries the hint.
+    """
     _friendly(monkeypatch)
     interaction = await run(channel, bot.pet)
 
-    blurb, award = [t for t, _ in interaction.sent if t]
+    sent = [t for t, _ in interaction.sent if t]
+    blurb = sent[0]
+    award = next(t for t in sent if "Making First Contact" in t)
 
     assert "pet her" in blurb and "*Hint:" not in blurb
-    assert "Making First Contact" in award
     assert "You've gotten your first achievement" in award
 
 
