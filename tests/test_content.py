@@ -363,21 +363,35 @@ def test_the_error_message_names_the_count_and_lists_them():
 
 
 def test_the_emoji_file_loads(shipped):
-    assert len(shipped.emoji_groups) == 132
+    """Every emoji in the writers' catalogue, not just the edible ones.
+
+    The file used to hold 132 food rows. It now holds all 1,927, because
+    the ladder has an answer for an unrelated guess too - a 🐱 - and
+    that answer needs the row to exist to be sure the guess is unrelated
+    rather than unlisted."""
+    assert len(shipped.emoji_groups) == 1927
 
 
-def test_dishware_is_not_drawable(shipped):
-    """A plate as the cat's craving of the day is a strange day."""
-    dishware = [e for e in shipped.emoji_groups if e.subgroup == content.DISHWARE_SUBGROUP]
+def test_dishes_are_not_drawable(shipped):
+    """A plate as the cat's craving of the day is a strange day.
 
-    assert len(dishware) == 7
-    assert not any(e.drawable for e in dishware)
+    **This used to need a special case in code.** Dishware sits inside
+    Unicode's Food & Drink group, so the old grouping made plates look
+    edible and a named constant kept them out. The writers' categories
+    file them under Adjacent, and the rule is data now."""
+    dishes = [e for e in shipped.emoji_groups if e.type == "Dishes"]
+
+    assert len(dishes) == 7
+    assert all(e.category == "Adjacent" for e in dishes)
+    assert not any(e.drawable for e in dishes)
 
 
-def test_the_drawable_pool_is_everything_edible(shipped):
-    """125 non-dishware rows, less the salt shaker, which is food-prepared in
-    Unicode but is not a craving anyone wants."""
-    assert len(shipped.craving_pool) == 124
+def test_the_drawable_pool_is_the_food_and_the_prey(shipped):
+    """138 Food and Prey rows, less the two that are new in Unicode 18.0:
+    Discord's picker may not have them yet, and a craving nobody can type
+    is unwinnable."""
+    assert len(shipped.craving_pool) == 136
+    assert {e.category for e in shipped.craving_pool} == {"Food", "Prey"}
 
 
 def test_salt_is_not_a_possible_craving(shipped):
@@ -385,34 +399,60 @@ def test_salt_is_not_a_possible_craving(shipped):
     whole reason `drawable` is a column."""
     salt = next(e for e in shipped.emoji_groups if e.emoji == "🧂")
 
-    assert salt.subgroup == "food-prepared"
+    assert (salt.category, salt.type) == ("Adjacent", "Ingredient")
     assert salt.drawable is False
 
 
-def test_a_plate_still_resolves_to_a_subgroup(shipped):
+def test_a_plate_still_resolves_to_a_category_and_type(shipped):
     """It can never be the answer, but it is a legal guess and must not crash -
     which is why `drawable` is a separate column from the grouping."""
-    plate = next(e for e in shipped.emoji_groups if e.subgroup == content.DISHWARE_SUBGROUP)
+    plate = next(e for e in shipped.emoji_groups if e.type == "Dishes")
 
-    assert plate.subgroup
+    assert plate.category and plate.type
     assert plate.drawable is False
 
 
-def test_every_subgroup_the_spec_names_is_present_except_marine(shipped):
-    """food-marine is in the Functional Spec's list but not in Unicode 18.0:
-    crab, lobster, shrimp, squid and oyster are Animals & Nature/animal-marine.
-    The pool is the Food & Drink group, so there is no seafood in it."""
-    found = {e.subgroup for e in shipped.emoji_groups}
+def test_the_bots_own_reactions_are_excluded(shipped):
+    """The six faces the bot answers with are in the file so the writers
+    can swap them, and out of the game so that reacting with one cannot
+    be read as a guess - which would let a player walk the ladder
+    backwards from the bot's own replies."""
+    excluded = [e for e in shipped.emoji_groups if e.excluded]
 
-    assert found == {
-        "food-fruit",
-        "food-vegetable",
-        "food-prepared",
-        "food-asian",
-        "food-sweet",
-        "drink",
-        "dishware",
+    assert len(excluded) == 6
+    assert all(e.category == content.BOT_CATEGORY for e in excluded)
+    assert not any(e.drawable for e in excluded)
+
+
+def test_the_categories_are_the_ones_the_ladder_judges_by(shipped):
+    """**Seven, and the game pays only two of them.** Today's craving is
+    always Food or Prey; Adjacent and Toy can earn the second rung and no
+    more; Misc and Cat are the friendly nothing; Bot is the bot's own
+    replies, kept out of the game.
+
+    Unicode's own grouping is gone, and with it the accident it caused -
+    dishware sat inside Food & Drink, so plates looked edible."""
+    assert {e.category for e in shipped.emoji_groups} == {
+        "Food",
+        "Prey",
+        "Adjacent",
+        "Toy",
+        "Cat",
+        "Misc",
+        "Bot",
     }
+
+
+def test_drinks_are_adjacent_rather_than_food(shipped):
+    """A writers' call that changes play: a drink can earn the
+    wrong-category rung at best, where the old file filed it as food."""
+    coffee = next(
+        e for e in shipped.emoji_groups
+        if e.emoji == content.normalise_emoji(chr(0x2615))
+    )
+
+    assert coffee.category == "Adjacent"
+    assert coffee.drawable is False
 
 
 def test_emoji_are_normalised_on_load(shipped):
@@ -422,13 +462,13 @@ def test_emoji_are_normalised_on_load(shipped):
 
 
 def test_the_pool_is_large_enough_for_the_game(shipped):
-    """The spec sizes the daily guess at roughly 1-in-130, narrowed by subgroup
+    """The spec sizes the daily guess at roughly 1-in-130, narrowed by type
     to something a room closes out in a few tries."""
     assert 100 <= len(shipped.craving_pool) <= 160  # noqa: PLR2004
-    by_group = {}
+    by_type = {}
     for e in shipped.craving_pool:
-        by_group.setdefault(e.subgroup, []).append(e)
-    assert all(5 <= len(v) <= 40 for v in by_group.values())
+        by_type.setdefault(e.type, []).append(e)
+    assert all(5 <= len(v) <= 40 for v in by_type.values())
 
 
 def test_a_duplicate_emoji_is_caught(shipped):
@@ -445,19 +485,36 @@ def test_a_duplicate_that_differs_only_by_variation_selector_is_caught():
 
     c = content.Content()
     c.emoji_groups = [
-        EmojiGroup(emoji=content.normalise_emoji("\u2615\ufe0f"), subgroup="drink", drawable=True),
-        EmojiGroup(emoji=content.normalise_emoji("\u2615"), subgroup="drink", drawable=True),
+        EmojiGroup(emoji=content.normalise_emoji("\u2615\ufe0f"), code="", name="hot beverage", category="Adjacent", type="Drinks",
+            drawable=False, excluded=False),
+        EmojiGroup(emoji=content.normalise_emoji("\u2615"), code="", name="hot beverage", category="Adjacent", type="Drinks",
+            drawable=False, excluded=False),
     ]
     assert any("appears twice" in p for p in content._check_emoji_groups(c))
 
 
-def test_an_emoji_with_no_subgroup_is_caught(shipped):
+def test_an_emoji_with_no_category_or_type_is_caught(shipped):
+    """The ladder judges a guess by both, so a blank one cannot be scored."""
+    from dataclasses import replace
+
+    for blank in ({"category": ""}, {"type": ""}):
+        broken = copy.deepcopy(shipped)
+        broken.emoji_groups[0] = replace(broken.emoji_groups[0], **blank)
+
+        assert problems_matching(broken, "has no category or no type"), blank
+
+
+def test_an_excluded_emoji_that_is_also_drawable_is_caught(shipped):
+    """It would make the craving an emoji the bot refuses to judge, so
+    nobody could ever win the day."""
     from dataclasses import replace
 
     broken = copy.deepcopy(shipped)
-    broken.emoji_groups[0] = replace(broken.emoji_groups[0], subgroup="")
+    broken.emoji_groups[0] = replace(
+        broken.emoji_groups[0], excluded=True, drawable=True
+    )
 
-    assert problems_matching(broken, "has no subgroup")
+    assert problems_matching(broken, "both excluded and drawable")
 
 
 def test_a_file_with_nothing_drawable_is_caught(shipped):

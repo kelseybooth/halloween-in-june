@@ -2,7 +2,7 @@
 
 One food emoji a day, the same for everyone on a server, guessed by reacting
 to anything the bot has posted. The bot answers with reactions of its own:
-👀 for the right subgroup, 😻 when somebody finds it, and ❌ when the message
+👀 for the right type, 😻 when somebody finds it, and ❌ when the message
 has run out of room.
 
 Two design points are load-bearing and easy to undo by accident.
@@ -71,27 +71,61 @@ def normalise(emoji: str) -> str:
 
 
 async def _pool() -> list[tuple[str, str]]:
-    """(emoji, subgroup) for everything that can be the craving."""
+    """(emoji, type) for everything that can be the craving."""
     session_factory = database._require_session()
     async with session_factory() as session:
         rows = await session.execute(
-            select(database.EmojiGroup.emoji, database.EmojiGroup.subgroup).where(
+            select(database.EmojiGroup.emoji, database.EmojiGroup.type).where(
                 database.EmojiGroup.drawable.is_(True)
             )
         )
         return [(row[0], row[1]) for row in rows]
 
 
-async def subgroup_of(emoji: str) -> str | None:
-    """Which Unicode subgroup an emoji belongs to, or None if it is not food.
+# The categories that are in the file but not in the game. A guess filed
+# under one of these is the friendly nothing - the same answer an emoji
+# the file has never heard of gets, because to a player there is no
+# difference between the two and there should not be.
+#
+# `Bot` is in here because those six are the bot's own replies. Judging
+# one would let a player walk the ladder backwards off the answers.
+NON_GAME_CATEGORIES = frozenset({"Misc", "Cat", "Bot"})
 
-    Dishware answers here even though it can never be the craving, which is
-    what lets a plate be a legal guess that simply never matches.
+
+async def category_of(emoji: str) -> str | None:
+    """Which game category an emoji is filed under, or None if the file
+    has never heard of it.
+
+    **The file now holds every emoji, not just the edible ones**, which
+    changed what "not in the file" means. A car used to be absent and so
+    read as unrelated by default; it is a `Misc` row now, and without
+    this it would score as a wrong guess at food instead.
     """
     session_factory = database._require_session()
     async with session_factory() as session:
         return await session.scalar(
-            select(database.EmojiGroup.subgroup).where(
+            select(database.EmojiGroup.category).where(
+                database.EmojiGroup.emoji == normalise(emoji)
+            )
+        )
+
+
+async def type_of(emoji: str) -> str | None:
+    """Which game type an emoji belongs to, or None if the file has never
+    heard of it.
+
+    A plate answers here even though it can never be the craving, which is
+    what lets it be a legal guess that simply never matches.
+
+    **This was the Unicode subgroup until the catalogue arrived**, and the
+    rename is not cosmetic: the old grouping decided the game by accident,
+    putting dishware inside Food & Drink. The writers' type is the thing the
+    ladder is meant to compare.
+    """
+    session_factory = database._require_session()
+    async with session_factory() as session:
+        return await session.scalar(
+            select(database.EmojiGroup.type).where(
                 database.EmojiGroup.emoji == normalise(emoji)
             )
         )
@@ -248,11 +282,15 @@ async def judge(
         scored = await credit(guild_id, user_id, day)
         return Guess(verdict=CORRECT, craving=craving, credited=scored, first=first)
 
-    theirs = await subgroup_of(guessed)
+    category = await category_of(guessed)
+    if category is None or category in NON_GAME_CATEGORIES:
+        return Guess(verdict=NOT_FOOD, craving=craving)
+
+    theirs = await type_of(guessed)
     if theirs is None:
         return Guess(verdict=NOT_FOOD, craving=craving)
 
-    ours = await subgroup_of(craving)
+    ours = await type_of(craving)
     if theirs == ours:
         return Guess(verdict=SAME_GROUP, craving=craving)
     return Guess(verdict=WRONG, craving=craving)

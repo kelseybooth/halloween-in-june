@@ -79,11 +79,11 @@ CHANNEL_ROOM = "CH"
 # rather than becoming a drop that never arrives.
 KNOWN_DROP_EVENTS: set[str] = set()
 
-# The Unicode subgroup holding plates, chopsticks and the like. It is inside the
-# Food & Drink group but is not food, so nothing in it can be the craving. Note
-# the name: it is `dishware`, not `food-dishware`, and guessing wrong makes every
-# plate drawable without failing anything.
-DISHWARE_SUBGROUP = "dishware"
+# The category the bot's own reaction emoji sit in. They are in the file so
+# that the writers can see and swap them, and `excluded` keeps them out of the
+# game: a player reacting with one is reacting with the bot's own answer, and
+# judging it would let them read the ladder backwards.
+BOT_CATEGORY = "Bot"
 
 # Where a restock puts what it adds. `container` names one; `room` names one
 # room; `random` draws a slot from every room and every container at equal
@@ -266,17 +266,28 @@ class Restock:
 
 @dataclass(frozen=True)
 class EmojiGroup:
-    """One emoji, its Unicode subgroup, and whether it can be the craving.
+    """One emoji, where the game files it, and whether it can be the craving.
 
-    Splitting the pool from the grouping is what makes the dishware rule fall
-    out rather than needing a special case: the craving is drawn only from
-    drawable rows, but a player who reacts with a plate still resolves to a
-    known subgroup and simply never matches.
+    **Category and type, not the Unicode subgroup.** The file used to carry
+    Unicode's own grouping, which decided the game by accident - dishware
+    happened to sit inside Food & Drink, so plates had to be special-cased out
+    of the craving pool. The writers' catalogue sorts every emoji for the game
+    instead: a category (Food, Prey, Adjacent, Toy, Cat, Misc, Bot) and a type
+    within it, which is exactly the pair the reaction ladder judges a guess by.
+
+    Splitting the pool from the grouping is what keeps a losing guess legible.
+    The craving is drawn only from drawable rows, but a player who reacts with
+    a plate still resolves to a known category and type and simply never
+    matches - a straight no rather than an error.
     """
 
     emoji: str
-    subgroup: str
+    code: str
+    name: str
+    category: str
+    type: str
     drawable: bool
+    excluded: bool
 
 
 @dataclass(frozen=True)
@@ -602,15 +613,22 @@ def load_files(directory: Path | None = None) -> Content:
             )
         )
 
-    for row in _rows(base / FILES["emoji_groups"], ("emoji", "subgroup")):
+    for row in _rows(base / FILES["emoji_groups"], ("emoji", "category", "type")):
         emoji = normalise_emoji(row["emoji"])
         if not emoji:
             continue
         content.emoji_groups.append(
             EmojiGroup(
                 emoji=emoji,
-                subgroup=(_text(row.get("subgroup")) or "").lower(),
-                drawable=_bool(row.get("drawable"), default=True),
+                code=_text(row.get("code")) or "",
+                name=_text(row.get("name")) or "",
+                # Kept in the writers' casing. These are read back in reports
+                # and in `/qa-inspect` far more often than they are compared,
+                # and `Fast Food` reads better there than `fast food`.
+                category=_text(row.get("category")) or "",
+                type=_text(row.get("type")) or "",
+                drawable=_bool(row.get("drawable"), default=False),
+                excluded=_bool(row.get("excluded"), default=False),
             )
         )
 
@@ -1240,8 +1258,16 @@ def _check_emoji_groups(content: Content) -> list[str]:
                 "normalised; one row would silently shadow the other"
             )
         seen.add(row.emoji)
-        if not row.subgroup:
-            problems.append(f"emoji {row.emoji!r} has no subgroup")
+        if not row.category or not row.type:
+            problems.append(
+                f"emoji {row.emoji!r} has no category or no type; the ladder "
+                "judges a guess by both, so a blank one cannot be scored"
+            )
+        if row.excluded and row.drawable:
+            problems.append(
+                f"emoji {row.emoji!r} is both excluded and drawable, so the "
+                "craving could be an emoji the bot refuses to judge"
+            )
 
     if content.emoji_groups and not content.craving_pool:
         problems.append(
