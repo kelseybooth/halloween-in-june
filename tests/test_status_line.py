@@ -338,6 +338,13 @@ async def craving_time(who=ALICE):
     await database.award_player_achievement(GUILD_A, who, bot.PURRSUASIVE)
 
 
+def test_the_gating_achievement_is_one_that_exists():
+    """An id that matches nothing would read as a player who has not
+    earned it - so the hint would never appear, on any server, and
+    nothing would say why."""
+    assert bot.PURRSUASIVE in content_module.load_files().achievement_ids
+
+
 async def test_the_hint_appears_once_the_player_has_purrsuaded_her(server):
     await craving_time()
 
