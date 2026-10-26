@@ -34,15 +34,17 @@ GUILD_B = 900000000000000002
 # here, so a test that wants nine rooms wants a server sitting on this drop -
 # which is why the `db` fixture puts both test guilds on it. A test about the
 # drops themselves moves its own server and says so.
-HOUSE_DROP = 3
+#
+# **Ten since 26 October**, when drop 3 became the craving game and the
+# drops after it were renumbered in tens to leave room between them.
+HOUSE_DROP = 10
 
 # The last drop anything real waits for. **Achievements no longer all arrive
-# with the house**: the 21 October renumbering spread them from drop 0 to
-# drop 7 against the drop each one can first be earned at, so a server on
-# `HOUSE_DROP` is missing two thirds of them. A test about what can be
-# *earned* wants this instead - the eight parked at 99 are unreachable by
-# design and stay that way.
-LAST_DROP = 7
+# with the house**: the 21 October renumbering spread them against the drop
+# each one can first be earned at, so a server on `HOUSE_DROP` is missing two
+# thirds of them. A test about what can be *earned* wants this instead - the
+# eight parked at 99 are unreachable by design and stay that way.
+LAST_DROP = 50
 
 ALICE = 100000000000000001
 BOB = 100000000000000002

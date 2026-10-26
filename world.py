@@ -134,7 +134,12 @@ HUNGER_WINDOW = timedelta(hours=8)
 # Before this drop there is no food in the game, so every player has
 # never been fed and would read as permanently hungry. The gate is what
 # stops `/stats` promising a mechanic that does not exist yet.
-FEEDING_FROM_DROP = 3
+#
+# **Ten, not three, since the 26 October renumbering.** Drop 3 became the
+# craving game and the house moved to 10, which is where the cat food
+# rows live. Left at 3 this would have announced a hungry cat seven drops
+# before there was anything to feed her with.
+FEEDING_FROM_DROP = 10
 
 
 def play_chance(ramp: int) -> int:

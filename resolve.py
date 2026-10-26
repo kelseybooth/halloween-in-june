@@ -59,7 +59,7 @@ NO_GAME = None
 # refused to reach the drop that had just been built and the only way
 # in was `/qa-drop` on a test server. `test_every_built_drop_is
 # _reachable` is what stops that happening again.
-LAST_PLAYABLE_DROP = 2
+LAST_PLAYABLE_DROP = 3
 
 
 class UnknownDrop(Exception):

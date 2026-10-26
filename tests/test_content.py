@@ -49,7 +49,7 @@ def test_the_shipped_content_parses():
     assert len(c.rooms) == 10  # nine rooms and the channel
     assert len(c.things) == 162  # ...drop 1's ten scenery, and the stand's four
     assert len(c.defaults) == 114  # ...and the toy arrival line
-    assert len(c.drops) == 8      # 0 and 1 built; 2 to 7 named ahead of their content
+    assert len(c.drops) == 9      # 0 to 3 built; 10 to 50 named ahead of their content
     assert len(c.restocks) == 4  # the toy channel row joined them
 
 

@@ -26,11 +26,15 @@ PLAYER_COMMANDS: dict[int, tuple[str, ...]] = {
     1: ("pet", "stats", "look", "use"),
     # Drop 2 is the toys, and the drop that teaches carrying things.
     2: ("pet", "stats", "look", "use", "take", "drop", "inventory"),
-    # The house. Not part of the proof of concept, and defined anyway: the
-    # content files put every Release 1 row at drop 3, so a test server
-    # sent there with drop 1's four verbs would be a nine-room house
-    # nobody can walk into. Phase 3b owns making this list honest.
-    3: ("pet", "stats", "look", "use", "take", "drop", "inventory", "enter"),
+    # **Drop 3 is deliberately absent.** The craving game is played with
+    # emoji reactions and adds no verb, so a server there keeps drop 2's
+    # seven and the table says so by saying nothing. An entry repeating
+    # drop 2's list would read as a drop that changed something.
+    #
+    # The house. Was keyed at 3 until the 26 October renumbering moved it
+    # to 10; a server on 3 with `/enter` would have been a nine-room house
+    # whose rooms do not exist yet. Phase 3b owns making this list honest.
+    10: ("pet", "stats", "look", "use", "take", "drop", "inventory", "enter"),
 }
 
 # What admins get. Separate because it does not follow the player ladder:
@@ -38,7 +42,8 @@ PLAYER_COMMANDS: dict[int, tuple[str, ...]] = {
 # is the one state where players get nothing.
 ADMIN_COMMANDS: dict[int, tuple[str, ...]] = {
     0: ("start-game", "advance-game", "admin_config", "reset-haunted-house"),
-    3: (
+    # 10, with the house: `/initialize-haunted-house` seeds rooms.
+    10: (
         "start-game",
         "advance-game",
         "admin_config",
