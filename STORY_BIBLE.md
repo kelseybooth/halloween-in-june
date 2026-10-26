@@ -259,7 +259,7 @@ There's one house, and every player in a server shares it. If one player takes t
 ### Eunoia and the relationship meter
 
 - Each player has their own relationship with Eunoia, from -100 to 100, starting at 50.
-- Petting gently and not too often builds it. Pestering the cat makes it standoffish.
+- Petting gently and not too often builds it. Pestering her makes her standoffish.
 - Eunoia seems to perceive things players can't: staring at mirrors, pawing at empty air, sitting outside the Nursery as if listening.
 - The cat appears at every player's side when they arrive and follows each of them. There is one Eunoia, somehow everywhere at once.
 

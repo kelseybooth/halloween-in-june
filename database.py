@@ -124,7 +124,7 @@ RELATIONSHIP_MIN = -100
 PERFECT_RELATIONSHIP = 100
 
 # Where a brand-new player starts: nowhere. The cat has no opinion of
-# somebody it has never met, and every point after this one was earned.
+# somebody she has never met, and every point after this one was earned.
 # Starting above neutral made the first several days a slow loss of
 # something the player was given rather than a gain of something they
 # did, and the drift pulled them to 0 whether they played or not.

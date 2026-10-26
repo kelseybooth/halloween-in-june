@@ -243,7 +243,7 @@ The new shape is better. It reads as a single journey with two possible endings 
 
 #### Two content consequences
 
-**The cat's first-pet voice was written against a warm start.** A player at 50 was already half-liked; a player at 0 is a stranger. The blurbs need a pass to make the cat aloof to someone it does not know and warm as the number climbs — and the arc improves, because there is now somewhere to warm up *from*. Note the mood roll itself does **not** read the relationship: friendly chance depends only on recent pets, so this is purely a writing change, not a behaviour one.
+**The cat's first-pet voice was written against a warm start.** A player at 50 was already half-liked; a player at 0 is a stranger. The blurbs need a pass to make the cat aloof to someone she does not know and warm as the number climbs — and the arc improves, because there is now somewhere to warm up *from*. Note the mood roll itself does **not** read the relationship: friendly chance depends only on recent pets, so this is purely a writing change, not a behaviour one.
 
 **The Story Bible's "a perfect relationship is 100" is no longer true.** With no ceiling, 100 is the *Cat's Best Friend* milestone and nothing more. One line, but it is canon.
 
