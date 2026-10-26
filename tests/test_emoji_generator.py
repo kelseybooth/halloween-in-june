@@ -42,11 +42,14 @@ def test_a_hand_edited_file_is_caught(tmp_path, monkeypatch, capsys):
     """And the complaint names the line, because "the TSVs are stale" is
     not something anybody can act on."""
     mangled = tmp_path / "emoji_groups.tsv"
-    with io.open(gen.GROUPS, encoding="utf-8", newline="") as handle:
-        rows = handle.read().split("\r\n")
+    # Universal newlines on the way in and out. Split on a hard-coded
+    # CRLF this found one line on a Linux checkout and raised IndexError
+    # instead of testing anything.
+    with io.open(gen.GROUPS, encoding="utf-8", newline=None) as handle:
+        rows = handle.read().splitlines()
     rows[3] = rows[3].replace("\tMisc\t", "\tFood\t")
-    with io.open(mangled, "w", encoding="utf-8", newline="") as handle:
-        handle.write("\r\n".join(rows))
+    with io.open(mangled, "w", encoding="utf-8") as handle:
+        handle.write("\n".join(rows) + "\n")
     monkeypatch.setattr(gen, "GROUPS", mangled)
 
     assert gen.main(["--check"]) == 1
@@ -214,6 +217,36 @@ def test_a_cell_with_a_tab_in_it_is_refused():
         gen.render(("a",), [("has\there",)])
 
 
+def test_the_check_does_not_care_which_line_endings_are_on_disk(tmp_path, monkeypatch):
+    """**The bug that only showed up in CI.** `.gitattributes` says
+    `text=auto`, so these files are CRLF in a Windows working tree and LF
+    in a Linux one, for the same content. Comparing whole strings passed
+    on the machine that wrote the file and failed on the other, with the
+    complaint that it "has 1928 lines; the catalogue makes 1928".
+    """
+    catalogue = gen.read_catalogue()
+    lines = gen.render(gen.GROUP_COLUMNS, gen.group_rows(catalogue))
+
+    for ending in ("\n", "\r\n"):
+        path = tmp_path / f"groups{len(ending)}.tsv"
+        with io.open(path, "w", encoding="utf-8", newline="") as handle:
+            handle.write(ending.join(lines) + ending)
+        gen.check(path, lines)  # must not raise, either way
+
+
+def test_a_missing_row_is_reported_as_a_missing_row(tmp_path, monkeypatch, capsys):
+    """The length mismatch used to print both counts as the same number,
+    which told nobody anything."""
+    catalogue = gen.read_catalogue()
+    lines = gen.render(gen.GROUP_COLUMNS, gen.group_rows(catalogue))
+    short = tmp_path / "short.tsv"
+    with io.open(short, "w", encoding="utf-8") as handle:
+        handle.write("\n".join(lines[:-3]) + "\n")
+
+    with pytest.raises(gen.Stale, match="the catalogue has 3 more than on disk"):
+        gen.check(short, lines)
+
+
 def test_the_file_the_loader_reads_agrees_with_the_catalogue(catalogue):
     """End to end: the parser's view of a row and the catalogue's row."""
     parsed = {row.emoji: row for row in content_module.load_files().emoji_groups}
@@ -231,9 +264,9 @@ def test_nothing_is_both_excluded_and_drawable(catalogue):
         assert not (row[5] == "yes" and row[6] == "yes"), row
 
 
-def test_the_six_the_bot_answers_with_are_all_excluded(catalogue):
+def test_the_faces_the_bot_answers_with_are_all_excluded(catalogue):
     built = {row[0]: row for row in csv.reader(
-        gen.render(gen.GROUP_COLUMNS, gen.group_rows(catalogue)).splitlines()[1:],
+        gen.render(gen.GROUP_COLUMNS, gen.group_rows(catalogue))[1:],
         delimiter="\t",
     )}
     for row in gen.reaction_rows(catalogue):

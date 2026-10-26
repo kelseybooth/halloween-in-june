@@ -209,8 +209,15 @@ def yes_no(value: bool) -> str:
     return "yes" if value else "no"
 
 
-def render(columns: tuple[str, ...], rows: list[tuple[str, ...]]) -> str:
-    """A TSV as the loader reads it: tab separated, CRLF, no quoting.
+def render(columns: tuple[str, ...], rows: list[tuple[str, ...]]) -> list[str]:
+    """A TSV as the loader reads it: tab separated, no quoting.
+
+    **Lines, not a string, and no line endings in sight.** `.gitattributes`
+    says `text=auto`, so these files are LF in the repository and native in
+    the working tree - CRLF on Windows and LF on Linux, for the same bytes.
+    Anything here that picked one would be wrong on the other platform, and
+    would be wrong silently: it fails in CI rather than on the machine that
+    wrote it.
 
     Written by hand rather than through `csv.writer` so that a tab or a
     newline inside a cell raises here instead of being quoted into a row the
@@ -222,34 +229,45 @@ def render(columns: tuple[str, ...], rows: list[tuple[str, ...]]) -> str:
             if "\t" in cell or "\n" in cell or "\r" in cell:
                 raise Stale(f"cell {cell!r} contains a tab or a newline")
         lines.append("\t".join(row))
-    return "\r\n".join(lines) + "\r\n"
+    return lines
 
 
-def write(path: Path, text: str) -> None:
-    with io.open(path, "w", encoding="utf-8", newline="") as handle:
-        handle.write(text)
+def write(path: Path, lines: list[str]) -> None:
+    # newline=None translates to the platform's own ending, which is what
+    # git has just checked out and what it will normalise back to LF.
+    with io.open(path, "w", encoding="utf-8") as handle:
+        handle.write("\n".join(lines) + "\n")
 
 
-def check(path: Path, text: str) -> None:
+def check(path: Path, lines: list[str]) -> None:
+    """Compare content, line by line, never the raw bytes.
+
+    **Line endings are not content here.** Comparing whole strings made
+    this pass on Windows and fail in CI, with the useless complaint that
+    the file "has 1928 lines; the catalogue makes 1928" - true, and the
+    difference was a carriage return on every one of them.
+    """
     if not path.exists():
         raise Stale(f"{path.name} does not exist; run this script without --check")
 
-    with io.open(path, encoding="utf-8", newline="") as handle:
-        on_disk = handle.read()
-    if on_disk == text:
+    with io.open(path, encoding="utf-8", newline=None) as handle:
+        on_disk = handle.read().splitlines()
+    if on_disk == lines:
         return
 
-    want = text.splitlines()
-    have = on_disk.splitlines()
-    for number, (left, right) in enumerate(zip(want, have), start=1):
+    for number, (left, right) in enumerate(zip(lines, on_disk), start=1):
         if left != right:
             raise Stale(
                 f"{path.name} line {number} does not match the catalogue\n"
                 f"  on disk:        {right}\n"
                 f"  from catalogue: {left}"
             )
+    longer, shorter = ("on disk", "the catalogue") if len(on_disk) > len(lines) else (
+        "the catalogue", "on disk"
+    )
     raise Stale(
-        f"{path.name} has {len(have)} lines; the catalogue makes {len(want)}"
+        f"{path.name} agrees for {min(len(on_disk), len(lines))} lines and then "
+        f"{longer} has {abs(len(on_disk) - len(lines))} more than {shorter}"
     )
 
 
@@ -271,9 +289,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {problem}", file=sys.stderr)
         return 1
 
-    for path, text in built:
+    for path, lines in built:
         try:
-            check(path, text) if args.check else write(path, text)
+            check(path, lines) if args.check else write(path, lines)
         except Stale as problem:
             print(f"error: {problem}", file=sys.stderr)
             print(
