@@ -37,7 +37,7 @@ async def server(db):
 
 
 async def a_guess_in(group_of, *, same: bool):
-    """An emoji in, or not in, the craving's subgroup."""
+    """An emoji in, or not in, the craving's type."""
     pool = await craving._pool()
     return next(e for e, g in pool if (g == group_of) is same and e != group_of)
 
@@ -187,25 +187,25 @@ async def test_the_right_emoji_is_correct(server):
     assert guess.first is True
 
 
-async def test_the_same_subgroup_earns_the_narrowing_signal(server):
+async def test_the_same_type_earns_the_narrowing_signal(server):
     answer = await craving.craving_for(GUILD_A, TODAY)
-    group = await craving.subgroup_of(answer)
+    group = await craving.type_of(answer)
     near = next(e for e, g in await craving._pool() if g == group and e != answer)
 
     assert (await craving.judge(GUILD_A, ALICE, near, TODAY)).verdict == craving.SAME_GROUP
 
 
-async def test_a_different_subgroup_is_just_wrong(server):
+async def test_a_different_type_is_just_wrong(server):
     answer = await craving.craving_for(GUILD_A, TODAY)
-    group = await craving.subgroup_of(answer)
+    group = await craving.type_of(answer)
     far = next(e for e, g in await craving._pool() if g != group)
 
     assert (await craving.judge(GUILD_A, ALICE, far, TODAY)).verdict == craving.WRONG
 
 
 async def test_a_plate_is_a_legal_guess_that_never_matches(server):
-    """It resolves to a known subgroup and simply never wins, which is what
-    keeping `drawable` separate from `subgroup` buys."""
+    """It resolves to a known type and simply never wins, which is what
+    keeping `drawable` separate from the grouping buys."""
     guess = await craving.judge(GUILD_A, ALICE, "\N{FORK AND KNIFE WITH PLATE}", TODAY)
 
     assert guess.verdict == craving.WRONG
@@ -215,6 +215,30 @@ async def test_a_plate_is_a_legal_guess_that_never_matches(server):
 async def test_something_that_is_not_food_at_all(server):
     guess = await craving.judge(GUILD_A, ALICE, "\N{AUTOMOBILE}", TODAY)
     assert guess.verdict == craving.NOT_FOOD
+
+
+async def test_an_unrelated_emoji_in_the_file_reads_the_same_way(server):
+    """**What the new catalogue changed.** The file used to hold only the
+    edible emoji, so "not in the file" and "nothing to do with food" were
+    the same condition - a car fell through to the friendly answer by
+    being absent. The file holds all 1,927 now, so a car is a `Misc` row,
+    and judging on type alone would score it as a wrong guess at food.
+
+    A player cannot tell those two apart and should not be able to, so
+    the category is what decides it."""
+    shrimp = chr(0x1F990)
+
+    assert await craving.category_of(shrimp) == "Misc"
+    assert (await craving.judge(GUILD_A, ALICE, shrimp, TODAY)).verdict == craving.NOT_FOOD
+
+
+async def test_the_bots_own_reaction_is_never_judged_as_a_guess(server):
+    """Those six emoji are the bot's own replies. Reading one as a guess
+    would let a player walk the ladder backwards off the answers."""
+    cat_face = chr(0x1F431)
+
+    assert await craving.category_of(cat_face) == "Bot"
+    assert (await craving.judge(GUILD_A, ALICE, cat_face, TODAY)).verdict == craving.NOT_FOOD
 
 
 async def test_a_variation_selector_does_not_stop_a_match(server):
@@ -258,7 +282,7 @@ async def test_a_second_day_scores_again(server):
 
 async def test_a_wrong_guess_scores_nothing(server):
     answer = await craving.craving_for(GUILD_A, TODAY)
-    group = await craving.subgroup_of(answer)
+    group = await craving.type_of(answer)
     far = next(e for e, g in await craving._pool() if g != group)
 
     await craving.judge(GUILD_A, ALICE, far, TODAY)

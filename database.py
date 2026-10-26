@@ -731,16 +731,25 @@ class EmojiGroup(Base):
     """The craving lookup, from emoji_groups.tsv.
 
     Content like any other: global, replaced wholesale on load, never mutated
-    at runtime. `drawable` is separate from `subgroup` so a plate can never be
-    the craving while still resolving to a known group - which is what lets a
-    player guess one and get a straight "no" rather than an error.
+    at runtime. `drawable` is separate from the grouping so a plate can never
+    be the craving while still resolving to a known category and type - which
+    is what lets a player guess one and get a straight "no" rather than an
+    error.
+
+    `category` and `type` are the pair the reaction ladder judges by: right
+    category and wrong type is a different answer from both wrong, and a
+    single column could not say which.
     """
 
     __tablename__ = "emoji_groups"
 
     emoji: Mapped[str] = mapped_column(String(32), primary_key=True)
-    subgroup: Mapped[str] = mapped_column(String(32), nullable=False)
-    drawable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    code: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    name: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    category: Mapped[str] = mapped_column(String(32), nullable=False)
+    type: Mapped[str] = mapped_column(String(32), nullable=False)
+    drawable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    excluded: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 class Drop(Base):
@@ -1294,6 +1303,40 @@ async def _rebuild_room_text_if_narrow(conn) -> None:
         )
 
 
+async def _rebuild_emoji_groups_if_old(conn) -> None:
+    """Drop `emoji_groups` when it still has the `subgroup` column.
+
+    **Safe for the same reason the `room_text` rebuild is.** This is
+    content, not world state: it carries no `guild_id`, nothing mutates
+    it at runtime, and `_replace_content` deletes and rewrites every row
+    of it on every boot. The rebuild throws away rows that were about to
+    be thrown away.
+
+    The column could not be ALTERed in: `subgroup` is NOT NULL and the
+    new file has nothing to put in it, so the first insert after an
+    upgrade would fail on a table that cannot be fixed forward.
+
+    Runs before `create_all`, which then creates it in the new shape. A
+    database that already has `category` is untouched, so this is a
+    no-op from the second boot onward and on every fresh install.
+    """
+
+    def _old(sync_conn) -> bool:
+        insp = inspect(sync_conn)
+        if "emoji_groups" not in insp.get_table_names():
+            return False
+        columns = {col["name"] for col in insp.get_columns("emoji_groups")}
+        return "category" not in columns
+
+    if await conn.run_sync(_old):
+        await conn.execute(text("DROP TABLE emoji_groups"))
+        log.warning(
+            "Schema upgrade: rebuilt emoji_groups for the category and type "
+            "columns. Its rows are rewritten from the content files on this "
+            "same boot."
+        )
+
+
 async def _add_missing_columns(conn) -> None:
     """Add every column in _LATER_COLUMNS that the database does not have yet."""
 
@@ -1581,6 +1624,7 @@ async def init_db() -> None:
         async with _engine.begin() as conn:
             await _reject_pre_guild_schema(conn)
             await _rebuild_room_text_if_narrow(conn)
+            await _rebuild_emoji_groups_if_old(conn)
             await conn.run_sync(Base.metadata.create_all)
             await _add_missing_columns(conn)
             await _migrate_config_to_history(conn)

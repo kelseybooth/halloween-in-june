@@ -291,7 +291,15 @@ def _rows_for(parsed: Content) -> dict[str, list[dict]]:
             for d in parsed.drops
         ],
         "emoji_groups": [
-            {"emoji": e.emoji, "subgroup": e.subgroup, "drawable": e.drawable}
+            {
+                "emoji": e.emoji,
+                "code": e.code,
+                "name": e.name,
+                "category": e.category,
+                "type": e.type,
+                "drawable": e.drawable,
+                "excluded": e.excluded,
+            }
             for e in parsed.emoji_groups
         ],
         "art": [
