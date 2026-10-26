@@ -9,7 +9,7 @@ missing. Everything else about `/look` follows from where a thing is.
 
 import pytest
 
-from conftest import HOUSE_DROP, ALICE, BOB, GUILD_A
+from conftest import HOUSE_DROP, LAST_DROP, ALICE, BOB, GUILD_A
 from fake_discord import FakeInteraction
 
 import bot
@@ -547,7 +547,7 @@ async def test_every_source_in_the_shipped_house_describes_itself(house):
     for thing in parsed.things:
         if not thing.is_source:
             continue
-        if thing.since_drop > HOUSE_DROP:
+        if thing.since_drop > LAST_DROP:
             # Nothing is, today. Kept so a source written for a later
             # drop is skipped rather than failing for not resolving.
             continue

@@ -1,0 +1,7 @@
+outcome	progression	emoji	code	meaning	when
+greeting	1	🐱	U+1F431	Non-Game Category	The emoji is Misc or Cat, or not in the list at all
+wrong_category	2	😼	U+1F63C	Game Category	The emoji is Adjacent, Toy, Food or Prey, but not in today's category
+right_category	3	😸	U+1F638	Right Category	Right category, wrong type
+right_type	4	👀	U+1F440	Right Type	Right type, wrong emoji
+win	5	😻	U+1F63B	Win	Today's craving
+out_of_guesses		❌	U+274C	Out of Guesses	The message has 19 different emoji on it and the guess is not the craving

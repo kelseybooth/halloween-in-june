@@ -23,6 +23,7 @@ from database import (  # noqa: F401 - the vocabulary, re-exported for call site
     ABSENT,
     AMBIGUOUS,
     COOLDOWN,
+    CRAVING_GUESS,
     DROP,
     FULL_HANDS,
     HINT,

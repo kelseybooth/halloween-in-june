@@ -9,7 +9,7 @@ seven new default strings is reachable by a path a test can trigger".
 
 import pytest
 
-from conftest import ALICE, BOB, GUILD_A
+from conftest import ALICE, BOB, GUILD_A, HOUSE_DROP
 from fake_discord import FakeInteraction
 
 import bot
@@ -1141,25 +1141,37 @@ async def test_a_can_cannot_be_opened_yet(real_house):
     assert await db.carried_of(ALICE, GUILD_A, "cat_food_tuna") == 1
 
 
-async def test_the_opener_now_arrives_with_the_house(real_house):
-    """**This used to assert the opposite**, and the change is a real one
-    rather than a test being brought into line.
+async def test_the_opener_arrives_with_the_kitchen_it_is_in(real_house):
+    """**This has asserted three different things**, and each change was a
+    real decision rather than a test brought into line.
 
-    The opener waited on a manual drop nobody had fired, so the gate could
-    never be met and every can refused. V3's renumbering moved every
-    Release 1 row to drop 3 uniformly - the content spec's decision, on the
-    grounds that per-row accuracy for drops 3 through 7 belongs to whoever
-    builds those drops - and the opener went with them. From the drop the
-    house opens, the cans can be opened.
+    The opener first waited on a manual drop nobody had fired, so the gate
+    could never be met and every can refused. V3's renumbering then moved
+    every Release 1 row to drop 3 together, on the grounds that per-row
+    accuracy belonged to whoever built those drops.
 
-    Recorded here rather than left to be discovered, because it is a
-    gameplay change hiding inside a bulk edit: whoever builds drop 3 should
-    decide whether the opener still belongs in it.
+    Whoever built them was the writers, on 26 October: each row now waits
+    for the room it is in. The opener is in the Kitchen, so it arrives with
+    the Ground Floor, and the coat rack is in the Entryway, so it arrives
+    with the house - which is the arrangement the first two versions of
+    this test were both approximating.
+
+    Read off the rooms rather than written out, so moving the Kitchen to
+    another drop moves this with it. The opener itself sits in no room -
+    it is obtained rather than found - so it is compared to the drop the
+    Kitchen opens on rather than to a room of its own.
     """
     parsed = content_module.load_files()
 
-    assert parsed.things_by_id["can_opener"].since_drop == 3
-    assert parsed.things_by_id["coat_rack"].since_drop == 3
+    def opens_with(room_id):
+        return min(t.since_drop for t in parsed.things if t.room_id == room_id)
+
+    opener = parsed.things_by_id["can_opener"]
+    rack = parsed.things_by_id["coat_rack"]
+
+    assert rack.since_drop == opens_with("EN") == HOUSE_DROP
+    assert opener.since_drop == opens_with("KI")
+    assert opener.since_drop > rack.since_drop
 
 
 @pytest.mark.parametrize(

@@ -883,6 +883,12 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent) -> None:
     if payload.guild_id is None or payload.user_id == bot.user.id:
         return
 
+    # Every bot, not only this one. A webhook or another app reacting is
+    # not a player, and judging it would put the cat's answer on a message
+    # nobody guessed at.
+    if payload.member is not None and payload.member.bot:
+        return
+
     channel = bot.get_channel(payload.channel_id)
     if channel is None:
         return
@@ -898,17 +904,24 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent) -> None:
         return
 
     try:
+        day = await database.server_today(payload.guild_id)
         guess = await craving.judge(
-            payload.guild_id, payload.user_id, str(payload.emoji)
+            payload.guild_id, payload.user_id, str(payload.emoji), day
         )
     except SQLAlchemyError:
         log.exception("Could not judge a craving guess")
         return
 
-    await _answer_guess(message, guess)
+    # None is one of the bot's own six coming back at it. Not a guess, so
+    # no answer and no telemetry row - the player did not play.
+    if guess is None:
+        return
 
-    # No interaction token here, so an earned description arrives by DM. It is
-    # the same reason the craving's own confirmation is a public reaction.
+    await _answer_guess(message, guess, day)
+    await _log_guess(payload.guild_id, payload.user_id, payload.emoji, guess)
+
+    # No interaction token here, so there is no private description to send.
+    # It is the same reason the craving's own confirmation is a reaction.
     await _fire(
         achievements.Context(
             guild_id=payload.guild_id,
@@ -920,38 +933,123 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent) -> None:
     )
 
 
-async def _answer_guess(message: discord.Message, guess) -> None:
-    """React with the bot's answer, if it has not already said it.
+async def _log_guess(guild_id: int, user_id: int, emoji, guess) -> None:
+    """One row per judged guess, win or miss.
 
-    Checks whether *the bot* is among a reaction's users rather than whether
-    the emoji is present: a player can add any of the three by hand, and
-    Discord merges identical emoji into one reaction with a count.
+    **The ladder rung goes in `detail`, not in `outcome`.** This column is
+    two-valued everywhere else in the table and a five-valued one here would
+    mean no query could ask "did it work" across actions. So a win is a
+    success and everything else is a refusal - which reads oddly for a 👀,
+    and is the right shape for the one question the column answers.
+
+    The emoji rides along because the useful report is not how often players
+    win. It is what they guess when they are close, which is the only
+    evidence of whether the categories read the way the writers meant.
     """
-    mine = {str(r.emoji) for r in message.reactions if r.me}
+    detail = f"emoji={emoji} outcome={guess.outcome}"
+    if guess.won:
+        # `points` is 0 on a win the player has already been paid for
+        # today, which is the figure the row should carry: they won, and
+        # it moved nothing.
+        await telemetry.succeeded(
+            guild_id,
+            user_id,
+            telemetry.CRAVING_GUESS,
+            reason=guess.outcome,
+            relationship_delta=guess.points,
+            score_after=guess.score_after,
+            detail=detail,
+        )
+    else:
+        await telemetry.refused(
+            guild_id,
+            user_id,
+            telemetry.CRAVING_GUESS,
+            reason=guess.outcome,
+            detail=detail,
+        )
 
-    async def react(emoji: str) -> None:
+
+async def _answer_guess(message: discord.Message, guess, day) -> None:
+    """Put the cat's answer on the message, and say when it is full.
+
+    **The reactions describe the message, not the guess.** Discord allows the
+    bot each emoji only once per message, so it cannot answer every reaction
+    individually. The message carries its best answer so far and a guess only
+    changes it by beating that rank - a 👀 after a 😻 changes nothing.
+
+    **Nothing here counts slots from memory.** Removing the bot's reaction
+    frees a slot only when the bot was the only one who clicked it; if a
+    player also did, the emoji stays on the message with their count. So the
+    live reaction list is read every time and the bot's own two operations
+    are applied to a copy of it, which is the only way the twentieth slot
+    can be reasoned about at all.
+    """
+    ladder = await craving.reactions()
+    guild_id = message.guild.id
+
+    mine = {str(r.emoji) for r in message.reactions if r.me}
+    # The ones the bot can actually take back off the message.
+    sole = {str(r.emoji) for r in message.reactions if r.me and r.count == 1}
+    distinct = {str(r.emoji) for r in message.reactions}
+
+    async def add(emoji: str) -> None:
         if emoji in mine:
             return
         try:
             await message.add_reaction(emoji)
         except discord.HTTPException:
             log.warning("Could not add %s", emoji, exc_info=True)
+            return
+        mine.add(emoji)
+        distinct.add(emoji)
 
-    if guess.verdict is craving.CORRECT or guess.verdict == craving.CORRECT:
-        # Public by design - a reaction carries no interaction token, so there
-        # is no private confirmation available. The cat is the confirmation.
-        await react(craving.FOUND)
+    async def take_back(emoji: str) -> None:
+        if emoji not in mine:
+            return
+        try:
+            await message.remove_reaction(emoji, bot.user)
+        except discord.HTTPException:
+            log.warning("Could not remove %s", emoji, exc_info=True)
+            return
+        mine.discard(emoji)
+        if emoji in sole:
+            distinct.discard(emoji)
+
+    # **Yesterday's answers are lies.** The craving rolls over at midnight
+    # and the reactions do not, so a 😻 left on an old message points at the
+    # wrong emoji today. The first guess to land on one clears what the bot
+    # left there before judging anything.
+    if await craving.is_stale(guild_id, message.id, day):
+        for row in ladder.values():
+            await take_back(row.emoji)
+
+    # **The last slot is the ❌'s, and a win's.** A message with nineteen
+    # distinct emoji on it has one left, and the next guess would fill it
+    # with the player's own emoji and leave the bot no room to answer - so
+    # the bot spends it saying there is no twenty-first, rather than on a
+    # 👀 that would be the last thing anybody could ever add. A correct
+    # guess is the exception: the cat is a better thing to close on.
+    full = len(distinct) >= craving.MAX_REACTIONS - 1
+
+    shown = await craving.message_outcome(guild_id, message.id, day)
+    answer = ladder.get(guess.outcome)
+    beats = craving.rank_of(guess.outcome, ladder) > craving.rank_of(shown, ladder)
+    if answer is not None and beats and (guess.won or not full):
+        beaten = ladder.get(shown or "")
+        if beaten is not None:
+            await take_back(beaten.emoji)
+        await add(answer.emoji)
+        await craving.set_message_outcome(guild_id, message.id, day, guess.outcome)
+
+    if guess.won:
         return
-
-    if guess.verdict == craving.SAME_GROUP:
-        await react(craving.RIGHT_GROUP)
-        return
-
-    # Discord caps a message at 20 distinct reactions. Spend the last one
-    # saying "no more guesses here", or a correct guess in the final slot
-    # would leave the bot no room to answer.
-    if craving.FOUND not in mine and len(message.reactions) >= craving.MAX_REACTIONS - 1:
-        await react(craving.NO_ROOM)
+    # Read again: the answer above may have taken the nineteenth slot
+    # itself, and whether its swap freed one depends on whether a player
+    # was also on the emoji it replaced.
+    end = ladder.get(craving.OUT_OF_GUESSES)
+    if end is not None and len(distinct) >= craving.MAX_REACTIONS - 1:
+        await add(end.emoji)
 
 
 # The cat is everywhere, so `/pet` needs no location check. It resolves in
@@ -5056,10 +5154,47 @@ async def _status_line(guild, user_id: int) -> str | None:
     elif hungry:
         keys = ["stats.status.hungry"]
     else:
+        keys = []
+
+    # Last, and on its own if nothing else is true. It is the only place
+    # the craving game is ever mentioned, so it has to be able to appear
+    # with no other condition to hang off.
+    if await _craving_is_open(guild_id, user_id):
+        keys.append("stats.status.craving")
+
+    if not keys:
         return None
 
     said = [await phrasing.default_say(key) for key in keys]
     return " ".join(part for part in said if part) or None
+
+
+# The achievement that opens the hint. Drop 2's, and the gate is about
+# pacing rather than about toys: a player on their first day is already
+# being handed a cat, a bed and a quest, and a fourth thing to wonder
+# about is the overwhelm the testers reported.
+PURRSUASIVE = "persuasive"
+
+
+async def _craving_is_open(guild_id: int, user_id: int) -> bool:
+    """Whether `/stats` should say the cat is craving something.
+
+    Three conditions, and all three are about not pointing at nothing.
+    The drop, because before it no craving is drawn. *Purrsuasive*,
+    because the line is the game's only announcement and a player who has
+    not got that far has enough to read already. And not having found it,
+    because once they have, the 😻 and the award have both said so - a
+    standing line repeating it would read as a second craving to go and
+    find.
+
+    Per player throughout. Somebody else solving it changes nothing here.
+    """
+    drop = await resolve.current_drop(guild_id)
+    if drop is resolve.NO_GAME or drop < world.CRAVING_FROM_DROP:
+        return False
+    if PURRSUASIVE not in await database.player_achievements_of(guild_id, user_id):
+        return False
+    return not await craving.found_today(guild_id, user_id)
 
 
 async def _is_hungry(guild_id: int, user_id: int) -> bool:

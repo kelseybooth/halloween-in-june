@@ -82,6 +82,12 @@ LOOK = "look"
 HINT = "hint"
 UNKNOWN_NOUN = "unknown_noun"
 RECOVERY = "recovery"
+# A guess at the day's craving, made by reacting rather than by a command.
+# `outcome` is the usual success or refused - a win against everything
+# else - and which rung of the ladder it earned is in `detail`, because
+# the ladder is five-valued and the column that answers "did it work" is
+# two-valued everywhere else in this table.
+CRAVING_GUESS = "craving_guess"
 
 # Why a refusal refused. Open-ended on purpose - a new gate adds a new
 # reason here rather than reusing an approximate one, because the whole
@@ -752,6 +758,26 @@ class EmojiGroup(Base):
     excluded: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
+class CravingReaction(Base):
+    """The ladder the bot answers a craving guess with, from
+    craving_reactions.tsv.
+
+    Content, so the writers can swap a face without a release. Six rows: one
+    per outcome, each with the emoji to react with and where it sits on the
+    ladder. `progression` is null for `out_of_guesses`, which is not a rung -
+    it is what the bot says when a message has no reaction slots left.
+    """
+
+    __tablename__ = "craving_reactions"
+
+    outcome: Mapped[str] = mapped_column(String(32), primary_key=True)
+    progression: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    emoji: Mapped[str] = mapped_column(String(32), nullable=False)
+    code: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    meaning: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    notes: Mapped[str] = mapped_column("when_text", Text, nullable=False, default="")
+
+
 class Drop(Base):
     """The unlock calendar: when each slice of content becomes visible.
 
@@ -1027,6 +1053,33 @@ class CravingDay(Base):
     # knowing whether the day is already solved, and for 2d to look back on.
     found_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     found_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class CravingMessage(Base):
+    """The best answer one message has shown, on one day.
+
+    **Per message, because the bot's reactions describe the message.**
+    Discord lets the bot put each emoji on a message only once, so it cannot
+    answer each guess; it carries the best answer so far and replaces it when
+    a guess beats it.
+
+    **Per day, because the answer moves and the reactions do not.** A 😻 left
+    on last night's message points at yesterday's craving, which is a lie
+    told to anybody scrolling up. The day is stored so that the first guess
+    to land on an old message clears what the bot left there before judging.
+
+    What is deliberately *not* here is how many reaction slots the message
+    has left. A player who also clicked the bot's emoji keeps it on the
+    message after the bot removes its own, so any count kept here would drift
+    from Discord's within a day. The live reaction list is read every time.
+    """
+
+    __tablename__ = "craving_messages"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    message_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    day: Mapped[date] = mapped_column(Date, nullable=False)
+    outcome: Mapped[str] = mapped_column(String(32), nullable=False)
 
 
 class CravingTally(Base):
@@ -3210,6 +3263,16 @@ CONFIG_KEYS: dict[str, tuple[int, str]] = {
     # once here rather than invented by whoever builds the drop that
     # needs it. Raising it later must not take the award back from
     # anybody already holding it.
+    # The craving is worth less than a toy play on purpose. Copying
+    # somebody else's correct guess is a reaction away, and that is
+    # fine - the game is a thing to notice, not a thing to solve - so
+    # the figure has to be small enough that copying it is not the
+    # cheapest relationship in the game.
+    "craving_points": (
+        5,
+        "What finding the cat's daily craving is worth, once per player per "
+        "day.",
+    ),
     "toy_set_total": (
         13,
         "How many cat toys the whole game will have. Used by the toy-collection "

@@ -759,25 +759,40 @@ async def test_talking_to_alexa_about_anything_else_earns_nothing(playing):
 
 
 async def test_met_the_craving(playing):
-    """**The predicate answers; the award is parked.**
+    """**Awarded now, where it used to be parked.**
 
-    The craving game is wired end to end - `on_raw_reaction_add` judges
-    a guess and fires `on_reaction` - but the 21 October renumbering
-    put `met_the_craving` at `NEVER`, so the row never arrives and
-    nothing can be awarded. Both halves are asserted, because they
-    disagree with each other and one of them is going to change: give
-    the row a real drop and the second assertion fails, which is the
-    reminder to delete it.
+    The game was wired end to end from drop 2 - `on_raw_reaction_add`
+    judged a guess and fired `on_reaction` - but the achievement sat at
+    drop 99, so the row never arrived and the predicate answered into
+    nothing. The 26 October renumbering gave the craving a drop of its
+    own and the award came with it.
     """
-    guess = craving.Guess(verdict=craving.CORRECT, craving="\N{COOKIE}")
+    guess = craving.Guess(outcome=craving.WIN, craving="\N{COOKIE}")
     context = a_context("on_reaction", extra={"guess": guess})
 
     assert await triggers.met_the_craving(context)
-    assert await earned(context) == set()
+    assert await earned(context) == {"met_the_craving"}
 
 
-async def test_the_wrong_craving_guess_earns_nothing(playing):
-    guess = craving.Guess(verdict=craving.SAME_GROUP, craving="\N{COOKIE}")
+async def test_a_win_that_paid_nothing_still_earns_it(playing):
+    """A player who already took their five points today and clicks the
+    answer again has still met the craving. The award is a one-off and
+    cannot fire twice anyway, so gating it on the payment would only
+    lose the player who found it the hard way after copying it once."""
+    guess = craving.Guess(outcome=craving.WIN, craving="\N{COOKIE}", credited=False)
+
+    assert await earned(a_context("on_reaction", extra={"guess": guess})) == {
+        "met_the_craving"
+    }
+
+
+@pytest.mark.parametrize(
+    "outcome",
+    [craving.GREETING, craving.WRONG_CATEGORY, craving.RIGHT_CATEGORY,
+     craving.RIGHT_TYPE],
+)
+async def test_no_rung_below_the_top_earns_anything(playing, outcome):
+    guess = craving.Guess(outcome=outcome, craving="\N{COOKIE}")
     assert await earned(a_context("on_reaction", extra={"guess": guess})) == set()
 
 

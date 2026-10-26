@@ -60,6 +60,7 @@ stats.status.expectant	Right now, the cat is watching you expectantly.
 stats.status.hungry	Right now, the cat is watching you with hunger in her eyes.
 stats.status.expectant_hungry	Right now, the cat is watching you expectantly with hunger in her eyes.
 stats.status.crowded	You've pet the cat a lot recently.
+stats.status.craving	She's craving something very specific today.
 stats.relationship	Cat relationship strength: {score}
 stats.pets	Total pets: {count}
 stats.header.quests	Open Quests

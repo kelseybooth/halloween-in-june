@@ -141,6 +141,12 @@ HUNGER_WINDOW = timedelta(hours=8)
 # before there was anything to feed her with.
 FEEDING_FROM_DROP = 10
 
+# The craving game. Nothing announces it, and nothing in `/stats` mentions
+# it before this - the hint is the whole of the game's visible surface, so
+# showing it in a server where no craving is being drawn would be a clue
+# pointing at nothing.
+CRAVING_FROM_DROP = 3
+
 
 def play_chance(ramp: int) -> int:
     """Percentage chance that this attempt lands, from the ramp."""

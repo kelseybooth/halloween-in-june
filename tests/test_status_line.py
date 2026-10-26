@@ -19,6 +19,7 @@ from fake_discord import FakeChannel, FakeGuild, FakeInteraction, FakeMember
 import bot
 import content as content_module
 import content_loader
+import craving
 import database
 import resolve
 import world
@@ -30,6 +31,7 @@ BOTH = (
     "Right now, the cat is watching you expectantly with hunger in her eyes."
 )
 CROWDED = "You've pet the cat a lot recently."
+CRAVING = "She's craving something very specific today."
 
 # A server the bot is merely a member of. The fixtures start both of
 # conftest's guilds, so this one has to be nobody's.
@@ -58,8 +60,17 @@ async def status(server, who=ALICE):
     interaction = FakeInteraction(who, GUILD_A, guild=guild, channel=halloween)
     await bot.stats.callback(interaction, None)
     body = interaction.sent[-1][1]["embed"].description.split("\n")
-    return next((line for line in body if line in
-                 (EXPECTANT, HUNGRY, BOTH, CROWDED, f"{HUNGRY} {CROWDED}")), None)
+    wanted = (
+        EXPECTANT, HUNGRY, BOTH, CROWDED,
+        f"{HUNGRY} {CROWDED}",
+        CRAVING,
+        f"{EXPECTANT} {CRAVING}",
+        f"{HUNGRY} {CRAVING}",
+        f"{BOTH} {CRAVING}",
+        f"{CROWDED} {CRAVING}",
+        f"{HUNGRY} {CROWDED} {CRAVING}",
+    )
+    return next((line for line in body if line in wanted), None)
 
 
 async def pet(server, times, who=ALICE):
@@ -310,3 +321,83 @@ async def _embed(server, who=ALICE):
     interaction = FakeInteraction(who, GUILD_A, guild=guild, channel=halloween)
     await bot.stats.callback(interaction, None)
     return interaction.sent[-1][1]["embed"]
+
+
+# --------------------------------------------------------------------------
+# The craving hint
+#
+# The only place the craving game is ever mentioned. Nothing announces it,
+# so every one of these conditions is about not pointing at a game that is
+# not running - or at one the player has already finished for today.
+# --------------------------------------------------------------------------
+
+
+async def craving_time(who=ALICE):
+    """Drop 3, and a player who has got as far as *Purrsuasive*."""
+    await resolve.set_current_drop(GUILD_A, world.CRAVING_FROM_DROP)
+    await database.award_player_achievement(GUILD_A, who, bot.PURRSUASIVE)
+
+
+async def test_the_hint_appears_once_the_player_has_purrsuaded_her(server):
+    await craving_time()
+
+    assert await status(server) == f"{EXPECTANT} {CRAVING}"
+
+
+async def test_it_comes_last(server):
+    """After the relationship description and after any expectant, hungry
+    or crowded line. It is the least urgent thing on the card."""
+    await craving_time()
+    await pet(server, 5)
+
+    assert await status(server) == f"{CROWDED} {CRAVING}"
+
+
+async def test_it_can_be_the_whole_line(server):
+    """Exactly even odds is neither expectant nor crowded, and there is no
+    food in the game at drop 3 - so without this the craving hint would be
+    a sentence with nothing to append itself to."""
+    await craving_time()
+    await pet(server, 3)
+
+    assert await status(server) == CRAVING
+
+
+async def test_a_player_who_has_not_purrsuaded_her_is_not_told(server):
+    """**The pacing gate.** A player on their first day already has a cat,
+    a bed and an open quest to read; a fourth thing to wonder about is the
+    overwhelm the testers reported."""
+    await resolve.set_current_drop(GUILD_A, world.CRAVING_FROM_DROP)
+
+    assert await status(server) == EXPECTANT
+
+
+async def test_nothing_is_said_before_the_craving_drop(server):
+    """At drop 2 no craving is drawn at all, so the line would be a clue
+    pointing at nothing."""
+    await resolve.set_current_drop(GUILD_A, 2)
+    await database.award_player_achievement(GUILD_A, ALICE, bot.PURRSUASIVE)
+
+    assert await status(server) == EXPECTANT
+
+
+async def test_it_vanishes_once_the_player_finds_it(server):
+    """The 😻 and the award have both said so already. A standing line
+    repeating it would read as a second craving to go and find."""
+    await craving_time()
+    today = await database.server_today(GUILD_A)
+    await craving.judge(GUILD_A, ALICE, await craving.craving_for(GUILD_A, today), today)
+
+    assert await status(server) == EXPECTANT
+
+
+async def test_somebody_elses_win_does_not_take_the_hint_away(server, db):
+    """Per player throughout. One player solving it ends their day, not
+    everybody's - the whole point is that they can tell each other."""
+    await craving_time()
+    await craving_time(who=BOB)
+    await db.ensure_user_exists(BOB, GUILD_A)
+    today = await database.server_today(GUILD_A)
+    await craving.judge(GUILD_A, BOB, await craving.craving_for(GUILD_A, today), today)
+
+    assert CRAVING in (await status(server) or "")
