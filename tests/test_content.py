@@ -572,3 +572,145 @@ def test_two_objects_in_a_room_sharing_a_word_is_still_an_error():
     ]
 
     assert any("'thing'" in p for p in content.validate(parsed))
+
+
+# --------------------------------------------------------------------------
+# The craving ladder
+#
+# Six rows, and every one of these is a way the file can be wrong while
+# still loading perfectly well - which is the only kind of content error
+# worth a validator.
+# --------------------------------------------------------------------------
+
+
+def a_ladder(**changes):
+    """The shipped reactions, with one row swapped out."""
+    rows = list(content.load_files().craving_reactions)
+    for index, row in enumerate(rows):
+        if row.outcome in changes:
+            rows[index] = replace(row, **changes[row.outcome])
+    return rows
+
+
+def with_ladder(rows):
+    parsed = content.load_files()
+    return replace(parsed, craving_reactions=rows)
+
+
+def test_the_shipped_ladder_is_valid():
+    assert content._check_craving_reactions(content.load_files()) == []
+
+
+def test_a_missing_outcome_is_caught():
+    """One row short is one answer the bot has nothing to say for."""
+    short = [r for r in content.load_files().craving_reactions if r.outcome != "win"]
+
+    problems = content._check_craving_reactions(with_ladder(short))
+
+    assert any("no row for win" in p for p in problems)
+
+
+def test_an_outcome_the_game_cannot_branch_on_is_caught():
+    rows = a_ladder(win={"outcome": "nearly"})
+
+    problems = content._check_craving_reactions(with_ladder(rows))
+
+    assert any("nearly" in p and "no branch" in p for p in problems)
+
+
+def test_two_outcomes_sharing_a_face_are_caught():
+    """Indistinguishable answers. The player would be told two different
+    things in the same way, which is worse than being told nothing."""
+    greeting = content.load_files().reaction_for_outcome["greeting"]
+    rows = a_ladder(win={"emoji": greeting.emoji})
+
+    problems = content._check_craving_reactions(with_ladder(rows))
+
+    assert any("indistinguishable" in p for p in problems)
+
+
+def test_a_ladder_out_of_order_is_caught():
+    """**The one that would be hardest to find in play.** A better guess
+    simply would not replace a worse one, and the message would sit on
+    its 😼 while people guessed their way past it."""
+    rows = a_ladder(win={"progression": 1}, greeting={"progression": 5})
+
+    problems = content._check_craving_reactions(with_ladder(rows))
+
+    assert any("not " in p and "increasing" in p for p in problems)
+
+
+def test_a_rung_with_no_rank_is_caught():
+    rows = a_ladder(right_type={"progression": None})
+
+    problems = content._check_craving_reactions(with_ladder(rows))
+
+    assert any("needs a progression" in p for p in problems)
+
+
+def test_ranking_the_end_of_a_message_is_caught():
+    """❌ is not a rung. Given one, it could outrank a win and a message
+    that ran out of room could never show that somebody found it."""
+    rows = a_ladder(out_of_guesses={"progression": 6})
+
+    problems = content._check_craving_reactions(with_ladder(rows))
+
+    assert any("end" in p and "rung" in p for p in problems)
+
+
+def test_a_face_a_player_could_guess_with_is_caught():
+    """The six have to be excluded from the emoji file, or a player could
+    react with the bot's own 😻 and read the answer out of the reply."""
+    parsed = content.load_files()
+    groups = [
+        replace(row, excluded=False) if row.category == "Bot" else row
+        for row in parsed.emoji_groups
+    ]
+
+    problems = content._check_craving_reactions(replace(parsed, emoji_groups=groups))
+
+    assert any("not excluded" in p for p in problems)
+
+
+# --------------------------------------------------------------------------
+# The written opening week
+# --------------------------------------------------------------------------
+
+
+def test_the_shipped_script_is_valid():
+    assert content._check_scripted_cravings(content.load_files()) == []
+
+
+def test_a_scripted_craving_that_is_not_in_the_file_is_caught():
+    """By name, so a writer renaming a row in the catalogue breaks this
+    rather than dropping the server quietly into a random draw on day one."""
+    parsed = content.load_files()
+    groups = [row for row in parsed.emoji_groups if row.name != "broccoli"]
+
+    problems = content._check_scripted_cravings(replace(parsed, emoji_groups=groups))
+
+    assert any("broccoli" in p and "not a CLDR short name" in p for p in problems)
+
+
+def test_a_scripted_craving_that_is_not_drawable_is_caught():
+    parsed = content.load_files()
+    groups = [
+        replace(row, drawable=False) if row.name == "fish" else row
+        for row in parsed.emoji_groups
+    ]
+
+    problems = content._check_scripted_cravings(replace(parsed, emoji_groups=groups))
+
+    assert any("fish" in p and "not drawable" in p for p in problems)
+
+
+def test_an_ambiguous_scripted_craving_is_caught():
+    """Two rows called "egg" and the game would take whichever the
+    database happened to return first."""
+    parsed = content.load_files()
+    egg = next(row for row in parsed.emoji_groups if row.name == "egg")
+    groups = list(parsed.emoji_groups) + [replace(egg, emoji="x")]
+
+    problems = content._check_scripted_cravings(replace(parsed, emoji_groups=groups))
+
+    assert any("egg" in p and "2 rows" in p for p in problems)

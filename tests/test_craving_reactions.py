@@ -17,6 +17,7 @@ and a bot keeping its own tally would drift from Discord within a day.
 from datetime import date, timedelta
 
 import pytest
+from sqlalchemy import select
 
 from conftest import ALICE, GUILD_A
 
@@ -353,3 +354,96 @@ async def test_the_bots_own_face_is_not_answered(server):
 
     assert await craving.judge(GUILD_A, ALICE, WIN_FACE, TODAY) is None
     assert message.calls == []
+
+
+# --------------------------------------------------------------------------
+# The row each guess leaves
+#
+# `outcome` stays two-valued, as it is for every other action: a win is a
+# success and every other rung is a refusal. That reads oddly for a 👀 and
+# it is the right shape, because the column's one job is to answer "did it
+# work" across all of them. Which rung it was goes in `reason`.
+# --------------------------------------------------------------------------
+
+
+async def logged(db):
+    async with db._require_session()() as session:
+        return list(
+            (
+                await session.scalars(
+                    select(database.InteractionLog)
+                    .where(database.InteractionLog.action == database.CRAVING_GUESS)
+                    .order_by(database.InteractionLog.id)
+                )
+            ).all()
+        )
+
+
+async def guess_through_the_handler(message, emoji, day=TODAY):
+    guess = await craving.judge(GUILD_A, ALICE, emoji, day)
+    await bot_module._log_guess(GUILD_A, ALICE, emoji, guess)
+    return guess
+
+
+async def test_a_win_is_a_success_worth_five(server):
+    await guess_through_the_handler(a_message(), MOUSE)
+
+    row, = await logged(server)
+    assert row.outcome == database.SUCCESS
+    assert row.reason == craving.WIN
+    assert row.relationship_delta == 5
+    assert row.score_after == 5
+
+
+async def test_a_near_miss_is_a_refusal_naming_its_rung(server):
+    await guess_through_the_handler(a_message(), ANOTHER_MAMMAL)
+
+    row, = await logged(server)
+    assert row.outcome == database.REFUSED
+    assert row.reason == craving.RIGHT_TYPE
+    assert row.relationship_delta == 0
+
+
+async def test_the_emoji_is_on_the_row(server):
+    """The useful report is not how often players win. It is what they
+    guess when they are close, which is the only evidence of whether the
+    categories read the way the writers meant them to."""
+    await guess_through_the_handler(a_message(), A_BIRD)
+
+    row, = await logged(server)
+    assert A_BIRD in row.detail
+    assert craving.RIGHT_CATEGORY in row.detail
+
+
+async def test_a_win_that_paid_nothing_says_so(server):
+    """Still a success - they won - and the delta is the figure that
+    moved, which is nothing."""
+    await guess_through_the_handler(a_message(), MOUSE)
+
+    await guess_through_the_handler(a_message(2), MOUSE)
+
+    second = (await logged(server))[1]
+    assert second.outcome == database.SUCCESS
+    assert second.relationship_delta == 0
+
+
+async def test_every_guess_leaves_exactly_one_row(server):
+    for emoji in (chr(0x1F697), BROCCOLI, A_BIRD, ANOTHER_MAMMAL, MOUSE):
+        await guess_through_the_handler(a_message(), emoji)
+
+    rows = await logged(server)
+    assert [row.reason for row in rows] == [
+        craving.GREETING,
+        craving.WRONG_CATEGORY,
+        craving.RIGHT_CATEGORY,
+        craving.RIGHT_TYPE,
+        craving.WIN,
+    ]
+
+
+async def test_the_drop_is_filled_in(server):
+    """The slicer every telemetry question starts with."""
+    await guess_through_the_handler(a_message(), MOUSE)
+
+    row, = await logged(server)
+    assert row.drop is not None

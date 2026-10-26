@@ -40,6 +40,8 @@ from sqlalchemy import select, update
 
 import content as content_module
 import database
+import resolve
+import world
 
 log = logging.getLogger(__name__)
 
@@ -74,6 +76,19 @@ NON_GAME_CATEGORIES = frozenset({"Misc", "Cat", "Bot"})
 SCRIPTED_CRAVINGS = content_module.SCRIPTED_CRAVINGS
 
 POINTS_SETTING = "craving_points"
+
+
+async def is_open(guild_id: int) -> bool:
+    """Whether this server is playing the craving game at all.
+
+    **Checked before anything is drawn.** A reaction on a drop 1 server is
+    a player reacting to a message, not a guess, and judging it would draw
+    that server a craving, pay out five points and leave a `craving_days`
+    row dated before the game existed - all invisibly, because nothing
+    about the game is announced and the only sign would be a 🐱.
+    """
+    drop = await resolve.current_drop(guild_id)
+    return drop is not resolve.NO_GAME and drop >= world.CRAVING_FROM_DROP
 
 
 @dataclass(frozen=True)
@@ -427,10 +442,11 @@ async def judge(
 ) -> Guess | None:
     """Score one guess, and credit the player if it was right.
 
-    None means the guess was not a guess: the emoji is one of the bot's own
-    six, and judging those would let a player walk the ladder backwards off
-    the answers. The caller does nothing at all with it - no reaction, no
-    telemetry row - because the player did not play.
+    None means the guess was not a guess: the server is not playing yet, or
+    the emoji is one of the bot's own six and judging those would let a
+    player walk the ladder backwards off the answers. The caller does
+    nothing at all with it - no reaction, no telemetry row - because the
+    player did not play.
 
     A win always shows 😻, whether the player is first or twentieth and
     whether they have already scored today. Only the day's first win credits
@@ -438,6 +454,9 @@ async def judge(
     late reaction is copying rather than solving - and that is not a gap to
     close. The tally measures taking part.
     """
+    if not await is_open(guild_id):
+        return None
+
     day = day or await database.server_today(guild_id)
     guessed = normalise(emoji)
 

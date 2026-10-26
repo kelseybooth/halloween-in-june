@@ -984,6 +984,13 @@ async def _answer_guess(message: discord.Message, guess, day) -> None:
     live reaction list is read every time and the bot's own two operations
     are applied to a copy of it, which is the only way the twentieth slot
     can be reasoned about at all.
+
+    **Not queued, and it is bounded rather than lucky.** An outcome change
+    costs two calls, remove then add, and a burst of guesses could in
+    principle spend a lot of them. But a guess only changes anything by
+    beating the message's current rank, so a message can cost at most five
+    changes a day however many people react to it - and discord.py backs
+    off on a 429 by itself.
     """
     ladder = await craving.reactions()
     guild_id = message.guild.id

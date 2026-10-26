@@ -30,6 +30,8 @@ import content as content_module
 import content_loader
 import craving
 import database
+import resolve
+import world
 
 
 TODAY = date(2026, 10, 20)
@@ -221,6 +223,48 @@ async def test_every_server_draws_its_own_script(server, db):
 
 
 # --------------------------------------------------------------------------
+# Before the game opens
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("drop", [0, 1, 2])
+async def test_a_server_before_drop_three_is_not_playing(server, drop):
+    """**Nothing at all, not a losing answer.** A reaction on a drop 1
+    server is a player reacting to a message. Judging it would draw that
+    server a craving, pay five points and leave a `craving_days` row dated
+    before the game existed - invisibly, because nothing announces the
+    game and the only sign would be a 🐱 coming back."""
+    await resolve.set_current_drop(GUILD_A, drop)
+
+    assert await craving.is_open(GUILD_A) is False
+    assert await craving.judge(GUILD_A, ALICE, MOUSE, TODAY) is None
+
+
+async def test_nothing_is_drawn_for_a_server_that_is_not_playing(server):
+    await resolve.set_current_drop(GUILD_A, 2)
+
+    await craving.judge(GUILD_A, ALICE, MOUSE, TODAY)
+
+    assert await craving.tally(GUILD_A, ALICE) == 0
+    assert await database.get_relationship(ALICE, GUILD_A) == 0
+
+
+async def test_the_game_opens_on_the_drop_it_was_built_for(server):
+    await resolve.set_current_drop(GUILD_A, world.CRAVING_FROM_DROP)
+
+    assert world.CRAVING_FROM_DROP == 3
+    assert await craving.is_open(GUILD_A) is True
+
+
+async def test_a_server_with_no_game_is_not_playing(server):
+    """`current_drop` is None there, not zero, and comparing None to a
+    drop number raises rather than reading as early."""
+    unstarted = 900000000000000999
+
+    assert await craving.is_open(unstarted) is False
+
+
+# --------------------------------------------------------------------------
 # The craving: the five rungs
 # --------------------------------------------------------------------------
 
@@ -380,6 +424,24 @@ async def test_a_guesser_who_has_never_run_a_command_still_scores(server, db):
 
     assert guess.points == 5
     assert await database.get_relationship(stranger, GUILD_A) == 5
+
+
+async def test_a_guess_is_not_a_cat_interaction(server):
+    """**Deliberately, and the one that is easiest to break by accident.**
+    `last_cat_interaction_date` is what stops the overnight drift and what
+    *Lucky Black Cat* reads, and every other way of touching the cat
+    stamps it - a pet, the bed, the toy, a can, successful or refused.
+
+    A reaction is not touching the cat. Stamping it would mean a player
+    could hold off the drift from their phone without playing, and would
+    hand out a holiday achievement to anybody who reacted to a message on
+    the right day.
+    """
+    assert await database.last_cat_interaction(GUILD_A, ALICE) is None
+
+    await craving.judge(GUILD_A, ALICE, MOUSE, TODAY)
+
+    assert await database.last_cat_interaction(GUILD_A, ALICE) is None
 
 
 async def test_a_losing_guess_pays_nothing(server):

@@ -5,37 +5,65 @@ and turn OFF any "convert text to numbers/dates" option so ids stay as written).
 
 |File|Rows|What it is|
 |-|-|-|
-|`rooms.tsv`|9|Room ids and names. Structure, not text.|
-|`room_text.tsv`|11|Room `look` text. 9 rooms + 2 rows for the repaired staircase.|
-|`things.tsv`|142|Every object, source, fixture and exit: ids, placement, flags. Structure, not text.|
-|`thing_text.tsv`|150|`look`, `look_carried`, `use`, `take`, `drop` plus the three refusal strings.|
-|`defaults.tsv`|23|Fallback strings used wherever a cell is left blank.|
-|`drops.tsv`|1|The unlock calendar: which drop each row of content waits for.|
-|`restocks.tsv`|3|Scheduled top-ups: what gets added to which container, how often.|
-|`emoji_groups.tsv`|132|The craving lookup: every Food & Drink emoji, its Unicode subgroup, and whether it can be the answer.|
+|`rooms.tsv`|10|Room ids and names, plus the channel. Structure, not text.|
+|`room_text.tsv`|17|Room `look` text, including the two rows for the repaired staircase.|
+|`things.tsv`|162|Every object, source, fixture and exit: ids, placement, flags. Structure, not text.|
+|`thing_text.tsv`|170|`look`, `look_carried`, `use`, `take`, `drop` plus the three refusal strings.|
+|`defaults.tsv`|115|Fallback strings used wherever a cell is left blank.|
+|`drops.tsv`|9|The unlock calendar: which drop each row of content waits for.|
+|`restocks.tsv`|4|Scheduled top-ups: what gets added where, how often.|
+|`achievements.tsv`|46|Every achievement: name, unlock text, which drop it can first be earned at.|
+|`art.tsv`|10|One row per image: the file, and the alt text a screen reader gets instead.|
+|`emoji_groups.tsv`|1,927|**Generated.** The craving lookup: every emoji, its game category and type, and whether it can be the answer.|
+|`craving_reactions.tsv`|6|**Generated.** Which face the bot answers each craving outcome with, and how the six rank.|
 
-## Where emoji_groups.tsv came from
+## The two generated files
 
-Generated from Unicode's `emoji-test.txt` (Unicode emoji 18.0, dated 30 April 2026),
-not written by hand — a mis-grouped emoji would show up as the bot saying "right
-subgroup" to a wrong guess, which nobody would trace back to a data file.
+**Do not edit `emoji_groups.tsv` or `craving_reactions.tsv` by hand.** Edit
+`emoji-catalogue-v18.csv` and regenerate:
 
-One row per fully-qualified emoji in the **Food & Drink** group. `drawable` is `no`
-on the seven `dishware` rows and `yes` on the other 125, so a plate can never be the
-craving but is still a legal guess that resolves to a known subgroup.
+```
+python generate_emoji_files.py
+```
 
-Two things worth knowing if you edit it:
+A hand-edit to a generated file is not rejected by anything. It loads, it works,
+and it disappears the next time somebody exports the catalogue — with no way to
+tell afterwards which row changed back. The pre-push hook runs
+`generate_emoji_files.py --check` and refuses a push where the two disagree,
+which is the only moment anybody would find out.
 
-- **There is no seafood.** The Functional Spec lists `food-marine` as a subgroup, but
-  Unicode 18.0 has no such thing — crab, lobster, shrimp, squid and oyster are all in
-  Animals & Nature. The pool is the Food & Drink group, so they are out.
-- **Salt (🧂) is `food-prepared`, not dishware**, whatever the spec's parenthetical
-  says, so it arrived drawable and was switched off by hand. That leaves 124 in the
-  pool. It is the one row where `drawable` disagrees with the Unicode grouping, and
-  it is here rather than in code precisely so a writer can make that call.
+### What the catalogue says, and what is worked out from it
 
-Replacing the Unicode subgroups with smaller hand-made groups is a content change:
-edit the `subgroup` column and nothing in the code needs to know.
+The catalogue is one row per emoji with a **Category** (Food, Prey, Adjacent,
+Toy, Cat, Misc, Bot) and a **Type** within it. Those two columns are the whole
+game: the ladder tells a guess in the right category from a guess in the right
+type, which a single grouping column could never do.
+
+| Column | Where it comes from |
+|-|-|
+|`category`, `type`|Copied from the catalogue's Category and Type.|
+|`excluded`|Copied from Game Exclusion. The bot's own six reaction emoji.|
+|`drawable`|**Worked out**: yes for Food and Prey, except anything new in this Unicode release.|
+
+`drawable` is the pool the craving is drawn from — 136 of the 1,927. A new emoji
+is left out because Discord's picker lags the standard by months, and a craving
+nobody can type is unwinnable with no way for the player to tell that apart from
+being wrong. The rule reads the ⊛ Unicode puts in front of a name that is new in
+the current release, so a 19.0 catalogue needs no code change. Today that loses
+🫝 pickle and 🫌 monarch butterfly, and keeps 🫜 root vegetable, which is 16.0.
+
+### What changed on 26 October
+
+The file used to hold only the 132 Food & Drink emoji, grouped by Unicode's own
+subgroups. That decided the game by accident — dishware sits inside Food & Drink,
+so plates had to be switched off by hand, and salt was in the pool for a while
+because Unicode files it under prepared food.
+
+The catalogue replaced all of it. Drinks are Adjacent now rather than food, so a
+drink earns a 😼 at best. Dishes are Adjacent/Dishes, which is data rather than a
+special case in code. And "not in the file" no longer means "nothing to do with
+food": a car is a Misc row, and the game checks the category first so that a car
+and a custom emote get the same friendly 🐱.
 
 Writers edit `room_text.tsv`, `thing_text.tsv` and `defaults.tsv`.
 `rooms.tsv` and `things.tsv` carry game rules — changing those is a design decision.
