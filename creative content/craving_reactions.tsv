@@ -5,3 +5,4 @@ right_category	3	😸	U+1F638	Right Category	Right category, wrong type
 right_type	4	👀	U+1F440	Right Type	Right type, wrong emoji
 win	5	😻	U+1F63B	Win	Today's craving
 out_of_guesses		❌	U+274C	Out of Guesses	The message has 19 different emoji on it and the guess is not the craving
+message_full		✖	U+2716	Message Full	Padding, not an answer. The bot adds this only when the ❌ failed to take the twentieth slot, because a player had already reacted with it

@@ -14,7 +14,7 @@ gourd_job	public	Gourd Job	Carved a pumpkin in the courtyard.	40	90
 follow_your_nose	public	Follow Your Nose	Used graphite powder to unstick the desk drawer.	40	100				
 baby_talk	public	Baby Talk	Used the baby monitor.	40	110				
 dressed_for_the_season	public	Dressed for the Season	Put on a Halloween costume.	40	120				
-met_the_craving	public	Met the Craving	Worked out the cat's daily craving.	3	130				Drop 3. The craving game: today's food, guessed by emoji reaction on any cat or bot message.
+met_the_craving	secret	Met the Craving	Worked out the cat's daily craving.	3	130				Drop 3. The craving game: today's food, guessed by emoji reaction on any cat or bot message.
 forwarding_address	public	Forwarding Address	Sent the letter on to the right address.	99	140				Blocked: the letter is a post-MVP deployment
 a_little_bit_lost	secret	A Little Bit Lost	Entered the same room five times in five minutes.	30	10				
 out_on_a_limb	secret	Out on a Limb	Climbed the tree in the courtyard.	50	20				

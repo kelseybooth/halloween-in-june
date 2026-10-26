@@ -21,6 +21,8 @@ from sqlalchemy import select
 
 from conftest import ALICE, GUILD_A
 
+from fake_discord import http_error
+
 import bot as bot_module
 import content as content_module
 import content_loader
@@ -45,6 +47,7 @@ RIGHT_CATEGORY_FACE = chr(0x1F638)
 RIGHT_TYPE_FACE = chr(0x1F440)
 WIN_FACE = chr(0x1F63B)
 NO_ROOM = chr(0x274C)
+PADDING = chr(0x2716)
 
 
 class FakeReaction:
@@ -61,7 +64,14 @@ class FakeMessage:
     gateway does: adding an emoji somebody already used joins their reaction
     rather than making a second one, and removing the bot's leaves the
     reaction standing if anybody else is on it.
+
+    **And a twenty-first distinct emoji is refused**, which is the rule the
+    whole ❌ exists for. Without it here the bot could be tested happily
+    adding reactions a real message would reject, and every slot assertion
+    in this file would be measuring a cap that is not there.
     """
+
+    CAP = 20
 
     def __init__(self, guild, message_id=1, *, others=(), mine=()):
         self.guild = guild
@@ -77,6 +87,8 @@ class FakeMessage:
         self.calls.append(("add", emoji))
         found = self._find(emoji)
         if found is None:
+            if len(self.reactions) >= self.CAP:
+                raise http_error(message="Maximum number of reactions reached")
             self.reactions.append(FakeReaction(emoji, me=True))
         elif not found.me:
             found.me = True
@@ -343,6 +355,116 @@ async def test_a_full_message_does_not_spend_its_last_slot_on_a_face(server):
 
 
 # --------------------------------------------------------------------------
+# Closing the message properly
+#
+# The ❌ means "no more guesses here", and it is only true if the message
+# really is full. A message showing it with a slot still open invites
+# exactly one more reaction - and that is the one reaction the bot has no
+# room left to answer, so the player gets silence from a bot that just
+# told them the opposite.
+# --------------------------------------------------------------------------
+
+
+async def test_the_cross_normally_takes_the_last_slot_by_itself(server):
+    """Nineteen distinct and the ❌ makes twenty. No padding needed, and
+    none added - a ✖ on every closed message would be noise."""
+    message = a_message(others=crowd(19))
+
+    await answer(message, BROCCOLI)
+
+    assert NO_ROOM in message.mine
+    assert PADDING not in message.showing
+    assert len(message.showing) == 20
+
+
+async def test_a_player_who_got_there_first_with_the_cross_is_padded(server):
+    """**The case the ✖ exists for.** Discord merges identical emoji into
+    one reaction, so the bot adding a ❌ a player already used joins their
+    reaction instead of taking a slot. The message would say "no more
+    guesses" at nineteen, with one slot free."""
+    message = a_message(others=crowd(18) + [NO_ROOM])
+    assert len(message.showing) == 19
+
+    await answer(message, ANOTHER_MAMMAL)
+
+    assert NO_ROOM in message.mine
+    assert PADDING in message.mine
+    assert len(message.showing) == 20
+
+
+async def test_the_padding_is_not_put_up_without_the_cross(server):
+    """It is not a reaction to anything. A quiet message never sees it."""
+    message = a_message(others=crowd(5))
+
+    await answer(message, BROCCOLI)
+
+    assert PADDING not in message.showing
+
+
+async def test_a_full_message_gets_neither(server):
+    """Twenty already. Both adds fail, and the bot asks for nothing it
+    cannot have - the ❌ is tried because it is worth a call, the ✖ is
+    not tried at all once the count says there is no room."""
+    message = a_message(others=crowd(20))
+
+    await answer(message, BROCCOLI)
+
+    assert len(message.showing) == 20
+
+
+async def test_padding_is_cleared_with_everything_else_the_next_day(server):
+    """**Otherwise a message the bot closed stays closed forever.** The ✖
+    is in the ladder file, so the stale sweep takes it back along with the
+    six - which is the reason it belongs in that file rather than in code,
+    where the sweep would have to be told about it separately.
+
+    The message here is a quiet one the bot closed and whose crowd then
+    went away, because that is the case where clearing frees real room. A
+    busy message closed yesterday is usually still nearly full today: the
+    players' own reactions stay, and it closes again straight away.
+    """
+    message = a_message(others=crowd(3), mine=[NO_ROOM, PADDING])
+    # Spend day one, so tomorrow is the cut of meat and the broccoli below
+    # is the right category - as it is in the stale tests above.
+    await craving.craving_for(GUILD_A, TODAY)
+    await craving.set_message_outcome(
+        GUILD_A, message.id, TODAY, craving.OUT_OF_GUESSES
+    )
+
+    await answer(message, BROCCOLI, day=TOMORROW)
+
+    assert PADDING not in message.showing
+    assert NO_ROOM not in message.showing
+    assert message.mine == {RIGHT_CATEGORY_FACE}
+
+
+async def test_the_padding_is_optional(server, monkeypatch):
+    """A content file without the row loads and plays; the bot simply
+    cannot close that last gap. Asserted because the validator lets the
+    row be missing, and a crash would be a worse answer than a gap."""
+    full = await craving.reactions()
+    six = {k: v for k, v in full.items() if k != craving.MESSAGE_FULL}
+
+    async def without_padding():
+        return six
+
+    monkeypatch.setattr(craving, "reactions", without_padding)
+    message = a_message(others=crowd(18) + [NO_ROOM])
+
+    await answer(message, ANOTHER_MAMMAL)
+
+    assert NO_ROOM in message.mine
+    assert len(message.showing) == 19
+
+
+async def test_the_padding_is_never_judged(server):
+    """It is a Bot row in the catalogue, excluded like the other six, so a
+    player reacting with it gets nothing rather than a cat face."""
+    assert await craving.category_of(PADDING) == "Bot"
+    assert await craving.judge(GUILD_A, ALICE, PADDING, TODAY) is None
+
+
+# --------------------------------------------------------------------------
 # What is not a guess
 # --------------------------------------------------------------------------
 
@@ -447,3 +569,38 @@ async def test_the_drop_is_filled_in(server):
 
     row, = await logged(server)
     assert row.drop is not None
+
+
+async def test_a_win_can_leave_its_own_slot_open(server):
+    """**Known, and left alone.** A win swaps out a face the bot owned
+    alone, so the message can end at nineteen with a slot free - and no
+    ❌, because a win returns before that. A player can fill that slot
+    with a guess the bot has no room to answer.
+
+    It is the one gap left and it costs nothing worth closing: the
+    message already shows the 😻, which is the best answer there is,
+    so the player who guesses into that last slot learns nothing they
+    could not already read. Padding it would put a ✖ beside a 😻 and
+    tell them the message was *out of guesses*, which is not what
+    happened to it. Their guess is still judged, scored and logged.
+    """
+    message = a_message(others=crowd(17))
+    await answer(message, BROCCOLI)
+    message.reactions.append(FakeReaction(chr(0x1F920)))
+
+    await answer(message, MOUSE)
+
+    assert message.mine == {WIN_FACE}
+    assert len(message.showing) == 19
+
+
+async def test_the_bot_does_not_ask_a_full_message_for_a_slot(server):
+    """The refusal would arrive as an exception and log like a fault, on
+    every guess to a message that is merely full - a warning nobody can
+    act on, which teaches everybody to skip warnings."""
+    message = a_message(others=crowd(20))
+    before = list(message.calls)
+
+    await answer(message, BROCCOLI)
+
+    assert message.calls == before

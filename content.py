@@ -86,7 +86,7 @@ KNOWN_DROP_EVENTS: set[str] = set()
 # judging it would let them read the ladder backwards.
 BOT_CATEGORY = "Bot"
 
-# The six answers a guess can earn, best last. **The game branches on these
+# What a guess can earn, best last. **The game branches on these
 # strings**, so they are the game's vocabulary rather than the writers' - the
 # emoji beside each one in `craving_reactions.tsv` is theirs to change, and
 # the slug is not. Declared here because this is the module that checks the
@@ -96,9 +96,21 @@ BOT_CATEGORY = "Bot"
 # `OUT_OF_GUESSES` is deliberately outside `CRAVING_LADDER`. It has no rank:
 # a message that has run out of reaction slots is not a better answer than
 # a win, it is the end of the message.
+#
+# `MESSAGE_FULL` is not an answer at all. It is padding: the bot puts it up
+# only when the ❌ failed to take the twentieth slot, which happens when a
+# player had already reacted with the ❌ themselves and the bot's own add
+# merely joined their reaction. Without it the message would sit at
+# nineteen with the ❌ showing and a slot still free - and the one guess
+# that fits in that slot is the one the bot has no room left to answer.
+#
+# **Optional, and the only outcome that is.** A file without it loads and
+# plays; the bot simply cannot close that last gap.
 CRAVING_LADDER = ("greeting", "wrong_category", "right_category", "right_type", "win")
 OUT_OF_GUESSES = "out_of_guesses"
-CRAVING_OUTCOMES = CRAVING_LADDER + (OUT_OF_GUESSES,)
+MESSAGE_FULL = "message_full"
+REQUIRED_CRAVING_OUTCOMES = CRAVING_LADDER + (OUT_OF_GUESSES,)
+CRAVING_OUTCOMES = REQUIRED_CRAVING_OUTCOMES + (MESSAGE_FULL,)
 
 # What the cat wants on the first five days a server plays, before the draw
 # takes over. **By CLDR short name, which is the catalogue's own column**, so
@@ -327,7 +339,7 @@ class CravingReaction:
     rather than each guess: a message carries its best answer so far, and a
     guess only changes it by beating that rank. `out_of_guesses` has no rank
     at all - it is not a better answer, it is the end of the message - so it
-    is `None` rather than a sixth rung.
+    is `None` rather than another rung.
     """
 
     outcome: str
@@ -1353,7 +1365,8 @@ def _check_emoji_groups(content: Content) -> list[str]:
 
 
 def _check_craving_reactions(content: Content) -> list[str]:
-    """Six outcomes, six distinct emoji, and the ladder in the right order.
+    """Every outcome present, each with its own emoji, and the ladder in
+    order.
 
     Every one of these is a way the file can be wrong while still loading,
     and each of them breaks the game silently rather than loudly: a missing
@@ -1367,7 +1380,7 @@ def _check_craving_reactions(content: Content) -> list[str]:
     problems = []
     by_outcome = content.reaction_for_outcome
 
-    missing = [name for name in CRAVING_OUTCOMES if name not in by_outcome]
+    missing = [name for name in REQUIRED_CRAVING_OUTCOMES if name not in by_outcome]
     if missing:
         problems.append(
             f"craving_reactions.tsv has no row for {', '.join(missing)}; the "
@@ -1409,14 +1422,15 @@ def _check_craving_reactions(content: Content) -> list[str]:
             "increasing - a better guess would not replace a worse one"
         )
 
-    end = by_outcome.get(OUT_OF_GUESSES)
-    if end is not None and end.progression is not None:
-        problems.append(
-            f"{OUT_OF_GUESSES} has progression {end.progression}; it is the end "
-            "of a message rather than a rung, and a rank would let it outrank a win"
-        )
+    for name in (OUT_OF_GUESSES, MESSAGE_FULL):
+        end = by_outcome.get(name)
+        if end is not None and end.progression is not None:
+            problems.append(
+                f"{name} has progression {end.progression}; it is the end of a "
+                "message rather than a rung, and a rank would let it outrank a win"
+            )
 
-    # The six are in the catalogue as `Bot`, excluded from being guessed.
+    # All of them are in the catalogue as `Bot`, excluded from guessing.
     # Without this a player could react with the bot's own 😻 and be told
     # they were right, which is the ladder read backwards off the answers.
     filed = {row.emoji: row for row in content.emoji_groups}

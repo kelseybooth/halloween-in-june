@@ -912,7 +912,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent) -> None:
         log.exception("Could not judge a craving guess")
         return
 
-    # None is one of the bot's own six coming back at it. Not a guess, so
+    # None is one of the bot's own faces coming back at it. Not a guess, so
     # no answer and no telemetry row - the player did not play.
     if guess is None:
         return
@@ -1003,6 +1003,14 @@ async def _answer_guess(message: discord.Message, guess, day) -> None:
     async def add(emoji: str) -> None:
         if emoji in mine:
             return
+        # **Do not ask for what cannot be given.** A twenty-first distinct
+        # emoji is refused, and the refusal arrives as an exception that
+        # logs like a fault - on every guess to a message that is simply
+        # full, which is a warning nobody can act on and everybody learns
+        # to skip. Joining a reaction already on the message needs no
+        # slot, so that is still worth the call.
+        if emoji not in distinct and len(distinct) >= craving.MAX_REACTIONS:
+            return
         try:
             await message.add_reaction(emoji)
         except discord.HTTPException:
@@ -1055,8 +1063,23 @@ async def _answer_guess(message: discord.Message, guess, day) -> None:
     # itself, and whether its swap freed one depends on whether a player
     # was also on the emoji it replaced.
     end = ladder.get(craving.OUT_OF_GUESSES)
-    if end is not None and len(distinct) >= craving.MAX_REACTIONS - 1:
-        await add(end.emoji)
+    if end is None or len(distinct) < craving.MAX_REACTIONS - 1:
+        return
+    await add(end.emoji)
+
+    # **The ❌ does not always take a slot.** A player can react with it
+    # themselves, and then the bot's own add just joins their reaction and
+    # the count does not move - leaving a message that says "no more
+    # guesses" with one slot still open, and the guess that fills it is
+    # the one the bot has no room left to answer.
+    #
+    # So: if the ❌ is up and the message is not full, pad it. One is
+    # enough. A player who has pre-empted both of the bot's closing emoji
+    # has spent two of the twenty slots to buy themselves one unanswered
+    # reaction, and defending against that costs more than it saves.
+    padding = ladder.get(craving.MESSAGE_FULL)
+    if padding is not None and len(distinct) < craving.MAX_REACTIONS:
+        await add(padding.emoji)
 
 
 # The cat is everywhere, so `/pet` needs no location check. It resolves in

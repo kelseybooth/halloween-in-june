@@ -222,10 +222,15 @@ Players guess by reacting to any message the bot posted. The bot answers with re
 | 👀 | 4 | today's type, wrong emoji |
 | 😻 | 5 | today's craving |
 | ❌ | — | the message has 19 distinct emoji and this guess is not the craving |
+| ✖ | — | padding: the ❌ failed to take the twentieth slot, because a player had already reacted with it |
 
 **The reactions describe the message, not the guess.** Discord allows the bot each emoji once per message, so a message carries its best answer so far and a guess only changes it by beating that rank. That makes the displayed outcome state, stored per message **per day**: the craving rolls over at midnight and the reactions do not, so the first guess to land on an old message clears what the bot left there before judging.
 
 **Never count reaction slots from memory.** Removing the bot's reaction frees a slot only when the bot was the only one who clicked it; a player who also clicked keeps the emoji there with their count. Read the live list every time. The twentieth slot is the ❌'s — the bot will not spend it on a 👀, because the next guess would fill it with the player's own emoji and leave nothing to answer with. A win is the exception.
+
+**❌ is a promise, so it has to be true.** Adding it does not always take a slot: a player can react with ❌ themselves, and the bot's add then merely joins their reaction. The message would read "no more guesses" at nineteen with one slot open — and the single guess that fits there is the one the bot has no room to answer. So when the ❌ is up and the message is not full, the bot pads the last slot with ✖. One is enough; a player who pre-empts both has spent two of the twenty slots to buy one unanswered reaction.
+
+The one gap left is deliberate: a **win** can swap out a face the bot owned alone and end at nineteen, with no ❌ because a win returns first. That message already shows the 😻, which is the best answer there is, so a guess into the last slot learns nothing it could not read — and it is still judged, scored and logged. Padding it would put a ✖ beside a 😻 and claim the message ran out of guesses, which is not what happened to it.
 
 **The opening week is written**: mouse, cut of meat, broccoli, fish, egg. Counted in draws rather than in days, so a day nobody plays is not spent.
 
@@ -233,7 +238,7 @@ Players guess by reacting to any message the bot posted. The bot answers with re
 
 **`/stats` says one sentence**, the game's only announcement, gated three ways: drop 3, *Purrsuasive* earned, and the player not having found today's. It comes last, after the relationship description and any expectant, hungry or crowded line.
 
-Three implementation notes that are each a day lost if missed. Use `on_raw_reaction_add`, not `on_reaction_add` — the latter only fires for messages still in the bot's cache, so guesses on anything posted before the last restart do nothing. Check whether **the bot itself** is among a reaction's users rather than whether the emoji is present, because a player can add any of the six by hand and Discord merges identical emoji into one reaction with a count. And **there is no private confirmation available**: a reaction carries no interaction token and ephemeral messages require one. The 😻 is the confirmation, public by design.
+Three implementation notes that are each a day lost if missed. Use `on_raw_reaction_add`, not `on_reaction_add` — the latter only fires for messages still in the bot's cache, so guesses on anything posted before the last restart do nothing. Check whether **the bot itself** is among a reaction's users rather than whether the emoji is present, because a player can add any of them by hand and Discord merges identical emoji into one reaction with a count. And **there is no private confirmation available**: a reaction carries no interaction token and ephemeral messages require one. The 😻 is the confirmation, public by design.
 
 **Crediting the tally.** Every player whose reaction matches the craving scores that day, once, whether they were first or twentieth. `on_raw_reaction_add` fires per user even when the emoji is already on the message and Discord is only incrementing its count, so a latecomer clicking the existing reaction is seen; and because it is the same emoji, it costs none of the 20 distinct-reaction slots. Store a last-credited date per player and compare before incrementing, so a player who removes and re-adds the reaction, or reacts correctly on a second bot message the same day, is counted once.
 

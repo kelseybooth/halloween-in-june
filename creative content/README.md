@@ -15,7 +15,7 @@ and turn OFF any "convert text to numbers/dates" option so ids stay as written).
 |`achievements.tsv`|46|Every achievement: name, unlock text, which drop it can first be earned at.|
 |`art.tsv`|10|One row per image: the file, and the alt text a screen reader gets instead.|
 |`emoji_groups.tsv`|1,927|**Generated.** The craving lookup: every emoji, its game category and type, and whether it can be the answer.|
-|`craving_reactions.tsv`|6|**Generated.** Which face the bot answers each craving outcome with, and how the six rank.|
+|`craving_reactions.tsv`|7|**Generated.** Which face the bot answers each craving outcome with, and how the five rungs rank.|
 
 ## The two generated files
 

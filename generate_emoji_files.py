@@ -61,6 +61,9 @@ OUTCOME_FOR_TYPE = {
     "Right Type": "right_type",
     "Win": "win",
     "Out of Guesses": "out_of_guesses",
+    # Not an answer - padding for the twentieth slot. See MESSAGE_FULL in
+    # `content`. Optional, so a catalogue without it still generates.
+    "Message Full": "message_full",
 }
 
 
@@ -107,8 +110,10 @@ def reaction_rows(catalogue: list[dict[str, str]]) -> list[tuple[str, ...]]:
     """`craving_reactions.tsv`: the six emoji the bot answers with.
 
     Ordered by the ladder rather than by the catalogue, because that is the
-    order the file is read in by a person. `out_of_guesses` has no rung - it
-    is not a better answer, it is the end of the message - so it sorts last.
+    order the file is read in by a person. The two that are not rungs sort
+    after it, in the order `OUTCOME_FOR_TYPE` lists them: the ❌ is the end
+    of a message, and the ✖ exists only to pad out the slot the ❌ failed
+    to take, so it reads second or it reads as a mystery.
 
     The `when` column is prose, and prose is not in the catalogue. It is
     carried over from the file already on disk, keyed on the outcome. A new
@@ -137,15 +142,22 @@ def reaction_rows(catalogue: list[dict[str, str]]) -> list[tuple[str, ...]]:
             )
         )
 
-    missing = set(OUTCOME_FOR_TYPE.values()) - {row[0] for row in rows}
+    required = set(OUTCOME_FOR_TYPE.values()) - {"message_full"}
+    missing = required - {row[0] for row in rows}
     if missing:
         raise Stale(
             f"the catalogue has no Bot row for {', '.join(sorted(missing))}. "
             f"Every outcome needs an emoji to answer with."
         )
 
-    # Blank progression sorts after 5 rather than before 1.
-    return sorted(rows, key=lambda row: int(row[1]) if row[1] else 99)
+    # Blank progression sorts after 5 rather than before 1, and the two
+    # that share it fall back to the order declared above rather than to
+    # wherever they happen to sit in the catalogue.
+    declared = list(OUTCOME_FOR_TYPE.values())
+    return sorted(
+        rows,
+        key=lambda row: (int(row[1]) if row[1] else 99, declared.index(row[0])),
+    )
 
 
 def existing_prose() -> dict[str, str]:

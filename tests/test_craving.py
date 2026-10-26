@@ -645,3 +645,4 @@ async def _one(*, category, type=None, other_than=None):
         if row.emoji != other_than:
             return row.emoji
     raise AssertionError(f"the file has no {category}/{type} to guess with")
+

@@ -413,13 +413,17 @@ def test_a_plate_still_resolves_to_a_category_and_type(shipped):
 
 
 def test_the_bots_own_reactions_are_excluded(shipped):
-    """The six faces the bot answers with are in the file so the writers
-    can swap them, and out of the game so that reacting with one cannot
-    be read as a guess - which would let a player walk the ladder
-    backwards from the bot's own replies."""
+    """The faces the bot answers with are in the file so the writers can
+    swap them, and out of the game so that reacting with one cannot be
+    read as a guess - which would let a player walk the ladder backwards
+    from the bot's own replies.
+
+    Seven, not six: five rungs, the ❌ that closes a message, and the
+    ✖ that pads out the slot the ❌ could not take.
+    """
     excluded = [e for e in shipped.emoji_groups if e.excluded]
 
-    assert len(excluded) == 6
+    assert len(excluded) == len(shipped.craving_reactions) == 7
     assert all(e.category == content.BOT_CATEGORY for e in excluded)
     assert not any(e.drawable for e in excluded)
 

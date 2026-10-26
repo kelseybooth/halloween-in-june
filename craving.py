@@ -45,14 +45,18 @@ import world
 
 log = logging.getLogger(__name__)
 
-# The five rungs, worst to best, and the sixth thing that is not a rung.
+# The five rungs, worst to best, and the two things that are not rungs.
 # Unpacked from the content module rather than written out again, because
 # these strings are the join between the game and `craving_reactions.tsv`
 # and a second copy is a second thing to keep in step.
 GREETING, WRONG_CATEGORY, RIGHT_CATEGORY, RIGHT_TYPE, WIN = (
     content_module.CRAVING_LADDER
 )
+# ❌ ends a message; ✖ pads out the slot the ❌ could not take when a
+# player had already reacted with it. Neither is an answer, and neither has
+# a rank.
 OUT_OF_GUESSES = content_module.OUT_OF_GUESSES
+MESSAGE_FULL = content_module.MESSAGE_FULL
 
 # Discord merges identical emoji into one reaction with a count, and caps a
 # message at 20 distinct ones. The bot needs a slot left to answer in, so the
@@ -64,7 +68,7 @@ MAX_REACTIONS = 20
 # the file has never heard of gets, because to a player there is no
 # difference between the two and there should not be.
 #
-# `Bot` is in here because those six are the bot's own replies. They are
+# `Bot` is in here because those are the bot's own replies. They are
 # `excluded` as well, which is the gate that actually stops them, but a
 # category that reads as a guess would be a quiet way back in.
 NON_GAME_CATEGORIES = frozenset({"Misc", "Cat", "Bot"})
@@ -171,7 +175,7 @@ async def type_of(emoji: str) -> str | None:
 
 
 async def reactions() -> dict[str, database.CravingReaction]:
-    """The six rows of `craving_reactions.tsv`, keyed by outcome."""
+    """`craving_reactions.tsv`, keyed by outcome."""
     session_factory = database._require_session()
     async with session_factory() as session:
         rows = await session.scalars(select(database.CravingReaction))
@@ -443,7 +447,7 @@ async def judge(
     """Score one guess, and credit the player if it was right.
 
     None means the guess was not a guess: the server is not playing yet, or
-    the emoji is one of the bot's own six and judging those would let a
+    the emoji is one of the bot's own and judging those would let a
     player walk the ladder backwards off the answers. The caller does
     nothing at all with it - no reaction, no telemetry row - because the
     player did not play.

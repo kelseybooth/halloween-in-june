@@ -1533,7 +1533,7 @@ emoji	code	name	category	type	drawable	excluded
 ♀	U+2640	female sign	Misc	Unrelated	no	no
 ♂	U+2642	male sign	Misc	Unrelated	no	no
 ⚧	U+26A7	transgender symbol	Misc	Unrelated	no	no
-✖	U+2716	multiply	Misc	Unrelated	no	no
+✖	U+2716	multiply	Bot	Message Full	no	yes
 ➕	U+2795	plus	Misc	Unrelated	no	no
 ➖	U+2796	minus	Misc	Unrelated	no	no
 ➗	U+2797	divide	Misc	Unrelated	no	no
