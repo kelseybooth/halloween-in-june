@@ -50,7 +50,7 @@ A new status line, `stats.status.craving`, in the POC copy deck:
 > She's craving something very specific today.
 
 - **Shown only once the player has earned *Purrsuasive***, so new players aren't given one more thing at once. Drop 3 on.
-- **It comes last**, after the relationship description and any expectant, hungry or crowded line.
+- **It comes last, on a line of its own**, after the relationship description and any expectant, hungry or crowded line. Run on after one of those it reads as one more sentence about the petting, which is what the beta testers reported.
 - **It vanishes once the player finds today's craving**, and returns the next day when the craving rolls over. There's no replacement line; the 😻 and the achievement announcement already confirm the win.
 
 ## Today's craving

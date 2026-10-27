@@ -5197,7 +5197,7 @@ RELATIONSHIP_BANDS: tuple[tuple[int, str], ...] = (
 
 
 async def _status_line(guild, user_id: int) -> str | None:
-    """What the cat wants from this player right now, in one sentence.
+    """What the cat wants from this player right now.
 
     **Private only.** It is progress rather than result - a standing
     condition that changes minute to minute - and looking at somebody
@@ -5214,7 +5214,12 @@ async def _status_line(guild, user_id: int) -> str | None:
     Expectant and crowded can never coincide, so the table's dash in
     those rows is a fact rather than a convention.
 
-    **The hunger half doubles as the tutorial reminder.** From drop 3
+    **The craving hint is a line of its own**, not a fourth clause on
+    the end. The three conditions are all about where this player
+    stands with the cat; the craving is about a game, and run on after
+    them the testers read it as one more sentence about the petting.
+
+    **The hunger half doubles as the tutorial reminder.** From drop 10
     an un-graduated player opening `/stats` is told the cat is hungry
     right beside the open quest, which is the job the follow-the-player
     nudge would have done before the cat started following everybody.
@@ -5240,17 +5245,20 @@ async def _status_line(guild, user_id: int) -> str | None:
     else:
         keys = []
 
-    # Last, and on its own if nothing else is true. It is the only place
-    # the craving game is ever mentioned, so it has to be able to appear
-    # with no other condition to hang off.
+    # Last, and on a line of its own. It is the only place the craving
+    # game is ever mentioned, so it has to be able to appear with no
+    # other condition to hang off - and it is a different kind of fact
+    # from the rest, which is what the testers caught: run on after
+    # *watching you expectantly*, it reads as one more sentence about
+    # how the petting is going rather than as a game to go and play.
+    hint = None
     if await _craving_is_open(guild_id, user_id):
-        keys.append("stats.status.craving")
-
-    if not keys:
-        return None
+        hint = await phrasing.default_say("stats.status.craving")
 
     said = [await phrasing.default_say(key) for key in keys]
-    return " ".join(part for part in said if part) or None
+    # The conditions themselves still compose into one sentence each.
+    lines = [" ".join(part for part in said if part), hint]
+    return "\n".join(line for line in lines if line) or None
 
 
 # The achievement that opens the hint. Drop 2's, and the gate is about

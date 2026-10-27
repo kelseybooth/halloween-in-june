@@ -54,23 +54,23 @@ async def server(db):
     return db, guild, halloween
 
 
+# Every line the block can be made of. The three conditions still
+# compose into one line between them; the craving hint is a line of
+# its own, so a test that expects both asks for both.
+WANTED = (EXPECTANT, HUNGRY, BOTH, CROWDED, f"{HUNGRY} {CROWDED}", CRAVING)
+
+
 async def status(server, who=ALICE):
-    """The status line out of a real `/stats`, or None if there is none."""
+    """The status block out of a real `/stats`, or None if there is none.
+
+    Joined back up with the newline the card puts between its lines, so
+    a test can still say what it expects as one string.
+    """
     _, guild, halloween = server
     interaction = FakeInteraction(who, GUILD_A, guild=guild, channel=halloween)
     await bot.stats.callback(interaction, None)
     body = interaction.sent[-1][1]["embed"].description.split("\n")
-    wanted = (
-        EXPECTANT, HUNGRY, BOTH, CROWDED,
-        f"{HUNGRY} {CROWDED}",
-        CRAVING,
-        f"{EXPECTANT} {CRAVING}",
-        f"{HUNGRY} {CRAVING}",
-        f"{BOTH} {CRAVING}",
-        f"{CROWDED} {CRAVING}",
-        f"{HUNGRY} {CROWDED} {CRAVING}",
-    )
-    return next((line for line in body if line in wanted), None)
+    return "\n".join(line for line in body if line in WANTED) or None
 
 
 async def pet(server, times, who=ALICE):
@@ -348,7 +348,24 @@ def test_the_gating_achievement_is_one_that_exists():
 async def test_the_hint_appears_once_the_player_has_purrsuaded_her(server):
     await craving_time()
 
-    assert await status(server) == f"{EXPECTANT} {CRAVING}"
+    assert await status(server) == f"{EXPECTANT}\n{CRAVING}"
+
+
+async def test_the_hint_is_a_line_of_its_own(server):
+    """**Testing feedback**, on the beta build. Run on after *watching
+    you expectantly* the two read as one thought about how the petting
+    is going, and the game the second sentence points at is missed.
+
+    Out of the real embed rather than off the helper, because the
+    newline only means anything if it survives into the card.
+    """
+    await craving_time()
+
+    body = (await _embed(server)).description.split("\n")
+
+    assert body[2] == EXPECTANT
+    assert body[3] == CRAVING
+    assert body[4].startswith("Total pets")
 
 
 async def test_it_comes_last(server):
@@ -357,7 +374,7 @@ async def test_it_comes_last(server):
     await craving_time()
     await pet(server, 5)
 
-    assert await status(server) == f"{CROWDED} {CRAVING}"
+    assert await status(server) == f"{CROWDED}\n{CRAVING}"
 
 
 async def test_it_can_be_the_whole_line(server):
