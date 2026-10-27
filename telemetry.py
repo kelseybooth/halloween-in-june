@@ -44,9 +44,11 @@ from database import (  # noqa: F401 - the vocabulary, re-exported for call site
     SUCCESS,
     SYSTEM,
     TAKE,
+    THREAD_REMOVED,
     UNKNOWN,
     UNKNOWN_NOUN,
     USE,
+    WRONG_PLACE,
     WRONG_ROOM,
 )
 

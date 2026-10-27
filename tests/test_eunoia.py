@@ -49,6 +49,10 @@ async def house(db):
     await content_loader.load_content(content_module.load_files())
     rooms = {rid: name for rid, name in await resolve.all_rooms()}
     halloween.add_active(*rooms.values())
+    # Which channel the game lives in, by id. `/start-game` sets it on a
+    # real server, and the place check reads it - so a fixture without it
+    # is a server where nobody has started anything.
+    await db.set_announcement_channel(GUILD_A, halloween.id)
     for who in (ALICE, BOB):
         await db.start_game(who, GUILD_A, "EN", await resolve.rooms_open_at_launch())
     threads = {t.name: t for t in halloween.threads}
@@ -409,22 +413,28 @@ async def test_two_players_in_one_room_each_get_their_own_two(house):
 
 
 async def test_the_halloween_channel_is_its_own_bucket(house):
-    """A tenth bucket alongside the nine rooms."""
+    """A tenth bucket alongside the nine rooms.
+
+    Walking out to the road is what it takes to pet there now: the cat is
+    wherever the player is, and the hand doing the petting is attached to
+    a body that is in one place.
+    """
     _, _, halloween, _, _ = house
     for _ in range(3):
         await act(house, bot.pet, None, "KI")
 
-    await act(house, bot.pet, None, channel=halloween)
+    await act(house, bot.pet, None, "CH", channel=halloween)
 
     assert len(halloween.posted) == 1
 
 
-async def test_petting_works_in_the_halloween_channel(house):
-    """Which is what makes the discovery argument work: an admin can pet the
-    cat there on day one, before anybody has run `/enter`."""
+async def test_petting_works_on_the_road(house):
+    """Which is what makes the discovery argument work: an admin can pet
+    the cat in the channel on day one, when the road is the whole game and
+    nobody has been inside anything."""
     db, guild, halloween, _, _ = house
 
-    interaction = await act(house, bot.pet, None, channel=halloween)
+    interaction = await act(house, bot.pet, None, "CH", channel=halloween)
 
     assert replies(interaction)
     assert halloween.posted

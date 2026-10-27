@@ -140,11 +140,17 @@ async def test_something_dropped_joins_the_listing_for_everyone(house):
     assert "spoon" in (await look(BOB)).reply
 
 
-async def test_looking_outside_the_house_is_refused(db):
+async def test_looking_from_outside_the_room_you_are_in_is_refused(db):
+    """**Nobody is nowhere.** A member who has only petted the cat has no
+    row, which drop 10 reads as standing on the road rather than as having
+    no location at all - so the refusal says where they are instead of
+    saying there is no room."""
     await db.ensure_user_exists(ALICE, GUILD_A)
     await content_loader.load_content(a_house())
 
-    assert "must be in a room" in (await look()).reply
+    reply = (await look()).reply
+
+    assert "your corporeal self is in" in reply
 
 
 # --------------------------------------------------------------------------

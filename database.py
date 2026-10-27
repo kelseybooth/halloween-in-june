@@ -84,6 +84,14 @@ LOOK = "look"
 # typed: two rows for one event is how a count ends up doubled. What the
 # achievements read is `thing_uses`, which the move still writes.
 MOVE = "move"
+# A world verb typed somewhere the player's body is not. Its own action
+# rather than a `reason` on each verb, because the question it answers is
+# about the interface rather than about the game: how often does anybody
+# try to play from the wrong window, and which verb were they holding.
+WRONG_PLACE = "wrong_place"
+# The bot taking somebody out of a room thread they do not belong in.
+# `actor` is the system: nobody asked for it, which is the whole point.
+THREAD_REMOVED = "thread_removed"
 HINT = "hint"
 UNKNOWN_NOUN = "unknown_noun"
 RECOVERY = "recovery"
@@ -2022,6 +2030,24 @@ async def update_current_room(user_id: int, guild_id: int, room_name: str) -> No
         raise
 
 
+async def locations_in(guild_id: int) -> dict[int, str]:
+    """Where everybody in this server is standing, by user id.
+
+    One read for a whole sweep rather than one per thread member: the
+    sweep asks the same question of every room, and a server with nine
+    rooms and thirty players would otherwise be thirty round trips an
+    hour to answer it.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(PlayerGameState.user_id, PlayerGameState.current_room).where(
+                PlayerGameState.guild_id == guild_id
+            )
+        )
+    return {user_id: room for user_id, room in rows if room}
+
+
 async def send_players_home(guild_id: int, valid: set[str], home: str) -> int:
     """Put every player who is nowhere real into `home`. Returns how many.
 
@@ -3317,6 +3343,15 @@ CONFIG_KEYS: dict[str, tuple[int, str]] = {
     # fine - the game is a thing to notice, not a thing to solve - so
     # the figure has to be small enough that copying it is not the
     # cheapest relationship in the game.
+    # Minutes between membership sweeps. A number rather than a constant
+    # because it is the kind of thing that wants turning down for an hour
+    # while somebody watches it work, and turning back up afterwards -
+    # and a deploy to do that is a deploy nobody makes.
+    "thread_sweep_minutes": (
+        60,
+        "How often the bot checks that every room thread holds exactly the "
+        "players standing in that room.",
+    ),
     "craving_points": (
         5,
         "What finding the cat's daily craving is worth, once per player per "

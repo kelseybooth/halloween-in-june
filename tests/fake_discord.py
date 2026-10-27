@@ -47,6 +47,15 @@ class FakeThread:
         self._channel = channel
         self.added_users: list[int] = []
         self.removed_users: list[int] = []
+        # Who is actually in it, as opposed to the two logs above. The
+        # sweep asks this; the logs answer what happened, and membership
+        # answers what is true now.
+        #
+        # **A mention does not put anybody in here.** Discord's does, and
+        # nothing offline can model that - see test_arrivals.py. A test
+        # that needs somebody inside a thread seeds this directly, which
+        # is also exactly what an admin adding them by hand looks like.
+        self.members: list[int] = []
         self.deleted = False
         self.posted: list[str] = []
         self.messages: list["FakeMessage"] = []
@@ -88,9 +97,16 @@ class FakeThread:
         if self.name in getattr(self._channel, "add_user_fails", ()):
             raise http_error(message=f"cannot add to {self.name}")
         self.added_users.append(user.id)
+        if user.id not in self.members:
+            self.members.append(user.id)
 
     async def remove_user(self, user):
         self.removed_users.append(user.id)
+        if user.id in self.members:
+            self.members.remove(user.id)
+
+    async def fetch_members(self):
+        return [SimpleNamespace(id=user_id) for user_id in self.members]
 
 
 class FakeChannel:

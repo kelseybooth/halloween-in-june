@@ -307,11 +307,20 @@ async def test_an_ambiguous_name_asks_rather_than_guessing(house):
     assert await bag() == {}
 
 
-async def test_taking_outside_the_house_is_refused(db):
+async def test_taking_in_a_room_you_are_not_standing_in_is_refused(db):
+    """**A player with no row is on the road**, not nowhere. That is drop
+    10's model: there is always a location, so the refusal can always say
+    where it is rather than that there is no room at all."""
     await db.ensure_user_exists(ALICE, GUILD_A)
     await content_loader.load_content(a_house(a_thing("spoon")))
 
-    assert "must be in a room" in (await take()).reply
+    reply = (await take()).reply
+
+    assert ELSEWHERE in reply
+    # This fixture's house has no channel row to take a name from, and no
+    # #halloween to link to, so the refusal falls back to the bare id. In
+    # the game it is a link to the channel they are standing in.
+    assert "CH" in reply
 
 
 # --------------------------------------------------------------------------
@@ -855,6 +864,12 @@ async def command(fn, arg, channel, user_id=ALICE, guild_id=GUILD_A, guild=None)
     return interaction
 
 
+# The wrong-place reply, by the half of it that is not the link. Drop 10
+# replaced "that only works inside the house" with it: the house is not
+# one place any more, so the question is not whether a player is inside it
+# but whether they are in the room they are standing in.
+ELSEWHERE = "your corporeal self is in"
+
 WORLD_VERBS = [
     pytest.param(lambda: bot.look, None, id="look"),
     pytest.param(lambda: bot.take, "spoon", id="take"),
@@ -864,12 +879,14 @@ WORLD_VERBS = [
 
 
 @pytest.mark.parametrize("verb, arg", WORLD_VERBS)
-async def test_a_world_verb_is_refused_outside_the_house(house, verb, arg):
+async def test_a_world_verb_is_refused_from_another_channel(house, verb, arg):
+    """Anywhere that is neither the player's room nor the channel is
+    nowhere, and gets the same answer as the wrong room."""
     await content_loader.load_content(a_house(a_thing("spoon")))
 
     reply = (await command(verb(), arg, somewhere_else())).reply
 
-    assert "only works inside the house" in reply
+    assert ELSEWHERE in reply
 
 
 @pytest.mark.parametrize("verb, arg", WORLD_VERBS)
@@ -879,7 +896,7 @@ async def test_a_world_verb_works_in_a_room_thread(house, verb, arg):
     # Threads are named after the room, not its id.
     reply = heard(await command(verb(), arg, a_room_thread("Entryway")))
 
-    assert "only works inside the house" not in reply
+    assert ELSEWHERE not in reply
 
 
 async def test_the_refusal_says_where_the_player_actually_is(house):
@@ -901,7 +918,7 @@ async def test_a_thread_outside_the_halloween_channel_is_not_the_house(house):
 
     reply = (await command(bot.look, None, impostor)).reply
 
-    assert "only works inside the house" in reply
+    assert ELSEWHERE in reply
 
 
 async def test_a_thread_named_after_no_room_is_not_the_house(house):
@@ -914,7 +931,7 @@ async def test_a_thread_named_after_no_room_is_not_the_house(house):
 
     reply = (await command(bot.look, None, chatter)).reply
 
-    assert "only works inside the house" in reply
+    assert ELSEWHERE in reply
 
 
 async def test_the_player_verbs_are_not_gated(house):
@@ -926,7 +943,7 @@ async def test_the_player_verbs_are_not_gated(house):
 
     reply = (await command(bot.inventory, None, somewhere_else())).reply
 
-    assert "only works inside the house" not in reply
+    assert ELSEWHERE not in reply
     assert "spoon" in reply
 
 
