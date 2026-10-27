@@ -80,7 +80,7 @@ The empty state is carrying real weight: with `/help` deferred, `/stats` is the 
 | `stats.status.hungry` | cat can be fed (drop 3 on), pet chance not above 50% | The cat looks at you with hunger in her eyes. | approved |
 | `stats.status.expectant_hungry` | both | The cat looks at you expectantly with hunger in her eyes. | approved |
 | `stats.status.crowded` | pet chance below 50%; follows the hunger line when both apply | You've pet the cat a lot recently. | approved |
-| `stats.status.craving` | drop 3 on, the player has earned Purrsuasive, and they haven't found today's craving; shown last, after any other status line. Gone for the rest of the day once they find it | She's craving something very specific today. | approved |
+| `stats.status.craving` | drop 3 on, the player has earned Purrsuasive, and they haven't found today's craving; shown last, on a line of its own, after any other status line. Gone for the rest of the day once they find it | She's craving something very specific today. | approved |
 
 ### Buttons
 
