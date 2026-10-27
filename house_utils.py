@@ -171,6 +171,16 @@ async def remove_player_from_thread(thread: discord.Thread, player_id: int) -> N
     await thread.remove_user(discord.Object(id=player_id))
 
 
+async def members_of(thread: discord.Thread) -> list[int]:
+    """Everybody in a thread, by id, asked of Discord rather than the cache.
+
+    The cache is populated by events this process saw, so a bot that
+    restarted knows nothing about who was added while it was down - which
+    is precisely the case the sweep exists for.
+    """
+    return [member.id for member in await thread.fetch_members()]
+
+
 async def unarchive_all(
     channel: discord.TextChannel, room_names: list[str]
 ) -> tuple[int, list[str]]:
