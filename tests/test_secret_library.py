@@ -435,7 +435,18 @@ async def test_the_living_room_reads_the_same_for_everybody(house):
 # --------------------------------------------------------------------------
 
 
-def test_only_the_four_secret_exits_override_the_move_lines():
+def test_the_four_secret_exits_and_the_two_doors_override_the_move_lines():
+    """**Six now, for two unrelated reasons.**
+
+    The four secrets, because the defaults give the library away twice
+    over: *exits via the oak tree* teaches the Courtyard that the tree is
+    a way out, and *arrives from the Secret Library* names the room.
+
+    The front door and the house, because the defaults describe one room
+    seen from another - and these two cross between the house and the
+    road, where "arrives from the channel" is not a sentence about
+    anywhere a player has been.
+    """
     parsed = content_module.load_files()
     overridden = {
         row.entity_id
@@ -443,7 +454,7 @@ def test_only_the_four_secret_exits_override_the_move_lines():
         if row.text.get("move_depart") or row.text.get("move_arrive")
     }
 
-    assert overridden == {"CS", "LS", "SL", "SC"}
+    assert overridden == {"CS", "LS", "SL", "SC", "front_door", "house"}
 
 
 def test_the_override_lines_use_the_token_that_already_exists():

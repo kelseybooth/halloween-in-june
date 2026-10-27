@@ -34,10 +34,16 @@ PLAYER_STATES = {
     "passage_open",
     "library_found",
     "drawer_unjammed",
-    # Two flags that gate a message rather than a door: the tutorial fires
-    # once ever, and the cat's reaction to a dirty diaper is only funny the
-    # first time. Both are the same shape as `drawer_unjammed` - set once,
-    # never cleared - which is why neither needs a table of its own.
+    # Two flags that gate a message rather than a door. The cat's reaction
+    # to a dirty diaper is only funny the first time; both are the same
+    # shape as `drawer_unjammed` - set once, never cleared - which is why
+    # neither needs a table of its own.
+    #
+    # **Nothing sets `tutorial_seen` any more.** The tutorial was retired
+    # with `/enter` at drop 10, as the copy deck had already settled: the
+    # hint rail and the gating replace it. The state stays registered
+    # because every player who saw it has a row that names it, and an
+    # unknown state is a row that fails to load.
     "tutorial_seen",
     "diaper_seen",
 }

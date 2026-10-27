@@ -85,9 +85,12 @@ async def test_rooms_are_ordered_by_sort_order(house):
     assert [r[0] for r in await resolve.all_rooms()] == ["KI", "EN"]
 
 
-async def test_the_shipped_house_has_nine_rooms_and_twenty_exits(house):
-    """Ten rows, nine rooms. The tenth is the channel, which is a room in
-    the registry and nowhere else: no exits, no prose, never walked to."""
+async def test_the_shipped_house_has_nine_rooms_and_twenty_two_exits(house):
+    """Ten rows, nine rooms, and the tenth is the road.
+
+    It used to be a room in the registry and nowhere else - no exits, no
+    prose, never walked to. Drop 10 gave it both of its two: the house
+    across the road, and the front door back out."""
     await content_loader.load_content(content_module.load_files())
 
     rooms = await resolve.all_rooms()
@@ -97,7 +100,7 @@ async def test_the_shipped_house_has_nine_rooms_and_twenty_exits(house):
     total = 0
     for room_id, _ in rooms:
         total += len(await resolve.exits_from(GUILD_A, room_id))
-    assert total == 20
+    assert total == 22
 
 
 async def test_the_shipped_house_is_still_fully_connected(house):
@@ -112,9 +115,10 @@ async def test_the_shipped_house_is_still_fully_connected(house):
                 seen.add(exit_.destination)
                 queue.append(exit_.destination)
 
-    # The channel is deliberately unreachable: it is where players
-    # already are, not somewhere they walk to.
-    assert seen == set(rooms) - {content_module.CHANNEL_ROOM}
+    # **The channel included**, which is the change drop 10 made: it was
+    # deliberately unreachable while it was only somewhere players already
+    # were, and it is a place with a door now.
+    assert seen == set(rooms)
 
 
 # --------------------------------------------------------------------------
@@ -419,10 +423,15 @@ async def test_every_exit_is_named_in_its_room_prose(db):
     and nothing checked it.
     """
     parsed = content_module.load_files()
-    prose = {
-        (row.entity_id, row.state): (row.text.get("look") or "").lower()
-        for row in parsed.room_text
-    }
+    # **Every fragment, joined.** Keyed by room and state alone, the
+    # channel's eight sentences overwrote each other and only the last
+    # survived - so an exit named in any earlier one read as unmentioned.
+    # The nine rooms have a single fragment each and never showed it.
+    prose: dict[tuple[str, str], str] = {}
+    for row in parsed.room_text:
+        key = (row.entity_id, row.state)
+        prose[key] = f"{prose.get(key, '')} {(row.text.get('look') or '').lower()}"
+
 
     unmentioned = []
     for thing in parsed.things:

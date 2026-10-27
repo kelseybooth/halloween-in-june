@@ -79,6 +79,11 @@ USE = "use"
 TAKE = "take"
 DROP = "drop"
 LOOK = "look"
+# Going somewhere, including out to the road and back. One row per move and
+# not also a `use`, even though `/use front door` is how most of them are
+# typed: two rows for one event is how a count ends up doubled. What the
+# achievements read is `thing_uses`, which the move still writes.
+MOVE = "move"
 HINT = "hint"
 UNKNOWN_NOUN = "unknown_noun"
 RECOVERY = "recovery"
@@ -107,6 +112,10 @@ NOT_TAKEABLE = "not_takeable"
 RAMP = "ramp"
 NOT_HELD = "not_held"
 FULL_HANDS = "full_hands"
+# `/go` at something that is not a way out. Its own refusal is what the
+# player reads, which is what keeps a disguised exit disguised - so the
+# only place the difference is visible at all is this column.
+NOT_AN_EXIT = "not_an_exit"
 
 # A real zone, not a fixed offset, so midnight stays midnight across DST.
 PACIFIC = ZoneInfo("America/Los_Angeles")
@@ -2013,6 +2022,36 @@ async def update_current_room(user_id: int, guild_id: int, room_name: str) -> No
         raise
 
 
+async def send_players_home(guild_id: int, valid: set[str], home: str) -> int:
+    """Put every player who is nowhere real into `home`. Returns how many.
+
+    **A location has to be somewhere that exists.** A build where a room
+    arrives later, a drop renumbered under a running server, a row written
+    by a version that is now two deploys old: each can leave a player
+    standing in a room their server has not got, and every verb they type
+    then answers about it. Out on the road is the one place that is always
+    there.
+
+    Idempotent, and cheap when there is nothing to do - which is the usual
+    case, and why this can run on every boot.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        result = await session.execute(
+            update(PlayerGameState)
+            .where(
+                PlayerGameState.guild_id == guild_id,
+                or_(
+                    PlayerGameState.current_room.is_(None),
+                    PlayerGameState.current_room.not_in(valid),
+                ),
+            )
+            .values(current_room=home, updated_at=func.now())
+        )
+        await session.commit()
+    return result.rowcount or 0
+
+
 async def delete_game_state(user_id: int, guild_id: int) -> None:
     """Remove a player's game state in this server.
 
@@ -3037,7 +3076,7 @@ async def relationship_ranking(guild_id: int) -> list[tuple[int, int]]:
 
     **Ties break on the older row**, so two players on the same score do
     not swap places between one viewing and the next. `created_at` is
-    the row's birth, which is the first pet or the first `/enter`: near
+    the row's birth, which is the first pet or the first way in: near
     enough to "first interaction" to order by, and the only such date
     stored.
 

@@ -16,7 +16,7 @@ baby_talk	public	Baby Talk	Used the baby monitor.	40	110
 dressed_for_the_season	public	Dressed for the Season	Put on a Halloween costume.	40	120				
 met_the_craving	secret	Met the Craving	Worked out the cat's daily craving.	3	130				Drop 3. The craving game: today's food, guessed by emoji reaction on any cat or bot message.
 forwarding_address	public	Forwarding Address	Sent the letter on to the right address.	99	140				Blocked: the letter is a post-MVP deployment
-a_little_bit_lost	secret	A Little Bit Lost	Entered the same room five times in five minutes.	30	10				
+a_little_bit_lost	secret	A Little Bit Lost	Entered the same room five times in five minutes.	10	10				Drop 10. The road counts as a room, so going in and out of the house counts as entering.
 out_on_a_limb	secret	Out on a Limb	Climbed the tree in the courtyard.	50	20				
 bulk_buyer	secret	Bulk Buyer	Carried 25 cans of cat food at once. Costco has a lot to answer for.	10	30				
 making_friends	secret	Making Friends	Built a good relationship by petting the cat 200 times.	0	40				

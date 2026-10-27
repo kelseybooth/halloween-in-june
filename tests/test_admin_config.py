@@ -231,7 +231,7 @@ def test_the_two_testing_tools_are_gone():
 
 @pytest.mark.parametrize(
     "name",
-    ["pet", "stats", "look", "inventory", "take", "drop", "use", "enter"],
+    ["pet", "stats", "look", "inventory", "take", "drop", "use", "go"],
 )
 def test_the_player_commands_are_registered(name):
     assert name in commands()

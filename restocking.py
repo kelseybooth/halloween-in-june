@@ -233,10 +233,10 @@ async def set_initialized_on(guild_id: int, on: date | None = None) -> date:
     Restock day numbers and the drop calendar both count from here, so a
     server that never gets this never restocks.
 
-    **Set by the first `/enter`, not by building the house.** An admin can
-    initialize days before the game opens, and the calendar should start when
-    somebody is actually inside to see it. Idempotent, so every later `/enter`
-    is a no-op and the first one wins.
+    **Set by the first walk in through the front door, not by building the
+    house.** An admin can initialize days before the game opens, and the
+    calendar should start when somebody is actually inside to see it.
+    Idempotent, so every later entry is a no-op and the first one wins.
     """
     existing = await initialized_on(guild_id)
     if existing:

@@ -265,13 +265,27 @@ def test_the_channel_may_now_have_prose():
     assert not module.validate(parsed)
 
 
-def test_no_exit_may_touch_the_channel():
-    """Never reachable by movement, enforced in both directions."""
+def test_the_channel_has_one_door_each_way():
+    """**It was a ban until drop 10.** No exit could join the channel to
+    the house in either direction, because the road was where players
+    already were rather than somewhere they walked to - and the content
+    check enforced it.
+
+    What replaces the ban is a shape. One way in, one way out, and the
+    Entryway at the far end of both: the road is reachable now, which is
+    the stronger check of the two, because deleting the exits fails it
+    where the old rule called the deletion correct.
+    """
     import content as module
 
     parsed = module.load_files()
-    assert not [
-        t
+    doors = {
+        (t.room_id, t.destination_room_id): t.thing_id
         for t in parsed.things
         if t.is_exit and module.CHANNEL_ROOM in (t.room_id, t.destination_room_id)
-    ]
+    }
+
+    assert doors == {
+        (module.CHANNEL_ROOM, "EN"): "house",
+        ("EN", module.CHANNEL_ROOM): "front_door",
+    }
