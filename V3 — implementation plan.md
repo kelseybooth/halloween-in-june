@@ -1,6 +1,6 @@
 # V3 — implementation plan
 
-*Refreshed 19 October from `v3-implementation-plan.md`, the version delivered with the Phase 3a work order, plus a status section recording where 3a and 3b stand.*
+*Refreshed 19 October from `archived/v3-implementation-plan.md`, the version delivered with the Phase 3a work order, plus a status section recording where 3a and 3b stand.*
 
 V3 is the post-playtest code line. It ships drops 0 through 7 and is not finished when drop 0 ships.
 
