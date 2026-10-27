@@ -131,18 +131,31 @@ async def test_a_thing_with_a_refusal_and_no_success_refuses(house):
         and not text.get((t.thing_id, "default"), {}).get("use")
     }
 
-    # The cat, the four gated exits, and the five cans - whose `use` text
-    # already read as a failed attempt ("looking for a pull-tab") and moved
-    # to `use_fail` when feeding the cat came to need a can opener.
+    # The cat, the four gated exits, and four of the five cans - whose
+    # `use` text already read as a failed attempt ("looking for a
+    # pull-tab") and moved to `use_fail` when feeding came to need a can
+    # opener. **The salmon left this set in drop 10**, which is the whole
+    # of why drop 10 can be won: it is the one flavor with a ring on the
+    # lid, so it has a success to describe and its refusal is now about
+    # the missing bowl rather than the missing opener.
+    #
+    # The bowl joined in its place, and for the original reason rather
+    # than a new one: there is nothing to do with an empty bowl, so the
+    # writers filled in the refusal and left the success blank, which is
+    # them saying what they meant.
     #
     # Then the eight channel nouns playtesters went at with `/use`. They
     # are listed rather than filtered out by type, because the whole
     # point of this test is that the shape is rare and deliberate: a
     # ninth arriving silently is the thing it exists to catch.
+    # The house across the road joined them in drop 10's addendum, and
+    # for the exits' reason rather than a new one: its `default` row is
+    # the locked door, which has a refusal to give and nowhere to go.
     assert shaped == {
-        "eunoia", "EH", "HE", "LS", "SL",
-        "cat_food_chicken", "cat_food_salmon", "cat_food_tuna",
+        "eunoia", "EH", "HE", "LS", "SL", "house",
+        "cat_food_chicken", "cat_food_tuna",
         "cat_food_expired", "cat_food_gourmet",
+        "cat_bowl",
         "branches", "leaves", "fence", "wasp_nest",
         "stand", "shelves", "firewood_bin", "coin_slot",
     }

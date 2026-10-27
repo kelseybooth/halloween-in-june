@@ -67,6 +67,11 @@ async def house(db):
     await database.set_announcement_channel(GUILD_A, halloween.id)
     await resolve.set_current_drop(GUILD_A, LAST_DROP)
     await db.start_game(ALICE, GUILD_A, "EN", await resolve.rooms_open_at_launch())
+    # Past the Entryway's feeding gate, because this file is about which
+    # window a command was typed in and nothing else. A player who had
+    # not fed the cat could not leave the hall, and half of these tests
+    # would be failing on a condition they never mention.
+    await db.notice(GUILD_A, ALICE, content_module.FED_THE_CAT)
     return db, guild, halloween, rooms
 
 
@@ -187,7 +192,7 @@ async def test_the_right_window_is_not_refused(house):
     interaction = await run(house, bot.look, room="EN")
 
     assert SPIRIT not in replies(interaction)
-    assert "coat rack" in replies(interaction)
+    assert "coat tree" in replies(interaction)
 
 
 async def test_the_channel_is_the_right_window_for_somebody_outside(house):

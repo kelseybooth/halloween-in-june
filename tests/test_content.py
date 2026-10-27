@@ -47,12 +47,17 @@ def problems_matching(c, fragment):
 def test_the_shipped_content_parses():
     c = content.load_files()
     assert len(c.rooms) == 10  # nine rooms and the channel
-    assert len(c.things) == 163  # ...the stand's four, and the house across the road
+    # ...the stand's four, the house across the road, her bowl, and the
+    # brass key that opens the front door
+    assert len(c.things) == 165
     # Five out with `/enter`: its three lines, `#welcome`, and the
     # tutorial, which it was the only thing that posted. Five in: the two
     # wrong-place replies, `/go`'s own refusal, and the two hints that
-    # teach the door in each direction.
-    assert len(c.defaults) == 115
+    # teach the door in each direction. Then drop 10's four: three
+    # feeding lines and the notice that the Entryway has opened up. Then
+    # the addendum's two: the key falling out of the bed, and the door
+    # coming open.
+    assert len(c.defaults) == 121
     assert len(c.drops) == 9      # 0 to 3 built; 10 to 50 named ahead of their content
     assert len(c.restocks) == 4  # the toy channel row joined them
 

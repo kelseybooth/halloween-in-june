@@ -513,7 +513,8 @@ async def test_the_shipped_content_loads(two_servers):
     report = await content_loader.load_content(parsed)
 
     assert report.content_rows["room_types"] == 10  # nine rooms and the channel
-    assert report.content_rows["thing_types"] == 163  # ...and the house across the road
+    # ...the house across the road, her bowl, and the key to its door
+    assert report.content_rows["thing_types"] == 165
     assert report.content_rows["drops"] == 9  # 0 to 3 built, 10 to 50 named
     assert report.content_rows["restocks"] == 4  # the toy channel row joined them
 

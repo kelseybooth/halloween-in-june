@@ -739,10 +739,20 @@ async def real_house(db):
     return db, FakeGuild(GUILD_A, channels=[channel], members=[FakeMember(ALICE)])
 
 
-async def enter_properly(db, room="EN"):
-    """Entering the way `/enter` does, with ids in both columns."""
+async def enter_properly(db, room="EN", fed=True):
+    """A player properly inside the house, with ids in both columns.
+
+    **Fed by default, because that is what "properly inside" means from
+    drop 10 on.** The Entryway's inner doorways do not exist for a
+    player who has not fed the cat, so a test about the Living Room's
+    doorway that walked in unfed would be testing the feeding gate by
+    accident and failing for a reason it never mentions. The gate itself
+    is tested where it belongs, in `test_feeding.py`.
+    """
     await db.ensure_user_exists(ALICE, GUILD_A)
     await db.start_game(ALICE, GUILD_A, room, await resolve.rooms_open_at_launch())
+    if fed:
+        await db.notice(GUILD_A, ALICE, content_module.FED_THE_CAT)
 
 
 async def where_is_alice(db):
@@ -1197,14 +1207,25 @@ async def test_the_opener_arrives_with_the_kitchen_it_is_in(real_house):
 
 
 @pytest.mark.parametrize(
-    "can",
-    ["cat_food_chicken", "cat_food_salmon", "cat_food_tuna",
-     "cat_food_expired", "cat_food_gourmet"],
+    "can, requires",
+    [
+        # The salmon has a pull ring, which is what makes drop 10
+        # winnable: the opener is in the pantry and the kitchen does not
+        # open until 30, so a salmon that needed one could never be used
+        # in the drop that hides it behind the coat tree.
+        ("cat_food_salmon", "cat_bowl"),
+        ("cat_food_chicken", "can_opener|cat_bowl"),
+        ("cat_food_tuna", "can_opener|cat_bowl"),
+        ("cat_food_gourmet", "can_opener|cat_bowl"),
+        # The expired can is the exception twice over: she will not eat
+        # it, so it is not a feed and wants no bowl.
+        ("cat_food_expired", "can_opener"),
+    ],
 )
-async def test_every_can_wants_the_opener(real_house, can):
+async def test_every_can_says_what_it_needs(real_house, can, requires):
     parsed = content_module.load_files()
 
-    assert parsed.things_by_id[can].requires == "can_opener"
+    assert parsed.things_by_id[can].requires == requires
 
 
 # --------------------------------------------------------------------------

@@ -170,14 +170,23 @@ async def test_lumber_disappears_once_the_staircase_is_done(house):
     assert isinstance(gone, reach.NotFound)
 
 
+# The Entryway's staircase sentence is fragment 7, and every fragment
+# past the first is gated on having fed the cat. Asked without that,
+# both states of the room come back as the one sentence a new player
+# reads - the same string twice, and no evidence of anything.
+FED = frozenset({content_module.FED_THE_CAT})
+
+
 async def test_the_room_descriptions_swap(house):
     """Both the Entryway and the Upstairs Hallway have a stairs_repaired row."""
-    before_en = await resolve.room_look(GUILD_A, "EN")
+    before_en = await resolve.room_look(GUILD_A, "EN", unlocked=FED)
     before_uh = await resolve.room_look(GUILD_A, "UH")
 
     await states.set_server_state(GUILD_A, "stairs_repaired")
 
-    assert await resolve.room_look(GUILD_A, "EN", "stairs_repaired") != before_en
+    assert (
+        await resolve.room_look(GUILD_A, "EN", "stairs_repaired", FED) != before_en
+    )
     assert await resolve.room_look(GUILD_A, "UH", "stairs_repaired") != before_uh
 
 
@@ -202,8 +211,8 @@ async def test_a_room_written_for_your_state_still_wins(house):
     """The other half: the fallback must not swallow the specific row."""
     await states.set_server_state(GUILD_A, "stairs_repaired")
 
-    assert await resolve.room_look(GUILD_A, "EN", "stairs_repaired") != (
-        await resolve.room_look(GUILD_A, "EN")
+    assert await resolve.room_look(GUILD_A, "EN", "stairs_repaired", FED) != (
+        await resolve.room_look(GUILD_A, "EN", unlocked=FED)
     )
 
 
@@ -313,6 +322,9 @@ async def test_everything_capped_is_capped_at_one(house):
         # Both toys, so one player cannot hold the channel's whole supply.
         "feather_wand": 1,
         "crinkle_ball": 1,
+        # The brass key, so a spare always goes to somebody new - which
+        # is the whole of what a spare is for.
+        "house_key": 1,
     }
 
 
