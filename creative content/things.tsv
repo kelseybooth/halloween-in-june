@@ -79,7 +79,7 @@ mobile	mobile	mobile|crib mobile	fixture	NU	1	no	yes	0										40	69
 pacifier	pacifier	pacifier|dummy|soother	fixture	NU	1	no	yes	0										40	70		
 crib	crib	crib|cot|bed	fixture	NU	1	no	yes	0										40	71		
 coat_rack	coat rack	coat rack|rack|coats|jackets	fixture	EN	1	no	yes	0										10	72		
-front_door	front door	front door|door|entrance	fixture	EN	1	no	yes	0										10	73		
+front_door	front door	front door|door|entrance|outside|out|road	exit	EN	1	no	yes	0							CH			10	73		
 ceiling	ceiling	ceiling|water stain|stain	fixture	EN	1	no	yes	0										10	74		
 dining_table	long table	table|dining table|long table|wooden table	fixture	DI	1	no	yes	0										30	75		
 plates	plates	plates|plate|dinner plates	fixture	DI	1	no	yes	0										30	76		
@@ -161,3 +161,4 @@ stand	farm stand	stand|produce stand|farmstand|roadside stand|fruit stand|vegeta
 shelves	shelves	shelf|sign|board|produce|sweet corn|corn|blueberries|blueberry|eggs|brown eggs	scenery	CH	1	no	no	1										1	151		
 firewood_bin	firewood bin	bin|plank bin|wood bin|woodbin|firewood|wood|splits	scenery	CH	1	no	no	1										1	152		
 coin_slot	coin slot	slot|cash box|cashbox|money box|honor box|honesty box|cash|money	scenery	CH	1	no	no	1										1	153		
+house	house	house|haunted house|front door|door|inside|in	exit	CH	1	no	yes	0							EN			10	160		

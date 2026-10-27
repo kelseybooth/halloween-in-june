@@ -114,3 +114,6 @@ use_fail.fixture	There is nothing to do with the {name} but look at it.
 channel.fog_thins	When you look up from the bed, the fog has thinned slightly.
 hint.check_inventory	You can check what you're carrying with /inventory.
 hint.drop_something	If you want to put something down, you can use /drop, like /drop {name}
+wrong_place.default	Your spirit may be here, but your corporeal self is in {thread}. Try this action again there.
+wrong_place.pet	Your spirit may be here, but your hand, along with the rest of your corporeal self, is in {thread}. Try petting there.
+hint.go_house	Try /go house or /go front door.
