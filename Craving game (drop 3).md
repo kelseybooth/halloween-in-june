@@ -31,6 +31,7 @@ Checks run in this order, and the first match decides:
 The bot's reactions describe the message, not each guess, because Discord lets the bot add each emoji only once per message. So:
 
 - **Each message shows only its highest outcome so far**, ranked by the `progression` column: 🐱 1, 😼 2, 😸 3, 👀 4, 😻 5. When a guess beats the message's current outcome, the bot removes its old reaction and adds the new one. A guess at or below the current outcome changes nothing.
+- **The face walks along to the newest guess it answers.** Reactions are shown in the order they were first added, so a face that is still right drifts left as more guesses land beside it and ends up reading as a verdict on somebody else's guess. When a guess earns the outcome already showing, the bot takes its reaction off and puts it back, which moves it to the end. Only then: a worse guess must not drag the face down to it, a face a player has also clicked will not move at all, and a message at 19 is left alone because the ❌ is about to close it.
 - **Removing the bot's reaction doesn't always free a slot.** If a player also clicked it, the emoji stays on the message with their count. So the bot must never keep its own tally of slots. It reads the message's live reaction list every time.
 - **❌ at 19.** After the player's reaction lands, if the message has 19 or more different emoji and the guess isn't the craving, the bot adds ❌. That fills the twentieth slot, and nobody can add a new emoji after that.
 - **A correct guess at 19 still gets 😻.** It takes the twentieth slot.
@@ -41,7 +42,7 @@ The bot's reactions describe the message, not each guess, because Discord lets t
 - **5 relationship points for a correct guess, once per player per day.** That's `craving_points = 5` in config, so it's tunable like the toy and bed. It's deliberately small, because copying someone else's correct guess is easy, and that's fine.
 - **"Found" is per player.** One player's win ends the game only for them. Everyone else keeps guessing on the same messages.
 - **The display doesn't depend on who's guessing.** A player who already won today still gets 😻 if they click the answer again; they just don't score. This keeps the reaction logic a function of the emoji and today's craving only, which is simpler to build and to test.
-- **The first win fires *Met the Craving*** (drop 3), with the standard public achievement message only. No private message goes with it, because a reaction can't trigger one. **Guesses don't count as cat interactions.** A guess, right or wrong, doesn't stop the overnight drift and doesn't count toward *Lucky Black Cat*.
+- **The first win fires *Met the Craving*** (drop 3), with the standard public achievement message only, and it **@mentions the player**. No private message goes with it, because a reaction can't trigger one - so the public line is the whole announcement, and a printed name in a channel nobody is watching is one the earner never sees. Every achievement with no private half mentions its earner, not only this one. **Guesses don't count as cat interactions.** A guess, right or wrong, doesn't stop the overnight drift and doesn't count toward *Lucky Black Cat*.
 
 ## The /stats hint
 

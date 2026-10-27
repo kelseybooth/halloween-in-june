@@ -40,6 +40,8 @@ MOUSE = chr(0x1F401)          # day one, every time
 ANOTHER_MAMMAL = chr(0x1F430) # rabbit face: Prey, Mammal
 A_BIRD = chr(0x1F414)         # chicken: Prey, Bird
 BROCCOLI = chr(0x1F966)       # Food, so the wrong category today
+AN_APPLE = chr(0x1F34E)       # Food as well: the same rung as the broccoli
+A_THUMBS_UP = chr(0x1F44D)    # Misc, so the bottom rung
 
 GREETING_FACE = chr(0x1F431)
 WRONG_CATEGORY_FACE = chr(0x1F63C)
@@ -103,6 +105,13 @@ class FakeMessage:
         found.count -= 1
         if found.count == 0:
             self.reactions.remove(found)
+
+    @property
+    def order(self):
+        """Left to right, the way Discord shows them: first added, first
+        shown. Nothing else in this file cares, and the walk below is
+        entirely about it."""
+        return [r.emoji for r in self.reactions]
 
     @property
     def showing(self):
@@ -266,6 +275,124 @@ async def test_a_message_judged_today_is_not_cleared(server):
     await answer(message, ANOTHER_MAMMAL)
 
     assert message.calls.count(("remove", RIGHT_CATEGORY_FACE)) == 1
+
+
+# --------------------------------------------------------------------------
+# Walking the face along
+#
+# Reactions are shown in the order they were first added, so the cat's face
+# stays where the first guess of its rung put it while later guesses land to
+# the right of it - and four emoji along it reads as a verdict on somebody
+# else's guess. Taking it off and putting it back moves it to the end.
+#
+# Two calls, so everything here is also about not spending them: only when
+# the face is not already last, only when the bot is alone on it, and only
+# for a guess that earned the face that is up.
+# --------------------------------------------------------------------------
+
+
+def play(message, emoji):
+    """A player's own reaction, on the message before the bot sees it.
+
+    That is the ordering the walk is about and the one `answer` alone does
+    not produce: by the time the gateway hands the message over, the guess
+    is already sitting to the right of whatever the bot put up last time.
+    """
+    message.reactions.append(FakeReaction(emoji))
+    return emoji
+
+
+async def test_the_face_walks_along_to_the_newest_guess(server):
+    """**Playtest feedback.** Two wrong guesses of the same category and
+    type: the 😼 answers both, and belongs beside the second."""
+    message = a_message()
+    await answer(message, play(message, BROCCOLI))
+    assert message.order == [BROCCOLI, WRONG_CATEGORY_FACE]
+
+    await answer(message, play(message, AN_APPLE))
+
+    assert message.order == [BROCCOLI, AN_APPLE, WRONG_CATEGORY_FACE]
+
+
+async def test_a_worse_guess_does_not_drag_the_face_down_to_it(server):
+    """**The thumbs-up case, and the reason the walk is not simply "move
+    it after every guess".** The 👀 says somebody got the category and the
+    type right. Walked along to sit after a thumbs-up, it would say the
+    thumbs-up was the closest anybody has come."""
+    message = a_message()
+    await answer(message, play(message, ANOTHER_MAMMAL))
+    before = list(message.calls)
+
+    await answer(message, play(message, A_THUMBS_UP))
+
+    assert message.order == [ANOTHER_MAMMAL, RIGHT_TYPE_FACE, A_THUMBS_UP]
+    assert message.calls == before
+
+
+async def test_a_better_guess_lands_last_without_any_help(server):
+    """The swap puts the new face on the end by itself, so there is
+    nothing to walk and no second add."""
+    message = a_message()
+    await answer(message, play(message, BROCCOLI))
+
+    await answer(message, play(message, ANOTHER_MAMMAL))
+
+    assert message.order == [BROCCOLI, ANOTHER_MAMMAL, RIGHT_TYPE_FACE]
+    assert message.calls.count(("add", RIGHT_TYPE_FACE)) == 1
+
+
+async def test_a_face_already_last_costs_nothing(server):
+    """A second player clicking an emoji that is already on the message
+    moves nothing, so neither does the bot. Two calls a guess on a busy
+    message is the thing worth not spending."""
+    message = a_message()
+    await answer(message, play(message, BROCCOLI))
+    before = list(message.calls)
+
+    await answer(message, BROCCOLI)
+
+    assert message.calls == before
+
+
+async def test_a_face_a_player_is_also_on_stays_where_it_is(server):
+    """Removing the bot's reaction leaves theirs standing, so the position
+    does not move and the two calls buy nothing. The walk is a nicety, and
+    it is allowed not to happen."""
+    message = a_message(others=(WRONG_CATEGORY_FACE,))
+    await answer(message, play(message, BROCCOLI))
+    before = list(message.calls)
+
+    await answer(message, play(message, AN_APPLE))
+
+    assert message.calls == before
+    assert message.order == [WRONG_CATEGORY_FACE, BROCCOLI, AN_APPLE]
+
+
+async def test_a_closing_message_is_left_alone(server):
+    """At nineteen the next thing the bot does is close the message, and
+    the ❌ goes to the right of everything anyway. Letting go of a slot to
+    reorder a face is a slot the next guess can take."""
+    message = a_message(others=crowd(16))
+    await answer(message, play(message, BROCCOLI))
+
+    await answer(message, play(message, AN_APPLE))
+
+    assert ("remove", WRONG_CATEGORY_FACE) not in message.calls
+    assert message.order[-1] == NO_ROOM
+
+
+async def test_a_face_that_went_missing_comes_back(server):
+    """The walk is a remove and then an add, and Discord can fail between
+    them - leaving a message with an answer recorded against it and no
+    face on it. The add is unconditional for that reason: the next guess
+    of the same rung puts it back."""
+    message = a_message()
+    await answer(message, play(message, BROCCOLI))
+    message.reactions = [r for r in message.reactions if r.emoji != WRONG_CATEGORY_FACE]
+
+    await answer(message, play(message, AN_APPLE))
+
+    assert WRONG_CATEGORY_FACE in message.mine
 
 
 # --------------------------------------------------------------------------

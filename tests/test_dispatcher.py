@@ -377,6 +377,12 @@ def posted(halloween):
     return halloween.text_channels[0].posted
 
 
+def allowed(halloween):
+    """What the last public line let through. A mention in the text is
+    only a ping if this says so."""
+    return halloween.text_channels[0].mentions[-1]
+
+
 async def test_the_public_line_names_the_player_and_the_achievement(guild, halloween):
     interaction = FakeInteraction(ALICE, GUILD_A, guild=halloween)
 
@@ -392,12 +398,71 @@ async def test_the_public_line_never_carries_the_description(guild, halloween):
     assert "Carved a pumpkin" not in " ".join(posted(halloween))
 
 
-async def test_the_public_line_pings_nobody(guild, halloween):
+async def test_a_printed_display_name_pings_nobody(guild, halloween):
     """A display name is plain text, so one containing something
-    mention-shaped cannot turn into a ping."""
-    await bot._announce(an_award(), guild=halloween)
+    mention-shaped cannot turn into a ping. This is every line with an
+    interaction behind it - the earner has already been answered
+    privately, so the public line is for everybody else."""
+    interaction = FakeInteraction(ALICE, GUILD_A, guild=halloween)
+
+    await bot._announce(an_award(), interaction=interaction)
 
     assert f"<@{ALICE}>" not in " ".join(posted(halloween))
+    assert allowed(halloween).users is False
+
+
+async def test_an_achievement_with_no_private_half_mentions_its_earner(
+    guild, halloween
+):
+    """**Playtest feedback.** A reaction has no interaction to answer, so
+    the public line is the whole announcement - and a printed name in a
+    channel nobody is watching is an announcement the earner never sees.
+    *Met the Craving* is the one players meet."""
+    await bot._announce(an_award(), guild=halloween)
+
+    assert posted(halloween) == [f"<@{ALICE}> earned **Gourd Job**"]
+
+
+async def test_and_that_mention_is_allowed_to_ping(guild, halloween):
+    """Half the change. A mention posted under `AllowedMentions.none()`
+    renders as the name and notifies nobody, which is the thing this was
+    meant to fix."""
+    await bot._announce(an_award(), guild=halloween)
+
+    assert [user.id for user in allowed(halloween).users] == [ALICE]
+
+
+async def test_and_nobody_else_can_be_pinged_by_it(guild, halloween):
+    """The allowance is an id rather than a flag, so the rest of the line
+    is as inert as it was: an achievement name or a display name shaped
+    like a mention still reaches nobody."""
+    await bot._announce(an_award(name=f"<@{BOB}> @everyone"), guild=halloween)
+
+    assert [user.id for user in allowed(halloween).users] == [ALICE]
+    assert allowed(halloween).everyone is False
+    assert allowed(halloween).roles is False
+
+
+async def test_an_earner_the_member_cache_has_lost_is_still_named(guild, halloween):
+    """**"Somebody earned" cannot happen on these lines any more.** The
+    fallback exists because `_earner_of` asks the guild cache, which is
+    most likely to miss on exactly this path - no interaction, and a
+    reaction from somebody who has not spoken. The mention is built from
+    the id on the award, and the award always has one."""
+    stranger = 777000000000000777
+
+    await bot._announce(an_award(user_id=stranger), guild=halloween)
+
+    assert halloween.get_member(stranger) is None
+    assert posted(halloween) == [f"<@{stranger}> earned **Gourd Job**"]
+
+
+async def test_a_group_achievement_pings_nobody(guild, halloween):
+    """There is no earner to ping, and the server's own name is not a
+    mention."""
+    await bot._announce(an_award(kind="group", user_id=None), guild=halloween)
+
+    assert allowed(halloween).users is False
 
 
 async def test_the_earner_gets_the_name_and_the_description(guild, halloween):
@@ -740,5 +805,7 @@ async def test_a_reaction_announces_publicly_and_privately_to_nobody(guild, hall
         guild=halloween,
     )
 
-    assert "earned **Met The Craving**" in halloween.text_channels[0].posted[0]
+    assert halloween.text_channels[0].posted[0] == (
+        f"<@{ALICE}> earned **Met The Craving**"
+    )
     assert halloween.get_member(ALICE).dms == []
