@@ -1,6 +1,6 @@
 # V3 — implementation plan
 
-*Refreshed 19 October from `v3-implementation-plan.md`, the version delivered with the Phase 3a work order, plus a status section recording where 3a and 3b stand.*
+*Refreshed 19 October from `archived/v3-implementation-plan.md`, the version delivered with the Phase 3a work order, plus a status section recording where 3a and 3b stand.*
 
 V3 is the post-playtest code line. It ships drops 0 through 7 and is not finished when drop 0 ships.
 
@@ -354,9 +354,11 @@ The compensation is that the three genuinely hard design questions — the corri
 All four are thread behaviour the docs do not state outright, and all four gate work in workstream B.
 
 1. **Answered by testing, 15 October — a mention does add silently.** A normal member mentioning another member added them to the thread with no system message of any kind: no "{username} added {newuser} to the thread" line, no `RECIPIENT_ADD`. The mechanism we want therefore leaves no trace in the transcript. One residue goes into question 2: the bot adds while holding `MANAGE_THREADS` rather than as an ordinary member, and a privileged add is a different code path from the one that was tested.
-2. **The one that still has to be checked.** Does mention-add still work from a bot holding `MANAGE_THREADS` once `invitable: false` is set, and is it still silent when the bot is the one mentioning? The whole design rests on that asymmetry — players cannot add each other, the bot can — and no normal-user test can answer it, because `invitable` restrains non-moderators only.
-3. Does suppressing the ping with `allowed_mentions` defeat the add? If it does, the choice is a silent arrival or an unpinged one.
-4. Does a player leaving a thread themselves post nothing?
+2. **Answered by testing, 26 October — a privileged mention adds silently too, and it is now the mechanism.** Two private threads, both `invitable: false`, bot holding `MANAGE_THREADS`: the mention added the member with no system message of any kind, while `add_user` in an identical thread posted `RECIPIENT_ADD` — "Black Cat added <player> to the thread". The control is what makes the silence trustworthy, because it proves the check could see such a message at all. Shipped in PR #85: the arrival line in `_use_exit` is what admits the player, and `add_user` is gone from the move path. `/enter` still uses `add_user`, because its only player-naming line goes to the channel rather than into the thread.
+3. **Not answered, and no longer load-bearing.** The arrival line is sent with the default `allowed_mentions` on purpose: suppressing the ping, or routing it through `_post_quietly`, strips the mention that does the admitting. The question only returns if something later wants an arrival that does not ping, and the answer would have to be found before suppressing anything.
+4. **Answered by testing, 26 October — and the asymmetry runs the opposite way to the add.** A *bot* removing a player is not silent: `remove_user` posts `RECIPIENT_REMOVE` — "Black Cat removed <player> from the thread" — in the room they left. A player **leaving by hand is** silent: the thread drops them from its member list and posts nothing at all. So on the way in the bot has the quiet option and the player does not; on the way out the player has it and the bot does not, and nothing in the API lets the bot ask for a leave on somebody's behalf.
+
+**Net effect on the out-of-game lines, as shipped.** A move used to produce two system messages: an add in the room entered, a remove in the room left. It now produces one, in the room left, below the departure line the game writes. There is no silent removal to match the silent add, so cutting the last one would mean not removing players from rooms at all — which is the thing the room model is for. A player can leave a room quietly of their own accord, per 4, but that is theirs to do and not something a move can call.
 
 Plus two that are not about threads:
 
