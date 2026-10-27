@@ -28,6 +28,8 @@ from database import (  # noqa: F401 - the vocabulary, re-exported for call site
     FULL_HANDS,
     HINT,
     LOOK,
+    MOVE,
+    NOT_AN_EXIT,
     NOT_CARRIED,
     NOT_HELD,
     NOT_TAKEABLE,

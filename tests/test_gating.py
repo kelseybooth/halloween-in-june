@@ -56,7 +56,7 @@ def test_the_drop_one_verbs_are_absent_at_drop_zero_and_present_at_one(verb):
     assert verb in gating.commands_for(1)
 
 
-@pytest.mark.parametrize("verb", ["take", "drop", "inventory", "enter"])
+@pytest.mark.parametrize("verb", ["take", "drop", "inventory", "go"])
 def test_the_out_of_scope_verbs_are_absent_from_both_poc_drops(verb):
     """The scope table's own list, and the gating has to prove it. Present
     once the house opens, so this is a gate rather than a bot with no
@@ -81,11 +81,17 @@ def test_the_craving_drop_adds_no_command():
 
 def test_the_house_waits_for_the_drop_it_opens_on():
     """The 26 October renumbering moved the house from 3 to 10. Keyed at
-    3, a server on the craving drop would have had `/enter` and nine rooms
-    that do not exist yet."""
+    3, a server on the craving drop would have had a way in and nine rooms
+    that do not exist yet.
+
+    `/go` is the command that carries this now. `/enter` is retired: going
+    into the house is ordinary movement, so the verb that arrives here is
+    the one that moves a player anywhere.
+    """
     for drop in (3, 4, 9):
-        assert "enter" not in gating.commands_for(drop)
-    assert "enter" in gating.commands_for(HOUSE_DROP)
+        assert "go" not in gating.commands_for(drop)
+    assert "go" in gating.commands_for(HOUSE_DROP)
+    assert "enter" not in gating.commands_for(HOUSE_DROP)
 
 
 @pytest.mark.parametrize("name", ["initialize-haunted-house"])

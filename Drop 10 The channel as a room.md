@@ -98,11 +98,12 @@ Going in is ordinary movement too, so `/enter` is retired, along with its three 
 
 `house.move_depart` reads the same on a first visit and a return trip, so the return-visit variants drafted here earlier aren't needed.
 
-**`#welcome` is retired.** Decided 27 October: the hint rail teaches the way in instead, with one new hint.
+**`#welcome` and the tutorial are both retired.** Decided 27 October: the hint rail teaches the way in and the way out instead, with two new hints. The tutorial went with `/enter`, which was the only thing that posted it — the copy deck had already settled that the POC ships without one, and by drop 10 the rail has taught `/look`, `/look <thing>`, `/take`, `/use`, `/inventory` and `/drop` in the channel. Its third bullet named the wide doorway, which does not arrive until drop 30.
 
 | Key | Fires | Text |
 | --- | --- | --- |
 | `hint.go_house` | The first time a player uses `/look house`, at drop 10 or later, if they have earned *Fluffed to Perfection* | Try /go house or /go front door. |
+| `hint.go_road` | The first time a player arrives in the Entryway from the road, riding the private line that says they are inside | If you want to leave again, try /go road or /go front door. |
 
 - **`/go front door` works from the road** because `front door` is one of the `house` exit's aliases there.
 - **Once per player**, recorded in the hints table like every other hint.

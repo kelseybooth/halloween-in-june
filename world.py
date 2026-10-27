@@ -174,6 +174,25 @@ PASSAGE_OPEN = "passage_open"
 HAS_KEY = "has_key"
 
 
+# The road and the house, which is the pair of exits drop 10 adds: the house
+# across the road, and the front door back out of it.
+HOUSE = "house"
+FRONT_DOOR = "front_door"
+
+# Exits no `rooms_unlocked` check applies to, for three different reasons.
+#
+# The front door, because leaving is always allowed: the feeding gate on the
+# Entryway's other exits is there to stop a player being handed nine rooms at
+# once, and stepping back outside cannot overwhelm anybody.
+#
+# The house, because it is the exit that enrols people - a player on the road
+# has no row to have unlocked anything in yet.
+#
+# The oak, because an exit gated on the state its own use produces is a locked
+# door with the key inside, and nobody would ever find the library.
+UNGATED_EXITS = frozenset({OAK, HOUSE, FRONT_DOOR})
+
+
 # Most specific first. `_best` takes the first of these an entity actually has
 # a row for, so the same list works for every exit: a player who has opened
 # the passage reads the open cabinet, and asked about the oak the list falls

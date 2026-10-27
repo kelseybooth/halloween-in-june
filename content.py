@@ -1039,18 +1039,17 @@ def _check_reachable_rooms(content: Content, rooms: dict[str, Room]) -> list[str
     A room with no exits leading to it is a content bug nobody would notice
     until a player failed to find it.
 
-    The channel is the one exception, and it is exempt in both directions: no
-    exit may lead to it and none may lead out of it. It is where players
-    already are, not somewhere they walk to.
+    **The channel used to be exempt, and the exemption was a ban.** No exit
+    could lead to it and none out of it, because it was where players already
+    were rather than somewhere they walked to. Drop 10 makes it a place with a
+    door: the road has a house across it, the house has a front door back out,
+    and both are ordinary exits. So the channel is an ordinary node here, and
+    it has to be reachable like everything else - which is the stronger check
+    of the two. Delete the two exits and this fails, where the old rule would
+    have called the deletion correct.
     """
     if not content.rooms:
         return []
-    problems = [
-        f"exit {e.thing_id} joins the channel to the house, which has no door"
-        for e in content.things
-        if e.is_exit
-        and CHANNEL_ROOM in (e.room_id, e.destination_room_id)
-    ]
     start = next((r.room_id for r in content.rooms if r.open_at_launch), content.rooms[0].room_id)
 
     adjacency: dict[str, set[str]] = {r.room_id: set() for r in content.rooms}
@@ -1065,9 +1064,9 @@ def _check_reachable_rooms(content: Content, rooms: dict[str, Room]) -> list[str
                 seen.add(destination)
                 queue.append(destination)
 
-    return problems + [
+    return [
         f"room {room_id} cannot be reached from {start}"
-        for room_id in sorted(set(adjacency) - seen - {CHANNEL_ROOM})
+        for room_id in sorted(set(adjacency) - seen)
     ]
 
 

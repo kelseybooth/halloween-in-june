@@ -510,6 +510,29 @@ async def starting_room() -> str | None:
         )
 
 
+async def arrived_rooms(guild_id: int) -> set[str]:
+    """Which rooms exist on this server yet.
+
+    **A room arrives with its description.** `rooms.tsv` carries no drop
+    number; `room_text` does, so a room is here when one of its rows is -
+    and a room with no arrived row is one whose prose nobody can read and
+    whose thread nobody should be standing in.
+
+    The channel is in this set from drop 1, when its first fragment
+    arrives, and it is a valid place to stand before that too - which is
+    why the caller adds it rather than asking this.
+    """
+    arrived = await arrived_drop_ids(guild_id)
+    session_factory = database._require_session()
+    async with session_factory() as session:
+        rows = (
+            await session.execute(
+                select(database.RoomText.room_id, database.RoomText.since_drop)
+            )
+        ).all()
+    return {room_id for room_id, since_drop in rows if since_drop in arrived}
+
+
 async def rooms_open_at_launch() -> list[str]:
     """The room_ids a new player starts with unlocked.
 

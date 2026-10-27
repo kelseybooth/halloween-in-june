@@ -1002,15 +1002,20 @@ async def test_door_and_doorway_work_in_every_room(real_house, room, word, expec
 
 
 async def test_door_in_the_entryway_is_the_front_door(real_house):
-    """A house's door is its front one, and the fixture already owned the
-    word. The two interior doorways answer to `doorway` instead - which is
-    also how the room's own prose distinguishes them."""
+    """A house's door is its front one, and the front door already owned
+    the word. The two interior doorways answer to `doorway` instead -
+    which is also how the room's own prose distinguishes them.
+
+    **And now it opens.** It was a fixture that declined; drop 10 made it
+    the exit back out to the road, so the word still resolves to one thing
+    and that thing is a way out.
+    """
     db, guild = real_house
     await enter_properly(db, room="EN")
 
     reply = (await use(thing="door", guild=guild)).reply
 
-    assert await where_is_alice(db) == "EN"
+    assert await where_is_alice(db) == "CH"
     assert "Which one do you mean" not in reply
 
 
