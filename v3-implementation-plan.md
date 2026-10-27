@@ -1,5 +1,7 @@
 # V3 — implementation plan
 
+> **Superseded.** This is the copy delivered with the Phase 3a work order. `V3 — implementation plan.md` was refreshed from it on 19 October and is the live document; the verification list here is stale, and item 2 in particular was answered on 26 October. Kept as the delivered record rather than edited.
+
 V3 is the post-playtest code line. It ships drops 0 through 7 and is not finished when drop 0 ships.
 
 **Keep the two axes apart.** A release is what the developers deploy; a drop is a story beat the players experience. The Functional Spec already settled this — the runtime keys on drops and the calendar, never on a release number — so the plan below names releases V3.0 through V3.3 and leaves drop numbers to the content. One release can carry several drops; one drop can span two releases.
