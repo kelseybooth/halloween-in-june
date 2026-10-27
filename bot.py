@@ -985,16 +985,22 @@ async def _answer_guess(message: discord.Message, guess, day) -> None:
     are applied to a copy of it, which is the only way the twentieth slot
     can be reasoned about at all.
 
-    **Not queued, and it is bounded rather than lucky.** An outcome change
-    costs two calls, remove then add, and a burst of guesses could in
-    principle spend a lot of them. But a guess only changes anything by
-    beating the message's current rank, so a message can cost at most five
-    changes a day however many people react to it - and discord.py backs
-    off on a 429 by itself.
+    **Not queued, and it is bounded rather than lucky.** Remove-then-add
+    costs two calls, and a burst of guesses could in principle spend a lot
+    of them. Both things that spend them are capped by something other
+    than the number of guesses, though: an outcome only changes by beating
+    the message's current rank, which can happen five times in a day, and
+    the walk below only fires when something has landed to the right of
+    the cat's face, which needs a slot the message has only twenty of. So
+    a message costs at most twenty-five changes a day however many people
+    react to it - and discord.py backs off on a 429 by itself.
     """
     ladder = await craving.reactions()
     guild_id = message.guild.id
 
+    # The order they were first added in, which is the order Discord
+    # shows them in and the only reason the walk below is possible.
+    order = [str(r.emoji) for r in message.reactions]
     mine = {str(r.emoji) for r in message.reactions if r.me}
     # The ones the bot can actually take back off the message.
     sole = {str(r.emoji) for r in message.reactions if r.me and r.count == 1}
@@ -1056,6 +1062,28 @@ async def _answer_guess(message: discord.Message, guess, day) -> None:
             await take_back(beaten.emoji)
         await add(answer.emoji)
         await craving.set_message_outcome(guild_id, message.id, day, guess.outcome)
+    elif answer is not None and guess.outcome == shown and not full:
+        # **The answer walks along to sit after the guess that earned it.**
+        # Reactions are shown in the order they were first added, so the
+        # cat's face stays where the first guess of its rung put it while
+        # later guesses land to the right of it - and it reads as a verdict
+        # on an emoji three along. Taking it off and putting it back moves
+        # it to the end. Playtest feedback.
+        #
+        # **Only for a guess that earned the face already up.** A worse
+        # guess must not drag it along: a 👀 that followed a thumbs-up
+        # would say the thumbs-up was the closest anybody has come.
+        #
+        # Only when the bot is alone on the face, because otherwise the
+        # removal leaves the player's reaction standing and the position
+        # does not move - and only when the face is not already last, which
+        # is what makes this cost nothing on the common re-guess.
+        if answer.emoji in sole and order and order[-1] != answer.emoji:
+            await take_back(answer.emoji)
+        # Unconditional, and a no-op while the face is still up: it is also
+        # what puts the face back if a previous walk lost the remove-add
+        # race and left the message with no answer on it at all.
+        await add(answer.emoji)
 
     if guess.won:
         return
@@ -2046,18 +2074,35 @@ async def _with_art(guild, text: str, art_id: str | None):
     return None, embed
 
 
-async def _post_quietly(channel, text: str, art_id: str | None = None) -> None:
-    """Post without pinging anybody.
+async def _post_quietly(
+    channel, text: str, art_id: str | None = None, *, ping: int | None = None
+) -> None:
+    """Post without pinging anybody, bar one player the caller names.
 
     A display name is printed as plain text, so one containing something
     mention-shaped cannot turn into a ping. Applied on every public line that
     names a player.
+
+    **`ping` is an id rather than a flag**, so the one mention that is
+    allowed through is the one the caller built. Everything else in the
+    text stays inert - a display name on a line that also carries a real
+    mention is no more dangerous than it was before.
     """
     content_, embed = await _with_art(getattr(channel, "guild", None), text, art_id)
-    try:
-        await channel.send(
-            content_, embed=embed, allowed_mentions=discord.AllowedMentions.none()
+    # **Everything off, then the one id back on.** The constructor's own
+    # defaults are permissive - everyone and roles both start True - so a
+    # mention built the short way would let an achievement name carrying
+    # an @everyone through on a line meant to ping one player.
+    mentions = (
+        discord.AllowedMentions(
+            everyone=False, roles=False, replied_user=False,
+            users=[discord.Object(id=ping)],
         )
+        if ping is not None
+        else discord.AllowedMentions.none()
+    )
+    try:
+        await channel.send(content_, embed=embed, allowed_mentions=mentions)
     except discord.HTTPException:
         log.warning("Could not post in %s", getattr(channel, "name", "?"), exc_info=True)
 
@@ -2681,6 +2726,16 @@ async def _announce(award, *, interaction=None, guild=None) -> None:
     channel = await _game_channel(guild)
     earner = _earner_of(award, interaction, guild)
 
+    # **The ones with no private half @mention their earner.** An
+    # achievement earned through a command answers the player directly, so
+    # the public line is for everybody else and a printed name is the
+    # right weight. A reaction has no interaction to answer - *Met the
+    # Craving* is the one players meet - and there the public line is the
+    # whole announcement, which a player not watching the channel will
+    # simply miss. Playtest feedback, and the same three cases the no-DM
+    # note below is about.
+    ping = award.user_id if interaction is None else None
+
     if award.user_id is None:
         # A group achievement has no earner, so "somebody earned" is the
         # wrong sentence and there is nobody to write to privately. The
@@ -2693,9 +2748,12 @@ async def _announce(award, *, interaction=None, guild=None) -> None:
             description=award.unlock,
         )
     else:
+        # A mention needs no member cache and has no placeholder: the id
+        # is on the award itself, so the line that pings is also the one
+        # that can never come out as "Somebody earned".
         line = await phrasing.default_say(
             "achievement.public",
-            player=earner or "Somebody",
+            player=f"<@{ping}>" if ping is not None else (earner or "Somebody"),
             achievement=award.name,
         )
 
@@ -2704,9 +2762,11 @@ async def _announce(award, *, interaction=None, guild=None) -> None:
     # achievement has no earner and so no private message to put either in.
     art = ART_FOR_ACHIEVEMENT.get(award.achievement_id)
     if channel is not None and line:
-        # Plain text and no ping: a display name containing something
+        # Plain text otherwise: a display name containing something
         # mention-shaped must not turn into one.
-        await _post_quietly(channel, line, art if award.user_id is None else None)
+        await _post_quietly(
+            channel, line, art if award.user_id is None else None, ping=ping
+        )
 
     if award.user_id is None:
         return

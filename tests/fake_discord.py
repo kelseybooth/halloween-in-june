@@ -118,6 +118,9 @@ class FakeChannel:
         # Everything posted here, in order. The achievement announcements are
         # read straight off this.
         self.posted: list[str] = []
+        # The `allowed_mentions` each of those went out with, so a test can
+        # tell a mention that pings from one that is only text.
+        self.mentions: list = []
         self.uploaded: list[str] = []
         self.send_fails = False
 
@@ -134,6 +137,7 @@ class FakeChannel:
         if self.send_fails:
             raise http_error(message="channel send failed")
         self.posted.append(content)
+        self.mentions.append(kwargs.get("allowed_mentions"))
         # An upload is a send with a file, and what the caller wants back is
         # the CDN url Discord attaches to the posted message.
         uploaded = kwargs.get("file")
