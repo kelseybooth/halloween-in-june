@@ -16,6 +16,28 @@ def http_error(cls=discord.HTTPException, status=500, message="boom"):
     return cls(SimpleNamespace(status=status, reason=message), message)
 
 
+class FakeMessage:
+    """What `thread.send` hands back.
+
+    Only `delete` is ever called on it, by the rollback that undoes an arrival
+    the database would not accept. Deleting takes the line back out of
+    `posted`, because `posted` is what the room shows.
+    """
+
+    def __init__(self, thread, content):
+        self.thread = thread
+        self.content = content
+        self.id = len(thread.posted)
+        self.deleted = False
+
+    async def delete(self):
+        if self.thread.name in getattr(self.thread.parent, "message_delete_fails", ()):
+            raise http_error(message=f"cannot delete a message in {self.thread.name}")
+        self.deleted = True
+        if self.content in self.thread.posted:
+            self.thread.posted.remove(self.content)
+
+
 class FakeThread:
     def __init__(self, name, *, archived=False, locked=False, channel=None):
         self.id = abs(hash((name, archived, locked))) % (10**9)
@@ -27,6 +49,7 @@ class FakeThread:
         self.removed_users: list[int] = []
         self.deleted = False
         self.posted: list[str] = []
+        self.messages: list["FakeMessage"] = []
         self.mention = f"<#{self.id}>"
 
     @property
@@ -35,9 +58,18 @@ class FakeThread:
 
     async def send(self, content=None, **kwargs):
         """A room thread accepting a message: the arrival and departure lines,
-        and the one public `/use`."""
+        and the one public `/use`.
+
+        The arrival line is also what admits a player to a room, so both halves
+        of it have to be drivable: a send that fails, and a handle the rollback
+        can delete.
+        """
+        if self.name in getattr(self._channel, "thread_send_fails", ()):
+            raise http_error(message=f"cannot post in {self.name}")
         self.posted.append(content)
-        return SimpleNamespace(id=len(self.posted))
+        message = FakeMessage(self, content)
+        self.messages.append(message)
+        return message
 
     async def delete(self):
         if self.name in getattr(self._channel, "delete_fails", ()):
@@ -94,6 +126,8 @@ class FakeChannel:
         self.delete_fails: set[str] = set()
         self.edit_fails: set[str] = set()
         self.add_user_fails: set[str] = set()
+        self.thread_send_fails: set[str] = set()
+        self.message_delete_fails: set[str] = set()
         self.archived_forbidden = False
 
     async def send(self, content=None, **kwargs):

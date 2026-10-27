@@ -518,7 +518,7 @@ class CatBot(commands.Bot):
             except discord.HTTPException:
                 log.exception("Could not register commands in guild %s", guild.id)
 
-            channel = house_utils.find_channel(guild)
+            channel = await _game_channel(guild)
             if channel is None:
                 log.info(
                     "%s has no #%s channel yet - create it before running "
@@ -631,7 +631,7 @@ async def keep_threads_alive() -> None:
         return
 
     for guild in bot.guilds:
-        channel = house_utils.find_channel(guild)
+        channel = await _game_channel(guild)
         if channel is None:
             continue
         try:
@@ -1852,7 +1852,7 @@ async def initialize_haunted_house(
     # Deleting and creating 18 threads takes far longer than Discord's 3s deadline.
     await interaction.response.defer(ephemeral=True, thinking=True)
 
-    channel = house_utils.find_channel(interaction.guild)
+    channel = await _game_channel(interaction.guild)
     if channel is None:
         await interaction.followup.send(
             f"I couldn't find a #{house_utils.HALLOWEEN_CHANNEL_NAME} channel. "
@@ -2120,7 +2120,7 @@ async def enter(interaction: discord.Interaction) -> None:
     await interaction.response.defer(ephemeral=True, thinking=True)
     user, guild_id = interaction.user, interaction.guild_id
 
-    channel = house_utils.find_channel(interaction.guild)
+    channel = await _game_channel(interaction.guild)
     if channel is None:
         await interaction.followup.send(
             f"There's no #{house_utils.HALLOWEEN_CHANNEL_NAME} channel yet. "
@@ -2678,7 +2678,7 @@ async def _announce(award, *, interaction=None, guild=None) -> None:
         log.warning("Earned %s with no guild to announce it in", award.achievement_id)
         return
 
-    channel = await _announcement_channel(guild)
+    channel = await _game_channel(guild)
     earner = _earner_of(award, interaction, guild)
 
     if award.user_id is None:
@@ -2806,24 +2806,34 @@ async def upload_art(guild, channel) -> tuple[int, list[str]]:
     return uploaded, problems
 
 
-async def _announcement_channel(guild):
-    """Where this server's achievement names go.
+async def _game_channel(guild):
+    """This server's game channel: the house, its threads and its announcements.
 
     The channel the house was initialized in, by id rather than by name, so a
-    rename does not silently stop the announcements. A server initialized
-    before the id was recorded falls back to the name lookup.
+    rename does not silently stop the game. A server initialized before the id
+    was recorded falls back to the name lookup.
+
+    Every caller goes through here rather than matching on the name. Matching
+    found nothing on a server whose channel is called anything but #halloween,
+    and the failure surfaced as "ask an admin to run
+    `/initialize-haunted-house`" - which names the wrong cause and sends the
+    admin to a command that cannot help.
     """
+    # A database that cannot be read falls through to the name rather than
+    # giving up: the name is what every server used before the id existed, so
+    # it is the floor rather than a second failure. Giving up here would stop
+    # movement on a server that a rename had never touched.
+    channel_id = None
     try:
         channel_id = await database.announcement_channel(guild.id)
     except SQLAlchemyError:
-        log.exception("Could not read the announcement channel for %s", guild.id)
-        return None
+        log.exception("Could not read the game channel for %s", guild.id)
 
     if channel_id is not None:
         channel = guild.get_channel(channel_id)
         if channel is not None:
             return channel
-        log.warning("Announcement channel %s is gone in %s", channel_id, guild.id)
+        log.warning("Game channel %s is gone in %s", channel_id, guild.id)
     return house_utils.find_channel(guild)
 
 
@@ -2831,7 +2841,7 @@ async def _post_in_room(interaction, room_id: str, message: str) -> None:
     """Echo a use into the room thread. Only the staircase does this."""
     if interaction.guild is None:
         return
-    channel = house_utils.find_channel(interaction.guild)
+    channel = await _game_channel(interaction.guild)
     if channel is None:
         return
     try:
@@ -3290,7 +3300,7 @@ async def _use_exit(interaction, state, found, row) -> None:
         )
         return
 
-    channel = house_utils.find_channel(interaction.guild)
+    channel = await _game_channel(interaction.guild)
     if channel is None:
         await interaction.followup.send(
             f"There's no #{house_utils.HALLOWEEN_CHANNEL_NAME} channel. "
@@ -3317,12 +3327,56 @@ async def _use_exit(interaction, state, found, row) -> None:
         )
         return
 
-    # Add before removing: if this fails the player has not been moved or
-    # removed from anywhere, so they are where they started and can retry.
+    # A secret exit overrides both lines, because the house defaults give it
+    # away twice: "exits via the oak tree" teaches the Courtyard that the tree
+    # is a way out, and "arrives from the Secret Library" names the secret
+    # outright. The overrides say that somebody moved and nothing else.
+    state_now = world.exit_state(held)
+    depart = await phrasing.say(
+        guild_id, found.thing_id, "move_depart", state=state_now,
+        fallback="move.depart",
+        player=user.mention, name=found.name, room=origin_name,
+    )
+    arrive = await phrasing.say(
+        guild_id, found.thing_id, "move_arrive", state=state_now,
+        fallback="move.arrive",
+        player=user.mention, name=found.name, room=origin_name,
+    )
+
+    # The arrival line is what admits the player. A mention from a bot holding
+    # Manage Threads adds them to a private thread and posts nothing, where
+    # `add_user` also posts "<bot> added <player> to the thread" - an
+    # out-of-game line that cannot be deleted, on top of the arrival the game
+    # has already written. Verified on the test server, 26 October: the
+    # mention adds silently, add_user does not.
+    #
+    # It goes before the write for the same reason the add did: if this fails
+    # the player has not been moved or removed from anywhere, so they are
+    # where they started and can retry.
+    #
+    # Sent with the default allowed_mentions deliberately. Routing it through
+    # `_post_quietly`, or suppressing the ping any other way, strips the
+    # mention that does the admitting and leaves the player outside the room
+    # the line says they are in.
+    arrival_message = None
     try:
-        await house_utils.add_player_to_thread(destination_thread, user.id)
+        if user.mention in arrive:
+            arrival_message = await destination_thread.send(arrive)
+        else:
+            # Every `move_arrive` in the content carries `{player}`, and two
+            # tests hold that for the overrides and the default. This is the
+            # branch for a row that loses it later: the player is let in the
+            # old way, with the system line, rather than being stranded
+            # outside a room the game thinks they are standing in.
+            log.warning(
+                "move_arrive for %s carries no player mention; adding %s to %s directly",
+                found.thing_id, user.id, destination,
+            )
+            await house_utils.add_player_to_thread(destination_thread, user.id)
+            if arrive:
+                arrival_message = await destination_thread.send(arrive)
     except discord.HTTPException:
-        log.exception("Failed to add %s to %s", user.id, destination)
+        log.exception("Failed to admit %s to %s", user.id, destination)
         await interaction.followup.send(MOVE_ERROR_MESSAGE, ephemeral=True)
         return
 
@@ -3347,6 +3401,16 @@ async def _use_exit(interaction, state, found, row) -> None:
         # case. The long text is the reveal and is written to be read once;
         # the state it sets is what makes every later use read the short one.
     except SQLAlchemyError:
+        # The arrival line goes as well as the membership: it announced a move
+        # that did not happen, and it is the thing that let them in.
+        if arrival_message is not None:
+            try:
+                await arrival_message.delete()
+            except discord.HTTPException:
+                log.warning(
+                    "Rollback could not delete the arrival line in %s", destination,
+                    exc_info=True,
+                )
         try:
             await house_utils.remove_player_from_thread(destination_thread, user.id)
         except discord.HTTPException:
@@ -3354,24 +3418,10 @@ async def _use_exit(interaction, state, found, row) -> None:
         await interaction.followup.send(MOVE_ERROR_MESSAGE, ephemeral=True)
         return
 
-    # The move has happened. What follows is presentational, so a failure is
+    # The move has happened. What is left is presentational, so a failure is
     # logged rather than surfaced - the player is already through the door.
-    # A secret exit overrides both lines, because the house defaults give it
-    # away twice: "exits via the oak tree" teaches the Courtyard that the tree
-    # is a way out, and "arrives from the Secret Library" names the secret
-    # outright. The overrides say that somebody moved and nothing else.
-    state_now = world.exit_state(held)
-    depart = await phrasing.say(
-        guild_id, found.thing_id, "move_depart", state=state_now,
-        fallback="move.depart",
-        player=user.mention, name=found.name, room=origin_name,
-    )
-    arrive = await phrasing.say(
-        guild_id, found.thing_id, "move_arrive", state=state_now,
-        fallback="move.arrive",
-        player=user.mention, name=found.name, room=origin_name,
-    )
-
+    # The arrival line is not here: posting it is what let them in, so it was
+    # sent before the write.
     if origin_thread is not None:
         try:
             await origin_thread.send(depart)
@@ -3381,11 +3431,6 @@ async def _use_exit(interaction, state, found, row) -> None:
             await house_utils.remove_player_from_thread(origin_thread, user.id)
         except discord.HTTPException:
             log.warning("Could not remove %s from %s", user.id, origin_name, exc_info=True)
-
-    try:
-        await destination_thread.send(arrive)
-    except discord.HTTPException:
-        log.warning("Could not post arrival in %s", destination_name, exc_info=True)
 
     # The exit's own words, which no exit has ever printed: every one of the
     # twenty has a `use` line written and players only ever saw "You head to".

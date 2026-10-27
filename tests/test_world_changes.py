@@ -37,7 +37,7 @@ async def use(user_id=ALICE, guild_id=GUILD_A, thing="lumber"):
     from types import SimpleNamespace
 
     interaction = FakeInteraction(
-        user_id, guild_id, guild=SimpleNamespace(name="Test", text_channels=[])
+        user_id, guild_id, guild=SimpleNamespace(id=guild_id, name="Test", text_channels=[])
     )
     await bot.use.callback(interaction, thing)
     return interaction
