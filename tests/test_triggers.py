@@ -474,6 +474,39 @@ def test_a_blocked_achievement_says_what_it_waits_on(achievement_id):
     assert getattr(trigger.predicate, "blocked_on", None)
 
 
+# --------------------------------------------------------------------------
+# The one nobody can play for
+# --------------------------------------------------------------------------
+
+
+# Registered, and permanently unearnable. Kept apart from `BLOCKED`
+# because the two mean opposite things: those are waiting on a system,
+# this one is closed for good.
+BY_HAND = ["bug_catcher"]
+
+
+def test_the_hand_awarded_one_is_still_registered():
+    """Same reason the blocked ones are: the both-directions check only
+    means something if every row in the file has a trigger."""
+    assert achievements.trigger_for("bug_catcher") is not None
+
+
+def test_it_says_it_is_awarded_by_hand():
+    """And says it differently from the blocked ones, which are waiting
+    on a system rather than closed for good."""
+    trigger = achievements.trigger_for("bug_catcher")
+    assert getattr(trigger.predicate, "by_hand", None)
+    assert getattr(trigger.predicate, "blocked_on", None) is None
+
+
+async def test_no_command_can_earn_it(playing):
+    """`on_command` fires after every slash command there is, which is
+    the widest net in the game - and it still catches nothing."""
+    got = await earned(a_context("on_command"))
+
+    assert "bug_catcher" not in got
+
+
 async def test_the_three_crossing_ones_listen_on_a_hook_with_no_call_site(playing):
     for key in ("unsticking_the_situation", "return_to_sender", "it_takes_a_village"):
         assert key in achievements.listening_on("on_cross")
@@ -496,8 +529,13 @@ def test_what_can_actually_be_earned():
     wired - *Met the Craving* is, and its predicate works - so this
     counts what the engine can answer for, and the drop decides
     separately whether anybody will ever be asked.
+
+    Forty, still: *Bug Catcher* is registered like the rest and is not
+    one of them, because no play produces it.
     """
-    assert len(achievements.registered_ids()) - len(BLOCKED) == 40
+    earnable = achievements.registered_ids() - set(BLOCKED) - set(BY_HAND)
+
+    assert len(earnable) == 40
 
 
 # --------------------------------------------------------------------------

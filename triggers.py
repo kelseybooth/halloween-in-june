@@ -342,6 +342,26 @@ def _blocked(why: str):
     return predicate
 
 
+def _by_hand(why: str):
+    """A predicate that always says no, for an award nobody plays for.
+
+    Registered rather than omitted for the same reason `_blocked` is -
+    the both-directions check only means something if every row has a
+    trigger - but it says the opposite thing, and the difference is
+    worth a second function rather than a comment on the first.
+    `_blocked` is a promise: the system arrives and the predicate gets
+    written. This is permanent. The award marks something that happened
+    once, to the people it happened to, and no play should ever produce
+    another one.
+    """
+
+    async def predicate(context: Context) -> bool:
+        return False
+
+    predicate.by_hand = why
+    return predicate
+
+
 # --------------------------------------------------------------------------
 # The singletons
 # --------------------------------------------------------------------------
@@ -677,6 +697,12 @@ def register_all() -> None:
         return
 
     add = achievements.register
+
+    # Awarded by hand, to the playtesters who went at a dirty diaper
+    # the parser would not admit existed. On the widest hook there is,
+    # because that is where their `/look`, `/take` and `/use` went -
+    # though it never fires, which is the point.
+    add("bug_catcher", "on_command", _by_hand("awarded by hand, never by play"))
 
     # Group - all three on one hook, all three the same query.
     add("strength_in_numbers", "on_drop", strength_in_numbers)
