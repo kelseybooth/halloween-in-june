@@ -1,6 +1,6 @@
 thing_id	name	aliases	type	room_id	quantity	takeable	droppable	cross_weight	max_per_player	requires	present_when	transforms_to	transform_room	yields	destination_room_id	contained_in	use_cooldown_hours	since_drop	sort_order	consumed_on_use	use_cooldown_daily
 alexa	Alexa	smart speaker|speaker|echo	fixture	ALL	1	no	yes	0										20	1		
-eunoia	cat	cat|black cat|kitty|kitten|eunoia	fixture	ALL	1	no	yes	0										0	0		
+eunoia	cat	cat|black cat|kitty|kitten|eunoia|paw|paws|eyes|tail	fixture	ALL	1	no	yes	0										0	0		
 lumber	stack of lumber	lumber|planks|plank|wood	object	EN	many	no	yes	0			!stairs_repaired						48	20	2		
 intercom	intercom	intercom|door buzzer|buzzer	fixture	EN	1	no	yes	0										20	3		
 amazon_box	Amazon box	amazon box|box|parcel|package	fixture	EN	1	no	yes	0										20	4		
@@ -144,20 +144,20 @@ HN	nursery door	nursery door|nursery|green door|sage door|doorway|door	exit	UH	1
 NH	nursery door	nursery door|hallway|door|out|sage door|green door|doorway|hall door|hallway door	exit	NU	1	no	yes	0							UH			40	135		
 cake_box	cake box	cake box|white box|bakery box|caramel apple cake|cake	fixture	KI	1	no	yes	0										30	136		
 cat_food_stash_gourmet	cans of gourmet cat food	gourmet cans|two cans|gourmet wet food|gourmet wet cat food|gourmet food|gourmet|gourmet cat food|good cat food|fancy cat food|gold cans	source	KI	1	no	yes	0						cat_food_gourmet		cake_box		30	137		
-cat_bed	cat bed	cat bed|bed|cushion|cat cushion|cooler|icebox|egg cooler	fixture	CH	1	no	no											1	138		yes
-feather_wand	feather wand	wand|feather|feathers|feather toy|cat toy|toy	toy	CH	0	yes	yes	1	1									2	148		
+cat_bed	cat bed	cat bed|bed|cushion|cat cushion|cooler|icebox|egg cooler|catbed	fixture	CH	1	no	no											1	138		yes
+feather_wand	feather wand	wand|feather|feathers|feather toy|cat toy|toy|featherwand|ribbon|stick	toy	CH	0	yes	yes	1	1									2	148		
 crinkle_ball	crinkle ball	ball|foil ball|crinkle|crinkle toy|cat toy|toy	toy	CH	0	yes	yes	1	1									2	158		
 road	road	dirt road|lane|dirt	terrain	CH	1	no	no	1										1	140		
-fog	fog	mist|haze	terrain	CH	1	no	no	1										1	141		
-branches	branches	branch|limb|limbs|bough|boughs|canopy	scenery	CH	1	no	no	1										1	142		
-fence	fence	wire fence|fencing|post|posts|fence post	scenery	CH	1	no	no	1										1	143		
+fog	fog	mist|haze|middle distance	terrain	CH	1	no	no	1										1	141		
+branches	branches	branch|limb|limbs|bough|boughs|canopy|trees|tree	scenery	CH	1	no	no	1										1	142		
+fence	fence	wire fence|fencing|post|posts|fence post|strands	scenery	CH	1	no	no	1										1	143		
 ruts	ruts	rut|wheel rut|wheel ruts|grooves	terrain	CH	1	no	no	1										1	144		
-ditch	ditch	gutter|trench|culvert	terrain	CH	1	no	no	1										1	145		
+ditch	ditch	gutter|trench|culvert|water|trickle	terrain	CH	1	no	no	1										1	145		
 leaves	leaves	leaf|foliage	scenery	CH	1	no	no	1										1	146		
 wasp_nest	wasp nest	nest|wasps nest|wasp's nest|hornet nest|hornets nest|wasps|hornets|paper nest	scenery	CH	1	no	no	1										1	147		
 field	field	pasture|meadow|empty field	terrain	CH	1	no	no	1										1	148		
 tire_tracks	tire tracks	tracks|track|tire track|tyre tracks|wheel tracks|tire marks|mud	terrain	CH	1	no	no	1										1	149		
 stand	farm stand	stand|produce stand|farmstand|roadside stand|fruit stand|vegetable stand|stall|counter|roof|tin roof|planks|plank	scenery	CH	1	no	no	1										1	150		
-shelves	shelves	shelf|sign|board|produce|sweet corn|corn|blueberries|blueberry|eggs|brown eggs	scenery	CH	1	no	no	1										1	151		
-firewood_bin	firewood bin	bin|plank bin|wood bin|woodbin|firewood|wood|splits	scenery	CH	1	no	no	1										1	152		
-coin_slot	coin slot	slot|cash box|cashbox|money box|honor box|honesty box|cash|money	scenery	CH	1	no	no	1										1	153		
+shelves	shelves	shelf|sign|board|produce|sweet corn|corn|blueberries|blueberry|eggs|brown eggs|chaff|dried stem|stem|egg|boards	scenery	CH	1	no	no	1										1	151		
+firewood_bin	firewood bin	bin|plank bin|wood bin|woodbin|firewood|wood|splits|splinters|splinter	scenery	CH	1	no	no	1										1	152		
+coin_slot	coin slot	slot|cash box|cashbox|money box|honor box|honesty box|cash|money|coinslot	scenery	CH	1	no	no	1										1	153		
