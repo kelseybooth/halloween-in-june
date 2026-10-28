@@ -69,10 +69,11 @@ async def row_count(db, table):
 def test_the_shipped_file_parses():
     parsed = content_module.load_files()
     # Thirty-five from Release 1, nine added by V3, the two October
-    # holidays the writers added on 21 October, and *Room Service*,
-    # which is what drop 10's quest ends in.
-    assert len(parsed.achievements) == 47
-    assert len(parsed.achievement_ids) == 47
+    # holidays the writers added on 21 October, *Room Service*, which is
+    # what drop 10's quest ends in, and *Bug Catcher*, which is awarded
+    # by hand and cannot be played for.
+    assert len(parsed.achievements) == 48
+    assert len(parsed.achievement_ids) == 48
 
 
 def test_the_shipped_file_validates():
@@ -183,7 +184,7 @@ async def test_the_rows_reach_the_database(db):
 async def test_the_whole_shipped_file_loads(db):
     await content_loader.load_content(content_module.load_files())
 
-    assert await row_count(db, "achievements") == 47
+    assert await row_count(db, "achievements") == 48
 
 
 async def test_a_reload_replaces_the_rows(db):
