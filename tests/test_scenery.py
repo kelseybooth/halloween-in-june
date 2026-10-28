@@ -491,43 +491,64 @@ def test_the_shipped_files_pass_all_three():
     assert not content_module.validate(content_module.load_files())
 
 
-def test_a_bolded_word_with_no_row_behind_it_fails():
-    """The player types the one noun the game just pointed at and is
-    told the house has no such thing."""
+def test_bolding_written_into_the_prose_fails():
+    """**These two tests used to be one rule each, and are now one.**
+
+    They guarded a checker that read the bolding in the files and made
+    sure each marked word named something real, here, now: a
+    `**lamppost**` with no row behind it was a word the game pointed at
+    and the parser denied, and a drop-1 fragment bolding a drop-2 thing
+    was the same failure arriving on a timer.
+
+    Neither is a mistake anybody can make any more, because the asterisk
+    is gone from the writers' hands. The engine marks what is in reach,
+    so a word with no row behind it is never marked and a thing that has
+    not arrived is left plain - which `test_bolding.py` holds directly
+    rather than through a mangled copy of the channel.
+
+    What is left to guard is the habit: a pair of asterisks typed into
+    the prose is a second claim about a word the engine is already
+    deciding, and the loader refuses it whatever the word is.
+    """
 
     def mangle(parsed):
         for row in parsed.room_text:
             if row.entity_id == content_module.CHANNEL_ROOM and row.fragment == 10:
                 row.text["look"] += " A **lamppost** stands here."
 
-    assert any("lamppost" in p for p in _broken(mangle))
+    assert any("has bolding written into it" in p for p in _broken(mangle))
 
 
-def test_a_bolded_word_that_has_not_arrived_yet_fails():
-    """A drop-1 fragment bolding a drop-2 thing is the same failure
-    arriving on a timer."""
-
-    def mangle(parsed):
-        for row in parsed.room_text:
-            if row.entity_id == content_module.CHANNEL_ROOM and row.fragment == 10:
-                row.text["look"] += " A **feather wand** lies here."
-
-    assert any("until drop 2" in p for p in _broken(mangle))
-
-
-def test_unbolding_a_scenery_noun_fails():
-    """The inverse, and the one that will fire during authoring: trim
-    *ruts* out of `road.look` and the row becomes unreachable by any
-    path, with nothing logged."""
+def test_bolding_written_into_a_things_text_fails_too():
+    """The other file. Both are prose a player reads in a room, and the
+    engine marks both."""
 
     def mangle(parsed):
         for row in parsed.thing_text:
             if row.entity_id == "road":
-                row.text["look"] = row.text["look"].replace("**ruts**", "ruts").replace(
-                    "**Ruts**", "Ruts"
-                )
+                row.text["look"] += " A **lamppost** stands here."
 
-    assert any("scenery ruts is bolded nowhere" in p for p in _broken(mangle))
+    assert any("has bolding written into it" in p for p in _broken(mangle))
+
+
+def test_dropping_a_scenery_noun_from_the_prose_fails():
+    """The inverse, and the one that will fire during authoring: take
+    *ruts* out of `road.look` and the row becomes unreachable by any
+    path, with nothing logged.
+
+    **This used to be about unbolding**, back when the asterisks were
+    written by hand and trimming a pair was the whole mistake. Writers
+    cannot make that mistake any more - there is nothing to trim, and
+    the engine bolds what it finds - so the mistake that is left is the
+    one underneath it: prose that never says the word at all.
+    """
+
+    def mangle(parsed):
+        for row in parsed.thing_text:
+            if row.entity_id == "road":
+                row.text["look"] = row.text["look"].replace("Ruts", "Grooves")
+
+    assert any("names scenery ruts" in p for p in _broken(mangle))
 
 
 def test_a_second_person_take_line_fails():
@@ -623,8 +644,8 @@ async def test_the_stand_is_the_first_thing_the_player_reads(channel):
     """
     reply = (await look(channel)).reply
 
-    assert reply.startswith("A derelict, tin-roofed farm **stand**")
-    assert reply.index("**stand**") < reply.index("**fence**")
+    assert reply.startswith("A derelict, tin-roofed **farm stand**")
+    assert reply.index("**farm stand**") < reply.index("**fence**")
 
 
 async def test_the_stand_reveals_its_own_interior(channel):
@@ -648,7 +669,11 @@ async def test_the_stand_reveals_its_own_interior(channel):
 
     inside = (await look(channel, "farm stand")).reply
 
-    for noun in ("**shelves**", "**sign**", "**bin**", "**coin slot**",
+    # The name of each, which is what the engine marks: "sign" is
+    # another of the shelves' words and "bin" another of the firewood
+    # bin's, and a thing is marked once however many of its words the
+    # sentence happens to use.
+    for noun in ("**shelves**", "**plank bin**", "**coin slot**",
                  "**cat bed**"):
         assert noun in inside, noun
 

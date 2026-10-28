@@ -21,7 +21,7 @@ every time.
 from __future__ import annotations
 
 import enum
-import unicodedata
+import re
 from dataclasses import dataclass, field
 
 from sqlalchemy import select
@@ -108,18 +108,6 @@ class NotFound:
 
 
 Resolution = Found | Ambiguous | NotFound
-
-
-def normalise(text: str) -> str:
-    """Lowercase, strip punctuation, collapse whitespace.
-
-    Players type "Alexa," and "blue-door" and "the cat food". Matching on the raw
-    string would refuse all three, and each refusal reads like the thing is not
-    there rather than like a typo.
-    """
-    folded = unicodedata.normalize("NFKD", text).casefold()
-    kept = [c if c.isalnum() or c.isspace() else " " for c in folded]
-    return " ".join("".join(kept).split())
 
 
 def _names_of(name: str, aliases) -> set[str]:
@@ -602,3 +590,139 @@ async def find(
         )
 
     return NotFound(typed=typed, exists_elsewhere=await _exists_anywhere(typed))
+
+
+# --------------------------------------------------------------------------
+# Marking the nouns
+# --------------------------------------------------------------------------
+
+# Whom the marker never marks, and why, is `content`'s to say.
+NEVER_MARKED = content.NEVER_MARKED
+
+# The marker itself is `content`'s, so that the checks which ask the
+# files the same question cannot drift from what players are shown.
+normalise = content.normalise
+mark = content.mark
+
+
+def _words_of(candidate: "_Candidate", described: str | None) -> set[str]:
+    """Which of this candidate's words may be marked, given the subject.
+
+    Empty when the candidate *is* the subject and has no second half to
+    speak for - which is how an ordinary thing's own description leaves
+    itself out.
+    """
+    allowed = content.markable(candidate.name, candidate.names)
+    if described is None:
+        return allowed
+    if not candidate.source_id:
+        return set() if described == candidate.thing_id else allowed
+    if described == candidate.source_id:
+        return allowed - candidate.source_names
+    if described == candidate.thing_id:
+        return allowed - candidate.yield_names
+    return allowed
+
+
+async def nouns_within_reach(
+    guild_id: int, user_id: int, room_id: str, scope: Scope = Scope.REACH,
+    *, except_for: str | None = None,
+) -> tuple[dict[str, str], set[str]]:
+    """Every phrase that names exactly one thing this player can reach.
+
+    `except_for` names the thing being described, and its own words are
+    left out. A sentence about the branches that bolds the word
+    "branches" points the player at what they are already looking at,
+    which teaches nothing and spends the emphasis that should have gone
+    to the wasp nest in the next clause.
+
+    **A source and what it hands out are one candidate and two
+    subjects.** The stash behind the coat tree and the can it yields
+    share an entry - that is what stops `/take cat food` asking which
+    cat food - so "leave the subject out" cannot mean leaving the entry
+    out: looking at a loose can would stop the stash being marked in
+    the same breath. `source_names` and `yield_names` are the two
+    halves, so whichever is being described loses its words and the
+    other keeps them.
+
+    **One thing, or it is not marked.** Two things here answering to the
+    same word is a prompt - "chicken or salmon?" - and advertising a word
+    that leads to a question is worse than leaving it plain. Dropping the
+    shared ones is also what makes aliases safe to mark: the writers can
+    call a thing whatever the prose calls it, and the only words that lose
+    their bold are the ones that were ambiguous anyway.
+    """
+    owners: dict[str, set[str]] = {}
+    names: set[str] = set()
+    for candidate in (await _gather(guild_id, user_id, room_id, scope)).values():
+        if candidate.thing_id in NEVER_MARKED:
+            continue
+        words = _words_of(candidate, except_for)
+        if not words:
+            continue
+        own = normalise(candidate.name)
+        if own in words:
+            names.add(own)
+        for phrase in words:
+            owners.setdefault(phrase, set()).add(candidate.thing_id)
+    known = {
+        phrase: next(iter(ids)) for phrase, ids in owners.items() if len(ids) == 1
+    }
+    return known, names & set(known)
+
+
+async def mark_nouns(
+    guild_id: int, user_id: int, room_id: str, text: str,
+    scope: Scope = Scope.REACH, *, except_for: str | None = None,
+) -> str:
+    """Bold the nouns in this text that name something within reach.
+
+    **Bolding is the only signal that a noun can be typed**, and it used
+    to be written by hand into the content files. That put writers in
+    charge of a fact only the engine knows: a word is typeable when
+    something here answers to it, which depends on the room, on the drop,
+    and on what this player has unlocked. A hand-written pair of asterisks
+    could name a thing that had not arrived yet, or one deleted a release
+    ago, and only a checker standing over the files kept the two in step.
+
+    So the files hold plain prose and this marks it on the way out,
+    against the same index the parser resolves against. That makes the
+    promise exact rather than maintained: if it is bold, typing it works.
+
+    Per player, because reach is. Somebody who has unjammed the drawer
+    reads a sentence with a noun in it that is plain for everybody else,
+    which is the same rule the room description has always followed.
+    """
+    if not text:
+        return text
+    known, names = await nouns_within_reach(
+        guild_id, user_id, room_id, scope, except_for=except_for
+    )
+    return mark(text, known, names=names)
+
+
+async def mark_paragraph(
+    guild_id: int,
+    user_id: int,
+    room_id: str,
+    texts: list[str],
+    scope: Scope = Scope.REACH,
+) -> list[str]:
+    """Mark a room's fragments in reading order, once per thing across all.
+
+    **The description is one paragraph to a reader and five rows to the
+    files.** It is split that way so a drop can rewrite one sentence of a
+    room without restating the rest - not because the sentences are read
+    apart. So a thing named in the first sentence is already marked for
+    anybody who reaches the fourth, and marking it again there is the
+    same noise as marking it twice in one breath.
+
+    Fragment order is the reading order, which is why the caller passes
+    them in the order `room_fragments` returns rather than in any order
+    of its own.
+    """
+    known, names = await nouns_within_reach(guild_id, user_id, room_id, scope)
+    already: set[str] = set()
+    return [
+        mark(text, known, names=names, already=already) for text in texts
+    ]

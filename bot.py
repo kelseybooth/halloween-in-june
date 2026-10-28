@@ -2907,6 +2907,17 @@ async def _finish_use(interaction, state, found) -> None:
         guild_id, found.thing_id, "use", state=current,
         fallback="use.default", name=found.name, **tokens,
     )
+    # Marked before anything is appended to it. What follows the reply -
+    # an achievement, a relationship line, the hint rail - is the game
+    # talking about itself rather than about the room, and nothing in it
+    # is a noun to type.
+    try:
+        reply = await reach.mark_nouns(
+            guild_id, user.id, state.current_room, reply,
+            except_for=found.thing_id,
+        )
+    except SQLAlchemyError:
+        log.exception("Could not mark the nouns in %s's use text", found.thing_id)
     if effect and effect.announce:
         reply = f"{reply}\n\n{effect.announce}" if reply else effect.announce
 
@@ -4574,6 +4585,22 @@ async def _describe_room(
     if not parts:
         return None
 
+    # **Marked as a paragraph, before anything else reads the
+    # sentences.** A thing named in two fragments is bolded in the first
+    # and plain in the second, which only works if the whole run is
+    # marked at once - so it happens here rather than as each fragment
+    # is printed. A failure costs the bolding and keeps the paragraph,
+    # for the same reason the notice lookup below does.
+    try:
+        marked = await reach.mark_paragraph(
+            guild_id, user_id, room_id, [look for _, look in parts]
+        )
+        parts = [
+            (fragment, look) for (fragment, _), look in zip(parts, marked)
+        ]
+    except SQLAlchemyError:
+        log.exception("Could not mark the nouns in %s for %s", room_id, user_id)
+
     prefix = SEEN_FRAGMENT.format(room=room_id, fragment="")
     ids = {
         fragment: SEEN_FRAGMENT.format(room=room_id, fragment=fragment)
@@ -4802,6 +4829,19 @@ async def _look_at(
         )
     if not description:
         description = f"You see {name}."
+
+    # **`looking_at`, which is the thing this paragraph is about.** A
+    # source and what it hands out are one candidate to the resolver -
+    # the reason `/take candy` does not ask which candy - so the subject
+    # is whichever of the two the description came from, and only that
+    # half's words are left out. Looking at the pack behind the coat
+    # tree still marks the can; looking at the can still marks the pack.
+    try:
+        description = await reach.mark_nouns(
+            guild_id, user_id, room_id, description, except_for=looking_at
+        )
+    except SQLAlchemyError:
+        log.exception("Could not mark the nouns in %s's text", looking_at)
 
     # Fires on the look whether the diaper is on the floor or already in the
     # bag, and once ever rather than once per diaper: eight a day scatter
