@@ -55,11 +55,14 @@ NO_GAME = None
 # anywhere they like through `/qa-drop`.
 #
 # **Raise it in the release that builds the next drop, in the same
-# commit.** Drop 2 shipped with this still reading 1, so `/advance-game`
-# refused to reach the drop that had just been built and the only way
-# in was `/qa-drop` on a test server. `test_every_built_drop_is
-# _reachable` is what stops that happening again.
-LAST_PLAYABLE_DROP = 3
+# commit.** Drop 2 shipped with this still reading 1, and then drop 10
+# shipped with it still reading 3: both times `/advance-game` refused to
+# reach the drop that had just been built, and both times the only way
+# in was `/qa-drop` on a test server. Twice is a pattern, so the guard
+# that was supposed to catch it has been rewritten to actually do so -
+# see `test_the_ceiling_is_not_below_the_commands`, which asks the one
+# other file that records which drops exist.
+LAST_PLAYABLE_DROP = 10
 
 
 class UnknownDrop(Exception):

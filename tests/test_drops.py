@@ -18,6 +18,7 @@ import bot
 import content as content_module
 import content_loader
 import database
+import gating
 import reach
 import resolve
 from content import Content, Drop, Room, TextRow
@@ -497,13 +498,37 @@ async def test_it_names_the_drop_it_would_open(started, monkeypatch):
     assert "The Door" in interaction.reply
 
 
+def test_the_ceiling_is_not_below_the_commands():
+    """**The guard that was supposed to exist, and did not.**
+
+    The old one walked `LAST_PLAYABLE_DROP` steps and asserted it had
+    arrived at `LAST_PLAYABLE_DROP`, which is true for any value of it:
+    the constant was both the question and the answer, so a release that
+    built a drop and left the ceiling behind passed. It happened twice -
+    drop 2 against a ceiling of 1, then drop 10 against a ceiling of 3,
+    found both times by an admin in a playtest rather than here.
+
+    This asks a file that cannot be forgotten in the same way. A drop
+    that gives players a new verb has a row in `PLAYER_COMMANDS`, and
+    nobody builds the verb without writing it down - so a command table
+    reaching past the ceiling means a built drop that `/advance-game`
+    will not open.
+
+    It goes quiet for drops 20 to 50, which add rooms and no verbs. The
+    test below is what covers those: it asks whether the content of the
+    drop the ceiling names actually arrived.
+    """
+    assert resolve.LAST_PLAYABLE_DROP >= max(gating.PLAYER_COMMANDS)
+
+
 async def test_every_built_drop_is_reachable_by_advancing(started):
     """Walk a server up from nothing, the way an admin does.
 
-    The guard against a ceiling left behind: this walks to
-    `LAST_PLAYABLE_DROP` and then asserts the content of the last drop
-    is genuinely there, so a release that builds a drop without raising
-    the ceiling fails here rather than in a playtest.
+    Where the one above reads a table, this one walks the ladder and
+    then asks the world what arrived: the ceiling is drop 10, the house
+    is drop 10's content, and an admin who advanced all the way has to
+    be able to see it. Raising the ceiling past a drop whose content is
+    not in the files fails here.
     """
     await start(started)
 
@@ -511,6 +536,8 @@ async def test_every_built_drop_is_reachable_by_advancing(started):
         await advance(started)
 
     assert await resolve.current_drop(GUILD_A) == resolve.LAST_PLAYABLE_DROP
+    visible = await resolve.visible_thing_ids(GUILD_A)
+    assert {"house", "cat_bowl", "house_key", "cat_food_salmon"} <= visible
 
 
 async def test_the_ceiling_reaches_the_toys(started):
@@ -526,8 +553,8 @@ async def test_the_ceiling_reaches_the_toys(started):
 
 
 async def test_advancing_past_the_built_drops_still_refuses(started):
-    """The ceiling is still a ceiling: drop 3 is the house, and it is
-    not built."""
+    """The ceiling is still a ceiling. Drop 10 is the house and is built;
+    drop 20 is the rest of the Entryway and is not."""
     await start(started)
     for _ in range(resolve.LAST_PLAYABLE_DROP):
         await advance(started)
