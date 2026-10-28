@@ -19,6 +19,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 import database  # noqa: E402
 import resolve  # noqa: E402
+from sqlalchemy import event  # noqa: E402
 from sqlalchemy.ext.asyncio import (  # noqa: E402
     async_sessionmaker,
     create_async_engine,
@@ -86,6 +87,46 @@ def schema_template(tmp_path_factory):
     return path
 
 
+def _without_durability(engine) -> None:
+    """Stop a test database paying for a guarantee nobody collects.
+
+    Each test gets a SQLite file in its own `tmp_path`, deleted when the
+    test ends and read by nobody after the process exits. `synchronous`
+    buys one thing - that a committed transaction survives losing power -
+    and that file does not survive the test either way.
+
+    It is not a small charge. Broken into phases, the fixture costs about
+    1.4ms to make the directory, 2.0ms to copy the schema template and
+    1.7ms to open a connection, against **27ms for a commit**: the sync is
+    the fixture. And a test makes many more commits than it looks like,
+    because every write through `database` is its own transaction.
+
+    Measured end to end on a quiet machine, the whole suite went from
+    **905s to 447s** - the same 2,226 tests, half the wall clock, one
+    pragma. Under `-n 8` it is 173s, and the two compose almost exactly,
+    which is the clearest evidence that the sync was what the parallel
+    workers would otherwise have been queueing behind.
+
+    **`journal_mode` is deliberately left alone.** Setting it to MEMORY as
+    well measured 23x rather than 4.4x on the write path, but the whole of
+    that extra is about 3% of the suite, and it changes what a process
+    dying mid-transaction leaves behind - a corrupt file rather than a
+    stale one. Three per cent does not buy a footnote about crash
+    recovery. It is a separate change if anybody ever wants it.
+
+    Production is PostgreSQL and never sees this. It lives here rather
+    than in `database.py` for that reason: the one place the pragma would
+    otherwise bite is a developer running the bot on local SQLite, who did
+    not ask to lose durability.
+    """
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def _set_pragma(dbapi_connection, _record):  # pragma: no cover - driver callback
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA synchronous=OFF")
+        cursor.close()
+
+
 @pytest_asyncio.fixture
 async def db(tmp_path, monkeypatch, schema_template):
     """A fresh, empty database for one test.
@@ -104,6 +145,7 @@ async def db(tmp_path, monkeypatch, schema_template):
 
     database._engine = create_async_engine(url, pool_pre_ping=True)
     database._enforce_sqlite_foreign_keys(database._engine)
+    _without_durability(database._engine)
     database._session_factory = async_sessionmaker(database._engine, expire_on_commit=False)
 
     # Open the house in both test servers before anything runs. Content
