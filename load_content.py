@@ -55,12 +55,29 @@ def _check_only() -> int:
         f"({len(achievements.registered_ids())} wired up), "
         f"{len(parsed.art)} images"
     )
+    # **Printed, never fatal, and on stdout rather than stderr.** The
+    # marker reaches these things through an alias because their own
+    # name is not in the sentence, which works - a player who types
+    # either word gets the thing. What it costs is a name in the
+    # spreadsheet that nobody reading the prose would guess, and that is
+    # a writer's call to make at a writer's pace. Failing a build over
+    # it would teach people to delete the check.
+    notes = content.naming_notes(parsed)
+    if notes:
+        print(
+            f"\n{len(notes)} thing(s) the prose reaches by an alias rather "
+            "than by its name. Not errors - the marking works - but the "
+            "names and the prose have drifted:"
+        )
+        for note in notes:
+            print(f"  - {note}")
+
     if problems:
         print(f"\n{len(problems)} problem(s):", file=sys.stderr)
         for problem in problems:
             print(f"  - {problem}", file=sys.stderr)
         return 1
-    print("all checks pass")
+    print("\nall checks pass")
     return 0
 
 

@@ -65,7 +65,7 @@ async def test_drop_one_is_prose_with_no_list_at_all(channel):
 
     reply = (await look(channel)).reply
 
-    assert reply.startswith("A derelict, tin-roofed farm **stand**")
+    assert reply.startswith("A derelict, tin-roofed **farm stand**")
     assert "Also here:" not in reply
 
 
@@ -132,7 +132,7 @@ async def test_taking_the_last_loose_thing_leaves_prose_alone(channel):
     reply = (await look(channel)).reply
 
     assert "Also here:" not in reply
-    assert "**stand**" in reply
+    assert "**farm stand**" in reply
 
 
 async def test_the_cat_is_not_in_the_list(channel):
@@ -155,7 +155,7 @@ async def test_the_description_sits_above_the_list(channel):
 
     reply = (await look(channel)).reply
 
-    assert reply.startswith("A derelict, tin-roofed farm **stand**")
+    assert reply.startswith("A derelict, tin-roofed **farm stand**")
     assert "Also here:" not in reply
 
 

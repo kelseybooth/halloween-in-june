@@ -1,15 +1,15 @@
 thing_id	name	aliases	type	room_id	quantity	takeable	droppable	cross_weight	max_per_player	requires	present_when	transforms_to	transform_room	yields	destination_room_id	contained_in	use_cooldown_hours	since_drop	sort_order	consumed_on_use	use_cooldown_daily
 alexa	Alexa	smart speaker|speaker|echo	fixture	ALL	1	no	yes	0										20	1		
 eunoia	cat	cat|black cat|kitty|kitten|eunoia|paw|paws|eyes|tail	fixture	ALL	1	no	yes	0										0	0		
-lumber	stack of lumber	lumber|planks|plank|wood	object	EN	many	no	yes	0			!stairs_repaired						48	20	2		
+lumber	lumber	lumber|planks|plank|wood|stack of lumber	object	EN	many	no	yes	0			!stairs_repaired						48	20	2		
 intercom	intercom	intercom|door buzzer|buzzer	fixture	EN	1	no	yes	0										20	3		
 amazon_box	Amazon box	amazon box|box|parcel|package	fixture	EN	1	no	yes	0										20	4		
 spice_jar	spice jar	spice|spice jar|jar of spice	object	EN	0	yes	yes	1								amazon_box		20	5		
-ornate_mirror	ornate mirror	ornate mirror|mirror|hall mirror	fixture	EN	1	no	yes	0										20	6		
+ornate_mirror	mirror	ornate mirror|mirror|hall mirror	fixture	EN	1	no	yes	0										20	6		
 bulletin_board	bulletin board	bulletin board|board|cork board|notes	fixture	EN	1	no	yes	0										20	7		
 stroller	stroller	stroller|pram|buggy	fixture	EN	1	no	yes	0										20	8		
 shoes	pile of shoes	shoes|boots|pile of shoes	fixture	EN	1	no	yes	0										20	9		
-booties	knit booties	booties|baby booties|knit booties	fixture	EN	1	no	yes	0										20	10		
+booties	booties	booties|baby booties|knit booties	fixture	EN	1	no	yes	0										20	10		
 candy_bowl	bowl of Halloween candy	candy bowl|bowl of candy|bowl|halloween candy|candy|sweets	source	DI	1	no	yes	0						candy				30	11		
 candy	piece of candy	candy|piece of candy|sweet|chocolate bar	object		0	yes	yes	1										30	12	yes	
 to_do_list	to-do list	to-do list|todo list|to do list|list	fixture	DI	1	no	yes	0								sideboard		30	13		
@@ -126,7 +126,7 @@ ED	arched doorway	arch|arched doorway|doorway|dining room|dining	exit	EN	1	no	ye
 DE	arched doorway	arch|arched doorway|entryway|hall|doorway|door	exit	DI	1	no	yes	0							EN			30	117		
 EL	wide doorway	wide doorway|doorway|living room|living	exit	EN	1	no	yes	0							LI			30	118		
 LE	wide doorway	wide doorway|doorway|entryway|hall|door	exit	LI	1	no	yes	0							EN			30	119		
-EH	main staircase	main staircase|staircase|stairs|banister|upstairs|grand staircase	exit	EN	1	no	yes	0							UH			20	120		
+EH	grand staircase	main staircase|staircase|stairs|banister|upstairs|grand staircase	exit	EN	1	no	yes	0							UH			20	120		
 HE	main staircase	main staircase|staircase|stairs|downstairs	exit	UH	1	no	yes	0							EN			40	121		
 DK	swinging door	swinging door|kitchen door|kitchen|doorway|door	exit	DI	1	no	yes	0							KI			30	122		
 KD	swinging door	swinging door|dining room|dining|doorway|door	exit	KI	1	no	yes	0							DI			30	123		

@@ -524,8 +524,11 @@ async def test_but_only_for_a_word_the_two_of_them_share(house):
     await database.update_current_room(ALICE, GUILD_A, "EN")
     await database.place_in_room(GUILD_A, "EN", "cat_food_salmon", 1)
 
-    reply = (await look(thing="pack")).reply
+    reply = plain((await look(thing="pack")).reply)
 
+    # Unmarked, because this is about which thing answered, not about
+    # which of its neighbours' nouns got bolded on the way out - the
+    # coat tree is one of them, and `test_bolding.py` owns that.
     assert "tucked behind the base of the coat tree" in reply
 
 
@@ -554,6 +557,11 @@ async def test_taking_from_a_source_is_unchanged(house):
 
     assert await database.carried_of(ALICE, GUILD_A, "herbs") == 1
 
+
+
+def plain(text: str) -> str:
+    """The text without its bolding, for a test that is not about bolding."""
+    return (text or "").replace("**", "")
 
 async def test_every_source_in_the_shipped_house_describes_itself(house):
     """The sweep, as a test. Eighteen sources, each looked at where it
@@ -588,8 +596,13 @@ async def test_every_source_in_the_shipped_house_describes_itself(house):
             room = things[thing.contained_in].room_id
         await database.update_current_room(ALICE, GUILD_A, room)
 
-        reply = (await look(thing=thing.name)).reply
-        opening = own_look[thing.thing_id].split(".")[0]
+        # The marks come off both sides. What is asserted here is that
+        # the writers' sentence is the one that came back, and the engine
+        # now bolds the nouns in it on the way out - so comparing the raw
+        # strings would be asserting where the asterisks fall, which is
+        # `test_marking.py`'s question rather than this one's.
+        reply = plain((await look(thing=thing.name)).reply)
+        opening = plain(own_look[thing.thing_id]).split(".")[0]
         assert opening in reply, thing.thing_id
         checked += 1
 

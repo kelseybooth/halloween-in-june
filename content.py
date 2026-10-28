@@ -803,7 +803,7 @@ def validate(content: Content) -> list[str]:
     problems += _check_drop_references(content)
     problems += _check_restocks(content, things, rooms)
     problems += _check_sources_are_named_in_prose(content, rooms)
-    problems += _check_bolded_nouns_resolve(content)
+    problems += _check_no_hand_written_bolding(content)
     problems += _check_scenery_is_named_in_prose(content)
     problems += _check_fixtures_are_named_in_prose(content)
     problems += _check_scenery_aliases_are_unique(content)
@@ -1721,6 +1721,259 @@ def _check_art(content: Content) -> list[str]:
 _BOLDED = re.compile(r"\*\*(.+?)\*\*")
 
 
+# --------------------------------------------------------------------------
+# Marking the nouns
+#
+# **The engine bolds; the files do not.** Bolding is the only signal that
+# a noun can be typed, and a hand-written pair of asterisks is a claim
+# about the world that only the engine can check: a word is typeable
+# when something in the room answers to it, which depends on the room,
+# the drop and what the player has unlocked. So the prose is written
+# plain and marked on the way out.
+#
+# The pure half of that lives here, in the module with no project
+# imports, because two callers need exactly the same rule and they are
+# on opposite sides of the import graph: `reach`, which marks against
+# what a player can reach, and the checks below, which ask the files
+# whether every thing in a room is named somewhere a player will read.
+# It was written twice before this, and the two copies disagreed inside
+# an afternoon.
+# --------------------------------------------------------------------------
+
+
+def normalise(text: str) -> str:
+    """Lowercase, strip punctuation, collapse whitespace.
+
+    Players type "Alexa," and "blue-door" and "the cat food". Matching on
+    the raw string would refuse all three, and each refusal reads like the
+    thing is not there rather than like a typo. `reach` resolves what was
+    typed against the same function, which is what makes a marked word a
+    promise: if it is bold, typing it works.
+    """
+    folded = unicodedata.normalize("NFKD", text).casefold()
+    kept = [c if c.isalnum() or c.isspace() else " " for c in folded]
+    return " ".join("".join(kept).split())
+
+
+# **The cat is never marked, and she is the only thing that never is.**
+# Every other rule here is about what a word means; this one is about how
+# often it turns up. She is in reach in every room and the subject of most
+# sentences in the game, so marking her everywhere spends the emphasis that
+# should be pointing at the wasp nest and the cat bed. She needs no
+# advertising either: `/pet` is on the command list, and a player who has
+# read one line about her knows she is there.
+#
+# It lives here rather than in `reach` because the checks below have to
+# agree with it: a thing nothing may ever mark cannot be required to be
+# marked somewhere.
+NEVER_MARKED = frozenset({"eunoia"})
+
+
+def markable(name: str, names) -> set[str]:
+    """Which of a thing's words may be bolded for it.
+
+    Its own name always, and any alias of two words or more. **A
+    single-word alias is a convenience for the parser, not a noun a
+    sentence is about**: the front door answers to "out", the road to
+    "mud", the farm stand to "wood", a can of food to "can". Marking
+    those bolds half the words in a paragraph and teaches none of them.
+
+    A longer alias is specific enough to be the thing - "plank bin",
+    "door-hardware manual" - and is how a thing still gets marked when
+    the prose never says its name.
+    """
+    own = normalise(name)
+    marked = {own} if own else set()
+    marked.update(
+        phrase
+        for phrase in (normalise(n) for n in names)
+        if phrase and " " in phrase
+    )
+    return marked
+
+
+# Which gaps may sit inside one phrase. A name can be written with a
+# hyphen or an apostrophe and still be one noun - "door-hardware manual",
+# "cat's bowl" - but a full stop or a comma ends it, so a window that
+# spans one is two phrases that happen to be adjacent.
+_INSIDE_A_PHRASE = set(" -'’")
+
+
+
+
+def _words(text: str) -> list[tuple[int, int, str]]:
+    """(start, end) for every run of letters or digits, in order."""
+    return [(m.start(), m.end()) for m in re.finditer(r"[^\W_]+", text)]
+
+
+def _one_phrase(text: str, start: int, end: int, words: list[tuple[int, int]]) -> bool:
+    """Whether the words between these offsets read as a single phrase."""
+    inside = [w for w in words if w[0] >= start and w[1] <= end]
+    for (_, left), (right, _) in zip(inside, inside[1:]):
+        if set(text[left:right]) - _INSIDE_A_PHRASE:
+            return False
+    return True
+
+
+def mark(
+    text: str,
+    known: dict[str, str],
+    *,
+    names: "frozenset[str] | set[str]" = frozenset(),
+    already: set[str] | None = None,
+) -> str:
+    """Bold each phrase in `text` that `known` maps to a thing.
+
+    **A thing's own name wins over any alias of it**, which is what
+    `names` is for, and it is not a preference - it is the difference
+    between marking the right word and the wrong one. The farm stand's
+    prose reads "Empty shelves line the back … still offers sweet corn,
+    blueberries and brown eggs", and `shelves` answers to all four. A
+    sweep that only took the longest phrase first marked **sweet corn**,
+    spent the shelves' one mark on it, and left the word "shelves" plain
+    - advertising produce that has not been there for years and leaving
+    "blueberries" unmarked between two that were.
+
+    So names are offered first, in one pass, and aliases get what is
+    left in a second. Within a pass the longest phrase wins, so "cat
+    bowl" beats "bowl"; once per thing, because the second mention of
+    the sofa is the same sofa and bolding it again is only louder; and
+    never inside an existing pair of asterisks, so running this twice
+    changes nothing.
+
+    `already` carries "once per thing" across more than one call, and is
+    updated as marks are made. A room's description is five rows and one
+    paragraph, so the sentence that names the road second is reading the
+    same road the first one marked.
+
+    Matching is done on `normalise`d windows of words rather than on the
+    raw string, which is what lets the files say "door-hardware manual"
+    and the parser say `door hardware manual` and both mean the one thing.
+    """
+    if not text or not known:
+        return text
+    words = _words(text)
+    longest = max(len(phrase.split()) for phrase in known)
+    marked = set() if already is None else already
+    # **A thing bolded here already counts as marked.** Nothing in the
+    # files is hand-marked any more, so this is not for the writers: it
+    # is what makes running the marker over its own output a no-op, and
+    # it is what kept the transition honest. While the asterisks were
+    # still in the files, "dirt **road**" could not be re-marked as one
+    # phrase - the asterisks sit inside the window - so the road went
+    # unregistered and the next fragment bolded "road" a second time.
+    for phrase in _bolded_in(text):
+        thing_id = known.get(normalise(phrase))
+        if thing_id is not None:
+            marked.add(thing_id)
+    spans: list[tuple[int, int]] = []
+    for wanted_a_name in (True, False):
+        for size in range(min(longest, len(words)), 0, -1):
+            for i in range(len(words) - size + 1):
+                start, end = words[i][0], words[i + size - 1][1]
+                if any(not (end <= a or start >= b) for a, b in spans):
+                    continue
+                if text[max(0, start - 2):start] == "**" or text[end:end + 2] == "**":
+                    continue
+                if not _one_phrase(text, start, end, words):
+                    continue
+                phrase = normalise(text[start:end])
+                if (phrase in names) is not wanted_a_name:
+                    continue
+                thing_id = known.get(phrase)
+                if thing_id is None or thing_id in marked:
+                    continue
+                marked.add(thing_id)
+                spans.append((start, end))
+    for start, end in sorted(spans, reverse=True):
+        text = f"{text[:start]}**{text[start:end]}**{text[end:]}"
+    return text
+
+
+def marked_in_room(content: "Content") -> dict[str, set[str]]:
+    """Which things the marker would bold somewhere a player reads, by room.
+
+    **The prose of a room is more than the room's own paragraph.** It is
+    the fragments plus the look and use text of everything standing in
+    it, and a noun bolded in any of them teaches the same word - the
+    ditch and the ruts are named by the road's description, the wasp
+    nest by the branches'. So "is it ever pointed at here" is one
+    question asked across all of it.
+
+    This is the files' half of what `reach.mark_nouns` does per player.
+    It cannot be the same function - that one needs a database and this
+    one must not - but it is the same `markable` rule and the same
+    ambiguity rule underneath, which is the only way the check and the
+    behaviour can be held together.
+    """
+    rooms = [room.room_id for room in content.rooms]
+    # room -> phrase -> the things here that answer to it
+    answers: dict[str, dict[str, set[str]]] = {}
+    for thing in content.things:
+        if not thing.room_id or thing.thing_id in NEVER_MARKED:
+            continue
+        where = rooms if thing.room_id == EVERYWHERE else [thing.room_id]
+        for room_id in where:
+            here = answers.setdefault(room_id, {})
+            for phrase in markable(thing.name, thing.names):
+                here.setdefault(phrase, set()).add(thing.thing_id)
+
+    prose = {
+        room_id: _prose_of_room(content, room_id)
+        for room_id in {row.entity_id for row in content.room_text}
+        | {
+            thing.room_id
+            for thing in content.things
+            if thing.room_id and thing.room_id != EVERYWHERE
+        }
+    }
+
+    marked: dict[str, set[str]] = {}
+    for room_id, texts in prose.items():
+        here = answers.get(room_id, {})
+        # Only the words one thing answers to; a shared word is a prompt
+        # rather than a mark, so it teaches nothing and is not counted.
+        known = {p: next(iter(v)) for p, v in here.items() if len(v) == 1}
+        found = marked.setdefault(room_id, set())
+        for text in texts:
+            if not text:
+                continue
+            for phrase in known:
+                if _says(text, phrase):
+                    found.add(known[phrase])
+    return marked
+
+
+def _prose_of_room(content: "Content", room_id: str) -> list[str]:
+    """Every sentence a player standing in this room can read.
+
+    The room's own fragments, and the look and use text of the things
+    standing in it. A noun bolded in any of them teaches the same word.
+    """
+    texts = [
+        row.text.get("look") or ""
+        for row in content.room_text
+        if row.entity_id == room_id
+    ]
+    things = content.things_by_id
+    for row in content.thing_text:
+        thing = things.get(row.entity_id)
+        if thing is None or thing.room_id != room_id:
+            continue
+        texts += [row.text.get("look") or "", row.text.get("use") or ""]
+    return [text for text in texts if text]
+
+
+def _says(text: str, phrase: str) -> bool:
+    """Whether this prose contains this phrase as whole words.
+
+    Asked through `mark` rather than with a regular expression of its
+    own, so that the one thing the checker promises - the marker will
+    bold this - is answered by the marker.
+    """
+    return mark(text, {phrase: "it"}) != text
+
+
 def _bolded_in(text: str) -> list[str]:
     """Every phrase the writer bolded, lowercased and tidied.
 
@@ -1881,82 +2134,83 @@ def _check_scenery_aliases_are_unique(content: Content) -> list[str]:
     return problems
 
 
-def _check_bolded_nouns_resolve(content: Content) -> list[str]:
-    """Every bolded noun must be a thing a player in that room can look at.
+def _check_no_hand_written_bolding(content: Content) -> list[str]:
+    """No asterisks in the prose. The engine puts them there.
 
-    **This is the half of the scenery contract the player feels.** Bolding
-    is the only signal that a noun is lookable - there is no list of
-    scenery and no `/examine` index - so a bolded word that resolves to
-    nothing is worse than plain text: it advertises a thing, the player
-    types it, and the house says there is no such thing. A typo in an
-    alias does it, and so does deleting a row whose name is still in
-    somebody else's prose.
+    **This check replaced one that did the opposite.** Until the marker
+    existed, bolding was written by hand and a checker stood over it
+    making sure every bolded word named something real in that room at
+    that drop. It caught typos and deleted rows, and it could not catch
+    the rest: a word that should have been bolded and was not is
+    invisible to a rule that only reads what is already marked, and a
+    room's worth of nouns went unmarked for a release because nobody
+    noticed the absence of something.
 
-    The drop is checked as well as the room. A drop-1 fragment that bolds
-    a thing arriving at drop 2 reads as a dead word for everyone until
-    the drop lands, which is the same failure arriving on a timer.
+    So the prose is plain now and `mark` bolds it on the way out, which
+    makes a hand-written pair of asterisks a claim competing with the
+    engine's. Two marks on one thing, or a mark on a word the engine
+    knows is ambiguous, and the player is being promised something that
+    is not true. Easier to say: the files do not do this any more.
+
+    Emphasis that is not a noun has nowhere to live here, and that is
+    deliberate - the three places the game does emphasise are house
+    strings in `defaults.tsv`, which this does not touch.
     """
-    # room -> word -> the earliest drop at which something here answers to it
-    arrives: dict[str, dict[str, int]] = {}
-    # **And the same for the things that are everywhere**, which have no
-    # room of their own to be indexed under. The cat is one and so is the
-    # smart speaker, so without this every fragment that bolds either of
-    # them reads as a word naming nothing - a false alarm on the two rows
-    # most likely to turn up in somebody's prose.
-    anywhere: dict[str, int] = {}
-    for thing in content.things:
-        if not thing.room_id:
-            continue
-        here = anywhere if thing.room_id == EVERYWHERE else arrives.setdefault(
-            thing.room_id, {}
-        )
-        for name in thing.names:
-            word = name.lower()
-            here[word] = min(here.get(word, thing.since_drop), thing.since_drop)
-
-    things = content.things_by_id
     problems = []
-
-    def complain(where: str, room_id: str, drop: int, text: str) -> None:
-        here = {**anywhere, **arrives.get(room_id, {})}
-        for phrase in _bolded_in(text):
-            if phrase not in here:
-                problems.append(
-                    f"{where} bolds {phrase!r}, which names nothing in room "
-                    f"{room_id}; a player who types it is told the house has "
-                    "no such thing"
-                )
-            elif here[phrase] > drop:
-                problems.append(
-                    f"{where} bolds {phrase!r} at drop {drop}, but nothing "
-                    f"answers to it in room {room_id} until drop "
-                    f"{here[phrase]}"
-                )
-
     for row in content.room_text:
-        complain(
-            f"room {row.entity_id} fragment {row.fragment}",
-            row.entity_id,
-            row.since_drop,
-            row.text.get("look", ""),
-        )
-
-    for row in content.thing_text:
-        thing = things.get(row.entity_id)
-        # A carried object's prose has no room to be read in, so there is
-        # no scope to check it against. In practice nothing portable is
-        # bolded; if that changes it wants its own rule, not this one
-        # quietly passing everything.
-        if thing is None or not thing.room_id:
-            continue
-        for field_name in ("look", "use"):
-            complain(
-                f"{row.entity_id} {field_name} text",
-                thing.room_id,
-                row.since_drop,
-                row.text.get(field_name, ""),
+        if "**" in (row.text.get("look") or ""):
+            problems.append(
+                f"room {row.entity_id} fragment {row.fragment} has bolding "
+                "written into it; the engine marks the nouns now, so take "
+                "the asterisks out and it will bold what it can reach"
             )
+    for row in content.thing_text:
+        for field_name in ("look", "use"):
+            if "**" in (row.text.get(field_name) or ""):
+                problems.append(
+                    f"{row.entity_id} {field_name} text has bolding written "
+                    "into it; the engine marks the nouns now, so take the "
+                    "asterisks out and it will bold what it can reach"
+                )
     return problems
+
+
+def naming_notes(content: Content) -> list[str]:
+    """Things the prose points at by an alias rather than by their name.
+
+    **Not a problem, and deliberately not one.** The marker takes an
+    alias of two words or more when a thing's own name is not in the
+    sentence, so these all work: the firewood bin is reached through
+    "plank bin", and a player who types either gets it.
+
+    It is worth printing anyway. A name that differs from what the prose
+    calls the thing is a small debt - it reads oddly in the spreadsheet,
+    it is the thing most likely to go stale when the prose is rewritten,
+    and four of these were the only marks lost when bolding moved to the
+    engine. A list a writer can work through beats a wall they have to
+    argue with, which is why this is printed rather than raised.
+    """
+    marked = marked_in_room(content)
+    notes = []
+    for thing in content.things:
+        if not thing.room_id or thing.room_id == EVERYWHERE:
+            continue
+        if thing.thing_id not in marked.get(thing.room_id, set()):
+            continue
+        own = normalise(thing.name)
+        texts = _prose_of_room(content, thing.room_id)
+        if any(_says(text, own) for text in texts):
+            continue
+        reached = sorted(
+            phrase
+            for phrase in markable(thing.name, thing.names)
+            if phrase != own and any(_says(text, phrase) for text in texts)
+        )
+        notes.append(
+            f"{thing.room_id} {thing.thing_id}: the prose never says "
+            f"{thing.name!r}; it is reached by {reached}"
+        )
+    return notes
 
 
 def _check_fixtures_are_named_in_prose(content: Content) -> list[str]:
@@ -2045,32 +2299,22 @@ def _check_scenery_is_named_in_prose(content: Content) -> list[str]:
     wasp nest by the branches. That is the intended shape: a few nouns
     in the paragraph, each opening onto two or three more.
     """
-    bolded: dict[str, set[str]] = {}
-    things = content.things_by_id
-
-    for row in content.room_text:
-        bolded.setdefault(row.entity_id, set()).update(
-            _bolded_in(row.text.get("look", ""))
-        )
-    for row in content.thing_text:
-        thing = things.get(row.entity_id)
-        if thing is None or not thing.room_id:
-            continue
-        here = bolded.setdefault(thing.room_id, set())
-        for field_name in ("look", "use"):
-            here.update(_bolded_in(row.text.get(field_name, "")))
+    marked = marked_in_room(content)
 
     problems = []
     for thing in content.things:
         if thing.type not in SCENERY_TYPES or not thing.room_id:
             continue
-        here = bolded.get(thing.room_id, set())
-        if not any(name.lower() in here for name in thing.names):
-            problems.append(
-                f"scenery {thing.thing_id} is bolded nowhere in room "
-                f"{thing.room_id}; scenery is never listed, so no player "
-                "could learn it is there"
-            )
+        if thing.thing_id in marked.get(thing.room_id, set()):
+            continue
+        reachable = markable(thing.name, thing.names)
+        problems.append(
+            f"nothing in room {thing.room_id} names scenery "
+            f"{thing.thing_id} in a word the engine can bold, so no player "
+            f"could learn it is there; it would answer to {sorted(reachable)}"
+            if reachable
+            else f"scenery {thing.thing_id} has no markable name at all"
+        )
     return problems
 
 
