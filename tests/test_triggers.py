@@ -455,9 +455,9 @@ BLOCKED = [
     "ghostbuster",
     "signed_sealed_delivered",
     "forwarding_address",
-    # Waiting on feeding, which drop 3 builds. The two toy ones left
-    # this list when drop 2 gave them something to fire on.
-    "bowl_half_empty",
+    # *Bowl Half Empty* left this list in drop 10, when feeding arrived
+    # and gave it something to count - the same way the two toy ones
+    # left it in drop 2.
 ]
 
 
@@ -485,17 +485,19 @@ async def test_nothing_blocked_can_be_earned_by_any_use(playing):
 
 
 def test_what_can_actually_be_earned():
-    """Twenty-eight of Release 1's thirty-five, plus the nine V3 adds
+    """Twenty-eight of Release 1's thirty-five, plus the eleven V3 adds
     that have content behind them: making first contact, the two score
     thresholds below 250, fluffing the bed, Tireless, drop 2's two toy
-    achievements, and the two October holidays.
+    achievements, the two October holidays, and drop 10's feeding pair -
+    *Room Service* on the first can and *Bowl Half Empty* on the
+    twenty-fifth.
 
     **Registration, not arrival.** A row parked at `NEVER` is still
     wired - *Met the Craving* is, and its predicate works - so this
     counts what the engine can answer for, and the drop decides
     separately whether anybody will ever be asked.
     """
-    assert len(achievements.registered_ids()) - len(BLOCKED) == 38
+    assert len(achievements.registered_ids()) - len(BLOCKED) == 40
 
 
 # --------------------------------------------------------------------------

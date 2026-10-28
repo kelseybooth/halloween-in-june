@@ -27,6 +27,7 @@ import content as content_module
 import database
 import resolve
 import states
+import telemetry
 
 log = logging.getLogger(__name__)
 
@@ -111,25 +112,42 @@ async def toy_decay_percent(guild_id: int) -> int:
     return await database.get_setting(guild_id, TOY_DECAY_SETTING)
 
 
-# Feeding, which drop 3 builds. Only the hunger window is read today,
-# by the `/stats` status line, which has to be able to say the cat
-# wants feeding before anything can feed her.
+# Feeding. **A set of ids rather than a type or a column**, and that is
+# still the thing here worth revisiting. There is no `food` type, the
+# five cans are `object` like everything else carriable, and `requires`
+# stopped marking them the day the salmon got its pull-tab. An explicit
+# list beats a prefix match, which would sweep in the seven
+# `cat_food_stash_*` sources.
 #
-# **A set of ids rather than a type or a column**, and that is the one
-# thing here worth revisiting. There is no `food` type, the five cans
-# are `object` like everything else carriable, and `requires =
-# can_opener` stops marking them the day the salmon gets its pull-tab.
-# Whoever builds feeding should give them a real marker and delete
-# this; until then an explicit list beats a prefix match, which would
-# sweep in the seven `cat_food_stash_*` sources.
-CAT_FOOD = frozenset({
+# The expired can is a can of cat food and is **not** a feed, and the
+# split is load-bearing rather than tidy. She takes one breath of it and
+# walks away: it does not satisfy her hunger, so it must not stamp the
+# timer; it earns no *Room Service* and opens no room; and it posts no
+# public line, because nothing was fed. Everything that asks "is this a
+# meal" reads `FEEDS`; only the two questions that are really about the
+# object - is this a can, and does reaching for one count as turning up
+# - read `CAT_FOOD`.
+CAT_FOOD_EXPIRED = "cat_food_expired"
+FEEDS = frozenset({
     "cat_food_chicken",
     "cat_food_salmon",
     "cat_food_tuna",
     "cat_food_gourmet",
-    "cat_food_expired",
 })
+CAT_FOOD = FEEDS | {CAT_FOOD_EXPIRED}
 HUNGER_WINDOW = timedelta(hours=8)
+
+# What a feed is worth: parity with a toy success, for an action that
+# comes round twice a day instead of every ten minutes. The number is
+# here beside the bed's fifteen rather than in a content column -
+# `relationship_delta` on `things.tsv` is drop 40's work, and moving
+# four constants out of code is not a thing to do halfway.
+FEED_POINTS = 10
+
+# Her bowl, which every flavor requires. It is a fixture in the
+# Entryway, so the requirement is met from the room rather than from
+# the bag - see `database.requirements_met`.
+CAT_BOWL = "cat_bowl"
 
 # Before this drop there is no food in the game, so every player has
 # never been fed and would read as permanently hungry. The gate is what
@@ -179,6 +197,49 @@ HAS_KEY = "has_key"
 HOUSE = "house"
 FRONT_DOOR = "front_door"
 
+# The house starts locked, for the whole server, and one brass key opens
+# it for the whole server. **A server state rather than a player one**,
+# for the reason the staircase is: the work is collective and so is the
+# reward. Turning it is a one-way door, like every other state.
+#
+# The door being locked is what makes drop 10 a thing players do
+# together rather than nine people doing the same thing in parallel. The
+# key falls out of the cat bed, taking it is public, and whoever has it
+# has to be asked.
+HOUSE_UNLOCKED = "house_unlocked"
+HOUSE_KEY = "house_key"
+HOUSE_FROM_DROP = 10
+
+# How long after a key falls before the bed will give up another. The
+# spare exists because the first finder can go quiet - they take the key
+# and never come back, and without this the server is locked out of the
+# house for good by one person's Tuesday.
+#
+# **A day rather than an hour**, because the point is insurance and not
+# supply: a key an hour would make the first one worthless and the
+# cooperation the door exists to create pointless. And it stops for good
+# the moment the door opens, so a server that solved it never sees a
+# second one.
+KEY_INTERVAL = timedelta(hours=24)
+
+# The Entryway's inner doorways, which do not exist for a player who has
+# not fed the cat. Drop 10 is one room and one task; without this a
+# player who walks in at drop 30 is handed four rooms before they have
+# learnt what one is for.
+#
+# **This is the only per-player gate on an exit in the game, and it is
+# safe for exactly one reason: feeding can always be completed inside the
+# Entryway.** The cat is in every room, the bowl is a fixture here, and
+# the salmon stash behind the coat tree never runs out - so a player
+# behind the gate is always one `/look`, one `/take` and one `/use` from
+# being past it. Nobody can be stranded. If a later drop ever makes
+# feeding need something the Entryway cannot supply, this gate becomes a
+# locked door with the key on the other side of it, and it has to go.
+#
+# The front door is deliberately not in here. Leaving is always allowed.
+FEEDING_GATED_EXITS = frozenset({"ED", "EL", "EH"})
+
+
 # Exits no `rooms_unlocked` check applies to, for three different reasons.
 #
 # The front door, because leaving is always allowed: the feeding gate on the
@@ -197,7 +258,7 @@ UNGATED_EXITS = frozenset({OAK, HOUSE, FRONT_DOOR})
 # a row for, so the same list works for every exit: a player who has opened
 # the passage reads the open cabinet, and asked about the oak the list falls
 # past both to the oak's own `library_found` row.
-EXIT_STATES = (PASSAGE_OPEN, HAS_KEY, LIBRARY_FOUND)
+EXIT_STATES = (HOUSE_UNLOCKED, PASSAGE_OPEN, HAS_KEY, LIBRARY_FOUND)
 
 
 def exit_state(held: set[str]) -> tuple[str, ...]:
@@ -233,15 +294,42 @@ async def states_for_exit(guild_id: int, user_id: int) -> set[str]:
 def exit_refused_by(thing_id: str, held: set[str]) -> bool:
     """Whether this exit is shut for a player holding these states.
 
-    Only the two secret doors are ever shut. The oak is deliberately not here:
-    an exit gated on the state its own use produces is a locked door with the
-    key inside, and nobody would ever find the library.
+    Three doors, and the front one is not like the other two. The
+    cabinet and the passage are shut per player, because the discovery
+    is the content; the house is shut for everybody at once and opens
+    for everybody at once, so the state behind it is the server's.
+
+    The oak is deliberately not here: an exit gated on the state its own
+    use produces is a locked door with the key inside. **The front door
+    looks like exactly that and is not**, because the key does not come
+    from inside the house - it comes out of the cat bed, on the road,
+    where anybody can reach it.
     """
+    if thing_id == HOUSE:
+        return HOUSE_UNLOCKED not in held
     if thing_id == CABINET:
         return HAS_KEY not in held
     if thing_id == BACK_OF_CABINET:
         return PASSAGE_OPEN not in held
     return False
+
+
+def use_refused_by(thing_id: str, held: set[str]) -> bool:
+    """Whether a use is refused outright by the states in force.
+
+    `exit_refused_by` for things that are not doors, and it has one
+    member: the brass key, once the door it opens is open.
+
+    **It has to be code, and the content shows why.** The key's
+    `house_unlocked` row carries a refusal and no success, which is
+    normally how a writer says "this stops working" - but text
+    resolution falls past an empty cell to the next state and then to
+    `default`, and the key's `default` row is the one with the success
+    in it. So the row would be read straight through and the door
+    unlocked a second time. Every other thing written this way has the
+    blank on `default`, where there is nothing left to fall to.
+    """
+    return thing_id == HOUSE_KEY and HOUSE_UNLOCKED in held
 
 
 async def after_move(guild_id: int, user_id: int, thing_id: str) -> str | None:
@@ -280,6 +368,11 @@ class Effect:
     # off `relationship` would show it the refusal copy and hold the
     # public line back - the opposite of what the cap is for.
     played: bool = False
+    # Whether this feed was the player's first, which is what the
+    # Entryway's one-time notice rides on. Reported rather than asked
+    # for afterwards: by the time the handler could ask, the flag is
+    # already written and the answer is always yes.
+    first_feed: bool = False
 
     @property
     def changed_the_world(self) -> bool:
@@ -323,6 +416,12 @@ async def after_use(
     if thing_id == CAT_BED:
         return await _fluff_the_bed(guild_id, user_id)
 
+    if thing_id in FEEDS:
+        return await _feed_the_cat(guild_id, user_id)
+
+    if thing_id == HOUSE_KEY:
+        return await _unlock_the_front_door(guild_id)
+
     return None
 
 
@@ -342,7 +441,19 @@ async def dislodge_from_bed(guild_id: int, user_id: int, rng=None) -> str | None
     cannot silt the channel however many players a server has. And
     exempt from the restock cap by not going through the scheduler -
     a player who was given a third toy has a third toy.
+
+    **The brass key comes out first, and instead.** While the front door
+    is locked the bed is the only source of one, so a fluff that could
+    produce a key produces a key and nothing else - and it does so
+    without spending this player's one toy, which they can still have on
+    a later fluff. The key is the server's business and the toy is
+    theirs, and a fluff that quietly swapped one for the other would
+    cost somebody a toy for being first to the bed.
     """
+    key = await _a_key_falls_out(guild_id, user_id)
+    if key:
+        return key
+
     if await database.has_been_told(guild_id, user_id, BED_STASH):
         return None
     arrived = await resolve.arrived_drop_ids(guild_id)
@@ -357,6 +468,52 @@ async def dislodge_from_bed(guild_id: int, user_id: int, rng=None) -> str | None
     await database.notice(guild_id, user_id, BED_STASH)
     log.info("The bed gave %s to %s in guild %s", thing_id, user_id, guild_id)
     return thing_id
+
+
+async def _a_key_falls_out(guild_id: int, user_id: int) -> str | None:
+    """Drop a brass key on the road, if one is due. Its id, or None.
+
+    Three conditions, and each rules out a different kind of nonsense.
+    **The drop**, because before 10 there is no house for it to open.
+    **The door still being locked**, because a key is insurance against
+    being shut out and there is nothing to be shut out of afterwards.
+    And **a day since the last one**, which is what makes the second key
+    a spare rather than a supply.
+
+    **The clock comes off the log rather than a column**, which is the
+    thing here most worth arguing with. Normally that is the wrong way
+    round - `interaction_log` started empty on servers that had already
+    been played, which is why *Tireless* counts `thing_uses` instead.
+    It is right here because the mechanic and the log start together:
+    no key has ever fallen on any server, so there is no history for an
+    empty table to misrepresent. The row is written here beside the
+    placement rather than by the caller, so the two cannot come apart.
+    """
+    drop = await resolve.current_drop(guild_id)
+    if drop is resolve.NO_GAME or drop < HOUSE_FROM_DROP:
+        return None
+    if HOUSE_UNLOCKED in await states.in_force(guild_id, user_id):
+        return None
+
+    last = await database.last_logged_at(guild_id, database.KEY_DROPPED)
+    if last is not None and await database.server_now(guild_id) - last < KEY_INTERVAL:
+        return None
+
+    await database.place_in_room(
+        guild_id, content_module.CHANNEL_ROOM, HOUSE_KEY, 1
+    )
+    await telemetry.system(
+        guild_id,
+        database.KEY_DROPPED,
+        user_id=user_id,
+        thing_id=HOUSE_KEY,
+        outcome=database.SUCCESS,
+        detail="first" if last is None else "spare",
+    )
+    log.info(
+        "Guild %s: a brass key fell out of the bed for %s", guild_id, user_id
+    )
+    return HOUSE_KEY
 
 
 async def play_with(guild_id: int, user_id: int, now, rng=None) -> Effect:
@@ -437,6 +594,45 @@ async def _fluff_the_bed(guild_id: int, user_id: int) -> Effect:
     """
     score = await database.adjust_relationship(user_id, guild_id, BED_FLUFF)
     return Effect(relationship=score, delta=BED_FLUFF)
+
+
+async def _feed_the_cat(guild_id: int, user_id: int) -> Effect:
+    """Ten points, and the first time, the room opens up.
+
+    **The gate is written here rather than beside the achievement**, even
+    though they fire on the same event. `fed_the_cat` is read on every
+    `/look` in the Entryway and on every move out of it, and a predicate
+    that had to join the awards table to answer it would be a second
+    shape of the same question. One flag, one source, one query.
+
+    Nothing is consumed here: `consumed_on_use` takes the can, in
+    `_finish_use`, which is where every other use loses what it spent.
+    """
+    score = await database.adjust_relationship(user_id, guild_id, FEED_POINTS)
+    # `notice` reports the transition, which is the whole of "the first
+    # feed": the handler needs it to decide whether the room has just
+    # opened, and asking afterwards would always say yes.
+    first = await database.notice(guild_id, user_id, content_module.FED_THE_CAT)
+    return Effect(relationship=score, delta=FEED_POINTS, first_feed=first)
+
+
+async def _unlock_the_front_door(guild_id: int) -> Effect:
+    """Turn the key, for everybody.
+
+    **Reached only while the door is locked**, and that falls out of the
+    content rather than being checked here: the key's `house_unlocked`
+    row has no `use` text, so `/use key` on an open door is refused
+    before any effect runs. One rule, written once, in the one place a
+    writer can see it.
+
+    No relationship points. The door is a puzzle the server solves, not
+    something done for the cat, and paying for it would make the second
+    key-holder's failed attempt feel like a loss.
+    """
+    opened = await states.set_server_state(guild_id, HOUSE_UNLOCKED)
+    if opened:
+        log.info("Guild %s: the front door is unlocked", guild_id)
+    return Effect(public=False)
 
 
 async def _place_a_plank(guild_id: int) -> Effect:

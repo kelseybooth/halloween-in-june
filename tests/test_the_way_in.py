@@ -38,6 +38,7 @@ import database
 import hints
 import resolve
 import restocking
+import states
 import triggers
 import world
 
@@ -66,6 +67,13 @@ async def built(db):
     halloween.add_active(*[name for rid, name in rooms.items() if rid != "CH"])
     await database.set_announcement_channel(GUILD_A, halloween.id)
     await resolve.set_current_drop(GUILD_A, LAST_DROP)
+    # **Unlocked, because this file is about the door working rather
+    # than about the lock on it.** Drop 10 ships the front door shut for
+    # the whole server until somebody turns the brass key in it; that is
+    # `test_the_locked_door.py`, and a fixture here that kept it shut
+    # would make every test below fail on a condition none of them
+    # mentions.
+    await states.set_server_state(GUILD_A, world.HOUSE_UNLOCKED)
     return db, guild, halloween, rooms
 
 
@@ -88,8 +96,20 @@ async def use(built, thing, who=ALICE, channel=None, room=None):
     return interaction
 
 
+async def fed(built, who=ALICE):
+    """The flag the first feed writes, for a test about something else.
+
+    Drop 10 gates the Entryway's inner doorways on it, so anything that
+    walks further in than the hall has to say the player got out of the
+    hall the way a player does. Feeding itself is `test_feeding.py`.
+    """
+    db, *_ = built
+    await db.notice(GUILD_A, who, content_module.FED_THE_CAT)
+
+
 async def walk_to_the_courtyard(built):
     """Three doorways from the Entryway, which is where the oak is."""
+    await fed(built)
     for room, door in (("EN", "dining room"), ("DI", "kitchen"), ("KI", "courtyard")):
         await go(built, door, room=room)
 
@@ -428,6 +448,7 @@ async def test_the_road_is_nobody_s_unlocked_room(built):
 async def test_go_by_the_name_of_the_way_out(built):
     db, *_ = built
     await go(built)
+    await fed(built)
 
     await go(built, "wide doorway", room="EN")
 
@@ -440,6 +461,7 @@ async def test_go_by_the_name_of_the_room_it_leads_to(built):
     on the map in their head."""
     db, *_ = built
     await go(built)
+    await fed(built)
 
     await go(built, "living room", room="EN")
 
@@ -468,6 +490,7 @@ async def test_a_disguised_exit_answers_in_its_own_words_instead(built):
     every thing that is not."""
     db, *_ = built
     await go(built)
+    await fed(built)
     await go(built, "living room", room="EN")
 
     interaction = await go(built, "curiosity cabinet", room="LI")

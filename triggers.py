@@ -517,6 +517,46 @@ TIRELESS_PLAYS = 25
 PURRSISTENT_PLAYS = 2
 
 
+# Twenty-five feeds. At eight hours between them that is a fortnight of
+# showing up twice a day, which reads as devotion rather than as a
+# grind - and the grind was the objection the number survived.
+BOWL_HALF_EMPTY_FEEDS = 25
+
+
+async def room_service(context: Context) -> bool:
+    """A successful feed, of any flavor.
+
+    Not "the *first* feed", though that is what the quest says: the
+    awards table already grants each achievement once, so a predicate
+    that tried to say "first" would be asking a question somebody else
+    has already answered. *Fluffed to Perfection* is the same shape.
+
+    The expired can cannot earn it. She takes one breath of it and walks
+    away, so it is not in `FEEDS` and nothing here has to say so.
+    """
+    return context.thing_id in world.FEEDS
+
+
+async def bowl_half_empty(context: Context) -> bool:
+    """Twenty-five feeds, any flavor, cumulative.
+
+    Counted from `thing_uses`, like *Tireless*, and for the reason that
+    settled *Tireless*: the interaction log started empty on a server
+    that had already been played, so a count derived from it would have
+    quietly reset every veteran to zero.
+
+    "Twenty-five or more and not held", never "exactly the
+    twenty-fifth", so a feed that races or lands while the bot is down
+    does not lose the achievement for good.
+    """
+    if context.thing_id not in world.FEEDS:
+        return False
+    fed = await database.uses_of_any(
+        context.user_id, context.guild_id, world.FEEDS
+    )
+    return fed >= BOWL_HALF_EMPTY_FEEDS
+
+
 async def persuasive(context: Context) -> bool:
     """The first toy play that works."""
     return bool(context.extra.get("played"))
@@ -676,7 +716,10 @@ def register_all() -> None:
     add("persuasive", "on_use", persuasive)
     add("impressively_bad_luck", "on_use", impressively_bad_luck)
     add("purrsistent", "on_use", purrsistent)
-    add("bowl_half_empty", "on_use", _blocked("feeding the cat"))
+    # Drop 10: feeding, and the pair that counts it. The first feed and
+    # the twenty-fifth, which the copy deck writes as a deliberate pair.
+    add("room_service", "on_use", room_service)
+    add("bowl_half_empty", "on_use", bowl_half_empty)
 
     # Secret
     add("a_little_bit_lost", "on_move", a_little_bit_lost)

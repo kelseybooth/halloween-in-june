@@ -64,6 +64,15 @@ DID_DROP = "did.drop"
 # Drop 10's two actions, in and out. Recorded so neither hint is ever
 # given to somebody who has already done what it recommends - the
 # module's one invariant, which is the only reason these markers exist.
+# Reading the house's own description, which is one of the three ways a
+# player comes to know the house is there. Not a hint's `recommends` -
+# nothing ever tells anybody to look at the house - but the same table
+# and the same shape, because it answers the same kind of question.
+DID_LOOK_HOUSE = "did.look_house"
+# Trying the front door and finding it locked. A third way of knowing
+# the house is there, and the most certain of them: nobody types `/go
+# house` at a road that has never mentioned one by accident.
+DID_TRY_HOUSE = "did.try_house"
 DID_GO_HOUSE = "did.go_house"
 DID_GO_ROAD = "did.go_road"
 

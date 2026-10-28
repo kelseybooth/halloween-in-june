@@ -28,7 +28,11 @@ log = logging.getLogger(__name__)
 # Every state the engine knows how to set. content.py validates `present_when`
 # against the same names, so a typo in a gate is caught at load rather than
 # becoming content that never appears.
-SERVER_STATES = {"stairs_repaired"}
+# **Both are collective labour earning a collective reward**, which is
+# the rule that decides server over player. The staircase takes a plank
+# from several people; the front door takes one key, found by one person
+# and turned once, and it opens for everybody afterwards.
+SERVER_STATES = {"stairs_repaired", "house_unlocked"}
 PLAYER_STATES = {
     "has_key",
     "passage_open",

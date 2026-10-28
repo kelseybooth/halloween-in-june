@@ -135,9 +135,21 @@ RESTOCK_PLACEMENTS = {"container", "room", "random"}
 CLASS_PREFIX = "type:"
 
 # What a player must have done for a fragment to be visible to them.
-# One member on purpose - see `RoomText.visible_when`.
+# Each one is a notice id as well as a gate name, and they are the same
+# string on purpose: the gate is read straight off the per-player
+# notices table, so a second name would be a second thing to keep in
+# step. Adding one is a line here and a branch in `bot._unlocked_for`,
+# and doing one without the other fails `_check_visibility_gates`.
 LOOKED_AT_BED = "looked_at_bed"
-VISIBILITY_GATES = {LOOKED_AT_BED}
+
+# Drop 10's two. `fed_the_cat` opens the Entryway past its first
+# sentence and unlocks its inner doorways; `knows_house` is what puts
+# the house into the road's prose, and is held by anybody who has
+# earned *Purrsuasive*, looked at the house, or been inside it.
+FED_THE_CAT = "fed_the_cat"
+KNOWS_HOUSE = "knows_house"
+
+VISIBILITY_GATES = {LOOKED_AT_BED, FED_THE_CAT, KNOWS_HOUSE}
 
 # The five kinds of thing. `exit` moves a player; `source` is an
 # inexhaustible supply that yields objects; `object` can be carried;
@@ -1070,6 +1082,18 @@ def _check_reachable_rooms(content: Content, rooms: dict[str, Room]) -> list[str
     ]
 
 
+# A fourth way a roomless thing comes into being, and the only one the
+# files cannot show: code puts it there. One member, and it should stay
+# small - every id in here is a thing whose existence a reader of the
+# spreadsheets cannot account for.
+#
+# The brass key falls out of the cat bed, once for the server and then at
+# most once a day while the front door is still locked, in
+# `world.dislodge_from_bed`. It has no room because it has no home: until
+# somebody fluffs the bed there is no key anywhere.
+PLACED_BY_CODE = frozenset({"house_key"})
+
+
 def _check_obtainable_things(content: Content, things: dict[str, Thing]) -> list[str]:
     """Nothing may exist that no player could ever hold.
 
@@ -1078,10 +1102,13 @@ def _check_obtainable_things(content: Content, things: dict[str, Thing]) -> list
     restock schedule puts it somewhere. If none of those happens it is
     unreachable, and no check on dangling references catches that - every
     reference it makes is fine. It simply never appears in the game.
+
+    A fourth way, `PLACED_BY_CODE`, is the one the files cannot show.
     """
     produced = {t.yields for t in content.things if t.yields}
     produced |= {t.transforms_to for t in content.things if t.transforms_to}
     produced |= content.restocked_thing_ids
+    produced |= PLACED_BY_CODE
 
     problems = []
     for thing in content.things:
@@ -1871,10 +1898,18 @@ def _check_bolded_nouns_resolve(content: Content) -> list[str]:
     """
     # room -> word -> the earliest drop at which something here answers to it
     arrives: dict[str, dict[str, int]] = {}
+    # **And the same for the things that are everywhere**, which have no
+    # room of their own to be indexed under. The cat is one and so is the
+    # smart speaker, so without this every fragment that bolds either of
+    # them reads as a word naming nothing - a false alarm on the two rows
+    # most likely to turn up in somebody's prose.
+    anywhere: dict[str, int] = {}
     for thing in content.things:
         if not thing.room_id:
             continue
-        here = arrives.setdefault(thing.room_id, {})
+        here = anywhere if thing.room_id == EVERYWHERE else arrives.setdefault(
+            thing.room_id, {}
+        )
         for name in thing.names:
             word = name.lower()
             here[word] = min(here.get(word, thing.since_drop), thing.since_drop)
@@ -1883,7 +1918,7 @@ def _check_bolded_nouns_resolve(content: Content) -> list[str]:
     problems = []
 
     def complain(where: str, room_id: str, drop: int, text: str) -> None:
-        here = arrives.get(room_id, {})
+        here = {**anywhere, **arrives.get(room_id, {})}
         for phrase in _bolded_in(text):
             if phrase not in here:
                 problems.append(

@@ -25,11 +25,11 @@ chip_box	box of tortilla chips	case of chips|chip case|chips|tortilla chips|nach
 nacho_chips	nacho chips	nacho chips|chips|nachos|tortilla chips	object		0	yes	yes	1										30	22	yes	
 burritos	freezer of burritos	burritos|freezer|fridge|fridge-freezer|breakfast burritos|aunt sue	source	KI	1	no	yes	0						frozen_burrito				30	23		
 frozen_burrito	frozen burrito	burrito|frozen burrito|foil brick|breakfast burrito	object		0	yes	yes	1										30	24	yes	
-cat_food_chicken	chicken cat food	chicken cat food|chicken|cat food	object		0	yes	yes	1		can_opener								30	24		
-cat_food_salmon	salmon cat food	salmon cat food|salmon|cat food	object		0	yes	yes	1		can_opener								10	25		
-cat_food_tuna	tuna cat food	tuna cat food|tuna|cat food	object		0	yes	yes	1		can_opener								30	26		
-cat_food_expired	expired cat food	expired cat food|expired|off cat food	object		0	yes	yes	1		can_opener								40	27		
-cat_food_gourmet	gourmet wet cat food	gourmet|gourmet cat food|good cat food|can|tin|gold can	object		0	yes	yes	1	1	can_opener								30	28		
+cat_food_chicken	chicken cat food	chicken cat food|chicken|cat food	object		0	yes	yes	1		can_opener|cat_bowl								30	24	yes	
+cat_food_salmon	salmon cat food	salmon cat food|salmon|cat food	object		0	yes	yes	1		cat_bowl								10	25	yes	
+cat_food_tuna	tuna cat food	tuna cat food|tuna|cat food	object		0	yes	yes	1		can_opener|cat_bowl								30	26	yes	
+cat_food_expired	expired cat food	expired cat food|expired|off cat food	object		0	yes	yes	1		can_opener								40	27	yes	
+cat_food_gourmet	gourmet wet cat food	gourmet|gourmet cat food|good cat food|can|tin|gold can	object		0	yes	yes	1	1	can_opener|cat_bowl								30	28	yes	
 herb_garden	herb garden	herb garden|herb bed|garden|lavender|sage|rosemary|herbs	source	CO	1	no	yes	0						herbs				30	29		
 herbs	herbs	herbs|sprigs|cut herbs|herb	object		0	yes	yes	1										30	30	yes	
 pumpkins	pumpkins	pumpkins|pumpkin	fixture	CO	6	no	yes	0										30	31		
@@ -78,7 +78,7 @@ david_note	note from David	note|david's note|pinned note	fixture	NU	1	no	yes	0		
 mobile	mobile	mobile|crib mobile	fixture	NU	1	no	yes	0										40	69		
 pacifier	pacifier	pacifier|dummy|soother	fixture	NU	1	no	yes	0										40	70		
 crib	crib	crib|cot|bed	fixture	NU	1	no	yes	0										40	71		
-coat_rack	coat rack	coat rack|rack|coats|jackets	fixture	EN	1	no	yes	0										10	72		
+coat_rack	coat tree	coat tree|tree|coat stand|coat rack|rack|coats|jackets	fixture	EN	1	no	yes	0										10	72		
 front_door	front door	front door|door|entrance|outside|out|road	exit	EN	1	no	yes	0							CH			10	73		
 ceiling	ceiling	ceiling|water stain|stain	fixture	EN	1	no	yes	0										10	74		
 dining_table	long table	table|dining table|long table|wooden table	fixture	DI	1	no	yes	0										30	75		
@@ -162,3 +162,5 @@ shelves	shelves	shelf|sign|board|produce|sweet corn|corn|blueberries|blueberry|e
 firewood_bin	firewood bin	bin|plank bin|wood bin|woodbin|firewood|wood|splits	scenery	CH	1	no	no	1										1	152		
 coin_slot	coin slot	slot|cash box|cashbox|money box|honor box|honesty box|cash|money	scenery	CH	1	no	no	1										1	153		
 house	house	house|haunted house|front door|door|inside|in	exit	CH	1	no	yes	0							EN			10	160		
+cat_bowl	cat bowl	bowl|dish|food bowl|food dish|cat dish|water bowl|saucer	fixture	EN	1	no	no	0										10	161		
+house_key	brass key	brass key|key|house key|front door key	object		0	yes	yes	1	1	house								10	162		
