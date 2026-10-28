@@ -211,11 +211,12 @@ async def test_the_content_is_still_loaded(two_games):
     await reset(two_games)
 
     assert len(await resolve.all_rooms()) == 10  # nine rooms and the channel
-    # Forty of the forty-seven: the seven parked at 99 are unreachable
-    # by design. The point of the assertion is that the load survived the
-    # reset, not that every row arrived. *Room Service* is the fortieth,
-    # and arrived with feeding.
-    assert len(await resolve.achievements(GUILD_A)) == 40
+    # Forty-one of the forty-eight: the seven parked at 99 are
+    # unreachable by design. The point of the assertion is that the load
+    # survived the reset, not that every row arrived. *Room Service* was
+    # the fortieth and arrived with feeding; *Bug Catcher* is the
+    # forty-first, and is awarded by hand rather than reached by play.
+    assert len(await resolve.achievements(GUILD_A)) == 41
 
 
 async def test_the_art_is_kept_by_default(two_games):
