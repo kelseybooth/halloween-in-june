@@ -28,6 +28,7 @@ from fake_discord import (
     FakeGuild,
     FakeInteraction,
     FakeMember,
+    FakeThread,
     a_room_thread,
     somewhere_else,
 )
@@ -54,10 +55,9 @@ def forget_admissions():
     bot._ADMITTING.clear()
 
 
-@pytest.fixture
-async def house(db):
-    """The house built, and Alice standing in the Entryway."""
-    halloween = FakeChannel(name="halloween")
+async def a_server(db, channel_name):
+    """The house built in a channel of that name, Alice in the Entryway."""
+    halloween = FakeChannel(name=channel_name)
     guild = FakeGuild(
         GUILD_A, channels=[halloween], members=[FakeMember(ALICE), FakeMember(BOB)]
     )
@@ -73,6 +73,24 @@ async def house(db):
     # would be failing on a condition they never mention.
     await db.notice(GUILD_A, ALICE, content_module.FED_THE_CAT)
     return db, guild, halloween, rooms
+
+
+@pytest.fixture
+async def house(db):
+    return await a_server(db, "halloween")
+
+
+@pytest.fixture
+async def renamed_house(db):
+    """The same house on a server that calls its channel something else.
+
+    #halloween is this file's other default because it is the name the
+    code falls back to when a server has nothing recorded. It is not what
+    a server is *called*: the game records the channel it was started in
+    by id, so an admin may name it anything - and these are the tests
+    that say that server works.
+    """
+    return await a_server(db, "haunted-house")
 
 
 def thread(house, room_name):
@@ -213,6 +231,74 @@ async def test_a_player_with_no_row_at_all_is_on_the_road(house):
 
 
 # --------------------------------------------------------------------------
+# A server that calls its channel something else
+# --------------------------------------------------------------------------
+
+
+async def test_the_right_window_is_not_refused_on_a_renamed_channel(renamed_house):
+    """**The reported bug.** A room thread was found by id and recognised
+    by name, so on a server whose channel is not called #halloween the
+    refusal pointed a player at the window they had just typed in: "your
+    corporeal self is in #Entryway", read from inside the Entryway. Every
+    world verb, in every room, for every player on that server."""
+    interaction = await run(renamed_house, bot.look, room="EN")
+
+    assert SPIRIT not in replies(interaction)
+    assert "coat tree" in replies(interaction)
+
+
+async def test_the_refusal_never_points_at_the_window_it_was_typed_in(renamed_house):
+    """The shape of the bug rather than the one room it was reported in.
+
+    The refusal's own link is the thread the room owns, so a player
+    inside that thread is in the place it would send them - whatever
+    reads the window, being there cannot be wrong. Asserted for every
+    room, because the Entryway is only where it was noticed.
+    """
+    db, _, _, rooms = renamed_house
+
+    for room_id in rooms:
+        if room_id == content_module.CHANNEL_ROOM:
+            continue
+        await db.update_current_room(ALICE, GUILD_A, room_id)
+
+        interaction = await run(renamed_house, bot.look, room=room_id)
+
+        assert SPIRIT not in replies(interaction), room_id
+
+
+async def test_the_wrong_room_is_still_wrong_on_a_renamed_channel(renamed_house):
+    """The gate still shuts. Alice is in the Entryway, typing in the
+    Kitchen."""
+    interaction = await run(renamed_house, bot.look, room="KI")
+
+    assert SPIRIT in replies(interaction)
+
+
+async def test_the_channel_is_still_the_road_on_a_renamed_channel(renamed_house):
+    db, *_ = renamed_house
+    await db.update_current_room(ALICE, GUILD_A, "CH")
+
+    interaction = await run(renamed_house, bot.look)
+
+    assert SPIRIT not in replies(interaction)
+
+
+async def test_a_thread_under_a_real_halloween_channel_is_not_the_house(renamed_house):
+    """The decoy the name check would have taken.
+
+    This server's house is the channel the game was started in. A thread
+    named after one of its rooms, hanging off a different channel that
+    happens to be called #halloween, is somebody else's thread.
+    """
+    decoy = FakeThread("Entryway", channel=FakeChannel(name="halloween"))
+
+    interaction = await run(renamed_house, bot.look, channel=decoy)
+
+    assert SPIRIT in replies(interaction)
+
+
+# --------------------------------------------------------------------------
 # What stays global
 # --------------------------------------------------------------------------
 
@@ -341,6 +427,18 @@ async def test_a_join_the_bot_is_making_is_not_policed(house):
     await bot.on_thread_member_join(joined(house, "Kitchen", ALICE))
 
     assert kitchen.removed_users == []
+
+
+async def test_it_polices_a_renamed_channel_too(renamed_house):
+    """The other half of the same mistake, and the quieter half: deciding
+    whether a join is a join *into a room* went through the same name, so
+    on a renamed server nobody added to a room they were not standing in
+    was ever removed from it. Nothing said so - the handler simply
+    returned.
+    """
+    await bot.on_thread_member_join(joined(renamed_house, "Kitchen", ALICE))
+
+    assert ALICE in thread(renamed_house, "Kitchen").removed_users
 
 
 # --------------------------------------------------------------------------
