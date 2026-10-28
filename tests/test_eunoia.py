@@ -342,17 +342,15 @@ async def test_a_standoffish_crossing_replaces_the_response(house, monkeypatch):
     assert bot.STANDOFFISH_RESPONSES[0] not in fifth
 
 
-async def test_a_friendly_crossing_keeps_the_response_and_adds_to_it(
-    house, monkeypatch
-):
-    """The other roll, where the pet landed: she rubbed against a leg and the
-    score went up. Replacing that with her pulling away would contradict both
-    the prose and the points, so the friendly line is advice about the pets
-    still to come and is appended to it.
+async def test_a_friendly_crossing_replaces_the_response_too(house, monkeypatch):
+    """**The pairing that was reported, and the one nothing covered.** The
+    friendly line reports the pet and the warning together - the cat enjoys
+    it, despite the risk - so it stands on its own and replaces the response
+    exactly as the standoffish one does.
 
-    **This is the pairing that was reported and the one nothing covered.** It
-    only reads wrong on a friendly roll, which is 40% of that pet, so six
-    times in ten the old line looked merely repetitive.
+    It only read wrong on this roll, which is 40% of that pet, so six times
+    in ten the old shared line looked merely repetitive rather than
+    contradictory.
     """
     for _ in range(4):
         await act(house, bot.pet, None, "KI")
@@ -360,8 +358,8 @@ async def test_a_friendly_crossing_keeps_the_response_and_adds_to_it(
     rolls(monkeypatch, friendly=True)
     fifth = replies(await act(house, bot.pet, None, "KI"))
 
-    assert bot.FRIENDLY_RESPONSES[0] in fifth
     assert crowding("pet.crowding.friendly") in fifth
+    assert bot.FRIENDLY_RESPONSES[0] not in fifth
 
 
 async def test_swapping_the_words_leaves_the_meter_alone(house, monkeypatch):

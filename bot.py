@@ -1668,26 +1668,23 @@ async def pet(interaction: discord.Interaction) -> None:
     message = reaction.text
     crowding_begins = _crowding_begins(result.recent, standing)
     if crowding_begins:
-        # **One line per mood, and the standoffish one replaces rather than
-        # follows.** Its words are a standoffish beat themselves - she
-        # flattens her ears and pulls away - so printing it after a
-        # standoffish response narrated the same moment twice.
+        # **The crossing speaks for itself, so it replaces the response on
+        # either roll.** Each line reports the pet and the warning in one
+        # breath - one has her flattening her ears and pulling away, the
+        # other has her enjoying it despite the risk - so neither needs the
+        # response above it, and printing both narrated one moment twice.
         #
-        # A friendly roll is the opposite case and is appended, because the
-        # pet did land: she rubbed against a leg and the score went up, and
-        # saying she pulled away would contradict both the prose above it and
-        # the points. The warning there is about the pets still to come, which
-        # is why it reads as advice rather than as a refusal.
-        #
-        # It was one line for both, appended, and a player asked why a single
-        # pet had answered them twice. They had rolled friendly on the fifth.
+        # It was a single line for both moods, appended, and a player asked
+        # why one pet had answered them twice. They had rolled friendly on
+        # the fifth: she rubbed against their leg, and the paragraph under it
+        # said she had flattened her ears and left.
         nudge = await phrasing.default_say(
             "pet.crowding.friendly"
             if reaction.friendly
             else "pet.crowding.standoffish"
         )
         if nudge:
-            message = f"{message}\n\n{nudge}" if reaction.friendly else nudge
+            message = nudge
     if SHOW_DEBUG_INFO:
         message += _debug_lines(reaction, result.recent, relationship)
 
