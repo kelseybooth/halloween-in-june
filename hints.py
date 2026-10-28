@@ -183,10 +183,16 @@ USE_TOY = Hint(
     needs_commands=("use",),
     needs_a_toy=True,
 )
+# **No `needs_a_toy`, unlike the rungs above it.** Those fire on a look
+# around and have to ask for a toy to exist, because they have nothing else
+# to name. This one fires on a refusal, so the caller already knows which
+# thing was turned away and passes its name in. Asking for a toy as well
+# would gate a lesson about a can of cat food on whether a feather wand
+# happened to be lying in the channel - and until the name was passed in,
+# that wand is what the hint named.
 HOLD_TO_USE = Hint(
     "hint.hold_to_use",
     needs_commands=("take",),
-    needs_a_toy=True,
 )
 # Fires on the fluff that dislodges something, so it needs no toy in the
 # channel to be true - the fluff has just put one there.

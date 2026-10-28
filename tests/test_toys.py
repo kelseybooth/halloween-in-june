@@ -13,7 +13,7 @@ ball must not give you two ramps and a way around the cooldown.
 
 import pytest
 
-from conftest import ALICE, BOB, GUILD_A
+from conftest import ALICE, BOB, GUILD_A, GUILD_B
 from fake_discord import FakeChannel, FakeGuild, FakeInteraction, FakeMember
 
 import achievements
@@ -21,6 +21,7 @@ import bot
 import content as content_module
 import content_loader
 import database
+import hints
 import resolve
 import triggers
 import world
@@ -553,6 +554,37 @@ async def test_being_told_to_pick_it_up_is_its_own_rung(channel):
     reply = await play(channel)  # not holding it
 
     assert "You need to hold it to use it" in reply
+
+
+async def test_the_rung_names_the_thing_that_was_refused(channel):
+    """**It used to name whichever toy was in the channel.** With two of
+    them loose, that is a coin flip even here - and in the Entryway it told a
+    player refused on a can of cat food to pick up the feather wand.
+    """
+    hint = the_hint(await play(channel, "crinkle ball"))
+
+    assert "/take crinkle ball" in hint
+    assert "feather wand" not in hint
+
+
+async def test_the_rung_arrives_in_the_refusal_not_behind_it(channel):
+    """One command, one answer. It was a second ephemeral message, which
+    reads as two separate things having happened."""
+    interaction = await run(channel, bot.use, "feather wand")
+
+    bubbles = [text for text, _ in interaction.sent if text]
+    assert len(bubbles) == 1
+    assert "would have to pick it up first" in bubbles[0]
+    assert "You need to hold it to use it" in bubbles[0]
+
+
+async def test_the_rung_does_not_need_a_toy_lying_about(channel):
+    """It fires on a refusal, so it is about whatever was refused. The toy
+    gate belonged to the rungs that fire on a look around and have nothing
+    else to name; here it would have silenced the lesson in any room where
+    no toy happened to be."""
+    assert await hints.a_takeable_toy(GUILD_B) is None
+    assert await hints.reachable(GUILD_B, hints.HOLD_TO_USE)
 
 
 async def test_the_newest_drops_hint_wins_on_a_first_look(channel):
