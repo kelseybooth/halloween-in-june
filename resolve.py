@@ -55,11 +55,14 @@ NO_GAME = None
 # anywhere they like through `/qa-drop`.
 #
 # **Raise it in the release that builds the next drop, in the same
-# commit.** Drop 2 shipped with this still reading 1, so `/advance-game`
-# refused to reach the drop that had just been built and the only way
-# in was `/qa-drop` on a test server. `test_every_built_drop_is
-# _reachable` is what stops that happening again.
-LAST_PLAYABLE_DROP = 3
+# commit.** Drop 2 shipped with this still reading 1, and then drop 10
+# shipped with it still reading 3: both times `/advance-game` refused to
+# reach the drop that had just been built, and both times the only way
+# in was `/qa-drop` on a test server. Twice is a pattern, so the guard
+# that was supposed to catch it has been rewritten to actually do so -
+# see `test_the_ceiling_is_not_below_the_commands`, which asks the one
+# other file that records which drops exist.
+LAST_PLAYABLE_DROP = 10
 
 
 class UnknownDrop(Exception):
@@ -508,6 +511,29 @@ async def starting_room() -> str | None:
             .order_by(database.RoomType.sort_order, database.RoomType.room_id)
             .limit(1)
         )
+
+
+async def arrived_rooms(guild_id: int) -> set[str]:
+    """Which rooms exist on this server yet.
+
+    **A room arrives with its description.** `rooms.tsv` carries no drop
+    number; `room_text` does, so a room is here when one of its rows is -
+    and a room with no arrived row is one whose prose nobody can read and
+    whose thread nobody should be standing in.
+
+    The channel is in this set from drop 1, when its first fragment
+    arrives, and it is a valid place to stand before that too - which is
+    why the caller adds it rather than asking this.
+    """
+    arrived = await arrived_drop_ids(guild_id)
+    session_factory = database._require_session()
+    async with session_factory() as session:
+        rows = (
+            await session.execute(
+                select(database.RoomText.room_id, database.RoomText.since_drop)
+            )
+        ).all()
+    return {room_id for room_id, since_drop in rows if since_drop in arrived}
 
 
 async def rooms_open_at_launch() -> list[str]:

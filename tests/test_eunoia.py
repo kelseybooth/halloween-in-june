@@ -49,6 +49,10 @@ async def house(db):
     await content_loader.load_content(content_module.load_files())
     rooms = {rid: name for rid, name in await resolve.all_rooms()}
     halloween.add_active(*rooms.values())
+    # Which channel the game lives in, by id. `/start-game` sets it on a
+    # real server, and the place check reads it - so a fixture without it
+    # is a server where nobody has started anything.
+    await db.set_announcement_channel(GUILD_A, halloween.id)
     for who in (ALICE, BOB):
         await db.start_game(who, GUILD_A, "EN", await resolve.rooms_open_at_launch())
     threads = {t.name: t for t in halloween.threads}
@@ -127,18 +131,31 @@ async def test_a_thing_with_a_refusal_and_no_success_refuses(house):
         and not text.get((t.thing_id, "default"), {}).get("use")
     }
 
-    # The cat, the four gated exits, and the five cans - whose `use` text
-    # already read as a failed attempt ("looking for a pull-tab") and moved
-    # to `use_fail` when feeding the cat came to need a can opener.
+    # The cat, the four gated exits, and four of the five cans - whose
+    # `use` text already read as a failed attempt ("looking for a
+    # pull-tab") and moved to `use_fail` when feeding came to need a can
+    # opener. **The salmon left this set in drop 10**, which is the whole
+    # of why drop 10 can be won: it is the one flavor with a ring on the
+    # lid, so it has a success to describe and its refusal is now about
+    # the missing bowl rather than the missing opener.
+    #
+    # The bowl joined in its place, and for the original reason rather
+    # than a new one: there is nothing to do with an empty bowl, so the
+    # writers filled in the refusal and left the success blank, which is
+    # them saying what they meant.
     #
     # Then the eight channel nouns playtesters went at with `/use`. They
     # are listed rather than filtered out by type, because the whole
     # point of this test is that the shape is rare and deliberate: a
     # ninth arriving silently is the thing it exists to catch.
+    # The house across the road joined them in drop 10's addendum, and
+    # for the exits' reason rather than a new one: its `default` row is
+    # the locked door, which has a refusal to give and nowhere to go.
     assert shaped == {
-        "eunoia", "EH", "HE", "LS", "SL",
-        "cat_food_chicken", "cat_food_salmon", "cat_food_tuna",
+        "eunoia", "EH", "HE", "LS", "SL", "house",
+        "cat_food_chicken", "cat_food_tuna",
         "cat_food_expired", "cat_food_gourmet",
+        "cat_bowl",
         "branches", "leaves", "fence", "wasp_nest",
         "stand", "shelves", "firewood_bin", "coin_slot",
     }
@@ -409,22 +426,28 @@ async def test_two_players_in_one_room_each_get_their_own_two(house):
 
 
 async def test_the_halloween_channel_is_its_own_bucket(house):
-    """A tenth bucket alongside the nine rooms."""
+    """A tenth bucket alongside the nine rooms.
+
+    Walking out to the road is what it takes to pet there now: the cat is
+    wherever the player is, and the hand doing the petting is attached to
+    a body that is in one place.
+    """
     _, _, halloween, _, _ = house
     for _ in range(3):
         await act(house, bot.pet, None, "KI")
 
-    await act(house, bot.pet, None, channel=halloween)
+    await act(house, bot.pet, None, "CH", channel=halloween)
 
     assert len(halloween.posted) == 1
 
 
-async def test_petting_works_in_the_halloween_channel(house):
-    """Which is what makes the discovery argument work: an admin can pet the
-    cat there on day one, before anybody has run `/enter`."""
+async def test_petting_works_on_the_road(house):
+    """Which is what makes the discovery argument work: an admin can pet
+    the cat in the channel on day one, when the road is the whole game and
+    nobody has been inside anything."""
     db, guild, halloween, _, _ = house
 
-    interaction = await act(house, bot.pet, None, channel=halloween)
+    interaction = await act(house, bot.pet, None, "CH", channel=halloween)
 
     assert replies(interaction)
     assert halloween.posted

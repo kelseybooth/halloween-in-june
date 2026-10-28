@@ -25,6 +25,7 @@ import database
 import resolve
 import restocking
 import states
+import world
 from sqlalchemy import func, select
 
 SERVER_NAME = "Halloween in June"
@@ -210,10 +211,11 @@ async def test_the_content_is_still_loaded(two_games):
     await reset(two_games)
 
     assert len(await resolve.all_rooms()) == 10  # nine rooms and the channel
-    # Thirty-nine of the forty-six: the seven parked at 99 are
-    # unreachable by design. The point of the assertion is that the load
-    # survived the reset, not that every row arrived.
-    assert len(await resolve.achievements(GUILD_A)) == 39
+    # Forty of the forty-seven: the seven parked at 99 are unreachable
+    # by design. The point of the assertion is that the load survived the
+    # reset, not that every row arrived. *Room Service* is the fortieth,
+    # and arrived with feeding.
+    assert len(await resolve.achievements(GUILD_A)) == 40
 
 
 async def test_the_art_is_kept_by_default(two_games):
@@ -229,19 +231,28 @@ async def test_the_art_can_be_cleared_too(two_games):
     assert await database.art_urls(GUILD_A) == {}
 
 
-async def test_a_player_can_enter_again_afterwards(two_games):
-    """The whole point: the next run starts clean rather than half-wiped."""
+async def test_a_player_can_go_back_in_afterwards(two_games):
+    """The whole point: the next run starts clean rather than half-wiped.
+
+    Through the front door, since `/enter` is retired - which also covers
+    the half of the reset that matters most here: the row the way in
+    creates is the row the reset deleted.
+    """
     db, guild, halloween, _ = two_games
     await reset(two_games)
+    await database.set_announcement_channel(GUILD_A, halloween.id)
+    # The reset relocked the front door along with everything else, which
+    # is the right answer and is tested where the lock lives. Here it is
+    # one more thing in the way of the row this test is about.
+    await states.set_server_state(GUILD_A, world.HOUSE_UNLOCKED)
 
     interaction = FakeInteraction(ALICE, GUILD_A, guild=guild, channel=halloween)
-    await bot.enter.callback(interaction)
+    await bot.go.callback(interaction, "house")
 
     state = await db.get_game_state(ALICE, GUILD_A)
     assert state.current_room == "EN"
     assert await db.get_pet_count(ALICE, GUILD_A) == 0
     assert await db.player_achievements_of(GUILD_A, ALICE) == {}
-    assert await states.has(GUILD_A, ALICE, "tutorial_seen")
 
 
 async def test_the_report_says_what_it_did(two_games):

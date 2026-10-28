@@ -79,6 +79,25 @@ USE = "use"
 TAKE = "take"
 DROP = "drop"
 LOOK = "look"
+# Going somewhere, including out to the road and back. One row per move and
+# not also a `use`, even though `/use front door` is how most of them are
+# typed: two rows for one event is how a count ends up doubled. What the
+# achievements read is `thing_uses`, which the move still writes.
+MOVE = "move"
+# Offering the cat a can, and **not also a `use`** for the same reason a
+# move is not: two rows for one event is how a count ends up doubled.
+# Every attempt writes one, successful or not, because the question the
+# column answers is how often players reach for her and what stops them
+# - and the four refusals are most of the interesting half.
+FEED = "feed"
+# A world verb typed somewhere the player's body is not. Its own action
+# rather than a `reason` on each verb, because the question it answers is
+# about the interface rather than about the game: how often does anybody
+# try to play from the wrong window, and which verb were they holding.
+WRONG_PLACE = "wrong_place"
+# The bot taking somebody out of a room thread they do not belong in.
+# `actor` is the system: nobody asked for it, which is the whole point.
+THREAD_REMOVED = "thread_removed"
 HINT = "hint"
 UNKNOWN_NOUN = "unknown_noun"
 RECOVERY = "recovery"
@@ -88,6 +107,14 @@ RECOVERY = "recovery"
 # the ladder is five-valued and the column that answers "did it work" is
 # two-valued everywhere else in this table.
 CRAVING_GUESS = "craving_guess"
+# The bed giving up a brass key, and somebody turning one in the front
+# door. The first is a system row - nobody asked for the key, the bed
+# produced it - and `detail` says whether it was the server's first or a
+# spare, which is the question the day's interval exists to answer.
+# **The first is also load-bearing rather than only telemetry**: it is
+# what `world` reads to date the last key.
+KEY_DROPPED = "key_dropped"
+UNLOCK = "unlock"
 
 # Why a refusal refused. Open-ended on purpose - a new gate adds a new
 # reason here rather than reusing an approximate one, because the whole
@@ -107,6 +134,28 @@ NOT_TAKEABLE = "not_takeable"
 RAMP = "ramp"
 NOT_HELD = "not_held"
 FULL_HANDS = "full_hands"
+# `/go` at something that is not a way out. Its own refusal is what the
+# player reads, which is what keeps a disguised exit disguised - so the
+# only place the difference is visible at all is this column.
+NOT_AN_EXIT = "not_an_exit"
+# A use whose whole effect has already happened, and cannot happen
+# twice. The brass key in an unlocked door is the only one: the thing
+# still works, the player still holds it, and there is nothing left for
+# it to do.
+ALREADY_DONE = "already_done"
+
+# The four ways a feed can be turned down, and they are four rather than
+# two because the questions behind them are independent: is she hungry,
+# and is the kit to hand. `not_hungry` is the mechanic working;
+# `wrong_time_and_place` is that same answer given to somebody who is
+# also nowhere near her bowl. `no_bowl` and `no_opener` are the hungry
+# half, split because they point at different drops - the bowl is in the
+# Entryway from drop 10 and the opener is in the kitchen at 30, so which
+# one players hit says which room they are stuck outside of.
+NOT_HUNGRY = "not_hungry"
+WRONG_TIME_AND_PLACE = "wrong_time_and_place"
+NO_BOWL = "no_bowl"
+NO_OPENER = "no_opener"
 
 # A real zone, not a fixed offset, so midnight stays midnight across DST.
 PACIFIC = ZoneInfo("America/Los_Angeles")
@@ -2013,6 +2062,54 @@ async def update_current_room(user_id: int, guild_id: int, room_name: str) -> No
         raise
 
 
+async def locations_in(guild_id: int) -> dict[int, str]:
+    """Where everybody in this server is standing, by user id.
+
+    One read for a whole sweep rather than one per thread member: the
+    sweep asks the same question of every room, and a server with nine
+    rooms and thirty players would otherwise be thirty round trips an
+    hour to answer it.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(PlayerGameState.user_id, PlayerGameState.current_room).where(
+                PlayerGameState.guild_id == guild_id
+            )
+        )
+    return {user_id: room for user_id, room in rows if room}
+
+
+async def send_players_home(guild_id: int, valid: set[str], home: str) -> int:
+    """Put every player who is nowhere real into `home`. Returns how many.
+
+    **A location has to be somewhere that exists.** A build where a room
+    arrives later, a drop renumbered under a running server, a row written
+    by a version that is now two deploys old: each can leave a player
+    standing in a room their server has not got, and every verb they type
+    then answers about it. Out on the road is the one place that is always
+    there.
+
+    Idempotent, and cheap when there is nothing to do - which is the usual
+    case, and why this can run on every boot.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        result = await session.execute(
+            update(PlayerGameState)
+            .where(
+                PlayerGameState.guild_id == guild_id,
+                or_(
+                    PlayerGameState.current_room.is_(None),
+                    PlayerGameState.current_room.not_in(valid),
+                ),
+            )
+            .values(current_room=home, updated_at=func.now())
+        )
+        await session.commit()
+    return result.rowcount or 0
+
+
 async def delete_game_state(user_id: int, guild_id: int) -> None:
     """Remove a player's game state in this server.
 
@@ -2944,6 +3041,33 @@ async def use_count_of(user_id: int, guild_id: int, thing_id: str) -> int:
     return int(count or 0)
 
 
+async def uses_of_any(user_id: int, guild_id: int, thing_ids: Iterable[str]) -> int:
+    """How many times this player has used any one of these, in total.
+
+    `toy_plays` by another route: a sum of `use_count` over several rows
+    rather than one, because `thing_uses` counts uses per thing and the
+    question is about a class of them. The toy version joins on `type`
+    because toys are a type; the cans are a set of ids, so this takes
+    the ids.
+
+    **Successes only, and that falls out rather than being enforced** -
+    `record_use` is the only writer and a refused use returns before it.
+    """
+    wanted = sorted(set(thing_ids))
+    if not wanted:
+        return 0
+    session_factory = _require_session()
+    async with session_factory() as session:
+        total = await session.scalar(
+            select(func.sum(ThingUse.use_count)).where(
+                ThingUse.guild_id == guild_id,
+                ThingUse.user_id == user_id,
+                ThingUse.thing_id.in_(wanted),
+            )
+        )
+    return int(total or 0)
+
+
 async def art_urls(guild_id: int) -> dict[str, str]:
     """Every image this server has uploaded, by art_id."""
     session_factory = _require_session()
@@ -3037,7 +3161,7 @@ async def relationship_ranking(guild_id: int) -> list[tuple[int, int]]:
 
     **Ties break on the older row**, so two players on the same score do
     not swap places between one viewing and the next. `created_at` is
-    the row's birth, which is the first pet or the first `/enter`: near
+    the row's birth, which is the first pet or the first way in: near
     enough to "first interaction" to order by, and the only such date
     stored.
 
@@ -3278,6 +3402,15 @@ CONFIG_KEYS: dict[str, tuple[int, str]] = {
     # fine - the game is a thing to notice, not a thing to solve - so
     # the figure has to be small enough that copying it is not the
     # cheapest relationship in the game.
+    # Minutes between membership sweeps. A number rather than a constant
+    # because it is the kind of thing that wants turning down for an hour
+    # while somebody watches it work, and turning back up afterwards -
+    # and a deploy to do that is a deploy nobody makes.
+    "thread_sweep_minutes": (
+        60,
+        "How often the bot checks that every room thread holds exactly the "
+        "players standing in that room.",
+    ),
     "craving_points": (
         5,
         "What finding the cat's daily craving is worth, once per player per "
@@ -3362,6 +3495,52 @@ async def notices_with_prefix(guild_id: int, user_id: int, prefix: str) -> set[s
                 PlayerNotice.guild_id == guild_id,
                 PlayerNotice.user_id == user_id,
                 PlayerNotice.notice_id.startswith(prefix),
+            )
+        )
+        return set(rows)
+
+
+async def last_logged_at(guild_id: int, action: str) -> datetime | None:
+    """When this server last logged one kind of action. None for never.
+
+    Through `created_at`, which goes through `server_now` like every
+    other dated column here, so a QA clock offset moves it with
+    everything else.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        return await session.scalar(
+            select(func.max(InteractionLog.created_at)).where(
+                InteractionLog.guild_id == guild_id,
+                InteractionLog.action == action,
+            )
+        )
+
+
+async def notices_of(
+    guild_id: int, user_id: int, notice_ids: Iterable[str]
+) -> set[str]:
+    """Which of these this player holds. One query for the lot.
+
+    `has_been_told` is right for one rung of the hint ladder and wrong
+    for a question made of several: deciding which fragments of a room
+    a player can see asks about four unrelated ids at once, and four
+    round trips to answer one `/look` is three too many.
+
+    Unlike `notices_with_prefix` the ids need share nothing, which is
+    the point - the four this was written for are two hint flags and
+    two visibility gates.
+    """
+    wanted = sorted(set(notice_ids))
+    if not wanted:
+        return set()
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = await session.scalars(
+            select(PlayerNotice.notice_id).where(
+                PlayerNotice.guild_id == guild_id,
+                PlayerNotice.user_id == user_id,
+                PlayerNotice.notice_id.in_(wanted),
             )
         )
         return set(rows)

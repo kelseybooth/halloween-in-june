@@ -135,9 +135,21 @@ RESTOCK_PLACEMENTS = {"container", "room", "random"}
 CLASS_PREFIX = "type:"
 
 # What a player must have done for a fragment to be visible to them.
-# One member on purpose - see `RoomText.visible_when`.
+# Each one is a notice id as well as a gate name, and they are the same
+# string on purpose: the gate is read straight off the per-player
+# notices table, so a second name would be a second thing to keep in
+# step. Adding one is a line here and a branch in `bot._unlocked_for`,
+# and doing one without the other fails `_check_visibility_gates`.
 LOOKED_AT_BED = "looked_at_bed"
-VISIBILITY_GATES = {LOOKED_AT_BED}
+
+# Drop 10's two. `fed_the_cat` opens the Entryway past its first
+# sentence and unlocks its inner doorways; `knows_house` is what puts
+# the house into the road's prose, and is held by anybody who has
+# earned *Purrsuasive*, looked at the house, or been inside it.
+FED_THE_CAT = "fed_the_cat"
+KNOWS_HOUSE = "knows_house"
+
+VISIBILITY_GATES = {LOOKED_AT_BED, FED_THE_CAT, KNOWS_HOUSE}
 
 # The five kinds of thing. `exit` moves a player; `source` is an
 # inexhaustible supply that yields objects; `object` can be carried;
@@ -1039,18 +1051,17 @@ def _check_reachable_rooms(content: Content, rooms: dict[str, Room]) -> list[str
     A room with no exits leading to it is a content bug nobody would notice
     until a player failed to find it.
 
-    The channel is the one exception, and it is exempt in both directions: no
-    exit may lead to it and none may lead out of it. It is where players
-    already are, not somewhere they walk to.
+    **The channel used to be exempt, and the exemption was a ban.** No exit
+    could lead to it and none out of it, because it was where players already
+    were rather than somewhere they walked to. Drop 10 makes it a place with a
+    door: the road has a house across it, the house has a front door back out,
+    and both are ordinary exits. So the channel is an ordinary node here, and
+    it has to be reachable like everything else - which is the stronger check
+    of the two. Delete the two exits and this fails, where the old rule would
+    have called the deletion correct.
     """
     if not content.rooms:
         return []
-    problems = [
-        f"exit {e.thing_id} joins the channel to the house, which has no door"
-        for e in content.things
-        if e.is_exit
-        and CHANNEL_ROOM in (e.room_id, e.destination_room_id)
-    ]
     start = next((r.room_id for r in content.rooms if r.open_at_launch), content.rooms[0].room_id)
 
     adjacency: dict[str, set[str]] = {r.room_id: set() for r in content.rooms}
@@ -1065,10 +1076,22 @@ def _check_reachable_rooms(content: Content, rooms: dict[str, Room]) -> list[str
                 seen.add(destination)
                 queue.append(destination)
 
-    return problems + [
+    return [
         f"room {room_id} cannot be reached from {start}"
-        for room_id in sorted(set(adjacency) - seen - {CHANNEL_ROOM})
+        for room_id in sorted(set(adjacency) - seen)
     ]
+
+
+# A fourth way a roomless thing comes into being, and the only one the
+# files cannot show: code puts it there. One member, and it should stay
+# small - every id in here is a thing whose existence a reader of the
+# spreadsheets cannot account for.
+#
+# The brass key falls out of the cat bed, once for the server and then at
+# most once a day while the front door is still locked, in
+# `world.dislodge_from_bed`. It has no room because it has no home: until
+# somebody fluffs the bed there is no key anywhere.
+PLACED_BY_CODE = frozenset({"house_key"})
 
 
 def _check_obtainable_things(content: Content, things: dict[str, Thing]) -> list[str]:
@@ -1079,10 +1102,13 @@ def _check_obtainable_things(content: Content, things: dict[str, Thing]) -> list
     restock schedule puts it somewhere. If none of those happens it is
     unreachable, and no check on dangling references catches that - every
     reference it makes is fine. It simply never appears in the game.
+
+    A fourth way, `PLACED_BY_CODE`, is the one the files cannot show.
     """
     produced = {t.yields for t in content.things if t.yields}
     produced |= {t.transforms_to for t in content.things if t.transforms_to}
     produced |= content.restocked_thing_ids
+    produced |= PLACED_BY_CODE
 
     problems = []
     for thing in content.things:
@@ -1872,10 +1898,18 @@ def _check_bolded_nouns_resolve(content: Content) -> list[str]:
     """
     # room -> word -> the earliest drop at which something here answers to it
     arrives: dict[str, dict[str, int]] = {}
+    # **And the same for the things that are everywhere**, which have no
+    # room of their own to be indexed under. The cat is one and so is the
+    # smart speaker, so without this every fragment that bolds either of
+    # them reads as a word naming nothing - a false alarm on the two rows
+    # most likely to turn up in somebody's prose.
+    anywhere: dict[str, int] = {}
     for thing in content.things:
         if not thing.room_id:
             continue
-        here = arrives.setdefault(thing.room_id, {})
+        here = anywhere if thing.room_id == EVERYWHERE else arrives.setdefault(
+            thing.room_id, {}
+        )
         for name in thing.names:
             word = name.lower()
             here[word] = min(here.get(word, thing.since_drop), thing.since_drop)
@@ -1884,7 +1918,7 @@ def _check_bolded_nouns_resolve(content: Content) -> list[str]:
     problems = []
 
     def complain(where: str, room_id: str, drop: int, text: str) -> None:
-        here = arrives.get(room_id, {})
+        here = {**anywhere, **arrives.get(room_id, {})}
         for phrase in _bolded_in(text):
             if phrase not in here:
                 problems.append(

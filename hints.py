@@ -61,6 +61,21 @@ DID_USE_TOY = "did.use_toy"
 DID_INVENTORY = "did.inventory"
 DID_DROP = "did.drop"
 
+# Drop 10's two actions, in and out. Recorded so neither hint is ever
+# given to somebody who has already done what it recommends - the
+# module's one invariant, which is the only reason these markers exist.
+# Reading the house's own description, which is one of the three ways a
+# player comes to know the house is there. Not a hint's `recommends` -
+# nothing ever tells anybody to look at the house - but the same table
+# and the same shape, because it answers the same kind of question.
+DID_LOOK_HOUSE = "did.look_house"
+# Trying the front door and finding it locked. A third way of knowing
+# the house is there, and the most certain of them: nobody types `/go
+# house` at a road that has never mentioned one by accident.
+DID_TRY_HOUSE = "did.try_house"
+DID_GO_HOUSE = "did.go_house"
+DID_GO_ROAD = "did.go_road"
+
 # The flag `/stats` sets, half of the condition that graduates the quest
 # notice from pointing at `/stats` to naming the quest inline.
 OPENED_STATS = "opened_stats"
@@ -107,6 +122,11 @@ class Hint:
 
 CAT_BED = "cat_bed"
 TOY = "toy"
+# The two exits drop 10 adds, by the ids `things.tsv` gives them.
+# Literals here like the two above rather than `world.HOUSE`, because this
+# module sits under the game rules rather than beside them.
+HOUSE = "house"
+FRONT_DOOR = "front_door"
 
 FIRST_FRIENDLY = Hint("hint.first_friendly", needs_commands=("stats",))
 FIRST_STANDOFFISH = Hint("hint.first_standoffish", needs_commands=("stats",))
@@ -190,6 +210,44 @@ DROP_SOMETHING = Hint(
     needs_commands=("drop",),
 )
 
+# Drop 10. **The rail is how the way in is taught**, now that `#welcome`
+# is retired - it told every new player to run `/enter`, and there is no
+# `/enter`.
+#
+# The two gates it declares are the drop, twice over and in the module's
+# own terms: `/go` is drop 10's command and the house is drop 10's thing,
+# so neither a server that is early nor a QA server moved by hand can be
+# told to walk through a door that is not there.
+#
+# The condition the rail cannot express - *Fluffed to Perfection* - is the
+# caller's, in `/look`. It is the bed, which means the player has met the
+# cat and done something for her; before that they are still on drop 1's
+# lesson and a second place to go is one thing too many.
+GO_HOUSE = Hint(
+    "hint.go_house",
+    recommends=DID_GO_HOUSE,
+    needs_commands=("go",),
+    needs_thing=HOUSE,
+)
+
+# **The way back out, and the rung the retired tutorial was carrying.**
+# Its third bullet was the only lesson the rail could not give before drop
+# 10 - there was no exit anywhere to teach movement on - and it named the
+# wide doorway, which does not arrive until drop 30.
+#
+# It matters more than it looks. The bed and the toys stay in the channel,
+# so a player who cannot find the way out loses the daily fluff, which is
+# the whole relationship engine at this drop.
+#
+# It rides the private line that says they are inside, because that is the
+# message a player who has just walked in was getting anyway.
+GO_ROAD = Hint(
+    "hint.go_road",
+    recommends=DID_GO_ROAD,
+    needs_commands=("go",),
+    needs_thing=FRONT_DOOR,
+)
+
 ALL = (
     FIRST_FRIENDLY,
     FIRST_STANDOFFISH,
@@ -204,6 +262,8 @@ ALL = (
     BED_YIELD,
     CHECK_INVENTORY,
     DROP_SOMETHING,
+    GO_HOUSE,
+    GO_ROAD,
 )
 
 # Which hints a given action can make unnecessary, worked out once.

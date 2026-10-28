@@ -28,16 +28,26 @@ log = logging.getLogger(__name__)
 # Every state the engine knows how to set. content.py validates `present_when`
 # against the same names, so a typo in a gate is caught at load rather than
 # becoming content that never appears.
-SERVER_STATES = {"stairs_repaired"}
+# **Both are collective labour earning a collective reward**, which is
+# the rule that decides server over player. The staircase takes a plank
+# from several people; the front door takes one key, found by one person
+# and turned once, and it opens for everybody afterwards.
+SERVER_STATES = {"stairs_repaired", "house_unlocked"}
 PLAYER_STATES = {
     "has_key",
     "passage_open",
     "library_found",
     "drawer_unjammed",
-    # Two flags that gate a message rather than a door: the tutorial fires
-    # once ever, and the cat's reaction to a dirty diaper is only funny the
-    # first time. Both are the same shape as `drawer_unjammed` - set once,
-    # never cleared - which is why neither needs a table of its own.
+    # Two flags that gate a message rather than a door. The cat's reaction
+    # to a dirty diaper is only funny the first time; both are the same
+    # shape as `drawer_unjammed` - set once, never cleared - which is why
+    # neither needs a table of its own.
+    #
+    # **Nothing sets `tutorial_seen` any more.** The tutorial was retired
+    # with `/enter` at drop 10, as the copy deck had already settled: the
+    # hint rail and the gating replace it. The state stays registered
+    # because every player who saw it has a row that names it, and an
+    # unknown state is a row that fails to load.
     "tutorial_seen",
     "diaper_seen",
 }

@@ -32,9 +32,15 @@ PLAYER_COMMANDS: dict[int, tuple[str, ...]] = {
     # drop 2's list would read as a drop that changed something.
     #
     # The house. Was keyed at 3 until the 26 October renumbering moved it
-    # to 10; a server on 3 with `/enter` would have been a nine-room house
+    # to 10; a server on 3 with a way in would have been a nine-room house
     # whose rooms do not exist yet. Phase 3b owns making this list honest.
-    10: ("pet", "stats", "look", "use", "take", "drop", "inventory", "enter"),
+    #
+    # **`/go` in place of `/enter`.** Going into the house is ordinary
+    # movement now - the road has a house across it and the house has a
+    # front door back out - so the command that arrives here is the one
+    # that moves a player anywhere, and the one that only ever went one
+    # way is gone.
+    10: ("pet", "stats", "look", "use", "take", "drop", "inventory", "go"),
 }
 
 # What admins get. Separate because it does not follow the player ladder:

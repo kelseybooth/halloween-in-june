@@ -418,6 +418,65 @@ async def _exists_anywhere(typed: str) -> bool:
         return any(needle in _names_of(name, aliases) for name, aliases in rows)
 
 
+async def missing_requirements(
+    guild_id: int, user_id: int, room_id: str, thing_ids: list[str]
+) -> list[str]:
+    """Which of these the player cannot satisfy, in the cell's own order.
+
+    **`requires` used to mean "in your bag", and now means "to hand".**
+    A thing you could pick up still has to be carried - that is what the
+    can opener is, and the rule has not moved. A thing you could not is
+    satisfied by standing in the room with it, which is how the cat bowl
+    works: it is a fixture on the Entryway floor, nobody can pocket it,
+    and a feed that demanded it in the bag could never happen at all. So
+    the split is `takeable`, the column that already says whether a thing
+    is the sort you hold.
+
+    **The order of the answer is the order of the cell**, because the
+    caller has one refusal string and has to decide which missing item
+    it is about. `can_opener|cat_bowl` names the opener first, so a
+    player in the kitchen with no bowl hears about the bowl only once
+    the opener is in their hand.
+
+    A thing that is everywhere counts as present, which is the cat and
+    the smart speaker today. A fixture whose `present_when` this player
+    does not hold does not: it is not in the room as far as they can
+    tell, and a requirement met by something invisible is a gate with no
+    visible way through it.
+    """
+    if not thing_ids:
+        return []
+    held_states = await states.in_force(guild_id, user_id)
+    session_factory = database._require_session()
+    async with session_factory() as session:
+        carried = {
+            row[0]
+            for row in await session.execute(
+                select(database.PlayerInventory.thing_id).where(
+                    database.PlayerInventory.user_id == user_id,
+                    database.PlayerInventory.guild_id == guild_id,
+                    database.PlayerInventory.thing_id.in_(thing_ids),
+                    database.PlayerInventory.count > 0,
+                )
+            )
+        }
+        standing = {
+            thing_id
+            for thing_id, present_when in await session.execute(
+                select(
+                    database.ThingType.thing_id, database.ThingType.present_when
+                ).where(
+                    database.ThingType.thing_id.in_(thing_ids),
+                    database.ThingType.takeable.is_(False),
+                    database.ThingType.room_id.in_([room_id, content.EVERYWHERE]),
+                )
+            )
+            if states.passes(present_when, held_states)
+        }
+    to_hand = carried | standing
+    return [thing_id for thing_id in thing_ids if thing_id not in to_hand]
+
+
 async def find(
     guild_id: int,
     user_id: int,

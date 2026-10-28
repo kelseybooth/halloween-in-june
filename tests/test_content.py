@@ -47,8 +47,17 @@ def problems_matching(c, fragment):
 def test_the_shipped_content_parses():
     c = content.load_files()
     assert len(c.rooms) == 10  # nine rooms and the channel
-    assert len(c.things) == 162  # ...drop 1's ten scenery, and the stand's four
-    assert len(c.defaults) == 115  # ...and the craving status line
+    # ...the stand's four, the house across the road, her bowl, and the
+    # brass key that opens the front door
+    assert len(c.things) == 165
+    # Five out with `/enter`: its three lines, `#welcome`, and the
+    # tutorial, which it was the only thing that posted. Five in: the two
+    # wrong-place replies, `/go`'s own refusal, and the two hints that
+    # teach the door in each direction. Then drop 10's four: three
+    # feeding lines and the notice that the Entryway has opened up. Then
+    # the addendum's two: the key falling out of the bed, and the door
+    # coming open.
+    assert len(c.defaults) == 121
     assert len(c.drops) == 9      # 0 to 3 built; 10 to 50 named ahead of their content
     assert len(c.restocks) == 4  # the toy channel row joined them
 
@@ -73,16 +82,18 @@ def test_every_source_is_findable():
     assert problems == []
 
 
-def test_there_are_twenty_exits_and_they_match_the_rooms(shipped):
+def test_there_are_twenty_two_exits_and_they_match_the_rooms(shipped):
+    """Twenty inside the house, and drop 10's two: the house across the
+    road, and the front door back out of it."""
     exits = [t for t in shipped.things if t.is_exit]
-    assert len(exits) == 20
+    assert len(exits) == 22
     assert all(e.destination_room_id in shipped.rooms_by_id for e in exits)
 
 
 def test_the_secret_library_is_the_only_room_locked_at_launch(shipped):
     """The channel is `open_at_launch = no` as well, for a different
-    reason: the Secret Library is found, and the channel is never walked
-    into at all."""
+    reason: the Secret Library is found, and the road is where everybody
+    starts rather than a room anybody unlocks."""
     locked = [r.room_id for r in shipped.rooms if not r.open_at_launch]
     assert locked == ["SE", content.CHANNEL_ROOM]
 

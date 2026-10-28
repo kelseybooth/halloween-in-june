@@ -10,6 +10,7 @@ import logging
 import os
 import random
 import sys
+import time
 from datetime import datetime, time as dt_time, timedelta
 from typing import NamedTuple
 
@@ -38,7 +39,6 @@ import states
 import telemetry
 import triggers
 
-TUTORIAL_SEEN = "tutorial_seen"
 import world
 
 load_dotenv()
@@ -478,6 +478,7 @@ class CatBot(commands.Bot):
         nightly_job.start()
         keep_threads_alive.start()
         restock_sweep.start()
+        thread_sweep.start()
 
         # Nothing is a global command any more. Which commands exist is a
         # per-server question now - two servers can sit on different drops
@@ -518,6 +519,38 @@ class CatBot(commands.Bot):
             except discord.HTTPException:
                 log.exception("Could not register commands in guild %s", guild.id)
 
+            # **Nobody stands in a room that does not exist.** The
+            # channel is a location now, and it is the one that is always
+            # there - so a player left in a room this server has not
+            # reached comes back out to the road. On every boot rather
+            # than once, because the same repair covers a renumbered drop.
+            try:
+                moved = await _send_everybody_somewhere_real(guild.id)
+            except SQLAlchemyError:
+                log.exception("Could not check where players stand in %s", guild.id)
+            else:
+                if moved:
+                    log.info(
+                        "Put %d player(s) in %s back out on the road", moved, guild.name
+                    )
+
+            # **Once at startup, and before the loop's clock starts.** A
+            # build that was down for a weekend comes back to whatever
+            # memberships it missed, and nothing else would notice them
+            # for an hour.
+            try:
+                _LAST_SWEPT[guild.id] = time.monotonic()
+                stray = await _sweep_threads(guild)
+            except discord.HTTPException:
+                log.exception("Startup sweep failed in %s", guild.id)
+            else:
+                if stray:
+                    log.info(
+                        "Startup sweep took %d player(s) out of threads in %s",
+                        stray,
+                        guild.name,
+                    )
+
             channel = await _game_channel(guild)
             if channel is None:
                 log.info(
@@ -556,6 +589,7 @@ class CatBot(commands.Bot):
         """Graceful shutdown: stop the scheduler, release the pool, then disconnect."""
         nightly_job.cancel()
         keep_threads_alive.cancel()
+        thread_sweep.cancel()
         await database.close_db()
         await super().close()
 
@@ -651,6 +685,44 @@ async def keep_threads_alive() -> None:
 
 @keep_threads_alive.before_loop
 async def _before_keep_alive() -> None:
+    await bot.wait_until_ready()
+
+
+# **A tick, not the interval.** `thread_sweep_minutes` is a per-guild
+# config value and one loop serves every server, so the loop wakes often
+# and each guild is swept on its own clock. A tick that finds nothing due
+# is two dictionary lookups and a config read.
+SWEEP_TICK_MINUTES = 1
+_LAST_SWEPT: dict[int, float] = {}
+
+
+@tasks.loop(minutes=SWEEP_TICK_MINUTES)
+async def thread_sweep() -> None:
+    """Every so often, make each room thread hold exactly its own players.
+
+    The backup layer. `on_thread_member_join` is what fixes a stray
+    membership the moment it happens; this is for the ones that happened
+    while the bot was down, which is the half nobody can be careful about.
+    """
+    for guild in bot.guilds:
+        try:
+            minutes = await database.get_setting(guild.id, "thread_sweep_minutes")
+        except SQLAlchemyError:
+            log.exception("Could not read the sweep interval for %s", guild.id)
+            continue
+
+        now = time.monotonic()
+        if now < _LAST_SWEPT.get(guild.id, 0.0) + max(int(minutes or 0), 1) * 60:
+            continue
+        _LAST_SWEPT[guild.id] = now
+
+        removed = await _sweep_threads(guild)
+        if removed:
+            log.info("Sweep took %d player(s) out of threads in %s", removed, guild.name)
+
+
+@thread_sweep.before_loop
+async def _before_thread_sweep() -> None:
     await bot.wait_until_ready()
 
 
@@ -786,34 +858,288 @@ async def _room_of_thread(channel) -> str | None:
     return None
 
 
-async def _outside_the_house(interaction, room_id: str) -> str | None:
-    """Why `/look`, `/take`, `/drop` and `/use` cannot run here. None to go on.
+# **The joins the bot makes itself.** Admitting somebody to a room thread
+# is a mention, and Discord answers it with the same join event an admin
+# adding them by hand produces - so without this every move would race its
+# own arrival line: the event lands, the row still says the room they left,
+# and the handler throws them out of the one they just walked into.
+#
+# A deadline rather than a flag to clear. There is no `finally` that can be
+# trusted to run on every path out of a move, and the failure mode of a
+# forgotten flag is a thread that is never policed again; the failure mode
+# of a stale deadline is half a minute of not policing one thread, after
+# which the sweep catches it anyway.
+_ADMITTING: dict[tuple[int, int], float] = {}
+_ADMITTING_WINDOW = 30.0
 
-    **The thread is the room.** Without this the four world verbs answer from
-    anywhere in the server: a player standing in the Upstairs Hallway could
-    type `/look` in an unrelated channel and be told about the hallway, which
-    makes the house a status readout rather than a place.
 
-    Being in *a* room thread is enough, and it is not weaker than checking for
-    *the* room. The rooms are private threads created with `invitable=False`,
-    and the bot is the only thing that adds or removes anybody - on entry and
-    on every move. A player is therefore a member of exactly one room thread
-    and cannot type in another. Checking the specific room as well would add
-    no protection and one failure mode: a membership bug would strand somebody
-    with no room they are allowed to act in.
+def _admitting(thread_id: int, user_id: int) -> bool:
+    deadline = _ADMITTING.get((thread_id, user_id))
+    return deadline is not None and deadline > time.monotonic()
 
-    Nothing else is gated. `/pet`, `/inventory` and `/stats` are about the
-    player rather than the room, and the admin commands have to work before
-    any thread exists.
+
+def _admit(thread_id: int, user_id: int) -> None:
+    now = time.monotonic()
+    for key, deadline in list(_ADMITTING.items()):
+        if deadline <= now:
+            del _ADMITTING[key]
+    _ADMITTING[(thread_id, user_id)] = now + _ADMITTING_WINDOW
+
+
+def _me() -> int | None:
+    """The bot's own id, or None before the gateway has told it.
+
+    Asked rather than assumed: the sweep runs at startup, and a crash
+    there would take the whole boot with it.
     """
-    if await _room_of_thread(interaction.channel) is not None:
-        return None
+    return getattr(bot.user, "id", None)
 
-    name = await resolve.room_name(room_id) or "the house"
-    return (
-        f"That only works inside the house. You're in **{name}** - "
-        "open that room's thread and try again."
+
+def _staff(guild, user_id: int) -> bool:
+    """Whether this member can see every private thread anyway.
+
+    Removing them would fail, and then fail again on the next sweep, for
+    as long as they are an admin.
+    """
+    member = guild.get_member(user_id)
+    if member is None:
+        return False
+    permissions = getattr(member, "guild_permissions", None)
+    return bool(
+        getattr(permissions, "manage_threads", False)
+        or getattr(permissions, "administrator", False)
     )
+
+
+async def _evict(guild, thread, room_id: str, user_id: int, why: str) -> bool:
+    """Take one player out of one thread, and write down that it happened."""
+    try:
+        await house_utils.remove_player_from_thread(thread, user_id)
+    except discord.HTTPException:
+        log.warning("Could not remove %s from %s", user_id, room_id, exc_info=True)
+        return False
+    await telemetry.system(
+        guild.id,
+        telemetry.THREAD_REMOVED,
+        user_id=user_id,
+        outcome=telemetry.SUCCESS,
+        detail=f"thread={room_id} why={why}",
+    )
+    return True
+
+
+async def _sweep_threads(guild) -> int:
+    """Put every room thread's membership back to the players in that room.
+
+    **The second of two layers, and the slower one.** The join handler
+    fixes most mistakes the moment they happen; this is the backup for
+    whatever the bot missed while it was restarting or rate-limited, which
+    is exactly the half that cannot be covered by being careful.
+
+    The Secret Library is swept like every other room - discovery is per
+    player, and the thread is what keeps it that way.
+
+    The channel is not here at all. Nobody can be removed from it, and
+    nobody needs to be: being able to read it is not a claim about where
+    anybody is standing.
+    """
+    channel = await _game_channel(guild)
+    if channel is None:
+        return 0
+
+    try:
+        rooms = [
+            (room_id, name)
+            for room_id, name in await resolve.all_rooms()
+            if room_id != content.CHANNEL_ROOM
+        ]
+        standing = await database.locations_in(guild.id)
+    except SQLAlchemyError:
+        log.exception("Thread sweep could not read where players are")
+        return 0
+
+    removed = 0
+    for room_id, name in rooms:
+        try:
+            thread = await house_utils.get_thread_for_room(channel, name)
+            if thread is None:
+                continue
+            here = await house_utils.members_of(thread)
+        except discord.HTTPException:
+            log.warning("Thread sweep could not read %s", name, exc_info=True)
+            continue
+
+        for user_id in here:
+            if user_id == _me() or standing.get(user_id) == room_id:
+                continue
+            if _admitting(thread.id, user_id) or _staff(guild, user_id):
+                continue
+            removed += await _evict(guild, thread, room_id, user_id, "sweep")
+    return removed
+
+
+async def _put_them_back(guild, location: str, user) -> None:
+    """Re-admit a player to their own room's thread if they have left it.
+
+    **A pointer at a thread you are not in opens nothing**, so the refusal
+    that sends somebody back to their room is useless at exactly the
+    moment it matters most. A bare mention re-admits them silently, which
+    is the same mechanism the arrival line uses.
+
+    The sweep deliberately does not do this. An hourly mention in every
+    room somebody has walked out of is noise; here it is one line, once,
+    on a command they just typed.
+    """
+    if guild is None or location == content.CHANNEL_ROOM:
+        return
+    channel = await _game_channel(guild)
+    if channel is None:
+        return
+    try:
+        thread = await _place_for(channel, location, await resolve.room_name(location))
+        if thread is None or user.id in await house_utils.members_of(thread):
+            return
+        _admit(thread.id, user.id)
+        await thread.send(user.mention)
+    except (discord.HTTPException, SQLAlchemyError):
+        log.warning("Could not put %s back in %s", user.id, location, exc_info=True)
+
+
+@bot.event
+async def on_thread_member_join(member) -> None:
+    """Somebody is in a room thread. Decide whether they should be.
+
+    The fast half of the two layers: a player added by hand, or one who
+    reached a thread some other way, is out again before they have read
+    anything. The sweep behind it is for what this misses.
+    """
+    thread = getattr(member, "thread", None)
+    guild = getattr(thread, "guild", None)
+    if thread is None or guild is None or member.id == _me():
+        return
+    if _admitting(thread.id, member.id):
+        return
+
+    try:
+        room_id = await _room_of_thread(thread)
+        if room_id is None:
+            return
+        state = await database.get_game_state(member.id, guild.id)
+    except SQLAlchemyError:
+        log.exception("Could not check whether %s belongs in %s", member.id, thread.id)
+        return
+
+    location = state.current_room if state else content.CHANNEL_ROOM
+    if location == room_id or _staff(guild, member.id):
+        return
+    await _evict(guild, thread, room_id, member.id, "join")
+
+
+def _where_typed(interaction) -> str:
+    """What to write in the log about where a command came from."""
+    return getattr(interaction.channel, "name", None) or "elsewhere"
+
+
+async def _typed_where_they_stand(interaction, location: str) -> bool:
+    """Whether this command was typed in the place the player's body is.
+
+    **Asked as "is this their room", not "which room is this".** The two
+    differ only for a thread the game does not own, and that is the case
+    that matters: anywhere else in the server is nowhere, which is a third
+    answer rather than a missing one. A verb typed in #general is as wrong
+    as one typed in the Kitchen by somebody standing in the Nursery, and
+    gets the same reply.
+    """
+    if location == content.CHANNEL_ROOM:
+        return await _in_the_channel(interaction)
+    if await _in_the_channel(interaction):
+        return False
+
+    channel = interaction.channel
+    parent = getattr(channel, "parent", None)
+    if getattr(parent, "name", None) != house_utils.HALLOWEEN_CHANNEL_NAME:
+        return False
+    return await resolve.room_name(location) == getattr(channel, "name", None)
+
+
+async def _wrong_place_line(interaction, location: str, key: str) -> str:
+    """Where your body actually is, as a link you can click.
+
+    **It points rather than explains.** The rule - one location, and the
+    verbs follow it - is not something a player needs taught; what they
+    need is the way back to the window they can act in, which is their
+    room's thread, or the channel when they are outside.
+    """
+    # A command with no guild cannot be answered with a link to one. It
+    # should not be reachable - every one of these is `guild_only` - but
+    # the refusal is the last thing standing between a player and silence.
+    channel = (
+        await _game_channel(interaction.guild) if interaction.guild is not None else None
+    )
+    place = None
+    if channel is not None:
+        try:
+            place = await _place_for(
+                channel, location, await resolve.room_name(location)
+            )
+        except (discord.HTTPException, SQLAlchemyError):
+            log.warning("Could not find %s to point at", location, exc_info=True)
+    # A room whose thread is missing is a server an admin has to repair, and
+    # the name still says where they are - better than refusing with nothing.
+    where = (
+        place.mention
+        if place is not None
+        else f"**{await resolve.room_name(location) or location}**"
+    )
+    return await phrasing.default_say(key, thread=where)
+
+
+async def _place_to_act_in(interaction, verb: str, *, key: str = "wrong_place.default"):
+    """(state, refusal). Exactly one is set.
+
+    **One location decides everything.** A player's body is in exactly one
+    place - the road, or one room of the house - and the five world verbs
+    act on that place. Where the command was typed decides only whether
+    they may: a `/look` from the wrong window is the same question asked
+    from the wrong room, not a different question with its own answer.
+
+    That is the change drop 10 made. Before it, typing in the channel *was*
+    standing in the channel, and the house was the set of threads you had
+    been added to; a player in the Kitchen could `/look` in the channel and
+    be shown the road. Now the row says where they are and the window has
+    to agree with it.
+
+    `state` is the player's own row, or the channel stand-in for somebody
+    who has never been inside - so `state.current_room` is always a place,
+    and no caller has to spell "no row" as a third case.
+    """
+    user, guild_id = interaction.user, interaction.guild_id
+    state = await database.get_game_state(user.id, guild_id) or _InTheChannel()
+
+    if not await _typed_where_they_stand(interaction, state.current_room):
+        # **Logged here rather than by each verb.** It is one row shape
+        # across six commands, and the question it answers is about the
+        # interface: how often anybody plays from the wrong window, and
+        # which verb they were holding when they did.
+        await telemetry.refused(
+            guild_id,
+            user.id,
+            telemetry.WRONG_PLACE,
+            reason=telemetry.WRONG_ROOM,
+            detail=(
+                f"command={verb} in={_where_typed(interaction)} "
+                f"at={state.current_room}"
+            ),
+        )
+        await _put_them_back(interaction.guild, state.current_room, user)
+        return None, await _wrong_place_line(interaction, state.current_room, key)
+
+    # Somebody playing in the channel with no row: `/take` has to have one
+    # to write against. Done here rather than in each verb so the five
+    # cannot disagree about when a player starts existing.
+    if isinstance(state, _InTheChannel):
+        await database.ensure_user_exists(user.id, guild_id)
+    return state, None
 
 
 @bot.event
@@ -1186,8 +1512,8 @@ async def _announce_pet(interaction, friendly: bool) -> None:
 
     Posted wherever the command was run, which is what makes the discovery
     argument work - an admin can pet the cat in the Halloween channel on day
-    one, before anybody has run `/enter`, and everyone watching learns the
-    command exists.
+    one, before anybody has gone into the house, and everyone watching
+    learns the command exists.
 
     **It reports the pet, not the relationship.** The branch is the mood
     roll this pet made, and the meter is not read at all.
@@ -1276,8 +1602,8 @@ async def pet(interaction: discord.Interaction) -> None:
 
     A member with no player row can run this, exactly as in v1: the row is
     created, the meter starts, and the pet counts. It is how somebody can
-    hold a relationship score having never been in a room, which `/enter`
-    then has to handle.
+    hold a relationship score having never been in a room, which the way
+    into the house then has to handle.
     """
     # Ephemeral now: the blurb is the private half of the pair. Defer first,
     # because the DB round trip can exceed Discord's 3s deadline.
@@ -1285,6 +1611,15 @@ async def pet(interaction: discord.Interaction) -> None:
     user, guild_id = interaction.user, interaction.guild_id
 
     try:
+        # **The cat is wherever the player is, but the hand is not.** She
+        # follows everybody, so no check asks where she is - and the hand
+        # doing the petting is attached to a body that is in one room. Its
+        # own line says so, rather than reading as a bug.
+        _, refusal = await _place_to_act_in(interaction, "pet", key="wrong_place.pet")
+        if refusal:
+            await interaction.followup.send(refusal, ephemeral=True)
+            return
+
         drop = await telemetry.drop_of(guild_id)
         result = await database.increment_pet_count(user.id, guild_id, drop=drop)
         # Read before the meter moves, so it is this player's place
@@ -1726,8 +2061,9 @@ async def reset_haunted_house(
     nothing in any room.
 
     **The calendar restarts too.** `initialized_on` lives in `server_config`
-    and goes with the rest, so the next `/enter` is day one again - which is
-    what makes this useful for testing the drop schedule.
+    and goes with the rest, so the next walk in through the front door is
+    day one again - which is what makes this useful for testing the drop
+    schedule.
 
     **The drop and the channel survive by default.** Both live in
     `server_config` and so are cleared with everything else, and both are
@@ -1841,8 +2177,8 @@ async def reset_haunted_house(
     else:
         lines.append(f"- rewound from drop {current} to drop {landing}")
     lines.append(
-        "- day one starts again on the next `/enter`, and every player will "
-        "need to run it"
+        "- day one starts again the next time somebody goes into the house, "
+        "and everybody is back out on the road"
     )
     if cleared:
         worst = sorted(cleared.items(), key=lambda kv: -kv[1])[:5]
@@ -2107,187 +2443,32 @@ async def _post_quietly(
         log.warning("Could not post in %s", getattr(channel, "name", "?"), exc_info=True)
 
 
-async def _show_tutorial(thread, guild_id: int, user_id: int) -> None:
-    """Teach the three verbs, once per player and never again.
-
-    Not gated on petting the cat: a tutorial a player only sees if they happen
-    to find the cat is a tutorial some players never see. It teaches `/look`,
-    `/take` and `/use` and deliberately not `/pet` - the public line a pet
-    posts introduces that command by itself.
-    """
-    if await states.has(guild_id, user_id, TUTORIAL_SEEN):
-        return
-    text = await phrasing.default_say("tutorial")
-    if not text:
-        return
-    try:
-        await thread.send(text)
-    except discord.HTTPException:
-        # Better to show it next time than to burn the flag on a failed send.
-        log.warning("Could not post the tutorial for %s", user_id, exc_info=True)
-        return
-    await states.set_player_state(guild_id, user_id, TUTORIAL_SEEN)
-
-
-async def _arrive_in(thread, guild_id: int, user_id: int, room_id: str) -> None:
-    """Add the player to a room's thread and describe it to them."""
-    await house_utils.add_player_to_thread(thread, user_id)
-    await thread.send(await _look_around(guild_id, user_id, room_id))
-
-
-@bot.tree.command(
-    name="enter",
-    description="Enter the haunted house.",
-)
-@app_commands.guild_only()
-async def enter(interaction: discord.Interaction) -> None:
-    """Put a member inside the house, or put them back.
-
-    Self-serve, so nobody has to be awake when a latecomer turns up on 14
-    October, and there is no reaction handler to build.
-
-    For somebody already playing this is a repair tool rather than an error:
-    they land back in the room they were in, not the Entryway. People leave
-    threads by hand and need a way back, and that is cheaper than an admin
-    command.
-
-    **A player row is not the same as having been inside.** `/pet` creates one
-    for anybody who pets the cat in the channel, so a member can have a
-    relationship score and no room at all. That case takes the first-time
-    path, tutorial included.
-    """
-    if interaction.guild is None:
-        await interaction.response.send_message(
-            "This command only works inside a server.", ephemeral=True
-        )
-        return
-
-    await interaction.response.defer(ephemeral=True, thinking=True)
-    user, guild_id = interaction.user, interaction.guild_id
-
-    channel = await _game_channel(interaction.guild)
-    if channel is None:
-        await interaction.followup.send(
-            f"There's no #{house_utils.HALLOWEEN_CHANNEL_NAME} channel yet. "
-            "An admin needs to create it and run `/initialize-haunted-house`.",
-            ephemeral=True,
-        )
-        return
-
-    # The one place a member types a command before they are inside, so it has
-    # to be somewhere they can find: the channel the house was built in.
-    if interaction.channel != channel:
-        await interaction.followup.send(
-            f"Run this in {channel.mention} and I'll let you in.", ephemeral=True
-        )
-        return
-
-    try:
-        state = await database.get_game_state(user.id, guild_id)
-        # A row with no room is somebody who petted the cat and never came in.
-        returning = state is not None and state.current_room
-        room_id = state.current_room if returning else await resolve.starting_room()
-        room_name = await resolve.room_name(room_id) if room_id else None
-    except SQLAlchemyError:
-        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
-        return
-
-    if room_name is None:
-        await interaction.followup.send(
-            "No rooms are loaded yet. Ask an admin to check the logs.",
-            ephemeral=True,
-        )
-        return
-
-    try:
-        thread = await house_utils.get_thread_for_room(channel, room_name)
-    except discord.HTTPException:
-        log.exception("Could not look up the %s thread", room_name)
-        await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
-        return
-
-    if thread is None:
-        await interaction.followup.send(
-            "The haunted house hasn't been built yet. "
-            "Ask an admin to run `/initialize-haunted-house`.",
-            ephemeral=True,
-        )
-        return
-
-    if returning:
-        try:
-            await _arrive_in(thread, guild_id, user.id, room_id)
-        except discord.HTTPException:
-            log.exception("Could not put %s back in %s", user.id, room_id)
-            await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
-            return
-        await interaction.followup.send(
-            await phrasing.default_say(
-                "enter.returning", room=room_name, thread=thread.mention
-            ),
-            ephemeral=True,
-        )
-        return
-
-    try:
-        # The Secret Library is not among these: it is found by climbing the
-        # oak, which is what puts it in the list.
-        await database.start_game(
-            user.id, guild_id, room_id, await resolve.rooms_open_at_launch()
-        )
-        # Day one is the day somebody first walked in, not the day the house
-        # was built - an admin can initialize days early. Idempotent, so only
-        # the first `/enter` on this server counts.
-        opened = await restocking.set_initialized_on(guild_id)
-        log.info("Guild %s: day one is %s (first entry by %s)", guild_id, opened, user.id)
-    except SQLAlchemyError:
-        await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
-        return
-
-    try:
-        await _arrive_in(thread, guild_id, user.id, room_id)
-    except discord.HTTPException:
-        # Undo the enrolment rather than record somebody as inside a house
-        # they were never let into.
-        log.exception("Failed to place %s in %s; rolling back", user.id, room_id)
-        try:
-            await database.delete_game_state(user.id, guild_id)
-        except SQLAlchemyError:
-            log.error("Rollback failed for %s - player may be stuck enrolled", user.id)
-        await interaction.followup.send(GENERIC_ERROR_MESSAGE, ephemeral=True)
-        return
-
-    await _show_tutorial(thread, guild_id, user.id)
-
-    # Public, in the channel: it builds the sense of a group going in
-    # together and shows latecomers a working example of the command.
-    await _post_quietly(
-        channel,
-        await phrasing.default_say("enter.public", player=user.display_name),
-    )
-    await interaction.followup.send(
-        await phrasing.default_say("enter.arrived", thread=thread.mention),
-        ephemeral=True,
-    )
-
-
 class _InTheChannel:
     """What `/use` needs of a game state, for a player who has no row.
 
-    `/enter` does not exist at the drops where the channel is the only
-    place there is, so nobody standing in it has a `player_game_state`.
-    The use path reads exactly one field off it, and inventing a row in
-    the database to carry that would be a player record for somebody who
-    has not played.
+    Nobody standing in the channel is required to have a
+    `player_game_state`: before drop 10 the channel is the whole game, and
+    a row for somebody who has only petted the cat would be a player
+    record for somebody who has not played.
+
+    **`rooms_unlocked` is empty rather than absent**, because the move path
+    reads it now. The house exit is in `world.UNGATED_EXITS` for exactly
+    this reason - the way in is the exit that enrols people, so an empty
+    set is the honest answer and not a refusal.
     """
 
     current_room = content.CHANNEL_ROOM
+    rooms_unlocked = ()
 
 
 # Things that are the cat, for the purpose of the nightly drift. Using
 # any of them counts as having turned up, whether or not it worked. The
 # toy and the food join this set when drops 2 and 3 build them.
-CAT_INTERACTIONS = frozenset({world.CAT_BED})
+# Reaching for the cat, for the nightly drift's purposes. The expired
+# can is in here along with the four she will eat: the drift asks
+# whether somebody turned up, and offering her something is turning up
+# however it goes.
+CAT_INTERACTIONS = frozenset({world.CAT_BED}) | world.CAT_FOOD
 
 
 @bot.tree.command(name="use", description="Attempt to use an object.")
@@ -2315,32 +2496,10 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
     user, guild_id = interaction.user, interaction.guild_id
 
     try:
-        # Standing in the channel, which is a room with no player rows in
-        # it. Checked before the game state for the same reason `/look`
-        # checks it there: at the drops where this is the only place
-        # there is, nobody has entered anything.
-        if await _in_the_channel(interaction):
-            await database.ensure_user_exists(user.id, guild_id)
-            state = _InTheChannel()
-        else:
-            state = await database.get_game_state(user.id, guild_id)
-            if state is None:
-                await interaction.followup.send(
-                    "You're not in the haunted house yet. Use `/enter` first.",
-                    ephemeral=True,
-                )
-                await _turned_away(
-                    interaction, telemetry.USE, telemetry.NO_GAME_YET, detail=thing
-                )
-                return
-
-            elsewhere = await _outside_the_house(interaction, state.current_room)
-            if elsewhere:
-                await interaction.followup.send(elsewhere, ephemeral=True)
-                await _turned_away(
-                    interaction, telemetry.USE, telemetry.WRONG_ROOM, detail=thing
-                )
-                return
+        state, refusal = await _place_to_act_in(interaction, "use")
+        if refusal:
+            await interaction.followup.send(refusal, ephemeral=True)
+            return
 
         found = await reach.find(
             guild_id, user.id, state.current_room, thing, reach.Scope.REACH,
@@ -2401,8 +2560,52 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
             )
             return
 
+        if found.thing_id in await _exits_not_earned(guild_id, user.id):
+            # Before the requirements gate and before the branch on type,
+            # because it is the one refusal that says the thing is not
+            # there at all.
+            await _no_such_doorway(interaction, found, thing)
+            return
+
+        held_now = await states.in_force(guild_id, user.id)
+        if world.use_refused_by(found.thing_id, held_now):
+            # A use whose effect has already happened. Resolved against
+            # the states in full rather than against one of them,
+            # because the refusal only exists on the state that caused
+            # it - which is the whole of why this gate is in code.
+            await interaction.followup.send(
+                await phrasing.say(
+                    guild_id, found.thing_id, "use_fail",
+                    state=sorted(held_now),
+                    fallback="use_fail.default", name=found.name,
+                ),
+                ephemeral=True,
+            )
+            await _turned_away(
+                interaction,
+                telemetry.USE,
+                telemetry.ALREADY_DONE,
+                thing_id=found.thing_id,
+            )
+            return
+
         wanted = states.required_things(row.requires)
-        if wanted and not await database.carries_all(user.id, guild_id, wanted):
+        missing = await reach.missing_requirements(
+            guild_id, user.id, state.current_room, wanted
+        )
+
+        # **Feeding asks about the cat before it asks about the kit**,
+        # and that order is the only place two gates are visible to a
+        # player. A sated cat turning down a can is the mechanic
+        # working; a missing bowl is a puzzle. Sending somebody across
+        # the house to find a bowl for a cat who would not have eaten
+        # anyway is a wasted trip the game chose for them.
+        if found.thing_id in world.FEEDS and await _a_feed_refusal(
+            interaction, found, missing
+        ):
+            return
+
+        if missing:
             # A gate, not a branch: it answers whether this player can do the
             # thing at all, so it is checked before working out what the thing
             # does. A refused use is not a use - nothing is recorded, nothing
@@ -2473,6 +2676,60 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
     except SQLAlchemyError:
         log.exception("Failed to use %r in guild %s", thing, guild_id)
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+
+
+async def _a_feed_refusal(interaction, found, missing: list[str]) -> bool:
+    """Turn a feed down if anything about it is wrong. True if it did.
+
+    Four answers in two pairs, and the pairs are independent questions:
+    is she hungry, and is the kit to hand.
+
+    **Hunger is read first.** Not hungry and no bowl in the room is
+    `feed.wrong_time_and_place` - the can is wrong twice over, and the
+    line says so. Not hungry with the bowl right there is
+    `feed.not_hungry`, which is the bed's register: she is fine, come
+    back later, nothing is broken.
+
+    **Hungry and short of something** falls to the flavor's own
+    `use_fail`, which is the one string a writer has for it, so the
+    reason is logged rather than written: the bowl points at the
+    Entryway and the opener at the kitchen, and which one players hit
+    says which room they are stuck outside of.
+
+    Nothing is consumed and no timer is stamped on any of these paths -
+    a refused feed costs the player nothing but the command. The
+    `last_cat_interaction_date` stamp is the exception, and it is
+    already written further up: offering food to a cat who will not eat
+    is still showing up.
+    """
+    user, guild_id = interaction.user, interaction.guild_id
+
+    if not await _is_hungry(guild_id, user.id):
+        no_bowl = world.CAT_BOWL in missing
+        line = await phrasing.default_say(
+            "feed.wrong_time_and_place" if no_bowl else "feed.not_hungry"
+        )
+        reason = (
+            telemetry.WRONG_TIME_AND_PLACE if no_bowl else telemetry.NOT_HUNGRY
+        )
+    elif missing:
+        line = await phrasing.say(
+            guild_id, found.thing_id, "use_fail",
+            fallback="use_fail.default", name=found.name,
+        )
+        reason = (
+            telemetry.NO_BOWL
+            if missing[0] == world.CAT_BOWL
+            else telemetry.NO_OPENER
+        )
+    else:
+        return False
+
+    await interaction.followup.send(line, ephemeral=True)
+    await _turned_away(
+        interaction, telemetry.FEED, reason, thing_id=found.thing_id
+    )
+    return True
 
 
 async def _turned_away(interaction, action: str, reason: str, **fields) -> None:
@@ -2560,10 +2817,16 @@ async def _finish_use(interaction, state, found) -> None:
     # Every use that is not an exit or a toy arrives here, including
     # the three cooldown paths, which is why this is the one place a
     # plain success is logged rather than four.
+    #
+    # **A can is logged as a feed and not also as a use**, for the
+    # reason a move is logged once: two rows for one event is how a
+    # count ends up doubled. All five cans, not only the four she eats
+    # - the question the action answers is how often anybody offers her
+    # anything, and the expired one is an offer.
     await telemetry.succeeded(
         guild_id,
         user.id,
-        telemetry.USE,
+        telemetry.FEED if found.thing_id in world.CAT_FOOD else telemetry.USE,
         thing_id=found.thing_id,
         relationship_delta=effect.delta if effect else None,
         score_after=effect.relationship if effect else None,
@@ -2628,7 +2891,22 @@ async def _finish_use(interaction, state, found) -> None:
         # opens on the fluff - *as {player} fluffs the cat bed,
         # something falls out* - so posting both would narrate the same
         # action twice in consecutive messages.
-        if dislodged and await _announce_bed_yield(interaction):
+        if dislodged == world.HOUSE_KEY:
+            # **Public and private both, unlike the toy yield**, which
+            # suppresses its private half because the two said the same
+            # thing. Here the addendum asks for `hint.bed_yield` on the
+            # fluff that drops a key, and a hint rides a private
+            # message, so there has to be one for it to ride.
+            #
+            # It is the right call on its own as well. The key is the
+            # server's only way into the house, and a line saying one
+            # exists is worth saying twice where a thirteenth crinkle
+            # ball is not.
+            await _announce_bed_yield(interaction, key=True)
+            reply = hints.beneath(
+                reply, await hints.after(guild_id, user.id, hints.BED_YIELD)
+            )
+        elif dislodged and await _announce_bed_yield(interaction):
             # **The public line is the whole event now.** It says both
             # halves - something fell out, and the cat took the bed
             # anyway - so the private fluff text underneath it was the
@@ -2648,6 +2926,25 @@ async def _finish_use(interaction, state, found) -> None:
                 reply,
                 None if carried else await hints.after(guild_id, user.id, nudge),
             )
+    elif found.thing_id == world.HOUSE_KEY:
+        # The road watches somebody unlock the front door, which is the
+        # single most consequential thing anybody does at drop 10: every
+        # other player's `/go house` starts working because of it.
+        await _announce_unlock(interaction)
+    elif found.thing_id in world.FEEDS:
+        # Public and private both, the bed's arrangement rather than the
+        # toy's: the room sees that she was fed, and the person who fed
+        # her gets the can's own text, which is about her and not about
+        # them.
+        await _announce_feed(interaction)
+        if effect is not None and effect.first_feed:
+            # **The Entryway's `channel.fog_thins`**, and marked the same
+            # way: italic, no label, written once and never again. The
+            # room has been one sentence until now because the player
+            # was watching the cat; she is eating, so they look up.
+            settled = await phrasing.default_say("en_settles")
+            if settled:
+                reply = f"{reply}\n\n*{settled}*"
 
     if privately:
         await interaction.followup.send(reply, ephemeral=True)
@@ -2869,6 +3166,18 @@ async def upload_art(guild, channel) -> tuple[int, list[str]]:
     return uploaded, problems
 
 
+async def _send_everybody_somewhere_real(guild_id: int) -> int:
+    """Put every player whose room this server has not got back on the road.
+
+    The valid places are the channel and the rooms whose text has arrived.
+    The channel is added here rather than asked of `arrived_rooms`, because
+    standing on the road is valid from drop 0 - before its own first
+    fragment, which arrives with drop 1.
+    """
+    valid = await resolve.arrived_rooms(guild_id) | {content.CHANNEL_ROOM}
+    return await database.send_players_home(guild_id, valid, content.CHANNEL_ROOM)
+
+
 async def _game_channel(guild):
     """This server's game channel: the house, its threads and its announcements.
 
@@ -2898,6 +3207,22 @@ async def _game_channel(guild):
             return channel
         log.warning("Game channel %s is gone in %s", channel_id, guild.id)
     return house_utils.find_channel(guild)
+
+
+async def _place_for(channel, room_id: str, room_name: str | None):
+    """Where a room's public lines go: its thread, or the channel itself.
+
+    **The channel is a place now.** Every room in the house is a private
+    thread, and the road is the channel the game was started in - so a move
+    between the two has a thread on one side and a channel on the other,
+    and what the move needs of either is only somewhere to post.
+
+    None when the room should have a thread and has not got one, which is
+    the caller's cue to send somebody to an admin.
+    """
+    if room_id == content.CHANNEL_ROOM:
+        return channel
+    return await house_utils.get_thread_for_room(channel, room_name)
 
 
 async def _post_in_room(interaction, room_id: str, message: str) -> None:
@@ -3141,8 +3466,52 @@ async def _announce_bed_fluff(interaction) -> None:
         await _post_quietly(channel, line)
 
 
-async def _announce_bed_yield(interaction) -> bool:
+async def _announce_unlock(interaction) -> None:
+    """The road watches the front door come open.
+
+    Posted on every successful `/use` of the key, which is only ever
+    the one that opened it: `world.use_refused_by` turns the rest away
+    before anything reaches here.
+    """
+    channel = interaction.channel
+    if channel is None or not hasattr(channel, "send"):
+        return
+    line = await phrasing.default_say(
+        "unlock.public", player=interaction.user.display_name
+    )
+    if line:
+        await _post_quietly(channel, line)
+
+
+async def _announce_feed(interaction) -> None:
+    """The room watches somebody feed the cat.
+
+    `_announce_bed_fluff`'s twin down to the shape, and one line in
+    `defaults.tsv` rather than one per flavor: the room sees that she
+    was fed, not what out of. The flavor is in the private text, which
+    is where the player who opened the can is.
+
+    Never raises and never blocks the feed. The score has already moved
+    and the can is already gone by the time this runs.
+    """
+    channel = interaction.channel
+    if channel is None or not hasattr(channel, "send"):
+        return
+    line = await phrasing.default_say(
+        "feed.public", player=interaction.user.display_name
+    )
+    if line:
+        await _post_quietly(channel, line)
+
+
+async def _announce_bed_yield(interaction, key: bool = False) -> bool:
     """The bed's one public line. True if it actually went out.
+
+    `key` picks the other one. A brass key falling out of a cushion is
+    a different event from a toy falling out of it - it is heard rather
+    than seen, and it is the thing the whole server is waiting on - so
+    it gets its own sentence rather than the generic one with a noun
+    swapped in.
 
     The work order has it *replacing* the ordinary public fluff post.
     There is nothing to replace: `/use` on a thing is private except
@@ -3159,7 +3528,8 @@ async def _announce_bed_yield(interaction) -> bool:
     if channel is None or not hasattr(channel, "send"):
         return False
     line = await phrasing.default_say(
-        "bed_yield.public", player=interaction.user.display_name
+        "bed_yield.key.public" if key else "bed_yield.public",
+        player=interaction.user.display_name,
     )
     if not line:
         return False
@@ -3331,6 +3701,46 @@ async def _use_with_cooldown(interaction, state, found, row) -> None:
     await _finish_use(interaction, state, found)
 
 
+async def _no_such_doorway(interaction, found, typed: str) -> None:
+    """Answer as though the doorway were a word nobody wrote.
+
+    **Not the doorway's own line and not `use_fail.default`.** Either
+    would confirm the arch is there and say only that it will not open,
+    which is a locked door rather than a room that has not opened yet.
+
+    **The player's own word, not the doorway's name.** `/go dining room`
+    resolves to the arch, because the room's name is one of the arch's
+    aliases - so a refusal built from the thing it found would answer
+    "you don't see an arched doorway here" to somebody who never
+    mentioned an arch, and name the doorway in the act of denying it.
+    That is why this is called from the verbs and not from `_use_exit`:
+    the verbs have the word, and the mover does not.
+    """
+    await interaction.followup.send(
+        await phrasing.default_say("use_fail.absent", name=typed.strip()),
+        ephemeral=True,
+    )
+    await _turned_away(
+        interaction, telemetry.MOVE, telemetry.ABSENT, thing_id=found.thing_id
+    )
+
+
+async def _exits_not_earned(guild_id: int, user_id: int) -> frozenset[str]:
+    """The Entryway's inner doorways, for a player who has not fed the cat.
+
+    Empty for everybody else, which is every player on a server past
+    drop 10's first week and every one of the nine other rooms.
+
+    **The only per-player gate on an exit in the game**, and safe for
+    one reason, written out beside the set in `world`: feeding can
+    always be completed inside the Entryway, so nobody behind this gate
+    is stuck behind it.
+    """
+    if await database.has_been_told(guild_id, user_id, content.FED_THE_CAT):
+        return frozenset()
+    return world.FEEDING_GATED_EXITS
+
+
 async def _use_exit(interaction, state, found, row) -> None:
     """Move the player through an exit into the adjoining room.
 
@@ -3347,13 +3757,26 @@ async def _use_exit(interaction, state, found, row) -> None:
     # than stored, and text keyed on it has to resolve like any other state.
     held = await world.states_for_exit(guild_id, user.id)
 
-    # The oak is the exception to `rooms_unlocked`, and it has to be. The
-    # Secret Library is `open_at_launch = no`, so nobody starts with it
-    # unlocked - and an exit gated on the state its own use produces is a
-    # locked door with the key inside. Climbing the tree is what unlocks the
-    # room, so the check cannot come first.
-    unreachable = destination not in state.rooms_unlocked and found.thing_id != world.OAK
+    # Three exits are exceptions to `rooms_unlocked`, and `UNGATED_EXITS`
+    # says why each one is. The oak is the old one: the Secret Library is
+    # `open_at_launch = no`, so nobody starts with it unlocked, and climbing
+    # the tree is what unlocks the room - so the check cannot come first.
+    # The house and the front door are drop 10's, and the reasons differ
+    # again; both are written down beside the set.
+    unreachable = (
+        destination not in state.rooms_unlocked
+        and found.thing_id not in world.UNGATED_EXITS
+    )
     if unreachable or world.exit_refused_by(found.thing_id, held):
+        if found.thing_id == world.HOUSE:
+            # **Trying the door is knowing the house is there**, and the
+            # most certain of the three ways of knowing: nobody types
+            # `/go house` at a road that has never mentioned one by
+            # accident. Written on the refusal rather than on the move,
+            # because while the door is locked the refusal is all
+            # anybody gets - and a player who could not read about the
+            # house afterwards would have no way back to it.
+            await hints.did(guild_id, user.id, hints.DID_TRY_HOUSE)
         await interaction.followup.send(
             await phrasing.say(
                 guild_id, found.thing_id, "use_fail", state=world.exit_state(held),
@@ -3372,17 +3795,25 @@ async def _use_exit(interaction, state, found, row) -> None:
         )
         return
 
+    origin = state.current_room
+    # **Either end can be the channel**, and exactly one of them can: the
+    # road is reachable only from the Entryway and the Entryway only from
+    # the road. Everything below is written against places rather than
+    # threads for that reason.
+    leaving_the_house = destination == content.CHANNEL_ROOM
+    coming_inside = origin == content.CHANNEL_ROOM
+
     try:
         destination_name = await resolve.room_name(destination)
-        origin_name = await resolve.room_name(state.current_room)
-        destination_thread = await house_utils.get_thread_for_room(channel, destination_name)
-        origin_thread = await house_utils.get_thread_for_room(channel, origin_name)
+        origin_name = await resolve.room_name(origin)
+        destination_place = await _place_for(channel, destination, destination_name)
+        origin_place = await _place_for(channel, origin, origin_name)
     except (discord.HTTPException, SQLAlchemyError):
-        log.exception("Could not look up room threads")
+        log.exception("Could not look up where this move happens")
         await interaction.followup.send(MOVE_ERROR_MESSAGE, ephemeral=True)
         return
 
-    if destination_thread is None:
+    if destination_place is None:
         await interaction.followup.send(
             f"I couldn't find the thread for {destination_name or destination}. "
             "Ask an admin to run `/initialize-haunted-house`.",
@@ -3394,16 +3825,23 @@ async def _use_exit(interaction, state, found, row) -> None:
     # away twice: "exits via the oak tree" teaches the Courtyard that the tree
     # is a way out, and "arrives from the Secret Library" names the secret
     # outright. The overrides say that somebody moved and nothing else.
+    #
+    # **A mention is a key, not a courtesy.** The arrival line carries one
+    # because it is what admits the player to the thread they have just
+    # walked into; the departure line never has, and arriving on the road
+    # does not need one either, because nobody has to be let into the
+    # channel. So the only line that pings is the one that has to.
     state_now = world.exit_state(held)
     depart = await phrasing.say(
         guild_id, found.thing_id, "move_depart", state=state_now,
         fallback="move.depart",
-        player=user.mention, name=found.name, room=origin_name,
+        player=user.display_name, name=found.name, room=origin_name,
     )
     arrive = await phrasing.say(
         guild_id, found.thing_id, "move_arrive", state=state_now,
         fallback="move.arrive",
-        player=user.mention, name=found.name, room=origin_name,
+        player=user.display_name if leaving_the_house else user.mention,
+        name=found.name, room=origin_name,
     )
 
     # The arrival line is what admits the player. A mention from a bot holding
@@ -3422,9 +3860,18 @@ async def _use_exit(interaction, state, found, row) -> None:
     # mention that does the admitting and leaves the player outside the room
     # the line says they are in.
     arrival_message = None
+    if not leaving_the_house:
+        _admit(destination_place.id, user.id)
     try:
-        if user.mention in arrive:
-            arrival_message = await destination_thread.send(arrive)
+        if leaving_the_house:
+            # Nothing to admit anybody to, so this is an ordinary post. It
+            # still goes before the write, so a failure leaves the player
+            # inside the house rather than in a room with no line saying so.
+            arrival_message = await destination_place.send(
+                arrive, allowed_mentions=discord.AllowedMentions.none()
+            ) if arrive else None
+        elif user.mention in arrive:
+            arrival_message = await destination_place.send(arrive)
         else:
             # Every `move_arrive` in the content carries `{player}`, and two
             # tests hold that for the overrides and the default. This is the
@@ -3435,28 +3882,56 @@ async def _use_exit(interaction, state, found, row) -> None:
                 "move_arrive for %s carries no player mention; adding %s to %s directly",
                 found.thing_id, user.id, destination,
             )
-            await house_utils.add_player_to_thread(destination_thread, user.id)
+            await house_utils.add_player_to_thread(destination_place, user.id)
             if arrive:
-                arrival_message = await destination_thread.send(arrive)
+                arrival_message = await destination_place.send(arrive)
     except discord.HTTPException:
         log.exception("Failed to admit %s to %s", user.id, destination)
         await interaction.followup.send(MOVE_ERROR_MESSAGE, ephemeral=True)
         return
 
     try:
-        await database.update_current_room(user.id, guild_id, destination)
+        # **The way in is the enrolment.** This is what `/enter` did before
+        # it was retired: create the player's row, and on the first one in a
+        # server, pin day one. `start_game` is idempotent and reports whether
+        # it was this call that enrolled them, which is also the answer to
+        # whether the tutorial is owed and whether day one is now.
+        enrolled = coming_inside and await database.start_game(
+            user.id, guild_id, destination, await resolve.rooms_open_at_launch()
+        )
+        if enrolled:
+            # Day one is the day somebody first walked in, not the day the
+            # house was built - an admin can initialize days early, and the
+            # restock calendar should start when there is somebody inside to
+            # see it. Idempotent, so the first entry on the server wins.
+            opened = await restocking.set_initialized_on(guild_id)
+            log.info(
+                "Guild %s: day one is %s (first entry by %s)", guild_id, opened, user.id
+            )
+        else:
+            await database.update_current_room(user.id, guild_id, destination)
         await database.record_use(user.id, guild_id, found.thing_id)
+        # The rail never recommends what the player has already done, so
+        # each of drop 10's two doors retires the hint that points at it. A
+        # player who found either on their own is never told about it.
+        if found.thing_id == world.HOUSE:
+            await hints.did(guild_id, user.id, hints.DID_GO_HOUSE)
+        elif found.thing_id == world.FRONT_DOOR:
+            await hints.did(guild_id, user.id, hints.DID_GO_ROAD)
         await telemetry.succeeded(
             guild_id,
             user.id,
-            telemetry.USE,
+            telemetry.MOVE,
             thing_id=found.thing_id,
-            detail=f"to={destination}",
+            detail=f"from={origin} to={destination}",
         )
         # The discovery is recorded after the move has committed, so a player
         # who could not be moved is not told they found something.
         await world.after_move(guild_id, user.id, found.thing_id)
-        if destination not in state.rooms_unlocked:
+        # The channel is nobody's unlocked room. It is where players start,
+        # and a row saying somebody has unlocked the road would be a row no
+        # question ever asks.
+        if not leaving_the_house and destination not in state.rooms_unlocked:
             await database.unlock_room(user.id, guild_id, destination)
         # `held` is deliberately *not* updated with what was just discovered.
         # 2c.5 resolves a use's text after its effect, so the drawer can be
@@ -3474,10 +3949,11 @@ async def _use_exit(interaction, state, found, row) -> None:
                     "Rollback could not delete the arrival line in %s", destination,
                     exc_info=True,
                 )
-        try:
-            await house_utils.remove_player_from_thread(destination_thread, user.id)
-        except discord.HTTPException:
-            log.exception("Rollback failed: %s left in %s", user.id, destination)
+        if not leaving_the_house:
+            try:
+                await house_utils.remove_player_from_thread(destination_place, user.id)
+            except discord.HTTPException:
+                log.exception("Rollback failed: %s left in %s", user.id, destination)
         await interaction.followup.send(MOVE_ERROR_MESSAGE, ephemeral=True)
         return
 
@@ -3485,15 +3961,18 @@ async def _use_exit(interaction, state, found, row) -> None:
     # logged rather than surfaced - the player is already through the door.
     # The arrival line is not here: posting it is what let them in, so it was
     # sent before the write.
-    if origin_thread is not None:
+    if origin_place is not None:
         try:
-            await origin_thread.send(depart)
+            await origin_place.send(
+                depart, allowed_mentions=discord.AllowedMentions.none()
+            )
         except discord.HTTPException:
             log.warning("Could not post departure in %s", origin_name, exc_info=True)
-        try:
-            await house_utils.remove_player_from_thread(origin_thread, user.id)
-        except discord.HTTPException:
-            log.warning("Could not remove %s from %s", user.id, origin_name, exc_info=True)
+        # **Nobody is removed from the channel**, and nobody needs to be: it
+        # is the one place where being able to read it is not a claim about
+        # where you are standing.
+        if not coming_inside:
+            await _evict(interaction.guild, origin_place, origin, user.id, "move")
 
     # The exit's own words, which no exit has ever printed: every one of the
     # twenty has a `use` line written and players only ever saw "You head to".
@@ -3502,10 +3981,22 @@ async def _use_exit(interaction, state, found, row) -> None:
     walked = await phrasing.say(
         guild_id, found.thing_id, "use", state=state_now, name=found.name
     )
-    arriving = f"You head to {destination_thread.mention}."
-    await interaction.followup.send(
-        f"{walked}\n\n{arriving}" if walked else arriving, ephemeral=True
-    )
+    arriving = f"You head to {destination_place.mention}."
+    reply = f"{walked}\n\n{arriving}" if walked else arriving
+
+    # **The way back out, on the message that says they are in.** The
+    # retired tutorial's third bullet was this lesson, and the rail could
+    # not give it before drop 10 because there was no exit anywhere to
+    # teach movement on. `quests=False`: this is one hint riding a move,
+    # not the whole rail arriving on movement for the first time.
+    if coming_inside:
+        reply = hints.beneath(
+            reply,
+            await hints.after(guild_id, user.id, hints.GO_ROAD, quests=False),
+        )
+
+    await interaction.followup.send(reply, ephemeral=True)
+
 
     await _fire(
         achievements.Context(
@@ -3519,8 +4010,188 @@ async def _use_exit(interaction, state, found, row) -> None:
     )
 
 
+async def _exit_to_room(guild_id: int, room_id: str, typed: str, hidden=frozenset()):
+    """The way out of this room that leads to the room a player named.
+
+    `/go dining room` rather than `/go archway`. A player thinks in rooms,
+    and the name of the doorway is something they have to read the prose to
+    learn - so the destination's name is a way of asking for the exit.
+
+    Matched on the whole name and on any word of it, which is `_is_this_room`
+    looseness and safe for the same reason: it is asked only after nothing in
+    the room answered to the word, and the candidates are the two or three
+    ways out of one room.
+
+    **The Secret Library is never matched by name**, from either of its two
+    doors. `/go secret library` has to fail exactly the way `/go dungeon`
+    fails, or the room's name is the thing that gives it away - and the oak
+    and the cabinet are still findable by their own.
+
+    `hidden` is the same argument for a different reason: a doorway this
+    player has not earned must not be reachable by naming the room
+    through it either, or `/go dining room` hands over a room the prose
+    has not mentioned to them.
+    """
+    wanted = reach.normalise(typed)
+    if not wanted:
+        return None
+
+    for exit_ in await resolve.exits_from(guild_id, room_id):
+        if exit_.destination == world.SECRET_LIBRARY or exit_.thing_id in hidden:
+            continue
+        name = await resolve.room_name(exit_.destination)
+        if not name:
+            continue
+        words = {reach.normalise(word) for word in name.split()}
+        if wanted in {reach.normalise(name), reach.normalise(exit_.destination), *words}:
+            return exit_
+    return None
+
+
+@bot.tree.command(name="go", description="Go somewhere.")
+@app_commands.guild_only()
+@app_commands.describe(where="A way out of here, or the room it leads to.")
+async def go(interaction: discord.Interaction, where: str) -> None:
+    """Movement, named either way: the door, or the room behind it.
+
+    `/use <exit>` moved players before this existed and still does. This is
+    the verb they reach for, and it answers the half `/use` answers badly:
+    the name of the doorway is something a player has to read the prose to
+    learn, while the room it leads to is on the map in their head. `/go
+    dining room` asks for the room and lets the archway be an
+    implementation detail of the house.
+
+    Three answers, in this order.
+
+    **A way out, by its own name or alias:** take it, through exactly the
+    path `/use` takes, gates and lines and all.
+
+    **A thing that is not a way out:** its own refusal. That is what keeps a
+    disguised exit disguised - `/go cabinet` reads the cabinet's line
+    whether or not there is a passage behind it, so the two cases are
+    indistinguishable from outside.
+
+    **A word that is neither:** *you don't see a {name} here*, which is also
+    what `/go secret library` says, because the alternative is a refusal
+    that admits the room exists.
+    """
+    if interaction.guild is None:
+        await interaction.response.send_message(
+            "This command only works inside a server.", ephemeral=True
+        )
+        return
+
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    user, guild_id = interaction.user, interaction.guild_id
+
+    try:
+        state, refusal = await _place_to_act_in(interaction, "go")
+        if refusal:
+            await interaction.followup.send(refusal, ephemeral=True)
+            return
+
+        hidden = await _exits_not_earned(guild_id, user.id)
+        found = await reach.find(
+            guild_id, user.id, state.current_room, where, reach.Scope.REACH
+        )
+
+        if isinstance(found, reach.Ambiguous):
+            await interaction.followup.send(
+                await phrasing.default_say(
+                    "ambiguous.match", options=", ".join(found.options)
+                ),
+                ephemeral=True,
+            )
+            await _turned_away(
+                interaction, telemetry.MOVE, telemetry.AMBIGUOUS, detail=where
+            )
+            return
+
+        if isinstance(found, reach.NotFound):
+            # Nothing here answered to the word, so try the rooms the ways
+            # out lead to - and then ask for that exit by its own name,
+            # rather than building a `Found` by hand that the one real
+            # resolver would not have produced.
+            exit_ = await _exit_to_room(guild_id, state.current_room, where, hidden)
+            if exit_ is not None:
+                found = await reach.find(
+                    guild_id, user.id, state.current_room, exit_.name, reach.Scope.REACH
+                )
+
+        if not isinstance(found, reach.Found):
+            await interaction.followup.send(
+                await phrasing.default_say("use_fail.absent", name=where.strip()),
+                ephemeral=True,
+            )
+            # Same split the other verbs log: a word the game knows is a
+            # player in the wrong room, and a word it has never heard is a
+            # player telling you what they expected to find.
+            await _turned_away(
+                interaction,
+                telemetry.MOVE,
+                telemetry.ABSENT
+                if getattr(found, "exists_elsewhere", False)
+                else telemetry.UNKNOWN,
+                detail=where.strip(),
+            )
+            return
+
+        if found.thing_id in hidden:
+            await _no_such_doorway(interaction, found, where)
+            return
+
+        row = await phrasing.thing_row(found.thing_id)
+        if row is None or row.type != "exit":
+            # **Its own line first, and `go_fail.default` only behind it.**
+            # That order is what keeps a disguised exit disguised: the
+            # cabinet answers with the cabinet's words whether or not there
+            # is a passage behind it, and so does every fixture that has
+            # words of its own. The fallback is for the ones that do not.
+            await interaction.followup.send(
+                await phrasing.say(
+                    guild_id, found.thing_id, "use_fail",
+                    state=await _current_state(guild_id, user.id),
+                    fallback="go_fail.default", name=found.name,
+                ),
+                ephemeral=True,
+            )
+            await _turned_away(
+                interaction,
+                telemetry.MOVE,
+                telemetry.NOT_AN_EXIT,
+                thing_id=found.thing_id,
+            )
+            return
+
+        # The things-to-hand gate, read before anything is worked out, for
+        # the reason `/use` reads it there: a refused move is not a move.
+        wanted = states.required_things(row.requires)
+        if await reach.missing_requirements(
+            guild_id, user.id, state.current_room, wanted
+        ):
+            await interaction.followup.send(
+                await phrasing.say(
+                    guild_id, found.thing_id, "use_fail",
+                    fallback="use_fail.default", name=found.name,
+                ),
+                ephemeral=True,
+            )
+            await _turned_away(
+                interaction,
+                telemetry.MOVE,
+                telemetry.REQUIRES_MISSING,
+                thing_id=found.thing_id,
+                detail=row.requires,
+            )
+            return
+
+        await _use_exit(interaction, state, found, row)
+    except SQLAlchemyError:
+        log.exception("Failed to go to %r in guild %s", where, guild_id)
+        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+
+
 GENERIC_ROOM_DESCRIPTION = "You see a room."
-NOT_IN_ROOM_MESSAGE = "You must be in a room to look around."
 CANT_LOOK_MESSAGE = "You can't look at that."
 INVENTORY_ERROR_MESSAGE = "Couldn't retrieve your inventory. Try again."
 
@@ -3555,68 +4226,54 @@ async def look(interaction: discord.Interaction, thing: str | None = None) -> No
         thing = None
 
     try:
-        # The channel is a room, and standing in it needs no player row:
-        # `/enter` does not exist at the drops where this is the only place
-        # there is. Checked before the game state for exactly that reason.
-        if await _in_the_channel(interaction):
-            if thing is None or not thing.strip():
-                await hints.did(guild_id, user.id, hints.DID_LOOK)
-                reply = await _look_in_the_channel(guild_id, user.id)
-                await interaction.followup.send(
-                    hints.beneath(
-                        reply,
-                        # **The newest drop's hint wins.** A player who
-                        # never looked at the bed is eligible for both
-                        # on their first `/look`, and only one line
-                        # goes per message - so it points at the thing
-                        # they have not seen. The bed's is not lost; it
-                        # fires on their next look if still unmet.
-                        await hints.after(
-                            guild_id, user.id, hints.LOOK_TOY, hints.LOOK_SPECIFIC
-                        ),
-                    ),
-                    ephemeral=True,
-                )
-                await telemetry.succeeded(
-                    guild_id, user.id, telemetry.LOOK, detail=content.CHANNEL_ROOM
-                )
-                return
-            await _look_at_one_thing(
-                interaction, guild_id, user.id, content.CHANNEL_ROOM, thing
-            )
+        state, refusal = await _place_to_act_in(interaction, "look")
+        if refusal:
+            await interaction.followup.send(refusal, ephemeral=True)
             return
-
-        state = await database.get_game_state(user.id, guild_id)
-        if state is None:
-            await interaction.followup.send(NOT_IN_ROOM_MESSAGE, ephemeral=True)
-            await _turned_away(
-                interaction, telemetry.LOOK, telemetry.NO_GAME_YET, detail=thing
-            )
-            return
-
-        elsewhere = await _outside_the_house(interaction, state.current_room)
-        if elsewhere:
-            await interaction.followup.send(elsewhere, ephemeral=True)
-            await _turned_away(
-                interaction, telemetry.LOOK, telemetry.WRONG_ROOM, detail=thing
-            )
-            return
+        room_id = state.current_room
 
         if thing is None or not thing.strip():
-            await interaction.followup.send(
-                await _look_here(guild_id, user.id, state.current_room), ephemeral=True
-            )
-            await telemetry.succeeded(
-                guild_id, user.id, telemetry.LOOK, detail=state.current_room
-            )
+            reply = await _look_here(guild_id, user.id, room_id)
+            if room_id == content.CHANNEL_ROOM:
+                # **The rail rides the channel's look and not a room's.**
+                # Every rung of it is about the two things the road has -
+                # the bed and the toys - and the house teaches itself.
+                #
+                # Recorded before the rail is asked, which is what keeps
+                # the invariant: by the time anything is chosen, what the
+                # player just did is already a reason not to suggest it.
+                await hints.did(guild_id, user.id, hints.DID_LOOK)
+                reply = hints.beneath(
+                    reply,
+                    # **The newest drop's hint wins.** A player who never
+                    # looked at the bed is eligible for both on their
+                    # first `/look`, and only one line goes per message -
+                    # so it points at the thing they have not seen. The
+                    # bed's is not lost; it fires on their next look if
+                    # still unmet.
+                    await hints.after(
+                        guild_id, user.id, hints.LOOK_TOY, hints.LOOK_SPECIFIC
+                    ),
+                )
+            await interaction.followup.send(reply, ephemeral=True)
+            await telemetry.succeeded(guild_id, user.id, telemetry.LOOK, detail=room_id)
             return
 
-        await _look_at_one_thing(
-            interaction, guild_id, user.id, state.current_room, thing
-        )
+        await _look_at_one_thing(interaction, guild_id, user.id, room_id, thing)
     except SQLAlchemyError:
         log.exception("Failed to look at %r in guild %s", thing, guild_id)
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+
+
+# The bed, which is drop 1's achievement and the condition on the hint
+# that points at the house. Any successful fluff earns it; a refused one
+# does not, which is the distinction the hint wants - a player who has
+# been told to come back tomorrow has not had the moment yet.
+FLUFFED = "fluffed_to_perfection"
+
+
+async def _has_fluffed_the_bed(guild_id: int, user_id: int) -> bool:
+    return FLUFFED in await database.player_achievements_of(guild_id, user_id)
 
 
 async def _look_at_one_thing(
@@ -3726,6 +4383,20 @@ async def _look_at_one_thing(
         text = hints.beneath(
             text, await hints.after(guild_id, user_id, hints.TRY_USE)
         )
+    elif found.thing_id == world.HOUSE:
+        # Recorded whether or not a hint follows it, and the difference
+        # matters: this flag is what puts the house into the road's prose
+        # from now on, and a player who found it by typing the word has
+        # earned that as much as one who was told where to look. The hint
+        # below is a separate question with a stricter condition.
+        await hints.did(guild_id, user_id, hints.DID_LOOK_HOUSE)
+        # **Only for a player who has fluffed the bed**, and the rail is
+        # asked only then: a player without it gets no line at all rather
+        # than a quest notice standing in for one.
+        if await _has_fluffed_the_bed(guild_id, user_id):
+            text = hints.beneath(
+                text, await hints.after(guild_id, user_id, hints.GO_HOUSE)
+            )
     elif row is not None and row.type == world.TOY:
         # **The verb, not the verb and a noun.** A player who looked at
         # a crinkle ball has learned what looking at a toy is, so the
@@ -3866,10 +4537,23 @@ async def _describe_room(
 
 
 async def _look_around(guild_id: int, user_id: int, room_id: str) -> str:
-    """The room's description, then what is lying about in it."""
+    """The room's description, then what is lying about in it.
+
+    **The gates are passed in here as well as in the channel**, which
+    they were not until drop 10: the fog was the only staged paragraph
+    in the game, and it is outdoors. The Entryway is the second, and a
+    room that read its fragments without them would show every player
+    the whole foyer on their first step inside.
+    """
     state = await _current_state(guild_id, user_id)
     description = (
-        await _describe_room(guild_id, user_id, room_id, state)
+        await _describe_room(
+            guild_id,
+            user_id,
+            room_id,
+            state,
+            await _unlocked_for(guild_id, user_id),
+        )
         or GENERIC_ROOM_DESCRIPTION
     )
 
@@ -3908,11 +4592,44 @@ async def _unlocked_for(guild_id: int, user_id: int) -> frozenset[str]:
     No new table, no new column, and emphatically not the general
     per-player `present_when`, which is a design programme parked in
     V3.2 and would have cost a staged paragraph the same as the whole
-    onboarding corridor.
+    onboarding corridor. Three gates later it is still one query.
+
+    **`knows_house` is four conditions rather than one**, because
+    there are four honest ways to know the house is there and all of
+    them should count: most players arrive through *Purrsuasive* and
+    the toy, some read the word off the fog and typed it, some have
+    tried the front door and found it locked, and anybody who has been
+    inside obviously knows. The achievement is asked last because it is
+    the only one that costs a second query, and asking it first would
+    spend that query on every `/look` in the game.
+
+    The gate names and the notice ids are the same strings, which is
+    why `fed_the_cat` needs no translation and `looked_at_bed` does:
+    the bed's flag predates the gate and is spelled for the hint
+    ladder it was written for.
     """
-    if await database.has_been_told(guild_id, user_id, hints.DID_LOOK_BED):
-        return frozenset({content.LOOKED_AT_BED})
-    return frozenset()
+    held = await database.notices_of(
+        guild_id,
+        user_id,
+        (
+            hints.DID_LOOK_BED,
+            hints.DID_LOOK_HOUSE,
+            hints.DID_TRY_HOUSE,
+            hints.DID_GO_HOUSE,
+            content.FED_THE_CAT,
+        ),
+    )
+    gates = set()
+    if hints.DID_LOOK_BED in held:
+        gates.add(content.LOOKED_AT_BED)
+    if content.FED_THE_CAT in held:
+        gates.add(content.FED_THE_CAT)
+    knows = {hints.DID_LOOK_HOUSE, hints.DID_TRY_HOUSE, hints.DID_GO_HOUSE}
+    if held & knows or PURRSUASIVE in (
+        await database.player_achievements_of(guild_id, user_id)
+    ):
+        gates.add(content.KNOWS_HOUSE)
+    return frozenset(gates)
 
 
 async def _look_in_the_channel(guild_id: int, user_id: int) -> str:
@@ -4099,34 +4816,6 @@ async def inventory(interaction: discord.Interaction) -> None:
 # --------------------------------------------------------------------------
 
 
-async def _player_room(interaction: discord.Interaction) -> str | None:
-    state = await database.get_game_state(interaction.user.id, interaction.guild_id)
-    return state.current_room if state else None
-
-
-async def _room_to_act_in(interaction) -> tuple[str | None, str | None]:
-    """(room, refusal). Exactly one is set.
-
-    `/take` and `/drop` share this: both need the player's room and both are
-    refused outside it, and having one function answer both means a verb
-    cannot be given the room without also being given the check.
-
-    **The channel is a room, and standing in it needs no player row.**
-    `/enter` does not exist at the drops where the channel is the only
-    place there is, so a player picking up their first toy has never
-    entered anything. Checked before the game state for that reason,
-    and here rather than in each verb so `/take` and `/drop` cannot
-    disagree about where the channel is.
-    """
-    if await _in_the_channel(interaction):
-        await database.ensure_user_exists(interaction.user.id, interaction.guild_id)
-        return content.CHANNEL_ROOM, None
-    room_id = await _player_room(interaction)
-    if room_id is None:
-        return None, NOT_IN_ROOM_MESSAGE
-    return room_id, await _outside_the_house(interaction, room_id)
-
-
 @bot.tree.command(name="take", description="Pick something up.")
 @app_commands.guild_only()
 @app_commands.describe(thing="What to pick up.")
@@ -4147,13 +4836,11 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
     user, guild_id = interaction.user, interaction.guild_id
 
     try:
-        room_id, elsewhere = await _room_to_act_in(interaction)
-        if elsewhere:
-            await interaction.followup.send(elsewhere, ephemeral=True)
-            await _turned_away(
-                interaction, telemetry.TAKE, telemetry.WRONG_ROOM, detail=thing
-            )
+        state, refusal = await _place_to_act_in(interaction, "take")
+        if refusal:
+            await interaction.followup.send(refusal, ephemeral=True)
             return
+        room_id = state.current_room
 
         found = await reach.find(
             guild_id, user.id, room_id, thing, reach.Scope.ROOM, action=telemetry.TAKE
@@ -4368,13 +5055,11 @@ async def drop(interaction: discord.Interaction, thing: str) -> None:
     user, guild_id = interaction.user, interaction.guild_id
 
     try:
-        room_id, elsewhere = await _room_to_act_in(interaction)
-        if elsewhere:
-            await interaction.followup.send(elsewhere, ephemeral=True)
-            await _turned_away(
-                interaction, telemetry.DROP, telemetry.WRONG_ROOM, detail=thing
-            )
+        state, refusal = await _place_to_act_in(interaction, "drop")
+        if refusal:
+            await interaction.followup.send(refusal, ephemeral=True)
             return
+        room_id = state.current_room
 
         found = await reach.find(
             guild_id, user.id, room_id, thing, reach.Scope.CARRIED,
@@ -5398,13 +6083,18 @@ async def _is_hungry(guild_id: int, user_id: int) -> bool:
 
     Read off `thing_uses`, which `/use` already writes on a successful
     feed and only on a successful one: a refused use returns before the
-    row is touched. Whoever builds feeding owns this function, and the
-    id set it reads is the part most likely to be replaced.
+    row is touched.
+
+    **`FEEDS` and not `CAT_FOOD`**, which is the whole of why the two
+    sets exist. The expired can is a can of cat food and is not a meal:
+    she takes one breath of it and walks away, so a player who opened
+    one has not fed her and must not have to wait eight hours before
+    she will eat again.
     """
     drop = await resolve.current_drop(guild_id)
     if drop is resolve.NO_GAME or drop < world.FEEDING_FROM_DROP:
         return False
-    fed = await database.last_used_any(user_id, guild_id, world.CAT_FOOD)
+    fed = await database.last_used_any(user_id, guild_id, world.FEEDS)
     if fed is None:
         return True
     return await database.server_now(guild_id) - fed >= world.HUNGER_WINDOW

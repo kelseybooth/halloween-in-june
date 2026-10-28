@@ -307,11 +307,20 @@ async def test_an_ambiguous_name_asks_rather_than_guessing(house):
     assert await bag() == {}
 
 
-async def test_taking_outside_the_house_is_refused(db):
+async def test_taking_in_a_room_you_are_not_standing_in_is_refused(db):
+    """**A player with no row is on the road**, not nowhere. That is drop
+    10's model: there is always a location, so the refusal can always say
+    where it is rather than that there is no room at all."""
     await db.ensure_user_exists(ALICE, GUILD_A)
     await content_loader.load_content(a_house(a_thing("spoon")))
 
-    assert "must be in a room" in (await take()).reply
+    reply = (await take()).reply
+
+    assert ELSEWHERE in reply
+    # This fixture's house has no channel row to take a name from, and no
+    # #halloween to link to, so the refusal falls back to the bare id. In
+    # the game it is a link to the channel they are standing in.
+    assert "CH" in reply
 
 
 # --------------------------------------------------------------------------
@@ -730,10 +739,20 @@ async def real_house(db):
     return db, FakeGuild(GUILD_A, channels=[channel], members=[FakeMember(ALICE)])
 
 
-async def enter_properly(db, room="EN"):
-    """Entering the way `/enter` does, with ids in both columns."""
+async def enter_properly(db, room="EN", fed=True):
+    """A player properly inside the house, with ids in both columns.
+
+    **Fed by default, because that is what "properly inside" means from
+    drop 10 on.** The Entryway's inner doorways do not exist for a
+    player who has not fed the cat, so a test about the Living Room's
+    doorway that walked in unfed would be testing the feeding gate by
+    accident and failing for a reason it never mentions. The gate itself
+    is tested where it belongs, in `test_feeding.py`.
+    """
     await db.ensure_user_exists(ALICE, GUILD_A)
     await db.start_game(ALICE, GUILD_A, room, await resolve.rooms_open_at_launch())
+    if fed:
+        await db.notice(GUILD_A, ALICE, content_module.FED_THE_CAT)
 
 
 async def where_is_alice(db):
@@ -855,6 +874,12 @@ async def command(fn, arg, channel, user_id=ALICE, guild_id=GUILD_A, guild=None)
     return interaction
 
 
+# The wrong-place reply, by the half of it that is not the link. Drop 10
+# replaced "that only works inside the house" with it: the house is not
+# one place any more, so the question is not whether a player is inside it
+# but whether they are in the room they are standing in.
+ELSEWHERE = "your corporeal self is in"
+
 WORLD_VERBS = [
     pytest.param(lambda: bot.look, None, id="look"),
     pytest.param(lambda: bot.take, "spoon", id="take"),
@@ -864,12 +889,14 @@ WORLD_VERBS = [
 
 
 @pytest.mark.parametrize("verb, arg", WORLD_VERBS)
-async def test_a_world_verb_is_refused_outside_the_house(house, verb, arg):
+async def test_a_world_verb_is_refused_from_another_channel(house, verb, arg):
+    """Anywhere that is neither the player's room nor the channel is
+    nowhere, and gets the same answer as the wrong room."""
     await content_loader.load_content(a_house(a_thing("spoon")))
 
     reply = (await command(verb(), arg, somewhere_else())).reply
 
-    assert "only works inside the house" in reply
+    assert ELSEWHERE in reply
 
 
 @pytest.mark.parametrize("verb, arg", WORLD_VERBS)
@@ -879,7 +906,7 @@ async def test_a_world_verb_works_in_a_room_thread(house, verb, arg):
     # Threads are named after the room, not its id.
     reply = heard(await command(verb(), arg, a_room_thread("Entryway")))
 
-    assert "only works inside the house" not in reply
+    assert ELSEWHERE not in reply
 
 
 async def test_the_refusal_says_where_the_player_actually_is(house):
@@ -901,7 +928,7 @@ async def test_a_thread_outside_the_halloween_channel_is_not_the_house(house):
 
     reply = (await command(bot.look, None, impostor)).reply
 
-    assert "only works inside the house" in reply
+    assert ELSEWHERE in reply
 
 
 async def test_a_thread_named_after_no_room_is_not_the_house(house):
@@ -914,7 +941,7 @@ async def test_a_thread_named_after_no_room_is_not_the_house(house):
 
     reply = (await command(bot.look, None, chatter)).reply
 
-    assert "only works inside the house" in reply
+    assert ELSEWHERE in reply
 
 
 async def test_the_player_verbs_are_not_gated(house):
@@ -926,7 +953,7 @@ async def test_the_player_verbs_are_not_gated(house):
 
     reply = (await command(bot.inventory, None, somewhere_else())).reply
 
-    assert "only works inside the house" not in reply
+    assert ELSEWHERE not in reply
     assert "spoon" in reply
 
 
@@ -1002,15 +1029,20 @@ async def test_door_and_doorway_work_in_every_room(real_house, room, word, expec
 
 
 async def test_door_in_the_entryway_is_the_front_door(real_house):
-    """A house's door is its front one, and the fixture already owned the
-    word. The two interior doorways answer to `doorway` instead - which is
-    also how the room's own prose distinguishes them."""
+    """A house's door is its front one, and the front door already owned
+    the word. The two interior doorways answer to `doorway` instead -
+    which is also how the room's own prose distinguishes them.
+
+    **And now it opens.** It was a fixture that declined; drop 10 made it
+    the exit back out to the road, so the word still resolves to one thing
+    and that thing is a way out.
+    """
     db, guild = real_house
     await enter_properly(db, room="EN")
 
     reply = (await use(thing="door", guild=guild)).reply
 
-    assert await where_is_alice(db) == "EN"
+    assert await where_is_alice(db) == "CH"
     assert "Which one do you mean" not in reply
 
 
@@ -1175,14 +1207,25 @@ async def test_the_opener_arrives_with_the_kitchen_it_is_in(real_house):
 
 
 @pytest.mark.parametrize(
-    "can",
-    ["cat_food_chicken", "cat_food_salmon", "cat_food_tuna",
-     "cat_food_expired", "cat_food_gourmet"],
+    "can, requires",
+    [
+        # The salmon has a pull ring, which is what makes drop 10
+        # winnable: the opener is in the pantry and the kitchen does not
+        # open until 30, so a salmon that needed one could never be used
+        # in the drop that hides it behind the coat tree.
+        ("cat_food_salmon", "cat_bowl"),
+        ("cat_food_chicken", "can_opener|cat_bowl"),
+        ("cat_food_tuna", "can_opener|cat_bowl"),
+        ("cat_food_gourmet", "can_opener|cat_bowl"),
+        # The expired can is the exception twice over: she will not eat
+        # it, so it is not a feed and wants no bowl.
+        ("cat_food_expired", "can_opener"),
+    ],
 )
-async def test_every_can_wants_the_opener(real_house, can):
+async def test_every_can_says_what_it_needs(real_house, can, requires):
     parsed = content_module.load_files()
 
-    assert parsed.things_by_id[can].requires == "can_opener"
+    assert parsed.things_by_id[can].requires == requires
 
 
 # --------------------------------------------------------------------------
