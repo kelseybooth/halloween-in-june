@@ -26,9 +26,32 @@ import database
 import resolve
 
 
-# The clause the nudge is recognised by, short enough to survive a
-# rewrite of the sentence around it.
-NUDGE = "has had enough of this for now"
+# There are two crowding lines, one per mood, and which one a pet gets
+# depends on a roll these timing tests do not fix. So the nudge is
+# recognised by comparing against the content itself rather than against a
+# clause of it: the question here is *when* it fires, and rewording either
+# line should not touch that.
+_CROWDING_KEYS = ("pet.crowding.friendly", "pet.crowding.standoffish")
+_CROWDING_LINES = None
+
+
+def crowding_lines():
+    global _CROWDING_LINES
+    if _CROWDING_LINES is None:
+        defaults = content_module.load_files().defaults
+        _CROWDING_LINES = tuple(defaults[key] for key in _CROWDING_KEYS)
+    return _CROWDING_LINES
+
+
+def nudged(text: str) -> bool:
+    """Whether either crowding line is in this text."""
+    return any(line in text for line in crowding_lines())
+
+
+def crowding(key: str) -> str:
+    """One crowding line by key, for the tests that fix the roll and so know
+    which of the two they should be reading."""
+    return crowding_lines()[_CROWDING_KEYS.index(key)]
 
 
 @pytest.fixture(autouse=True)
@@ -230,11 +253,11 @@ async def test_the_first_pet_that_loses_points_nudges(house):
     """
     for n in range(1, 5):
         interaction = await act(house, bot.pet, None, "KI")
-        assert NUDGE not in replies(interaction), n
+        assert not nudged(replies(interaction)), n
 
     fifth = await act(house, bot.pet, None, "KI")
 
-    assert NUDGE in replies(fifth)
+    assert nudged(replies(fifth))
 
 
 async def test_and_no_pet_after_it_says_it_again(house):
@@ -246,7 +269,7 @@ async def test_and_no_pet_after_it_says_it_again(house):
 
     for n in range(6, 13):
         interaction = await act(house, bot.pet, None, "KI")
-        assert NUDGE not in replies(interaction), n
+        assert not nudged(replies(interaction)), n
 
 
 async def test_it_can_fire_again_once_the_window_drains(house):
@@ -261,9 +284,9 @@ async def test_it_can_fire_again_once_the_window_drains(house):
 
     for n in range(1, 5):
         interaction = await act(house, bot.pet, None, "KI")
-        assert NUDGE not in replies(interaction), n
+        assert not nudged(replies(interaction)), n
 
-    assert NUDGE in replies(await act(house, bot.pet, None, "KI"))
+    assert nudged(replies(await act(house, bot.pet, None, "KI")))
 
 
 def test_the_nudge_follows_the_weighting():
@@ -290,7 +313,7 @@ async def test_the_nudge_never_appears_in_public(house):
     for _ in range(11):
         await act(house, bot.pet, None, "KI")
 
-    assert not any(NUDGE in line for line in threads["Kitchen"].posted)
+    assert not any(nudged(line) for line in threads["Kitchen"].posted)
 
 
 async def test_crowding_does_not_stop_the_pet_counting(house):
@@ -300,6 +323,60 @@ async def test_crowding_does_not_stop_the_pet_counting(house):
         await act(house, bot.pet, None, "KI")
 
     assert await db.get_pet_count(ALICE, GUILD_A) == 12
+
+
+async def test_a_standoffish_crossing_replaces_the_response(house, monkeypatch):
+    """**The bug a player reported.** The crowding line is itself a
+    standoffish beat - she flattens her ears and slides out from under your
+    hand - so printing it after a standoffish response narrated the same
+    moment twice. On that roll it replaces the response rather than following
+    it, and the pet answers once.
+    """
+    for _ in range(4):
+        await act(house, bot.pet, None, "KI")
+
+    rolls(monkeypatch, friendly=False)
+    fifth = replies(await act(house, bot.pet, None, "KI"))
+
+    assert crowding("pet.crowding.standoffish") in fifth
+    assert bot.STANDOFFISH_RESPONSES[0] not in fifth
+
+
+async def test_a_friendly_crossing_keeps_the_response_and_adds_to_it(
+    house, monkeypatch
+):
+    """The other roll, where the pet landed: she rubbed against a leg and the
+    score went up. Replacing that with her pulling away would contradict both
+    the prose and the points, so the friendly line is advice about the pets
+    still to come and is appended to it.
+
+    **This is the pairing that was reported and the one nothing covered.** It
+    only reads wrong on a friendly roll, which is 40% of that pet, so six
+    times in ten the old line looked merely repetitive.
+    """
+    for _ in range(4):
+        await act(house, bot.pet, None, "KI")
+
+    rolls(monkeypatch, friendly=True)
+    fifth = replies(await act(house, bot.pet, None, "KI"))
+
+    assert bot.FRIENDLY_RESPONSES[0] in fifth
+    assert crowding("pet.crowding.friendly") in fifth
+
+
+async def test_swapping_the_words_leaves_the_meter_alone(house, monkeypatch):
+    """Only the text is chosen by the mood. `reaction.friendly` still drives
+    the score, which is what makes this a copy fix rather than a balance one.
+    """
+    db, *_ = house
+    for _ in range(4):
+        await act(house, bot.pet, None, "KI")
+    before = await db.get_relationship(ALICE, GUILD_A)
+
+    rolls(monkeypatch, friendly=False)
+    await act(house, bot.pet, None, "KI")
+
+    assert await db.get_relationship(ALICE, GUILD_A) < before
 
 
 # --------------------------------------------------------------------------
@@ -487,7 +564,8 @@ def test_the_public_strings_live_in_defaults():
         "pet.public.friendly",
         "pet.public.standoffish",
         "pet.public.continues",
-        "pet.crowding",
+        "pet.crowding.friendly",
+        "pet.crowding.standoffish",
     ):
         assert defaults.get(key), key
 

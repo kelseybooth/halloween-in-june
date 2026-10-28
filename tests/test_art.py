@@ -214,10 +214,23 @@ async def test_the_first_pet_of_all(house):
     assert pet_image_of(await pet(house)) == "black_cat_alert.png"
 
 
-async def test_and_nothing_until_the_crowding_nudge(house):
+def standoffish(monkeypatch):
+    """Force the mood roll. The crossing's image now depends on it, so a
+    test that left it to the dice would pass six times in ten.
+
+    Patches `choose_response` rather than the module's `random`, because the
+    rng is a default argument and was bound at definition time - rebinding
+    `bot.random` leaves the default pointing at the original module and the
+    test runs on real dice while appearing not to.
+    """
+    reaction = bot.Reaction(bot.STANDOFFISH_RESPONSES[0], False, 0)
+    monkeypatch.setattr(bot, "choose_response", lambda *a, **k: reaction)
+
+
+async def test_and_nothing_until_the_crowding_nudge(house, monkeypatch):
     """Pets two to four earn nothing. The fifth is where petting starts
-    costing score, and the over-the-shoulder look is what the nudge
-    beside it says without words."""
+    costing score, and the over-the-shoulder look is what the standoffish
+    nudge beside it says without words."""
     _, guild, _, assets = house
     await bot.upload_art(guild, assets)
     await pet(house)
@@ -225,7 +238,24 @@ async def test_and_nothing_until_the_crowding_nudge(house):
     for n in range(2, 5):
         assert pet_image_of(await pet(house)) is None, n
 
+    standoffish(monkeypatch)
     assert pet_image_of(await pet(house)) == "black_cat_suspicious.png"
+
+
+async def test_and_nothing_on_a_friendly_crossing(house, monkeypatch):
+    """She did not pull away, so the picture of her pulling away would say
+    the opposite of the pet the player just earned. The warning on that roll
+    is carried in words alone."""
+    _, guild, _, assets = house
+    await bot.upload_art(guild, assets)
+    await pet(house)
+    for _ in range(2, 5):
+        await pet(house)
+
+    reaction = bot.Reaction(bot.FRIENDLY_RESPONSES[0], True, 80)
+    monkeypatch.setattr(bot, "choose_response", lambda *a, **k: reaction)
+
+    assert pet_image_of(await pet(house)) is None
 
 
 async def test_and_nothing_after_it_either(house):

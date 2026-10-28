@@ -1668,15 +1668,32 @@ async def pet(interaction: discord.Interaction) -> None:
     message = reaction.text
     crowding_begins = _crowding_begins(result.recent, standing)
     if crowding_begins:
-        nudge = await phrasing.default_say("pet.crowding")
+        # **One line per mood, and the standoffish one replaces rather than
+        # follows.** Its words are a standoffish beat themselves - she
+        # flattens her ears and pulls away - so printing it after a
+        # standoffish response narrated the same moment twice.
+        #
+        # A friendly roll is the opposite case and is appended, because the
+        # pet did land: she rubbed against a leg and the score went up, and
+        # saying she pulled away would contradict both the prose above it and
+        # the points. The warning there is about the pets still to come, which
+        # is why it reads as advice rather than as a refusal.
+        #
+        # It was one line for both, appended, and a player asked why a single
+        # pet had answered them twice. They had rolled friendly on the fifth.
+        nudge = await phrasing.default_say(
+            "pet.crowding.friendly"
+            if reaction.friendly
+            else "pet.crowding.standoffish"
+        )
         if nudge:
-            message = f"{message}\n\n{nudge}"
+            message = f"{message}\n\n{nudge}" if reaction.friendly else nudge
     if SHOW_DEBUG_INFO:
         message += _debug_lines(reaction, result.recent, relationship)
 
-    # The over-the-shoulder look is exactly what the nudge says in
-    # words, and it is the one image tied to something other than an
-    # achievement. It rides the private reply, never the public line,
+    # The over-the-shoulder look is exactly what the *standoffish* nudge
+    # says in words, and it is the one image tied to something other than
+    # an achievement. It rides the private reply, never the public line,
     # for the same reason the words do. The first pet of all gets her
     # instead - and every pet in between gets nothing, because an image
     # seen twice a minute stops being a reward and becomes latency,
@@ -1731,8 +1748,15 @@ async def pet(interaction: discord.Interaction) -> None:
         else await hints.after(guild_id, user.id, *candidates, hints.SOMETHING_NEW),
     )
 
-    art = ART_CROWDING if crowding_begins else (
-        ART_FIRST_PET if result.total == 1 else None
+    # **The image goes with the standoffish crossing only.** It is a picture
+    # of her pulling away, which is what that line says in words. On a
+    # friendly crossing she did not pull away: the pet landed and the score
+    # went up, so the picture would contradict it the same way the shared
+    # line did. That crossing carries its warning in words alone.
+    art = (
+        ART_CROWDING
+        if crowding_begins and not reaction.friendly
+        else (ART_FIRST_PET if result.total == 1 else None)
     )
     content_, embed = await _with_art(interaction.guild, message, art)
     await interaction.followup.send(content_, embed=embed, ephemeral=True)

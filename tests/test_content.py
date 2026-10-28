@@ -56,8 +56,9 @@ def test_the_shipped_content_parses():
     # teach the door in each direction. Then drop 10's four: three
     # feeding lines and the notice that the Entryway has opened up. Then
     # the addendum's two: the key falling out of the bed, and the door
-    # coming open.
-    assert len(c.defaults) == 121
+    # coming open. Then one more, where `pet.crowding` became a line per
+    # mood: the standoffish one replaces the response it used to follow.
+    assert len(c.defaults) == 122
     assert len(c.drops) == 9      # 0 to 3 built; 10 to 50 named ahead of their content
     assert len(c.restocks) == 4  # the toy channel row joined them
 
