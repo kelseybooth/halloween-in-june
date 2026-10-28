@@ -12,9 +12,12 @@ the channel was somewhere players stood and never somewhere they walked to,
 and the Entryway's front door was a fixture that declined to open.
 
 **Where each line goes matters as much as what it says.** A move posts in
-two places, and one of them is now a channel rather than a thread: the
-mention that admits somebody to a private thread is a key, so arriving on
-the road - where there is no lock - carries a plain name instead.
+two places, and one of them is now a channel rather than a thread. Both
+arrival lines carry a mention, for different reasons: going in it is the
+key that admits somebody to a private thread, and coming out it is the
+only thing pointing a player at the channel they have just been put back
+in. The departure line carries a plain name at both ends, because it is
+for the people left behind.
 """
 
 import pytest
@@ -386,17 +389,51 @@ async def test_leaving_posts_in_both_places(built):
     )
 
 
-async def test_arriving_on_the_road_pings_nobody(built):
-    """**The one place an arrival line carries a plain name.** The mention
-    is what admits somebody to a private thread; nobody has to be let into
-    the channel, so a public ping for stepping outside is only noise."""
+async def test_arriving_on_the_road_pings_the_player(built):
+    """**A signpost rather than a key.** There is no lock on the channel,
+    so for a while this line carried a plain name - a public ping for
+    stepping outside read as noise.
+
+    It is the opposite in practice. The player has just been taken out of
+    the thread they were reading, and everything that happens to them next
+    happens somewhere they may not be looking. The ping is what turns them
+    round to it.
+    """
     _, _, halloween, _ = built
     await go(built)
     before = len(halloween.posted)
 
     await go(built, "road", room="EN")
 
-    assert f"<@{ALICE}>" not in " ".join(halloween.posted[before:])
+    said = " ".join(halloween.posted[before:])
+    assert f"<@{ALICE}>" in said
+    assert "back onto the road" in said
+
+
+async def test_the_ping_on_the_way_out_is_a_real_one(built):
+    """Not a mention rendered as text. Leaving used to post with
+    `AllowedMentions.none()`, which prints `@player` and notifies
+    nobody - the shape of a fix that looks right in the transcript and
+    does nothing on the phone."""
+    _, _, halloween, _ = built
+    await go(built)
+    before = len(halloween.mentions)
+
+    await go(built, "road", room="EN")
+
+    assert any(m is None for m in halloween.mentions[before:])
+
+
+async def test_the_departure_line_still_names_them_plainly(built):
+    """It is read by the people still in the room, and none of them has
+    moved."""
+    await go(built)
+
+    await go(built, "road", room="EN")
+
+    posted = " ".join(thread(built, "Entryway").posted)
+    assert "lets themselves out through the front door" in posted
+    assert f"<@{ALICE}>" not in posted.split("comes in from the road")[-1]
 
 
 async def test_they_are_taken_out_of_the_entryway_thread(built):
