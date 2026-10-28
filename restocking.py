@@ -298,6 +298,22 @@ async def run_for_guild(
         # exist.
         return report
 
+    # **Before placing, not after.** What this clears is the backlog a
+    # scheduler that ignored drops left behind, and anything a future
+    # one gets wrong; a row written by the loop below is this tick's
+    # business and the next tick's to tidy if it was a mistake. Sweeping
+    # afterwards would mean deleting rows we had just written, which
+    # reads as a scatter rate rather than as a rule.
+    swept = await database.clear_unreachable_room_contents(
+        guild_id,
+        arrived,
+        await resolve.arrived_rooms(guild_id) | {content_module.CHANNEL_ROOM},
+    )
+    if swept:
+        log.info(
+            "Cleared %d unreachable row(s) from rooms in guild %s", swept, guild_id
+        )
+
     session_factory = database._require_session()
 
     async with session_factory() as session:
