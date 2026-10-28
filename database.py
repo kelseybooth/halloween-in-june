@@ -3808,6 +3808,66 @@ async def clear_play_state(guild_id: int, user_id: int) -> None:
         await session.commit()
 
 
+async def clear_unreachable_room_contents(
+    guild_id: int, arrived_drops: set[int], arrived_rooms: set[str]
+) -> int:
+    """Delete room contents nobody on this server could reach, and count them.
+
+    **One rule, three ways to break it.** A row is unreachable when the
+    room it is in has not arrived here, when the thing itself has not,
+    or when the container holding it has not - and in every case a
+    player standing where they are allowed to stand cannot see it, take
+    it or be told it is there.
+
+    It exists because the restock scheduler spent a month not reading
+    the drop column it was given. Eight used baby bottles a day, drop 30
+    content, scattered across servers on drop 3: most of them into rooms
+    whose prose nobody can read yet, where they sat as rows waiting to
+    surface the day the room opened holding a month of litter, and the
+    rest into the Entryway where the room listed them under `Also here:`
+    and no word reached them. Stopping the scheduler stops it growing;
+    this is what clears what is already there.
+
+    **Room contents only.** What a player is carrying is theirs, and a
+    bag emptied by a background job is worse than a bag with something
+    odd in it - the same reason the thread sweep moves people rather
+    than taking their things.
+
+    `arrived_rooms` is the caller's to compute, because which rooms exist
+    is a question about prose and this module does not read content. The
+    channel belongs in it on every drop: standing on the road is valid
+    from drop 0, before the road has its own first fragment.
+    """
+    # Nothing arrived is a server with no game - one the bot is only a
+    # member of. It has no reachable rooms at all, so the rule would
+    # empty it; there is nothing there to clear, and a sweep that treats
+    # "no pointer" as "delete everything" is one bad migration away from
+    # being a disaster.
+    if not arrived_drops or not arrived_rooms:
+        return 0
+
+    too_new = select(ThingType.thing_id).where(
+        ThingType.since_drop.not_in(sorted(arrived_drops))
+    )
+    session_factory = _require_session()
+    async with session_factory() as session:
+        result = await session.execute(
+            delete(RoomContents).where(
+                RoomContents.guild_id == guild_id,
+                or_(
+                    RoomContents.room_id.not_in(sorted(arrived_rooms)),
+                    RoomContents.thing_id.in_(too_new),
+                    # LOOSE_IN_ROOM is the empty string and no thing
+                    # answers to it, so a loose row never matches here
+                    # and needs no second condition to say so.
+                    RoomContents.container_id.in_(too_new),
+                ),
+            )
+        )
+        await session.commit()
+    return result.rowcount or 0
+
+
 async def place_in_room(guild_id: int, room_id: str, thing_id: str, amount: int) -> None:
     """Put something loose on a room's floor, from outside the scheduler.
 

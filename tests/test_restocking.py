@@ -544,6 +544,134 @@ async def test_stock_does_not_leak_between_servers(db):
 
 
 # --------------------------------------------------------------------------
+# A room holds nothing a player could not reach
+#
+# The sweep that clears what the scheduler left behind while it was not
+# reading drops. One rule - a player standing where they are allowed to
+# stand can reach every row in a room - and three ways to break it.
+# --------------------------------------------------------------------------
+
+
+def a_world_in_two_drops():
+    """EN and a bottle on drop 1; KI, a crate and a later thing on drop 2."""
+    parsed = a_world(
+        a_restock(times_per_day=0),
+        things=[
+            a_thing("bottle", name="bottle", room_id=None, quantity=0),
+            a_thing("pebble", name="pebble", room_id=None, quantity=0, since_drop=0),
+            a_thing("later", name="later", room_id=None, quantity=0, since_drop=2),
+            a_thing(
+                "crate", name="crate", type="fixture", takeable=False, since_drop=2
+            ),
+        ],
+    )
+    parsed.rooms.append(Room(room_id=CHANNEL, name="the channel", sort_order=9,
+                             open_at_launch=False))
+    parsed.thing_text.append(
+        TextRow(entity_id="pebble", state="default", since_drop=0,
+                text={"look": "A pebble."})
+    )
+    parsed.room_text = [
+        TextRow(entity_id="EN", state="default", since_drop=1, text={"look": "The EN."}),
+        TextRow(entity_id="KI", state="default", since_drop=2, text={"look": "The KI."}),
+        TextRow(entity_id=CHANNEL, state="default", since_drop=1,
+                text={"look": "The road."}),
+    ]
+    parsed.drops.append(
+        Drop(drop_id=2, trigger="manual", date=None, event=None, name="Two", notes=None)
+    )
+    # Drop 0 as well, because one of these tests stands on it: the road
+    # is a place before it has any prose of its own.
+    parsed.drops.insert(
+        0, Drop(drop_id=0, trigger="manual", date=None, event=None, name="Zero", notes=None)
+    )
+    return parsed
+
+
+@pytest.fixture
+async def two_drops(server):
+    await content_loader.load_content(a_world_in_two_drops())
+    await resolve.set_current_drop(GUILD_A, 1)
+    await started()
+    return server
+
+
+async def swept(db):
+    await restocking.run_for_guild(GUILD_A, now=end_of_day())
+    return await contents(db, GUILD_A)
+
+
+async def test_a_thing_whose_drop_has_not_arrived_is_cleared(two_drops):
+    """**The bottles in the Entryway.** The room listed them under
+    `Also here:` and no verb reached them, because the parser was right
+    that they are not here yet."""
+    await database.place_in_room(GUILD_A, "EN", "later", 1)
+
+    assert [r for r in await swept(two_drops) if r[2] == "later"] == []
+
+
+async def test_a_room_that_has_not_arrived_is_emptied(two_drops):
+    """**The pile waiting to surface.** A month of litter in a room that
+    has not opened is a room that opens holding a month of litter."""
+    await database.place_in_room(GUILD_A, "KI", "bottle", 1)
+
+    assert [r for r in await swept(two_drops) if r[0] == "KI"] == []
+
+
+async def test_a_container_that_has_not_arrived_takes_its_contents_with_it(two_drops):
+    """The spice jars went into an Amazon box two drops ahead of the
+    server. The jars were fine; the box they were in was not."""
+    await restocking._place(GUILD_A, "EN", "crate", "bottle", 1)
+
+    assert [r for r in await swept(two_drops) if r[1] == "crate"] == []
+
+
+async def test_what_a_player_can_reach_is_left_alone(two_drops):
+    """The half that stops this being a tidy-everything-away job."""
+    await database.place_in_room(GUILD_A, "EN", "bottle", 1)
+
+    assert ("EN", database.LOOSE_IN_ROOM, "bottle", 1) in await swept(two_drops)
+
+
+async def test_the_channel_is_not_emptied_for_want_of_prose(two_drops):
+    """**The drop 0 edge.** A room arrives with its description, and the
+    channel's first fragment is drop 1 - but standing on the road is
+    valid from drop 0, before there is anything to read there. A sweep
+    that asked only `arrived_rooms` would clear the road out from under
+    the people standing on it."""
+    await resolve.set_current_drop(GUILD_A, 0)
+    await database.place_in_room(GUILD_A, CHANNEL, "pebble", 1)
+
+    assert ("CH", database.LOOSE_IN_ROOM, "pebble", 1) in await swept(two_drops)
+
+
+async def test_a_guild_with_no_game_is_not_emptied(two_drops):
+    """Nothing arrived is not a licence to delete everything. A server
+    the bot is only a member of has no pointer, and the rule read
+    literally would empty it - which is one bad migration away from
+    being a disaster."""
+    never_started = 777000000000000777
+    await database.place_in_room(never_started, "EN", "bottle", 1)
+
+    await restocking.run_for_guild(never_started, now=end_of_day())
+
+    assert await contents(two_drops, never_started)
+
+
+async def test_a_players_bag_is_never_swept(two_drops):
+    """What somebody is carrying is theirs. A bag emptied by a
+    background job is worse than a bag with something odd in it."""
+    await database.place_in_room(GUILD_A, "EN", "later", 1)
+    await database.take_from_room(
+        ALICE, GUILD_A, "EN", database.LOOSE_IN_ROOM, "later"
+    )
+
+    await swept(two_drops)
+
+    assert await database.carried_of(ALICE, GUILD_A, "later") == 1
+
+
+# --------------------------------------------------------------------------
 # Against the real schedules
 # --------------------------------------------------------------------------
 

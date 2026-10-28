@@ -162,7 +162,7 @@ async def test_a_sweep_with_nothing_due_says_nothing(drop_two, monkeypatch):
 
 
 async def test_anything_landing_on_that_floor_is_announced(drop_two, monkeypatch):
-    """**Not toys only.** Drop 3 scatters bottles and diapers over every
+    """**Not toys only.** The bottles and diapers scatter over every
     room, the channel among them. The line never names what came, so it
     is as true of a bottle sliding across the floor as of a toy - and
     the alternative is a thing appearing in front of everybody standing
@@ -172,11 +172,20 @@ async def test_anything_landing_on_that_floor_is_announced(drop_two, monkeypatch
     the rule rather than a number: one notice exactly when something
     new came to rest on that floor, and none when nothing did. The
     channel starts at the toy cap so the toy row cannot be what moves.
+
+    **Drop 30, because that is where those rows fire.** It used to say
+    drop 3, from when every scatter row was drop 3 content; the
+    renumbering left them at 20 and 30 and the scheduler went on
+    placing them anyway, so the test stayed green on a premise that had
+    stopped being true. Once rows waited for their drop it passed only
+    while the diaper happened to sit on drop 3 - green by luck, and it
+    would have failed again the next time somebody moved that one cell,
+    complaining about announcements.
     """
     _, halloween = drop_two
     for toy in ("feather_wand", "crinkle_ball"):
         await database.place_in_room(GUILD_A, CHANNEL, toy, 1)
-    await resolve.set_current_drop(GUILD_A, 3)
+    await resolve.set_current_drop(GUILD_A, 30)
     before = await _loose_in_the_channel()
 
     await sweep(monkeypatch)
