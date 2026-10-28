@@ -3851,11 +3851,18 @@ async def _use_exit(interaction, state, found, row) -> None:
     # is a way out, and "arrives from the Secret Library" names the secret
     # outright. The overrides say that somebody moved and nothing else.
     #
-    # **A mention is a key, not a courtesy.** The arrival line carries one
-    # because it is what admits the player to the thread they have just
-    # walked into; the departure line never has, and arriving on the road
-    # does not need one either, because nobody has to be let into the
-    # channel. So the only line that pings is the one that has to.
+    # **A mention is a key going in, and a signpost coming out.** Walking
+    # into a room, it is what admits the player to the private thread the
+    # line is posted in - no mention, no room. Walking out onto the road
+    # there is no lock to open, and for a while that was taken to mean no
+    # mention was wanted: a public ping for stepping outside read as
+    # noise. It is the opposite in practice. The player has just been
+    # removed from the thread they were reading and the next thing to
+    # happen to them happens in a channel they may not be looking at, so
+    # the ping is the only thing pointing at where they now are.
+    #
+    # The departure line still carries a plain name. It is for the people
+    # left behind in the room, and none of them has moved.
     state_now = world.exit_state(held)
     depart = await phrasing.say(
         guild_id, found.thing_id, "move_depart", state=state_now,
@@ -3865,7 +3872,7 @@ async def _use_exit(interaction, state, found, row) -> None:
     arrive = await phrasing.say(
         guild_id, found.thing_id, "move_arrive", state=state_now,
         fallback="move.arrive",
-        player=user.display_name if leaving_the_house else user.mention,
+        player=user.mention,
         name=found.name, room=origin_name,
     )
 
@@ -3880,21 +3887,22 @@ async def _use_exit(interaction, state, found, row) -> None:
     # the player has not been moved or removed from anywhere, so they are
     # where they started and can retry.
     #
-    # Sent with the default allowed_mentions deliberately. Routing it through
-    # `_post_quietly`, or suppressing the ping any other way, strips the
-    # mention that does the admitting and leaves the player outside the room
-    # the line says they are in.
+    # Sent with the default allowed_mentions deliberately, at both ends.
+    # Going in, routing it through `_post_quietly` or suppressing the ping
+    # any other way strips the mention that does the admitting and leaves
+    # the player outside the room the line says they are in. Coming out,
+    # the ping is the whole point: it is what turns the player around to
+    # the channel they have just been put back in.
     arrival_message = None
     if not leaving_the_house:
         _admit(destination_place.id, user.id)
     try:
         if leaving_the_house:
-            # Nothing to admit anybody to, so this is an ordinary post. It
-            # still goes before the write, so a failure leaves the player
-            # inside the house rather than in a room with no line saying so.
-            arrival_message = await destination_place.send(
-                arrive, allowed_mentions=discord.AllowedMentions.none()
-            ) if arrive else None
+            # Nothing to admit anybody to - the ping here is for attention
+            # rather than access. It still goes before the write, so a
+            # failure leaves the player inside the house rather than in a
+            # room with no line saying so.
+            arrival_message = await destination_place.send(arrive) if arrive else None
         elif user.mention in arrive:
             arrival_message = await destination_place.send(arrive)
         else:

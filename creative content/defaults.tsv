@@ -116,7 +116,7 @@ hint.go_house	Try /go house or /go front door.
 hint.go_road	If you want to leave again, try /go road or /go front door.
 feed.public	{player} fed the cat. Finally.
 feed.wrong_time_and_place	The cat looks skeptically at the can, then at you. This is neither the right time nor the right place.
-feed.not_hungry	The cat looks at the can, then at you, with the mild disappointment of someone offered lunch at four in the afternoon. She isn't hungry yet.
+feed.not_hungry	The cat looks at the can, then at you, with the mild disappointment of someone offered lunch at ten in the morning. She isn't hungry yet.
 en_settles	The cat starts eating, and when you look up you notice more of the room.
 bed_yield.key.public	{player} fluffs the cat bed, and something small but heavy falls out of it with a clink.
 unlock.public	{player} unlocked the front door of the house.
