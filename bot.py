@@ -1668,15 +1668,29 @@ async def pet(interaction: discord.Interaction) -> None:
     message = reaction.text
     crowding_begins = _crowding_begins(result.recent, standing)
     if crowding_begins:
-        nudge = await phrasing.default_say("pet.crowding")
+        # **The crossing speaks for itself, so it replaces the response on
+        # either roll.** Each line reports the pet and the warning in one
+        # breath - one has her flattening her ears and pulling away, the
+        # other has her enjoying it despite the risk - so neither needs the
+        # response above it, and printing both narrated one moment twice.
+        #
+        # It was a single line for both moods, appended, and a player asked
+        # why one pet had answered them twice. They had rolled friendly on
+        # the fifth: she rubbed against their leg, and the paragraph under it
+        # said she had flattened her ears and left.
+        nudge = await phrasing.default_say(
+            "pet.crowding.friendly"
+            if reaction.friendly
+            else "pet.crowding.standoffish"
+        )
         if nudge:
-            message = f"{message}\n\n{nudge}"
+            message = nudge
     if SHOW_DEBUG_INFO:
         message += _debug_lines(reaction, result.recent, relationship)
 
-    # The over-the-shoulder look is exactly what the nudge says in
-    # words, and it is the one image tied to something other than an
-    # achievement. It rides the private reply, never the public line,
+    # The over-the-shoulder look is exactly what the *standoffish* nudge
+    # says in words, and it is the one image tied to something other than
+    # an achievement. It rides the private reply, never the public line,
     # for the same reason the words do. The first pet of all gets her
     # instead - and every pet in between gets nothing, because an image
     # seen twice a minute stops being a reward and becomes latency,
@@ -1731,8 +1745,15 @@ async def pet(interaction: discord.Interaction) -> None:
         else await hints.after(guild_id, user.id, *candidates, hints.SOMETHING_NEW),
     )
 
-    art = ART_CROWDING if crowding_begins else (
-        ART_FIRST_PET if result.total == 1 else None
+    # **The image goes with the standoffish crossing only.** It is a picture
+    # of her pulling away, which is what that line says in words. On a
+    # friendly crossing she did not pull away: the pet landed and the score
+    # went up, so the picture would contradict it the same way the shared
+    # line did. That crossing carries its warning in words alone.
+    art = (
+        ART_CROWDING
+        if crowding_begins and not reaction.friendly
+        else (ART_FIRST_PET if result.total == 1 else None)
     )
     content_, embed = await _with_art(interaction.guild, message, art)
     await interaction.followup.send(content_, embed=embed, ephemeral=True)
