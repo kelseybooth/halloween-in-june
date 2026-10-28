@@ -390,28 +390,90 @@ async def test_no_scenery_row_has_use_text():
 # --------------------------------------------------------------------------
 
 
+# The words a channel string must not contain before the house arrives.
+# Four kinds of thing rather than a loose wordlist, because the channel prose
+# is ordinary English and a wide list catches "the ground opens" and "one lets
+# go" - which would train whoever next edits it to delete the check instead of
+# the leak.
+LEAK_WORDS = ("room", "rooms", "mailbox", "drive", "driveway", "door", "doors")
+
+
+def leaking_words(prose: str) -> list[str]:
+    """Which of the forbidden words this prose names.
+
+    A function rather than a loop inside the test, so that the test and the
+    guard beneath it run the **same** matcher. That is the whole point: this
+    search spent months with two literal backspace characters where `\b` was
+    meant, so it matched nothing, the assertion was `assert not ...`, and it
+    passed on an empty result for as long as it existed.
+
+    A guard with its own copy of the pattern would not have caught that - it
+    would have gone on matching its own prose while this one matched nothing.
+    Only a guard that comes through here can.
+    """
+    lowered = prose.lower()
+    return [word for word in LEAK_WORDS if re.search(rf"\b{word}\b", lowered)]
+
+
 async def test_nothing_from_a_later_drop_is_named():
     """The leak test. The mailbox is drop 2 and carries David's name with
     it; the house, its door and the drive are drop 3. A channel string
     that mentions one spends the reveal weeks early, for free.
-
-    Four words rather than a wordlist, because the channel prose is
-    ordinary English and a loose list catches "the ground opens" and
-    "one lets go" - which would train whoever next edits it to delete
-    the check instead of the leak.
     """
-    import re
-
     parsed = content_module.load_files()
-    here = {t.thing_id for t in parsed.things if t.room_id == content_module.CHANNEL_ROOM}
-    blobs = [r.text.get("look", "") for r in parsed.room_text
-             if r.entity_id == content_module.CHANNEL_ROOM]
-    blobs += [v for r in parsed.thing_text if r.entity_id in here
-              for v in r.text.values()]
-    prose = " ".join(blobs).lower()
 
-    for word in ("room", "rooms", "mailbox", "drive", "driveway", "door", "doors"):
-        assert not re.search(rf"{word}", prose), word
+    # **Only the prose written before the reveal.** The channel holds the
+    # house itself now, and the house's own description says "The front door
+    # is shut" - which is the reveal happening rather than a leak of it. The
+    # drop is read off the house rather than written down here, so moving it
+    # moves this with it.
+    houses = [t for t in parsed.things if t.thing_id == "house"]
+    assert houses, "this check is anchored on the house and could not find it"
+    reveal = houses[0].since_drop
+
+    here = {
+        t.thing_id
+        for t in parsed.things
+        if t.room_id == content_module.CHANNEL_ROOM and t.since_drop < reveal
+    }
+    blobs = [
+        r.text.get("look", "")
+        for r in parsed.room_text
+        if r.entity_id == content_module.CHANNEL_ROOM and r.since_drop < reveal
+    ]
+    blobs += [
+        v
+        for r in parsed.thing_text
+        if r.entity_id in here and r.since_drop < reveal
+        for v in r.text.values()
+    ]
+    prose = " ".join(blobs)
+
+    # The haystack has to be real. A filter that excluded every row would
+    # pass this test for the wrong reason - the same vacuity as the broken
+    # pattern, one step along - so something known to be in drop 1's channel
+    # has to be in it.
+    assert "fence" in prose.lower()
+
+    assert leaking_words(prose) == []
+
+
+def test_and_the_check_itself_still_catches_one():
+    """**The guard that was missing.** The search above ran for months with
+    two literal backspace characters where `\b` was meant: it matched
+    nothing, the assertion was `assert not ...`, and the leak it exists to
+    catch would have walked straight through. A terminal prints those bytes
+    invisibly, which is how it survived being read.
+
+    Planted prose rather than the house's own, so that rewording the house
+    cannot turn this into a false alarm - and routed through
+    `leaking_words`, so that breaking the pattern breaks this too.
+    """
+    assert leaking_words("You can see the front door from the end of the drive.") == [
+        "drive",
+        "door",
+    ]
+    assert leaking_words("The fence sags where the wire has gone slack.") == []
 
 
 # --------------------------------------------------------------------------
