@@ -285,10 +285,18 @@ async def run_for_guild(
     # walks in, the real origin takes over and they count from it.
     start_day = await initialized_on(guild_id) or await database.server_today(guild_id)
 
-    # Which drops this server has reached, for the class draw: a
-    # selector must never hand out a toy from a drop that has not
-    # opened here.
+    # Which drops this server has reached. Two things read it: which
+    # rows may fire at all, and the class draw, which must never hand
+    # out a toy from a drop that has not opened here.
     arrived = await resolve.arrived_drop_ids(guild_id)
+    if not arrived:
+        # Nothing has arrived, so nothing may be placed. An empty set is
+        # a guild with no drop pointer - one the bot is merely a member
+        # of - and the sweep visits every guild it is in, so without this
+        # a server where nobody has ever run `/initialize-haunted-house`
+        # accumulates ten scattered objects a day in rooms that do not
+        # exist.
+        return report
 
     session_factory = database._require_session()
 
@@ -318,6 +326,18 @@ async def run_for_guild(
                     container_rooms[restock.destination] = room
 
     for restock in rows:
+        if restock.since_drop not in arrived:
+            # **The column the row has always carried, finally read.**
+            # `restocks.tsv` has had `since_drop` since September; it was
+            # parsed, validated and stored, and nothing ever looked at
+            # it - so every row ran on every server from its first day.
+            # Eight used baby bottles a day, which are drop 30 content,
+            # were scattering through servers on drop 10: most vanished
+            # into rooms that have not opened yet, and the rest sat in
+            # the Entryway as objects no word reached, because the
+            # parser was right that they are not here yet.
+            continue
+
         last = progress.get(restock.restock_id)
         per_day = await _times_per_day(guild_id, restock)
         if per_day < 1:
