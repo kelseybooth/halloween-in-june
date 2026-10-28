@@ -192,6 +192,109 @@ async def test_a_source_is_never_consumed_so_it_always_resolves(stash):
 
 
 # --------------------------------------------------------------------------
+# ...but only the words they share
+# --------------------------------------------------------------------------
+#
+# The merge above files a stash under the can it hands out, which is what
+# stops "chicken or chicken?". It also merged their vocabularies, so a word
+# belonging to the stash alone - `pack`, `crate`, `cupboard` - reached the
+# can instead: pass two was written for the words they share and never asked
+# which kind it had been given.
+
+
+@pytest.fixture
+async def pack(house):
+    """A stash with words of its own, and a loose can of what it yields."""
+    await content_loader.load_content(
+        a_house(
+            a_thing(
+                "can",
+                name="salmon cat food",
+                aliases=("cat food", "salmon"),
+                room_id="EN",
+                quantity=1,
+            ),
+            a_thing(
+                "hall_stash",
+                name="pack of salmon cat food",
+                aliases=("cat food", "salmon", "pack", "flat"),
+                type="source",
+                yields="can",
+                takeable=False,
+            ),
+        )
+    )
+    return house
+
+
+async def test_a_word_only_the_source_answers_to_means_the_source(pack):
+    """There is a loose can on the floor, and `pack` is still the pack."""
+    result = await find(typed="pack", scope=Scope.REACH)
+
+    assert result.where is Where.SOURCE
+    assert result.source_id == "hall_stash"
+
+
+async def test_even_with_a_can_of_it_in_the_bag(pack):
+    await carry(pack, ALICE, GUILD_A, "can")
+
+    assert (await find(typed="pack", scope=Scope.REACH)).where is Where.SOURCE
+
+
+async def test_taking_by_the_sources_own_word_records_the_source(pack):
+    """Not cosmetic. `source_id` is what tells a harvest from a pickup, and
+    a player typing the stash's own word was being credited with neither."""
+    result = await find(typed="pack", scope=Scope.ROOM)
+
+    assert result.source_id == "hall_stash"
+    assert result.yields == "can"
+
+
+async def test_a_shared_word_still_means_the_copy_in_your_hands(pack):
+    """The rule above is unchanged for every word the two have in common.
+    Somebody holding a can who says `cat food` means that can."""
+    await carry(pack, ALICE, GUILD_A, "can")
+
+    assert (await find(typed="cat food", scope=Scope.REACH)).where is Where.CARRIED
+
+
+async def test_a_shared_word_still_prefers_the_floor_to_the_stash(pack):
+    assert (await find(typed="salmon", scope=Scope.REACH)).where is Where.ROOM
+
+
+async def test_a_typo_on_the_sources_word_still_means_the_source(pack):
+    """Pass two asks about the word that was meant rather than the one that
+    was typed, or forgiving a typo would quietly undo this."""
+    result = await find(typed="packs", scope=Scope.REACH)
+
+    assert result.where is Where.SOURCE
+    assert result.fuzzy == "packs→pack"
+
+
+async def test_the_pack_of_salmon_in_the_entryway(house):
+    """The report, against the shipped content: a can of salmon loose in the
+    Entryway, and `/look pack` described the can."""
+    await content_loader.load_content(content_module.load_files())
+    await database.place_in_room(GUILD_A, "EN", "cat_food_salmon", 1)
+
+    result = await find(room="EN", typed="pack", scope=Scope.REACH)
+
+    assert result.where is Where.SOURCE
+    assert result.source_id == "cat_food_stash_hall"
+
+
+async def test_and_the_shared_words_there_are_untouched(house):
+    """`salmon` and `cat food` belong to both, so they still find the can
+    that is actually on the floor."""
+    await content_loader.load_content(content_module.load_files())
+    await database.place_in_room(GUILD_A, "EN", "cat_food_salmon", 1)
+
+    for typed in ("salmon", "cat food"):
+        assert (await find(room="EN", typed=typed, scope=Scope.REACH)).where is Where.ROOM, typed
+
+
+
+# --------------------------------------------------------------------------
 # Pass two: which copy
 # --------------------------------------------------------------------------
 

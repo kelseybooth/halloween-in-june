@@ -515,6 +515,32 @@ async def test_a_carried_copy_still_shows_the_object(house):
     assert "bed of lavender" not in reply
 
 
+async def test_but_only_for_a_word_the_two_of_them_share(house):
+    """**The reported bug.** `herbs` belongs to the bed and the sprigs alike,
+    so a loose sprig beating the bed is the ladder working. `pack` belongs to
+    the pack behind the coat tree and to no can out of it - and with a can of
+    salmon loose in the Entryway, `/look pack` was describing the can."""
+    await content_loader.load_content(content_module.load_files())
+    await database.update_current_room(ALICE, GUILD_A, "EN")
+    await database.place_in_room(GUILD_A, "EN", "cat_food_salmon", 1)
+
+    reply = (await look(thing="pack")).reply
+
+    assert "tucked behind the base of the coat tree" in reply
+
+
+async def test_and_the_words_they_share_are_untouched(house):
+    """The same room, the same loose can, a word that belongs to both: still
+    the can on the floor, exactly as before."""
+    await content_loader.load_content(content_module.load_files())
+    await database.update_current_room(ALICE, GUILD_A, "EN")
+    await database.place_in_room(GUILD_A, "EN", "cat_food_salmon", 1)
+
+    for word in ("salmon", "cat food"):
+        reply = (await look(thing=word)).reply
+        assert "tucked behind the base of the coat tree" not in reply, word
+
+
 async def test_taking_from_a_source_is_unchanged(house):
     """Only `/look` moved. Taking and using still act on the yield, because
     the thing id they resolve to drives real machinery - what is recorded,
