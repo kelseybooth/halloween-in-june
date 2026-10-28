@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import enum
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sqlalchemy import select
 
@@ -230,6 +230,14 @@ class _Candidate:
     yields: str | None = None
     # The source that put the SOURCE copy here, set with it and never apart.
     source_id: str | None = None
+    # The same words as `names`, kept apart as well as merged. A source and
+    # its yield share most of their vocabulary - `cat food`, `salmon` - and
+    # the merge is what stops `/take cat food` asking "chicken or chicken?".
+    # But some words belong to one of them alone: `pack` is the pack and not
+    # a can out of it. Pass two needs to tell those apart, and `names` has
+    # thrown the distinction away by the time it gets there.
+    source_names: set[str] = field(default_factory=set)
+    yield_names: set[str] = field(default_factory=set)
 
 
 async def _gather(
@@ -368,10 +376,15 @@ async def _gather(
                 # one thing. The source's own names match it too.
                 target = details.get(yields)
                 display = target[1] if target else name
-                names = _names_of(name, aliases)
-                if target:
-                    names |= _names_of(target[1], target[2])
-                candidate = entry(yields, display, names, yields=yields)
+                mine = _names_of(name, aliases)
+                theirs = _names_of(target[1], target[2]) if target else set()
+                candidate = entry(yields, display, mine | theirs, yields=yields)
+                # Merged above, and kept apart here. Both are needed: the
+                # merge is what makes the stash and its cans one thing, and
+                # the split is what lets a word only one of them answers to
+                # pick that one.
+                candidate.source_names |= mine
+                candidate.yield_names |= theirs
                 if Where.SOURCE not in candidate.copies:
                     # Set together, so the id always names the source this copy
                     # actually came from. Two sources of one yield in one room
@@ -506,6 +519,10 @@ async def find(
 
     candidates = await _gather(guild_id, user_id, room_id, scope)
     matches = [c for c in candidates.values() if needle in c.names]
+    # What pass two asks about. It is the typed word, unless a typo was
+    # forgiven below - then it is the word that was meant, because `packk`
+    # belongs to the source for the same reason `pack` does.
+    word = needle
 
     # Pass one: which thing. More than one and nothing is acted on.
     if len(matches) > 1:
@@ -533,6 +550,7 @@ async def find(
 
         matched, matched_name = near
         matches = [matched]
+        word = matched_name
         correction = f"{needle}→{matched_name}"
         if action is not None:
             # Logged from here rather than from the verbs, because this is the
@@ -550,6 +568,24 @@ async def find(
         if scope is not Scope.ROOM
         else (Where.ROOM, Where.SOURCE)
     )
+
+    # **A word only the source answers to means the source.** `pack` is the
+    # pack of salmon and not a can out of it, so `/look pack` describes the
+    # pack even with a loose can on the floor - and `/take pack` records the
+    # stash, which is what tells a harvest from a pickup and what *Green
+    # Thumb* turns on. Both were going to the can, because the ladder below
+    # was written for the words they share and never asked which kind this
+    # was.
+    #
+    # A shared word - `salmon`, `cat food` - keeps the ladder exactly as it
+    # was: the copy in your hands, then the one on the floor, then the
+    # source. The player who says `cat food` holding a can means that can.
+    if (
+        Where.SOURCE in candidate.copies
+        and word in candidate.source_names
+        and word not in candidate.yield_names
+    ):
+        order = (Where.SOURCE,) + tuple(w for w in order if w is not Where.SOURCE)
     for where in order:
         if where not in candidate.copies:
             continue
