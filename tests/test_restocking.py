@@ -230,10 +230,18 @@ async def test_the_container_row_adds_its_full_amount(server):
 
 
 async def test_a_random_row_scatters_across_slots(server):
+    """**The clock is pinned, and it has to be.**
+
+    Only occurrences that have already come due are placed, and a day's
+    forty are scattered through it - so at one in the morning this had
+    one placement to look at and no two slots to find among them. The
+    three tests here ask about the *spread* of a day's arrivals, which
+    means they have to ask after the day has had them.
+    """
     await content_loader.load_content(a_world(a_restock(times_per_day=40)))
     await started()
 
-    report = await restocking.run_for_guild(GUILD_A)
+    report = await restocking.run_for_guild(GUILD_A, now=end_of_day())
     slots = {(row[1], row[2]) for row in report.placed}
     assert len(slots) > 1
 
@@ -244,7 +252,7 @@ async def test_a_fresh_slot_is_drawn_for_every_occurrence(server):
     await content_loader.load_content(a_world(a_restock(times_per_day=30)))
     await started()
 
-    report = await restocking.run_for_guild(GUILD_A)
+    report = await restocking.run_for_guild(GUILD_A, now=end_of_day())
     counts = Counter((row[1], row[2]) for row in report.placed)
     assert max(counts.values()) < len(report.placed)
 
@@ -263,7 +271,7 @@ async def test_random_placement_can_land_inside_a_container(server):
     )
     await started()
 
-    report = await restocking.run_for_guild(GUILD_A)
+    report = await restocking.run_for_guild(GUILD_A, now=end_of_day())
     assert any(row[2] for row in report.placed)
 
 
@@ -719,6 +727,100 @@ async def test_a_player_may_put_down_more_than_the_cap(server):
     await database.drop_into_room(ALICE, GUILD_A, CHANNEL, mine)
 
     assert await toys_in_the_channel(server) == 3
+
+
+# --------------------------------------------------------------------------
+# A row waits for its own drop
+#
+# The selector below has always checked the drop of what it draws. The
+# row itself was never checked at all: `since_drop` was parsed, validated
+# and stored from September, and the scheduler never read it.
+# --------------------------------------------------------------------------
+
+
+async def test_a_row_whose_drop_has_not_arrived_does_not_fire(server):
+    """**The reported bug.** Eight used baby bottles a day - drop 30
+    content - were scattering through servers on drop 10."""
+    parsed = a_world(a_restock(since_drop=2))
+    parsed.drops.append(
+        Drop(drop_id=2, trigger="manual", date=None, event=None, name="Later", notes=None)
+    )
+    await content_loader.load_content(parsed)
+    await resolve.set_current_drop(GUILD_A, 1)
+    await started()
+
+    report = await restocking.run_for_guild(GUILD_A, now=end_of_day())
+
+    assert report.placed == []
+
+
+async def test_it_fires_once_its_drop_arrives(server):
+    """The other half, so the test above cannot pass by placing nothing
+    ever."""
+    parsed = a_world(a_restock(since_drop=2))
+    parsed.drops.append(
+        Drop(drop_id=2, trigger="manual", date=None, event=None, name="Later", notes=None)
+    )
+    await content_loader.load_content(parsed)
+    await resolve.set_current_drop(GUILD_A, 2)
+    await started()
+
+    report = await restocking.run_for_guild(GUILD_A, now=end_of_day())
+
+    assert report.placed
+
+
+async def test_one_row_waiting_does_not_hold_up_another(server):
+    """Each row answers for its own drop. The toys kept arriving on the
+    beta the whole time the bottles were arriving early, and that is the
+    behaviour to keep."""
+    parsed = a_world(
+        a_restock(1, since_drop=1),
+        a_restock(2, thing_id="later", since_drop=2),
+        things=[
+            a_thing("bottle", name="bottle", room_id=None, quantity=0),
+            a_thing("later", name="later thing", room_id=None, quantity=0),
+        ],
+    )
+    parsed.drops.append(
+        Drop(drop_id=2, trigger="manual", date=None, event=None, name="Later", notes=None)
+    )
+    await content_loader.load_content(parsed)
+    await resolve.set_current_drop(GUILD_A, 1)
+    await started()
+
+    report = await restocking.run_for_guild(GUILD_A, now=end_of_day())
+
+    assert {row[3] for row in report.placed} == {"bottle"}
+
+
+async def test_a_guild_the_bot_only_sits_in_is_left_alone(db):
+    """**The quiet half of the same bug.** The sweep visits every guild
+    the bot is in, and a guild with no drop pointer at all was taking ten
+    scattered objects a day into rooms of a house nobody had built."""
+    never_started = 777000000000000777
+    await content_loader.load_content(a_world(a_restock(times_per_day=8)))
+
+    report = await restocking.run_for_guild(never_started, now=end_of_day())
+
+    assert await resolve.current_drop(never_started) is resolve.NO_GAME
+    assert report.placed == []
+
+
+async def test_the_shipped_bottles_wait_for_their_drop(server):
+    """Against the real files, on the drop the beta server is on: the
+    bottles and the spice jars are drop 30 and 20 and stay away, and the
+    diapers are drop 10 now and keep coming."""
+    await content_loader.load_content(content_module.load_files())
+    await resolve.set_current_drop(GUILD_A, 10)
+    await started(days_ago=4)
+
+    report = await restocking.run_for_guild(GUILD_A, now=end_of_day())
+    placed = Counter(row[3] for row in report.placed)
+
+    assert placed["used_baby_bottle"] == 0
+    assert placed["spice_jar"] == 0
+    assert placed["dirty_diaper"] > 0
 
 
 async def test_a_toy_whose_drop_has_not_arrived_is_not_drawn(server):
