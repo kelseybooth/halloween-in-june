@@ -829,25 +829,51 @@ ALEXA_THING = "alexa"
 ALEXA_REMINDED = "reminded"
 
 
-async def _is_game_thread(channel) -> bool:
+async def _is_game_thread(channel, guild) -> bool:
     """Whether this is one of the house's room threads.
 
     Scoped deliberately: Alexa answering in every channel of the server would
     make her a nuisance rather than a fixture in the rooms.
     """
-    return await _room_of_thread(channel) is not None
+    return await _room_of_thread(channel, guild) is not None
 
 
-async def _room_of_thread(channel) -> str | None:
+async def _hangs_off_the_game_channel(channel, guild) -> bool:
+    """Whether this thread is one of the game channel's own.
+
+    **Asked by id, because the channel is not always called #halloween.**
+    `_game_channel` learned that once already - the lookup by name found
+    nothing on a server that had called its channel anything else - and
+    these two checks were left behind still matching on the name. One
+    half knowing the channel and the other half not is worse than either
+    being wrong alone: the house is found by id, so its threads are
+    there and get pointed at, while every verb typed inside one is
+    refused as the wrong window. A player standing in the Entryway was
+    told their body was in the Entryway.
+
+    The name stays underneath as the floor, for the same reason it is the
+    floor in `_game_channel`: a server with nothing recorded has to keep
+    working, and #halloween is the only answer there has ever been for
+    one of those.
+    """
+    parent = getattr(channel, "parent", None)
+    if parent is None:
+        return False
+    game = await _game_channel(guild) if guild is not None else None
+    if game is not None:
+        return getattr(parent, "id", None) == getattr(game, "id", None)
+    return getattr(parent, "name", None) == house_utils.HALLOWEEN_CHANNEL_NAME
+
+
+async def _room_of_thread(channel, guild) -> str | None:
     """Which room this thread *is*, or None if it is not a room thread.
 
     Duck-typed on `parent` rather than `isinstance(channel, discord.Thread)`:
     a text channel has no parent, so the check is just as tight, and it can be
     exercised without constructing a real Thread.
     """
-    parent = getattr(channel, "parent", None)
     name = getattr(channel, "name", None)
-    if parent is None or getattr(parent, "name", None) != house_utils.HALLOWEEN_CHANNEL_NAME:
+    if not await _hangs_off_the_game_channel(channel, guild):
         return None
     try:
         for room_id, room_name in await resolve.all_rooms():
@@ -1021,7 +1047,7 @@ async def on_thread_member_join(member) -> None:
         return
 
     try:
-        room_id = await _room_of_thread(thread)
+        room_id = await _room_of_thread(thread, guild)
         if room_id is None:
             return
         state = await database.get_game_state(member.id, guild.id)
@@ -1056,8 +1082,7 @@ async def _typed_where_they_stand(interaction, location: str) -> bool:
         return False
 
     channel = interaction.channel
-    parent = getattr(channel, "parent", None)
-    if getattr(parent, "name", None) != house_utils.HALLOWEEN_CHANNEL_NAME:
+    if not await _hangs_off_the_game_channel(channel, interaction.guild):
         return False
     return await resolve.room_name(location) == getattr(channel, "name", None)
 
@@ -1155,7 +1180,7 @@ async def on_message(message: discord.Message) -> None:
 
     if not alexa.is_addressed(message.content):
         return
-    if not await _is_game_thread(message.channel):
+    if not await _is_game_thread(message.channel, message.guild):
         return
 
     try:
