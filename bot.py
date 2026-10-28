@@ -2501,7 +2501,10 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
             await interaction.followup.send(refusal, ephemeral=True)
             return
 
-        found = await reach.find(guild_id, user.id, state.current_room, thing, reach.Scope.REACH)
+        found = await reach.find(
+            guild_id, user.id, state.current_room, thing, reach.Scope.REACH,
+            action=telemetry.USE,
+        )
 
         if isinstance(found, reach.Ambiguous):
             await interaction.followup.send(
@@ -4192,6 +4195,18 @@ GENERIC_ROOM_DESCRIPTION = "You see a room."
 CANT_LOOK_MESSAGE = "You can't look at that."
 INVENTORY_ERROR_MESSAGE = "Couldn't retrieve your inventory. Try again."
 
+# Words that mean "the room I am standing in", wherever that is. Players reach
+# for these before they reach for the room's own name, and the usual answer in
+# a text game is the room description - so they are folded into the
+# no-argument shape rather than resolved as nouns. That is what makes
+# `/look around` identical to `/look`, down to the hint it carries.
+#
+# Pre-empting resolution is the opposite of how the room's *name* is handled -
+# `_is_this_room` runs only after resolution fails, so a thing sharing a word
+# with its room still wins. These three can afford it because nothing in the
+# content answers to any of them, and a test holds that.
+HERE_WORDS = frozenset({"around", "room", "here"})
+
 
 @bot.tree.command(name="look", description="Look around the room, or at a specific thing.")
 @app_commands.guild_only()
@@ -4206,6 +4221,9 @@ async def look(interaction: discord.Interaction, thing: str | None = None) -> No
     """
     await interaction.response.defer(ephemeral=True, thinking=True)
     user, guild_id = interaction.user, interaction.guild_id
+
+    if thing is not None and reach.normalise(thing) in HERE_WORDS:
+        thing = None
 
     try:
         state, refusal = await _place_to_act_in(interaction, "look")
@@ -4268,7 +4286,34 @@ async def _look_at_one_thing(
     and the art all behave the same, and a second copy of this would be a
     second place for them to drift.
     """
-    found = await reach.find(guild_id, user_id, room_id, thing, reach.Scope.REACH)
+    # Three passes, and the order is the whole of it: an exact word for a
+    # thing, then the name of the room, then a typo correction.
+    #
+    # An exact word outranks the room's name - in the Courtyard `/look kitchen`
+    # is the back door, because that is what is in front of you. And the room's
+    # name outranks a correction, because `kitchen` typed in the Kitchen is a
+    # correct word for the room rather than a near miss for `kitten`, which the
+    # cat answers to from two edits away and was quietly winning.
+    found = await reach.find(
+        guild_id, user_id, room_id, thing, reach.Scope.REACH, fuzzy=False
+    )
+
+    if isinstance(found, reach.NotFound):
+        # Naming the room you are standing in is the same question as `/look`
+        # with no argument, and players ask it that way.
+        if await _is_this_room(room_id, thing):
+            await interaction.followup.send(
+                await _look_here(guild_id, user_id, room_id), ephemeral=True
+            )
+            await telemetry.succeeded(
+                guild_id, user_id, telemetry.LOOK, detail=room_id
+            )
+            return
+
+        found = await reach.find(
+            guild_id, user_id, room_id, thing, reach.Scope.REACH,
+            action=telemetry.LOOK,
+        )
 
     if isinstance(found, reach.Ambiguous):
         await interaction.followup.send(
@@ -4284,20 +4329,8 @@ async def _look_at_one_thing(
         return
 
     if isinstance(found, reach.NotFound):
-        # Naming the room you are standing in is the same question as
-        # `/look` with no argument, and players ask it that way. Checked
-        # only after resolution fails, so a thing sharing a word with the
-        # room still wins - in the Courtyard `/look kitchen` is the back
-        # door, because that is what is in front of you.
-        if await _is_this_room(room_id, thing):
-            await interaction.followup.send(
-                await _look_here(guild_id, user_id, room_id), ephemeral=True
-            )
-            await telemetry.succeeded(
-                guild_id, user_id, telemetry.LOOK, detail=room_id
-            )
-            return
-
+        # The room's own name was tried above, between the two passes.
+        #
         # One refusal per verb for a word the house does not know:
         # `look_fail.unknown` here, `take_fail.unknown` in /take,
         # `use_fail.unknown` in /use. They used to share one line, which
@@ -4809,7 +4842,9 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
             return
         room_id = state.current_room
 
-        found = await reach.find(guild_id, user.id, room_id, thing, reach.Scope.ROOM)
+        found = await reach.find(
+            guild_id, user.id, room_id, thing, reach.Scope.ROOM, action=telemetry.TAKE
+        )
 
         if isinstance(found, reach.Ambiguous):
             await interaction.followup.send(
@@ -5026,7 +5061,10 @@ async def drop(interaction: discord.Interaction, thing: str) -> None:
             return
         room_id = state.current_room
 
-        found = await reach.find(guild_id, user.id, room_id, thing, reach.Scope.CARRIED)
+        found = await reach.find(
+            guild_id, user.id, room_id, thing, reach.Scope.CARRIED,
+            action=telemetry.DROP,
+        )
 
         if isinstance(found, reach.Ambiguous):
             await interaction.followup.send(

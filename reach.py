@@ -30,6 +30,7 @@ import content
 import database
 import resolve
 import states
+import telemetry
 
 
 class Scope(enum.Enum):
@@ -73,6 +74,10 @@ class Found:
     # picking up herbs somebody dropped both report `thing_id = "herbs"`. Only
     # the first is gardening, which is the distinction *Green Thumb* turns on.
     source_id: str | None = None
+    # Set when the thing was reached through a typo rather than one of its own
+    # words, as "what was typed → what it matched". Carried so a caller can log
+    # it and a wrong guess can be found afterwards.
+    fuzzy: str | None = None
 
     @property
     def is_source(self) -> bool:
@@ -119,6 +124,99 @@ def normalise(text: str) -> str:
 
 def _names_of(name: str, aliases) -> set[str]:
     return {normalise(n) for n in (name, *(aliases or [])) if n and normalise(n)}
+
+
+# How far a typo may sit from the word it meant, and it depends on how long the
+# word is. Two edits is the rule the work order gave, and on a long word it is
+# the right one: *crincle ball*, *feather wamd*, *cat ber* are all one edit from
+# what they meant, and two leaves room for the ones nobody has typed yet.
+#
+# **On a short word two edits is too many,** because it is most of the word.
+# `wire` is two edits from `dirt`, so the fence's own word was reaching the
+# road's dirt - a wrong answer to a word three players typed, which is worse
+# than the refusal it replaced. Every typo in the beta log that is correctable
+# at all is a single edit away, so tightening the short band costs none of them.
+FUZZY_DISTANCE = 2
+FUZZY_DISTANCE_SHORT = 1
+
+# Where "short" ends. At seven characters two edits is under a third of the
+# word, which is the point at which a correction stops being a guess.
+FUZZY_LONG_WORD = 7
+
+# Short words are left alone. At three letters two edits is most of the word,
+# and *toi* sits that close to *toy* and to several other things at once, so a
+# guess there is a coin flip wearing the clothes of understanding.
+FUZZY_MIN_LENGTH = 4
+
+
+def _tolerance(typed: str) -> int:
+    """How many edits to forgive in a word this long."""
+    return FUZZY_DISTANCE if len(typed) >= FUZZY_LONG_WORD else FUZZY_DISTANCE_SHORT
+
+
+def _distance(typed: str, word: str, limit: int) -> int | None:
+    """Levenshtein distance between two words, or None once it passes `limit`.
+
+    Bailing out early is what keeps this cheap enough to run on every miss: the
+    length check alone settles most pairs, and the row loop stops as soon as
+    every cell is already too far.
+    """
+    if abs(len(typed) - len(word)) > limit:
+        return None
+
+    previous = list(range(len(word) + 1))
+    for i, a in enumerate(typed, start=1):
+        current = [i]
+        for j, b in enumerate(word, start=1):
+            current.append(
+                min(
+                    previous[j] + 1,  # delete
+                    current[j - 1] + 1,  # insert
+                    previous[j - 1] + (a != b),  # substitute
+                )
+            )
+        if min(current) > limit:
+            return None
+        previous = current
+
+    return previous[-1] if previous[-1] <= limit else None
+
+
+def _nearest(typed: str, candidates) -> tuple[_Candidate, str] | None:
+    """The one thing a typo must have meant, or None if that is not clear.
+
+    "Not clear" covers both halves of the rule and the second half is the one
+    that matters: nothing close enough, or **two things equally close**. Acting
+    on a tie would do something to a thing the player never named, which is a
+    worse outcome than a refusal they can read and retype.
+
+    Distance is taken per thing rather than per word, because one thing owns
+    several words and only its best one should speak for it.
+    """
+    if len(typed) < FUZZY_MIN_LENGTH:
+        return None
+
+    limit = _tolerance(typed)
+    scored = []
+    for candidate in candidates:
+        near = [
+            (distance, name)
+            for name in candidate.names
+            if (distance := _distance(typed, name, limit)) is not None
+        ]
+        if near:
+            # Sorted, not just min-ed, so a thing with two equally close words
+            # picks the same one every time rather than whichever the set
+            # happened to yield first.
+            distance, name = min(near)
+            scored.append((distance, candidate, name))
+
+    if not scored:
+        return None
+
+    closest = min(distance for distance, _, _ in scored)
+    tied = [(c, name) for distance, c, name in scored if distance == closest]
+    return tied[0] if len(tied) == 1 else None
 
 
 @dataclass
@@ -385,11 +483,22 @@ async def find(
     room_id: str,
     typed: str,
     scope: Scope,
+    *,
+    action: str | None = None,
+    fuzzy: bool = True,
 ) -> Resolution:
     """Resolve what a player typed to one thing and one copy of it.
 
     Returns Found, Ambiguous, or NotFound. Callers branch on the type rather
     than re-deriving any of this.
+
+    `action` is the verb this is resolving for, and exists only so that a typo
+    corrected on the way through can be logged against it. Left out, nothing is
+    logged and the resolution is identical.
+
+    `fuzzy=False` asks for the exact pass alone. `/look` needs that, because it
+    has something to try between the two: the name of the room the player is
+    standing in, which has to outrank a correction and not be stolen by one.
     """
     needle = normalise(typed)
     if not needle:
@@ -402,18 +511,37 @@ async def find(
     if len(matches) > 1:
         return Ambiguous(options=sorted(c.name for c in matches))
 
+    correction = None
     if not matches:
-        carried_elsewhere = False
-        if scope is Scope.ROOM:
-            # /take needs to tell "there isn't one here" from "you already have
-            # it", because take_fail.absent would be a lie in the second case.
-            bag = await _gather(guild_id, user_id, room_id, Scope.CARRIED)
-            carried_elsewhere = any(needle in c.names for c in bag.values())
-        return NotFound(
-            typed=typed,
-            exists_elsewhere=await _exists_anywhere(typed),
-            carried=carried_elsewhere,
-        )
+        # Pass one again, this time forgiving a typo - and only ever after the
+        # exact pass has failed, so a word somebody spelled correctly can never
+        # lose to somebody else's near miss.
+        near = _nearest(needle, candidates.values()) if fuzzy else None
+        if near is None:
+            carried_elsewhere = False
+            if scope is Scope.ROOM:
+                # /take needs to tell "there isn't one here" from "you already
+                # have it", because take_fail.absent would be a lie in the
+                # second case.
+                bag = await _gather(guild_id, user_id, room_id, Scope.CARRIED)
+                carried_elsewhere = any(needle in c.names for c in bag.values())
+            return NotFound(
+                typed=typed,
+                exists_elsewhere=await _exists_anywhere(typed),
+                carried=carried_elsewhere,
+            )
+
+        matched, matched_name = near
+        matches = [matched]
+        correction = f"{needle}→{matched_name}"
+        if action is not None:
+            # Logged from here rather than from the verbs, because this is the
+            # only place that knows a correction happened at all - and it is
+            # logged whether or not the verb then goes on to refuse, since a
+            # wrong guess is just as findable either way.
+            await telemetry.record(
+                guild_id, action=action, user_id=user_id, detail=f"fuzzy={correction}"
+            )
 
     # Pass two: which copy. First hit down the ladder wins.
     candidate = matches[0]
@@ -434,6 +562,7 @@ async def find(
             container_id=container,
             yields=candidate.yields if where is Where.SOURCE else None,
             source_id=candidate.source_id if where is Where.SOURCE else None,
+            fuzzy=correction,
         )
 
     return NotFound(typed=typed, exists_elsewhere=await _exists_anywhere(typed))
