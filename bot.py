@@ -2689,8 +2689,28 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
             await hints.did(guild_id, user.id, hints.DID_USE_TOY)
 
         if row.takeable and found.where is not reach.Where.CARRIED:
+            # **The rung rides the refusal rather than following it as a
+            # second ephemeral message.** One command, one answer - two
+            # bubbles for one `/use` read as two separate things having
+            # happened.
+            #
+            # And it is told what was refused. `{name}` is otherwise filled
+            # from whatever takeable toy is in the channel, so a player
+            # turned away from a can of cat food was told to pick up the
+            # feather wand.
             await interaction.followup.send(
-                await phrasing.default_say("use_fail.not_carried", name=found.name),
+                hints.beneath(
+                    await phrasing.default_say(
+                        "use_fail.not_carried", name=found.name
+                    ),
+                    await hints.after(
+                        guild_id,
+                        user.id,
+                        hints.HOLD_TO_USE,
+                        quests=False,
+                        name=found.name,
+                    ),
+                ),
                 ephemeral=True,
             )
             await _turned_away(
@@ -2699,7 +2719,6 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
                 telemetry.NOT_CARRIED,
                 thing_id=found.thing_id,
             )
-            await _hold_to_use_hint(interaction, found)
             return
 
         if row.type == world.TOY:
@@ -3621,15 +3640,6 @@ async def _announce_play(interaction, line: str) -> bool:
         return False
     await _post_quietly(channel, line)
     return True
-
-
-async def _hold_to_use_hint(interaction, found) -> None:
-    """The rung that fires on being told to pick it up first."""
-    line = await hints.after(
-        interaction.guild_id, interaction.user.id, hints.HOLD_TO_USE, quests=False
-    )
-    if line:
-        await interaction.followup.send(line, ephemeral=True)
 
 
 async def _use_transform(interaction, state, found, row) -> None:
