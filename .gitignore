@@ -21,3 +21,6 @@ Thumbs.db
 # Local SQLite database
 catbot.db
 catbot.db.backup-*
+
+# Claude Code worktrees and local session scaffolding
+.claude/
