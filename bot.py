@@ -1377,15 +1377,21 @@ async def _answer_guess(message: discord.Message, guess, day) -> None:
     are applied to a copy of it, which is the only way the twentieth slot
     can be reasoned about at all.
 
-    **Not queued, and it is bounded rather than lucky.** Remove-then-add
-    costs two calls, and a burst of guesses could in principle spend a lot
-    of them. Both things that spend them are capped by something other
-    than the number of guesses, though: an outcome only changes by beating
-    the message's current rank, which can happen five times in a day, and
-    the walk below only fires when something has landed to the right of
-    the cat's face, which needs a slot the message has only twenty of. So
-    a message costs at most twenty-five changes a day however many people
-    react to it - and discord.py backs off on a 429 by itself.
+    **Not queued, and bounded per message rather than lucky.**
+    Remove-then-add costs two calls, and both things that spend them are
+    capped by something other than the number of guesses: an outcome only
+    changes by beating the message's current rank, which can happen five
+    times in a day, and the walk below only fires when something has
+    landed to the right of the cat's face, which needs one of the
+    message's twenty slots. Twenty-five changes a message a day, then,
+    however many people react to it.
+
+    **The day's total is not bounded here**, and a cap per message is the
+    wrong unit to be reassured by in any case: the game is played on every
+    message the bot has ever posted, in every room at once, and the limit
+    this would run into is per channel. What keeps it comfortable is the
+    arrival rate rather than the cap - guesses come in at human speed, and
+    discord.py backs off on a 429 by itself.
     """
     ladder = await craving.reactions()
     guild_id = message.guild.id
