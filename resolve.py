@@ -276,6 +276,41 @@ async def room_fragments(
     return parts
 
 
+async def gate_reveals_more(
+    guild_id: int,
+    room_id: str,
+    gate: str,
+    state: str = DEFAULT_STATE,
+    unlocked: frozenset[str] = frozenset(),
+) -> bool:
+    """Whether holding `gate` is the difference between two readings of
+    this room, here, on the drop this server is standing on.
+
+    **A gate opens a sentence on a drop, not on a server.** The
+    Entryway's gated fragments are written for drop 20, so a drop-10
+    server flips `fed_the_cat` and the foyer reads exactly as it did -
+    one sentence, both doorways still absent. Anything that announces
+    the gate has to ask the room rather than assume, because the
+    content files are what decide when the sentences land and they can
+    move without anybody touching this code.
+
+    **The gate is discounted from the baseline rather than trusted
+    absent.** Callers ask this just after the flag was written, so the
+    `unlocked` they are holding already contains it and a naive
+    before-and-after would compare the room with itself and report that
+    nothing opened. Taking it out of the first reading makes the answer
+    the same whether the question is asked before the write or after.
+
+    Both readings are `room_fragments`, which is the point: the drop
+    filter, the state ladder and the gate check are the ones a `/look`
+    will run, not a second copy of them that can drift.
+    """
+    without = frozenset(unlocked) - {gate}
+    before = await room_fragments(guild_id, room_id, state, without)
+    after = await room_fragments(guild_id, room_id, state, without | {gate})
+    return len(after) > len(before)
+
+
 async def thing_text(
     guild_id: int,
     thing_id: str,
