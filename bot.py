@@ -3065,7 +3065,28 @@ async def _finish_use(interaction, state, found) -> None:
             # way: italic, no label, written once and never again. The
             # room has been one sentence until now because the player
             # was watching the cat; she is eating, so they look up.
-            settled = await phrasing.default_say("en_settles")
+            #
+            # **Unless there is nothing to look up at.** The line
+            # describes the foyer opening, and the fragments it opens
+            # into are written for drop 20 - so on a drop-10 server it
+            # promised a room that would not arrive for a release, and
+            # the player's next `/look` showed them the same single
+            # sentence they had already read.
+            #
+            # Asked of the room rather than written as `drop > 10`: the
+            # condition is "feeding reveals a sentence here", the
+            # content files are what decide when that becomes true, and
+            # a number copied into code is a second answer that can go
+            # stale. It costs one extra pair of reads on the rarest
+            # event a player has - the first feed happens once each.
+            opened = await resolve.gate_reveals_more(
+                guild_id,
+                state.current_room,
+                content.FED_THE_CAT,
+                await _current_state(guild_id, user.id),
+                await _unlocked_for(guild_id, user.id),
+            )
+            settled = await phrasing.default_say("en_settles") if opened else None
             if settled:
                 reply = f"{reply}\n\n*{settled}*"
 

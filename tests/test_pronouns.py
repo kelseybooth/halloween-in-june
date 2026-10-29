@@ -108,7 +108,7 @@ def test_the_guard_catches_a_relapse(line):
         "The cat is on it before it stops, skids past, and bats it under something.",
         "A round cat bed in the corner. There's no fur on it at all.",
         "It makes an outsized noise for its size, which is the entire point of it.",
-        "It's heavier than it looks, and there are plenty more where it came from.",
+        "{player} picks the diaper up between two fingers. It is heavier than it looks.",
         "The cat puts one paw on the {name} and leaves it there.",
         "She flattens her ears and slides out from under your hand.",
     ],

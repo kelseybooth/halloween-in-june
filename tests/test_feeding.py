@@ -288,6 +288,71 @@ async def test_and_says_it_exactly_once(house):
     assert "notice more of the room" not in reply
 
 
+async def test_a_drop_10_server_is_not_told_the_room_opened(house):
+    """**The line describes a room that has not shipped yet.**
+
+    Every gated fragment of the Entryway is written for drop 20. A
+    drop-10 server flips `fed_the_cat` and the foyer goes on reading
+    as one sentence - so telling the player they look up and notice
+    more of the room sends them to a `/look` that shows them exactly
+    what they had already read, and makes the game look broken at the
+    one moment it is trying to feel generous.
+
+    The feed itself is untouched: the flag is written, the quest is
+    earned, the room still sees it. Only the sentence about the
+    sentences waits.
+    """
+    db, *_ = house
+    await resolve.set_current_drop(GUILD_A, HOUSE_DROP)
+    await take_a_can(house)
+
+    reply = replies(await feed(house))
+
+    assert await db.has_been_told(GUILD_A, ALICE, content_module.FED_THE_CAT)
+    assert "notice more of the room" not in reply
+
+
+async def test_what_decides_is_the_room_and_not_a_drop_number(house):
+    """**The same server, the same feed, one drop apart.**
+
+    This is the whole reason the condition is a question put to the
+    room rather than `drop > 10` written in `bot.py`. The fragments
+    are content and content moves: a writer who brings the mirror
+    forward to drop 10, or pushes the doorways back to 30, changes
+    when this line is true, and nothing in the code has to be found
+    and edited to match.
+    """
+    await resolve.set_current_drop(GUILD_A, HOUSE_DROP)
+    quiet = await resolve.gate_reveals_more(
+        GUILD_A, "EN", content_module.FED_THE_CAT
+    )
+
+    await resolve.set_current_drop(GUILD_A, 20)
+    opened = await resolve.gate_reveals_more(
+        GUILD_A, "EN", content_module.FED_THE_CAT
+    )
+
+    assert not quiet
+    assert opened
+
+
+async def test_the_gate_counts_even_when_the_player_already_holds_it(house):
+    """**Asked after the flag is written, which is when it is asked.**
+
+    The feed writes `fed_the_cat` before the reply is composed, so the
+    gates the caller is holding already contain it. Reading the room
+    twice with that set unchanged would compare it against itself and
+    report that nothing opened, which is the bug this discounting
+    exists to avoid - and it would have passed every test above,
+    because "say nothing" is also what a drop-10 server wants.
+    """
+    held = frozenset({content_module.FED_THE_CAT})
+
+    assert await resolve.gate_reveals_more(
+        GUILD_A, "EN", content_module.FED_THE_CAT, unlocked=held
+    )
+
+
 async def test_the_expired_can_is_not_a_feed(house):
     """It is in `CAT_FOOD` and not in `FEEDS`, and every question about a
     meal reads the second one. She will not eat it, so it must not earn the
