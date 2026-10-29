@@ -43,11 +43,52 @@ import world
 
 load_dotenv()
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
-    stream=sys.stdout,  # Railway captures stdout for its log dashboard
+# **A single log record cannot be longer than this.**
+#
+# Written after a night when the bot went silent on every server and the
+# logs could not say why. Discord sat behind a Cloudflare block (error
+# 1015, an IP-level ban), and Cloudflare answers a blocked request with
+# an HTML page rather than JSON. `discord.HTTPException` carries the
+# response body in its message, our handlers log the exception with its
+# traceback, and so every refused command printed the whole page: about
+# a hundred and ten lines each.
+#
+# Three testers retrying a command was enough to pass Railway's ceiling
+# of 500 log lines a second, at which point Railway starts dropping
+# them - *"Messages dropped: 235"*. The logging was not a side effect of
+# the outage; it was actively destroying the evidence of the outage
+# while it happened.
+#
+# Capping the record rather than special-casing Cloudflare: the next
+# oversized body will come from somewhere else, and a rule that only
+# knows about today's page would not catch it. Head and tail are both
+# kept because the useful parts of a traceback are at both ends - the
+# exception type at the bottom, our own frames at the top.
+LOG_RECORD_LIMIT = 2000
+LOG_RECORD_TAIL = 500
+
+
+class CappedFormatter(logging.Formatter):
+    """A formatter that refuses to emit a record longer than the cap."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        text = super().format(record)
+        if len(text) <= LOG_RECORD_LIMIT:
+            return text
+        dropped = len(text) - LOG_RECORD_LIMIT
+        head = text[: LOG_RECORD_LIMIT - LOG_RECORD_TAIL]
+        return (
+            f"{head}\n"
+            f"    ... {dropped} characters dropped by the log cap ...\n"
+            f"{text[-LOG_RECORD_TAIL:]}"
+        )
+
+
+_log_handler = logging.StreamHandler(sys.stdout)  # Railway captures stdout
+_log_handler.setFormatter(
+    CappedFormatter("%(asctime)s %(levelname)-8s %(name)s: %(message)s")
 )
+logging.basicConfig(level=logging.INFO, handlers=[_log_handler])
 log = logging.getLogger("catbot")
 
 # Append the relationship score, the mood weighting that produced this reaction,
@@ -6338,13 +6379,33 @@ async def on_app_command_completion(
 async def on_app_command_error(
     interaction: discord.Interaction, error: app_commands.AppCommandError
 ) -> None:
-    """Catch-all so an unexpected failure never leaves the user staring at 'thinking...'."""
+    """Catch-all so an unexpected failure never leaves the user staring at
+    'thinking...'.
+
+    **Except when the apology needs the thing that is broken.** If Discord
+    itself is refusing us - a Cloudflare block, an outage, a revoked token
+    - then the reply below fails exactly the way the command did, and an
+    unawaited failure inside an error handler surfaces as asyncio's
+    *Task exception was never retrieved*: a second traceback for every
+    first one, in the log that is already struggling.
+
+    Nothing here can rescue the player's "thinking..." in that case,
+    because there is no channel left to apologise down. What it can do is
+    fail quietly and say so in one line.
+    """
     log.exception("Unhandled error in command %s", interaction.command, exc_info=error)
     message = "Something went wrong. Please try again."
-    if interaction.response.is_done():
-        await interaction.followup.send(message, ephemeral=True)
-    else:
-        await interaction.response.send_message(message, ephemeral=True)
+    try:
+        if interaction.response.is_done():
+            await interaction.followup.send(message, ephemeral=True)
+        else:
+            await interaction.response.send_message(message, ephemeral=True)
+    except discord.HTTPException as second:
+        log.warning(
+            "Could not even tell %s that their command failed: %s",
+            interaction.user.id,
+            second.__class__.__name__,
+        )
 
 
 def main() -> None:
