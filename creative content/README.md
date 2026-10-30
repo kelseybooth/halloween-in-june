@@ -122,6 +122,14 @@ This is easy to break by accident. Two cases in the last pass named nothing at a
 gold band on the label" — and were still false once the chocolate and the tin were
 taken. Write hints that stay true either way.
 
+**The converse is now checked as well.** Anything a player cannot pick up is never
+listed, so some sentence has to name it or nobody will ever learn it is there. That has
+held for sources and scenery since they existed and for fixtures since drop 10; the
+loader now asks it of every unlistable thing, whatever its `type` column says. It caught
+the reading glasses, which nothing in the Upstairs Hallway named — the roll-top desk
+mentions them now, in both its states, and that clause is a draft. Exits, sources and
+scenery keep their own stricter versions of the rule.
+
 **Sources are inexhaustible; objects are finite.** A stash of cat food is a `source`
 that never runs out and can't be carried; a can is an `object` with no room of its own
 that exists once drawn. Sources never appear in the `Also here:` line, so every source
