@@ -32,5 +32,11 @@ jobs:
       # No DATABASE_URL and no RAILWAY_ENVIRONMENT, so the suite runs on the
       # SQLite fallback. Postgres is deliberately not required here: CI has to
       # stay runnable by anyone with a checkout.
+      #
+      # Four workers because the standard runner has four cores. There is
+      # nothing for them to contend over: every test already builds its own
+      # database in its own tmp_path, and a worker is a separate process, so
+      # the checks that mangle parsed content mangle only their own copy.
+      # `-n auto` is the one-word change if the runner size ever differs.
       - name: Run tests
-        run: python -m pytest -q
+        run: python -m pytest -q -n 4
