@@ -214,6 +214,13 @@ is wrong now:
 
 > You've set your plank. Your muscles will want about {time} before the next one.
 
+*Added by the drop 20 build:* that line now lives in a new `thing_text.tsv` column,
+`use_fail_cooldown`, on the lumber's two `stairs_upper` rows. The two refusals had to
+part company: in `stairs_upper` the lumber's `use_fail` says the top steps are out of
+reach, which is true for the whole server, and this sentence is about one player's arms.
+Leave `use_fail_cooldown` blank on anything else and the cooldown keeps reading
+`use_fail`, which is what the cat bed does.
+
 `{time}` is a new template token — the remaining cooldown, rendered by the engine. It
 needs adding to the Templating section of the Content Schema.
 

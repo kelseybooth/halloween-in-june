@@ -2,15 +2,25 @@
 
 2b loaded `restocks.tsv` and left the job unbuilt. This runs it.
 
-Three rows exist today: four spice jars into the Amazon box every third day
-from day 2, eight used baby bottles a day scattered anywhere, and two dirty
-diapers a day scattered the same way. Between them that is ten objects a day
-accumulating in a house where nothing removes them until a player takes one,
-which is why the `Also here:` truncation shipped alongside.
+Four rows exist today: two spice jars into the shipping box every two to ten
+hours from the drop's second day, eight used baby bottles a day scattered
+anywhere, two dirty diapers a day scattered the same way, and the channel's
+toys. Between them that is ten objects a day accumulating in a house where
+nothing removes them until a player takes one, which is why the `Also here:`
+truncation shipped alongside.
 
 **Day numbers count from each server's own initialization date**, in Pacific
 time - deliberately the opposite of drops, which land on the same calendar day
 everywhere.
+
+**Except an interval row, which counts from its drop.** Drop 20 added
+the other kind of schedule - a gap drawn at random after each delivery
+rather than N times a day - and with it the question of what day one
+means for a row that waits on a drop. The beta had been playing for a
+month when drop 20 landed, so counting from the first `/enter` put the
+spice order's day two four weeks in the past and one sweep would have
+filled the box to its cap on the drop's opening day. See
+`_drop_day_one`.
 
 **Occurrence times are derived, not rolled.** The work order asks for the day's
 times to be drawn once at the start of the day and stored, so that re-rolling
@@ -35,6 +45,7 @@ from sqlalchemy import select
 import content as content_module
 import database
 import resolve
+import telemetry
 
 log = logging.getLogger(__name__)
 
@@ -131,6 +142,73 @@ def occurrence_times(
         local = opens + timedelta(seconds=offset)
         moments.append(local.astimezone(database.timezone.utc).replace(tzinfo=None))
     return sorted(moments)
+
+
+def interval_times(
+    guild_id: int,
+    restock_id: int,
+    first_day_starts: datetime,
+    until: datetime,
+    min_hours: int,
+    max_hours: int,
+) -> list[datetime]:
+    """Every delivery from `first_day_starts` up to `until`.
+
+    **Derived, not rolled**, for the reason the per-day times are: the
+    chain is seeded from (guild, restock) and asking twice gives the
+    same answer, so a sweep cannot skip or double a delivery by
+    re-deciding when it was due. Nothing is stored except the last one
+    applied.
+
+    The first delivery is drawn across the whole of the first day, not
+    `min_hours` after midnight - "two jars arrive on the second day"
+    should be able to mean the afternoon. Every one after it is a
+    uniformly random gap in [min, max] from the one before.
+
+    Bounded by the catch-up window on the caller's side: the walk stops
+    at `until`, and `until` is never more than `MAX_CATCHUP_DAYS` past
+    the start.
+    """
+    if min_hours is None or max_hours is None:
+        return []
+    low, high = min(min_hours, max_hours), max(min_hours, max_hours)
+    rng = _seeded(guild_id, restock_id, 0)
+
+    moment = first_day_starts + timedelta(hours=rng.uniform(0, 24))
+    times = []
+    # A ceiling on the walk as well as on the window, so a row written
+    # with a zero-hour interval cannot spin: at the shortest sane gap
+    # this is far more deliveries than any catch-up would place.
+    for _ in range(MAX_CATCHUP_DAYS * 24 + 24):
+        if moment > until:
+            break
+        times.append(moment)
+        moment += timedelta(hours=rng.uniform(low, high) or 1)
+    return times
+
+
+async def _drop_day_one(guild_id: int, restock) -> date | None:
+    """The Pacific date this row's drop arrived on this server.
+
+    **Day one is the drop's, not the server's.** `first_day` used to
+    count from the first `/enter`, which is right for a row that has
+    been live since the house opened - and wrong for one that waits on
+    a drop. The beta had been playing for weeks when drop 20 landed, so
+    "day 2" was long past and the spice box would have filled to its
+    cap of sixteen within one sweep, on the drop's first day, where the
+    design has it empty.
+
+    None when the server has not reached the drop, which the caller has
+    already excluded, or when it has no pointer history to read.
+    """
+    arrived = await database.when_drop_arrived(guild_id, restock.since_drop)
+    if arrived is None:
+        return None
+    return (
+        arrived.replace(tzinfo=database.timezone.utc)
+        .astimezone(database.PACIFIC)
+        .date()
+    )
 
 
 async def _slots(guild_id: int) -> tuple[list[tuple[str, str]], dict[str, str]]:
@@ -375,6 +453,39 @@ async def run_for_guild(
             continue
 
         last = progress.get(restock.restock_id)
+
+        if restock.interval_min_hours is not None:
+            # **An interval row keeps its own clock**, counted from the
+            # drop rather than from the server's first day, and ignores
+            # `times_per_day` - which is why the file calls that column
+            # a placeholder on this row.
+            day_one = await _drop_day_one(guild_id, restock)
+            if day_one is None:
+                continue
+            opens = day_one + timedelta(days=max(restock.first_day, 1) - 1)
+            floor = max(
+                opens, today - timedelta(days=MAX_CATCHUP_DAYS)
+            )
+            begins, _ = database.pacific_day_bounds_utc(floor)
+            due = [
+                moment
+                for moment in interval_times(
+                    guild_id,
+                    restock.restock_id,
+                    begins,
+                    now,
+                    restock.interval_min_hours,
+                    restock.interval_max_hours,
+                )
+                if last is None or moment > last
+            ]
+            if due:
+                await _deliver(
+                    guild_id, restock, due, slots, container_rooms, rng, arrived, report
+                )
+                await _record_progress(guild_id, restock.restock_id, max(due))
+            continue
+
         per_day = await _times_per_day(guild_id, restock)
         if per_day < 1:
             continue
@@ -402,37 +513,9 @@ async def run_for_guild(
         if not due:
             continue
 
-        for moment in sorted(due):
-            landing = _destination(restock, slots, container_rooms, rng)
-            if landing is None:
-                break
-            room_id, container_id = landing
-
-            thing_id = await _what_to_place(restock, arrived, rng)
-            if thing_id is None:
-                # A class with nothing arrived in it yet. Not an error -
-                # the toys' row is live from drop 2 and the schedule
-                # simply has nothing to draw until then.
-                continue
-
-            if not await _room_for_more(guild_id, room_id, restock):
-                # **Fill toward the cap, never past it.** A better rule
-                # than a rate: a quiet server keeps two sitting there
-                # and a busy one keeps getting fresh ones. The occurrence
-                # is spent either way, so a full channel does not bank
-                # placements and dump them when somebody takes one.
-                continue
-
-            await _place(guild_id, room_id, container_id, thing_id, restock.amount)
-            report.placed.append(
-                (guild_id, room_id, container_id, thing_id, restock.amount)
-            )
-            if restock.arrival_notice:
-                # The room hears the delivery land. Collected rather than
-                # posted here: `restocking` has no Discord client, and the
-                # sweep that calls it does.
-                report.announce.append((guild_id, room_id, restock.arrival_notice))
-
+        await _deliver(
+            guild_id, restock, due, slots, container_rooms, rng, arrived, report
+        )
         await _record_progress(guild_id, restock.restock_id, max(due))
 
     if report.placed:
@@ -441,6 +524,58 @@ async def run_for_guild(
             "Restock placed %d thing(s) in guild %s", report.count, guild_id
         )
     return report
+
+
+async def _deliver(
+    guild_id: int, restock, due, slots, container_rooms, rng, arrived, report
+) -> None:
+    """Place one occurrence per moment in `due`.
+
+    Shared by the two schedules - the per-day one and drop 20's
+    interval one - because what a delivery *does* has nothing to do
+    with how its time was worked out, and the cap, the class draw and
+    the arrival notice are all easy to get subtly different twice.
+    """
+    for _ in sorted(due):
+        landing = _destination(restock, slots, container_rooms, rng)
+        if landing is None:
+            break
+        room_id, container_id = landing
+
+        thing_id = await _what_to_place(restock, arrived, rng)
+        if thing_id is None:
+            # A class with nothing arrived in it yet. Not an error -
+            # the toys' row is live from drop 2 and the schedule
+            # simply has nothing to draw until then.
+            continue
+
+        amount = await _room_for(guild_id, room_id, container_id, restock)
+        if amount < 1:
+            # **Fill toward the cap, never past it.** A better rule
+            # than a rate: a quiet server keeps two sitting there
+            # and a busy one keeps getting fresh ones. The occurrence
+            # is spent either way, so a full channel does not bank
+            # placements and dump them when somebody takes one.
+            continue
+
+        await _place(guild_id, room_id, container_id, thing_id, amount)
+        report.placed.append((guild_id, room_id, container_id, thing_id, amount))
+        await telemetry.system(
+            guild_id,
+            telemetry.RESTOCK_PLACED,
+            thing_id=thing_id,
+            detail=(
+                f"restock={restock.restock_id} room={room_id} "
+                f"container={container_id or 'loose'} "
+                f"added={amount} "
+                f"now={await database.how_many_in_container(guild_id, room_id, container_id, thing_id)}"
+            ),
+        )
+        if restock.arrival_notice:
+            # The room hears the delivery land. Collected rather than
+            # posted here: `restocking` has no Discord client, and the
+            # sweep that calls it does.
+            report.announce.append((guild_id, room_id, restock.arrival_notice))
 
 
 async def _what_to_place(restock, arrived: set[int], rng) -> str | None:
@@ -461,12 +596,26 @@ async def _what_to_place(restock, arrived: set[int], rng) -> str | None:
     return rng.choice(pool) if pool else None
 
 
-async def _room_for_more(guild_id: int, room_id: str, restock) -> bool:
-    """Whether the cap leaves room for one more.
+async def _room_for(
+    guild_id: int, room_id: str, container_id: str, restock
+) -> int:
+    """How many of this row's thing may be added here, at most `amount`.
 
-    **The cap counts the class, not the row.** The rule is *keep two
-    toys in the channel*, and with thirteen toy rows written a per-row
-    reading would allow twenty-six.
+    **The cap counts the class, not the row**, where the row names a
+    class. The rule is *keep two toys in the channel*, and with
+    thirteen toy rows written a per-row reading would allow twenty-six.
+
+    **A row that names one thing is capped on that thing, where it
+    lands.** That half was accepted by the loader and never read:
+    `max_present` returned early for anything but a class, so the spice
+    order's cap of sixteen did nothing and a month-long catch-up filled
+    the shipping box to ninety-six. Drop 20 is the first row to depend
+    on it.
+
+    **A count rather than a yes or no**, so "fill toward sixteen and
+    never exceed it" is exact. The jars arrive two at a time; asking
+    "is there room for more" and then placing two put seventeen in a
+    box with one space left.
 
     **It is read from `server_config`, not from the row**, so a server
     can be retuned without a deploy and two rows drawing from the same
@@ -480,20 +629,21 @@ async def _room_for_more(guild_id: int, room_id: str, restock) -> bool:
     should tidy it away.
     """
     if restock.max_present is None:
-        return True
-    kind = (
-        restock.thing_id[len(content_module.CLASS_PREFIX):]
-        if restock.thing_id.startswith(content_module.CLASS_PREFIX)
-        else None
-    )
-    if kind is None:
-        return True
+        return restock.amount
     cap = restock.max_present
     if restock.config_key:
         # The key means the cap on a row that has one - see
         # `_times_per_day` for the other half of that rule.
         cap = await database.get_setting(guild_id, restock.config_key) or cap
-    return await database.count_of_type(guild_id, room_id, kind) < cap
+
+    if restock.thing_id.startswith(content_module.CLASS_PREFIX):
+        kind = restock.thing_id[len(content_module.CLASS_PREFIX):]
+        present = await database.count_of_type(guild_id, room_id, kind)
+    else:
+        present = await database.how_many_in_container(
+            guild_id, room_id, container_id, restock.thing_id
+        )
+    return max(0, min(restock.amount, cap - present))
 
 
 def _destination(restock, slots, container_rooms, rng) -> tuple[str, str] | None:

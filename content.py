@@ -341,8 +341,16 @@ class Restock:
     # first sign of it - vague enough to read as a tease.
     #
     # Last and defaulted, like `consumed_on_use` on a thing: the rows
-    # built by hand in the tests outnumber the one that wants this.
+    # built by hand in the tests outnumber the ones that want these.
     arrival_notice: str | None = None
+    # **A gap between deliveries, instead of a count per day.** The two
+    # are alternatives: a row with these ignores `times_per_day` and
+    # schedules the next delivery a uniformly random stretch after the
+    # last. The spice order wants it because it should feel like a van
+    # turning up rather than like a clock striking - four fixed times a
+    # day is a pattern players learn and then wait on.
+    interval_min_hours: int | None = None
+    interval_max_hours: int | None = None
 
 
 @dataclass(frozen=True)
@@ -726,6 +734,8 @@ def load_files(directory: Path | None = None) -> Content:
                 window_end=_text(row.get("window_end")) or "23:59",
                 config_key=_text(row.get("config_key")),
                 arrival_notice=_text(row.get("arrival_notice")),
+                interval_min_hours=_int(row.get("interval_min_hours")),
+                interval_max_hours=_int(row.get("interval_max_hours")),
                 since_drop=_since_drop(row),
                 notes=_text(row.get("notes")),
             )

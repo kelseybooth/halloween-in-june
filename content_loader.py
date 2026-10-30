@@ -358,6 +358,8 @@ def _rows_for(parsed: Content) -> dict[str, list[dict]]:
                 "window_end": r.window_end,
                 "config_key": r.config_key,
                 "arrival_notice": r.arrival_notice,
+                "interval_min_hours": r.interval_min_hours,
+                "interval_max_hours": r.interval_max_hours,
                 "since_drop": r.since_drop,
                 "notes": r.notes,
             }

@@ -146,6 +146,23 @@ NOT_AN_EXIT = "not_an_exit"
 # stopped because of the clock or because of the steps.
 WRONG_STATE = "wrong_state"
 
+# The staircase reaching the last fifth, where the steps stop being
+# reachable from the floor. A system row rather than a player's: the
+# plank that crossed the line is already logged as that player's use,
+# and this is the server's event. `detail` carries how many different
+# people had laid one by then, which is the question the repair's pace
+# is really about - ninety planks laid by six players is a different
+# game from ninety laid by thirty.
+STAIRS_UPPER_REACHED = "stairs_upper"
+
+# One row per restock placement. `detail` says what landed where and how
+# much of it is now there, which answers both of the questions the
+# scatter raises: whether the spice box fills and drains at a rate
+# players can keep up with, and - for the bottles and the diapers -
+# which container each one chose, so a QA run can confirm that none of
+# them ever picked the shipping box.
+RESTOCK_PLACED = "restock_placed"
+
 # A use whose whole effect has already happened, and cannot happen
 # twice. The brass key in an unlocked door is the only one: the thing
 # still works, the player still holds it, and there is nothing left for
@@ -892,6 +909,10 @@ class Restock(Base):
     max_present: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # A defaults key the room is told when this row delivers, or null.
     arrival_notice: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # The gap between deliveries, drawn uniformly in this range. Set
+    # together or not at all; a row with them ignores `times_per_day`.
+    interval_min_hours: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    interval_max_hours: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Separate occurrences, not one delivery of `amount` - eight bottles a day is
     # eight arrivals at eight independently drawn times.
     times_per_day: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
@@ -1356,6 +1377,8 @@ _LATER_COLUMNS: list[tuple[str, str, str]] = [
     ("thing_types", "consumed_on_use", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ("thing_types", "use_cooldown_daily", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ("restocks", "arrival_notice", "VARCHAR(64)"),
+    ("restocks", "interval_min_hours", "INTEGER"),
+    ("restocks", "interval_max_hours", "INTEGER"),
     ("thing_types", "scatter_target", "BOOLEAN NOT NULL DEFAULT TRUE"),
     ("thing_types", "to_hand_in_room", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ("thing_text", "use_fail_cooldown", "TEXT"),
@@ -3279,6 +3302,71 @@ async def server_achievements_of(guild_id: int) -> dict[str, datetime]:
             ).where(ServerAchievement.guild_id == guild_id)
         )
     return {row[0]: row[1] for row in rows}
+
+
+async def when_drop_arrived(guild_id: int, drop_id: int) -> datetime | None:
+    """When this server first stood on `drop_id` or anything past it.
+
+    **"Or past it", because drops can be skipped.** A server taken from
+    10 straight to 30 reached drop 20's content at that moment, and a
+    row that waited for the exact value would wait forever.
+
+    Read from `config_history`, which is the config rather than a
+    journal beside it - the earliest window that opened on a high
+    enough number. Values are strings there, so the comparison is done
+    here: a guild has a handful of these rows, and a cast in SQL that
+    meets a non-numeric value fails the whole query.
+
+    None when the server has never had a drop pointer at all, or never
+    reached this one.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = (
+            await session.execute(
+                select(ConfigHistory.value, ConfigHistory.effective_from).where(
+                    ConfigHistory.guild_id == guild_id,
+                    ConfigHistory.key == resolve_drop_key(),
+                )
+            )
+        ).all()
+
+    arrivals = []
+    for value, effective_from in rows:
+        try:
+            reached = int(value)
+        except (TypeError, ValueError):
+            continue
+        if reached >= drop_id and effective_from is not None:
+            arrivals.append(effective_from)
+    return min(arrivals) if arrivals else None
+
+
+def resolve_drop_key() -> str:
+    """`resolve.DROP_KEY`, without importing `resolve` into `database`.
+
+    The key is a string the two modules have to agree on, and the
+    dependency only runs one way: `resolve` imports `database`.
+    """
+    return "current_drop"
+
+
+async def how_many_in_container(
+    guild_id: int, room_id: str, container_id: str, thing_id: str
+) -> int:
+    """How many of a thing are in one container in one room."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        return (
+            await session.scalar(
+                select(RoomContents.count).where(
+                    RoomContents.guild_id == guild_id,
+                    RoomContents.room_id == room_id,
+                    RoomContents.container_id == container_id,
+                    RoomContents.thing_id == thing_id,
+                )
+            )
+        ) or 0
 
 
 async def total_uses_of(guild_id: int, thing_id: str) -> int:

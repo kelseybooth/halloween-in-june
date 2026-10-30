@@ -25,6 +25,7 @@ from datetime import timedelta
 
 import content as content_module
 import database
+import telemetry
 import resolve
 import states
 import telemetry
@@ -432,7 +433,18 @@ async def check_staircase(guild_id: int) -> bool:
     """
     placed, required = await planks(guild_id)
     if placed >= reachable_from_the_floor(required):
-        await states.set_server_state(guild_id, STAIRS_UPPER)
+        if await states.set_server_state(guild_id, STAIRS_UPPER):
+            # Only on the crossing. `set_server_state` returns True the
+            # once, which is what keeps this one row and not one per
+            # plank laid against a staircase that has already stopped.
+            await telemetry.system(
+                guild_id,
+                telemetry.STAIRS_UPPER_REACHED,
+                detail=(
+                    f"n={placed} total={required} "
+                    f"players={await database.distinct_users_of(guild_id, LUMBER)}"
+                ),
+            )
     if placed < required:
         return False
     return await states.set_server_state(guild_id, STAIRS_REPAIRED)

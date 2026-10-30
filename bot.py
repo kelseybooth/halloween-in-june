@@ -2846,6 +2846,11 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
                 telemetry.USE,
                 telemetry.WRONG_STATE,
                 thing_id=found.thing_id,
+                detail=(
+                    await _plank_detail(guild_id, user.id)
+                    if found.thing_id == world.LUMBER
+                    else None
+                ),
             )
             return
 
@@ -2915,6 +2920,48 @@ async def _a_feed_refusal(interaction, found, missing: list[str]) -> bool:
         interaction, telemetry.FEED, reason, thing_id=found.thing_id
     )
     return True
+
+
+async def _container_detail(guild_id: int, room_id: str, thing_id: str) -> str | None:
+    """How many are left in the container this thing lives in, or None.
+
+    **Only for things that live inside something**, which is the spice
+    jars today. The box fills toward sixteen on a schedule and drains
+    when players take them, and neither rate means anything without the
+    other: a box that is always full is a delivery nobody wants, and one
+    that is always empty is a delivery too slow to find.
+
+    None for everything else, so an ordinary take carries no detail and
+    the column stays readable.
+    """
+    row = await phrasing.thing_row(thing_id)
+    if row is None or not row.contained_in:
+        return None
+    left = await database.how_many_in_container(
+        guild_id, room_id, row.contained_in, thing_id
+    )
+    return f"container={row.contained_in} left={left}"
+
+
+async def _plank_detail(guild_id: int, user_id: int) -> str:
+    """What a plank row carries besides its outcome.
+
+    **The two questions the repair's data has to answer**, and neither
+    is answerable from the outcome alone. `n` is the count *after* this
+    attempt, so a row says where the work stood when somebody swung -
+    which is what turns a pile of refusals into "the server stalled at
+    72". `fed` is whether this player had fed the cat, because drop 20
+    decided that guessing the word "lumber" is allowed: if unfed players
+    are laying planks in numbers, the gate is doing less than the design
+    assumed and the room text is the only thing it holds back.
+
+    One string rather than two columns, because `detail` is the column
+    the log has for whatever a particular action needs and adding one
+    per question is how a wide table happens.
+    """
+    placed, required = await world.planks(guild_id)
+    fed = await database.has_been_told(guild_id, user_id, content.FED_THE_CAT)
+    return f"n={placed} total={required} fed={'yes' if fed else 'no'}"
 
 
 async def _turned_away(interaction, action: str, reason: str, **fields) -> None:
@@ -3015,6 +3062,11 @@ async def _finish_use(interaction, state, found) -> None:
         thing_id=found.thing_id,
         relationship_delta=effect.delta if effect else None,
         score_after=effect.relationship if effect else None,
+        detail=(
+            await _plank_detail(guild_id, user.id)
+            if found.thing_id == world.LUMBER
+            else None
+        ),
     )
     tokens = dict(effect.tokens) if effect else {}
 
@@ -3929,6 +3981,11 @@ async def _use_once_a_day(interaction, state, found, row) -> None:
                 telemetry.USE,
                 telemetry.ONCE_A_DAY,
                 thing_id=found.thing_id,
+                detail=(
+                    await _plank_detail(guild_id, user.id)
+                    if found.thing_id == world.LUMBER
+                    else None
+                ),
             )
             return
 
@@ -5275,7 +5332,11 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
             return
 
         await telemetry.succeeded(
-            guild_id, user.id, telemetry.TAKE, thing_id=taken
+            guild_id,
+            user.id,
+            telemetry.TAKE,
+            thing_id=taken,
+            detail=await _container_detail(guild_id, state.current_room, taken),
         )
 
         taken_row = await phrasing.thing_row(taken)
@@ -5498,7 +5559,13 @@ async def drop(interaction: discord.Interaction, thing: str) -> None:
             return
 
         await telemetry.succeeded(
-            guild_id, user.id, telemetry.DROP, thing_id=found.thing_id
+            guild_id,
+            user.id,
+            telemetry.DROP,
+            thing_id=found.thing_id,
+            detail=await _container_detail(
+                guild_id, state.current_room, found.thing_id
+            ),
         )
 
         # Retires `hint.drop_something`. Recorded here rather than
