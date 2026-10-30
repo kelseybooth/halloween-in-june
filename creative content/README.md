@@ -242,7 +242,7 @@ to `48` on `lumber` and blank everywhere else. New default `use_fail.cooldown`. 
 because "You've already done your part" was true under the old one-plank-ever rule and
 is wrong now:
 
-> You've set your plank. Your muscles will want about {time} before the next one.
+> You've set your plank. Your muscles will want {time} before the next one.
 
 *Added by the drop 20 build:* that line now lives in a new `thing_text.tsv` column,
 `use_fail_cooldown`, on the lumber's two `stairs_upper` rows. The two refusals had to
@@ -253,6 +253,12 @@ Leave `use_fail_cooldown` blank on anything else and the cooldown keeps reading
 
 `{time}` is a new template token — the remaining cooldown, rendered by the engine. It
 needs adding to the Templating section of the Content Schema.
+
+**The token already says "about".** It renders as `about 14 hours`, `about 40 minutes`, `about 2
+days`, or `a minute` when the wait is nearly up — the vagueness is the point, so nobody sits
+watching a countdown. A sentence that writes its own *about* in front of it reads "want about
+about 14 hours", which is what the line quoted above did until 30 October. Write around the
+token, not up to it.
 
 The engine side is the real cost: nothing currently records a per-player, per-thing last
 used time. `pet_events` is the only behavioral log and it is shaped for the mood window.

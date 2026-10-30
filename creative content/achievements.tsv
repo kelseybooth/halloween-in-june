@@ -25,10 +25,10 @@ trying_to_make_friends	secret	Trying to Make Friends	Had a negative relationship
 cats_best_friend	secret	Cat's Best Friend	You've earned 100 relationship points with the cat. She has started looking for you when you're not around.	0	60				
 signed_sealed_delivered	secret	Signed, Sealed, Delivered	Answered the intercom within three minutes of the doorbell.	99	70				Blocked: the doorbell is not built
 brewing_trouble	secret	Brewing Trouble	Drank coffee.	30	80				Not date-gated since 21 October: any successful /use of the coffee maker
-trash_panda	secret	Trash Panda	Celebrated International Raccoon Appreciation Day by going through the trash.	30	90				
+trash_panda	secret	Trash Panda	Went through the trash and came out with something.	99	90				Blocked: the trash can doesn't hold items yet; a trash can inventory with disposal is planned for a future release. Earned by taking any item out of the trash can. Not date-gated since 30 October
 say_cheese	secret	Say Cheese	Checked a mirror.	20	100				Not date-gated since 21 October: any successful /use of any of the three mirrors
-green_thumb	secret	Green Thumb	Got your hands dirty on the International Day of Rural Women.	30	110				
-nacho_average_ghost	secret	Nacho Average Ghost	Enjoyed the right snack on International Day of the Nacho.	30	120				
+green_thumb	secret	Green Thumb	Watered the garden, picked the herbs and carved a pumpkin. The courtyard has a gardener again.	30	110				Not date-gated since 30 October. Earned once a player has done all three, in any order and on any days: /use the watering can, /take herbs from the herb garden, and /use (carve) a pumpkin. Carving needs the carving tools, which arrive at drop 40, so it can't be completed before then
+nacho_average_ghost	secret	Nacho Average Ghost	Snacked on the nacho chips.	30	120				Not date-gated since 30 October: any successful /use of the nacho chips
 using_your_noodle	secret	Using Your Noodle	Put a pot on.	30	130				Not date-gated since 21 October: any successful /use of the pasta pot
 getting_into_the_spirit	secret	Getting into the Spirit	Put on a ghost costume and haunted your friends.	99	140				Blocked: the ghost system is not built
 ghostbuster	secret	Ghostbuster	Guessed the day's ghost correctly.	99	150				Blocked: the ghost system is not built
