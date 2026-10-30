@@ -13,9 +13,9 @@ Three families do most of the work and are written once:
 
 - **the date-gated six** share `_on_date`, parameterised by a day test and a
   set of targets, because five fixed dates and one weekday are the same shape.
-  They were seven: *Say Cheese* lost its date on 21 October, and four more are
-  due to - see `Date-restricted achievements.md`, which is authoritative for
-  which achievements check a date at all
+  They were seven: *Self-Reflection* lost its date on 21 October, and
+  four more are due to - see `Date-restricted achievements.md`, which is
+  authoritative for which achievements check a date at all
 - **the three group achievements** share one per-room read, because all three
   are the same `GROUP BY room_id` with a different `HAVING`
 - **the seven blocked** share `_blocked`, which is a predicate that says no.
@@ -253,7 +253,7 @@ def _on_thing(targets: set[str]):
     could not be earned this year by anybody. `Date-restricted
     achievements.md` carries the decision and the reasoning.
 
-    The `since_drop` gate still applies, and for *Say Cheese* it is the
+    The `since_drop` gate still applies, and for *Self-Reflection* it is the
     whole of what is left: drop 20 opened the Entryway's mirror, and the
     two other mirrors arrive with drops 40 and 50.
     """
@@ -808,7 +808,7 @@ def register_all() -> None:
     add("trash_panda", "on_use", _on_date(on_october(1), {TRASH_CAN}))
     # No longer World Smile Day. Any mirror, any day, any year - the one
     # of the six undated ones whose room is already open.
-    add("say_cheese", "on_use", _on_thing(MIRRORS))
+    add("self_reflection", "on_use", _on_thing(MIRRORS))
     # The one that shapes the signature: three things across two hooks.
     add(
         "green_thumb",

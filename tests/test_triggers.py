@@ -275,10 +275,10 @@ async def test_a_date_achievement_is_not_pinned_to_2026(playing):
 
 
 @pytest.mark.parametrize("mirror", sorted(triggers.MIRRORS))
-async def test_say_cheese_takes_any_of_the_three_mirrors(playing, mirror):
+async def test_self_reflection_takes_any_of_the_three_mirrors(playing, mirror):
     """On an ordinary day, which is the change. It was World Smile Day,
     2 October, and the writers took the date off on 21 October."""
-    assert "say_cheese" in await earned(
+    assert "self_reflection" in await earned(
         a_context("on_use", thing_id=mirror, now=pacific(2026, 6, 14))
     )
 
@@ -293,7 +293,7 @@ async def test_say_cheese_takes_any_of_the_three_mirrors(playing, mirror):
     ],
     ids=["its old day", "the day before the old window", "midwinter", "next year"],
 )
-async def test_say_cheese_no_longer_reads_the_clock(playing, when):
+async def test_self_reflection_no_longer_reads_the_clock(playing, when):
     """**The whole of the change, from the player's side.**
 
     Its own day still works - taking a date off is not a date swap - and
@@ -303,14 +303,14 @@ async def test_say_cheese_no_longer_reads_the_clock(playing, when):
     player could reach a mirror at all, and a dated version of this could
     not be earned by anybody this year.
     """
-    assert "say_cheese" in await earned(
+    assert "self_reflection" in await earned(
         a_context("on_use", thing_id="ornate_mirror", now=when)
     )
 
 
 async def test_the_wrong_thing_still_earns_nothing(playing):
     """Undated is not unconditional. It is still three mirrors."""
-    assert "say_cheese" not in await earned(
+    assert "self_reflection" not in await earned(
         a_context("on_use", thing_id="sink", now=pacific(2026, 6, 14))
     )
 
