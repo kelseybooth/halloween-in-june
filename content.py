@@ -1815,6 +1815,41 @@ def _one_phrase(text: str, start: int, end: int, words: list[tuple[int, int]]) -
     return True
 
 
+def _phrases_in(text: str, longest: int) -> set[str]:
+    """Every phrase of up to `longest` words that `mark` could bold here.
+
+    The same windows `mark` sweeps, under the same two rules - never
+    inside an existing pair of asterisks, and the words must read as one
+    phrase - normalised and collected in one pass.
+
+    **It exists because the windows do not depend on the phrase.**
+    `marked_in_room` asks "is this thing pointed at anywhere here" of
+    every phrase in a room against every sentence in it, and asking it
+    through `mark` re-swept the sentence once per phrase: ten thousand
+    full sweeps for ten rooms, which was 4.6 of the 4.6 seconds
+    `validate` spent on the files. Enumerating the windows once and
+    looking the phrases up in the result asks the same question of the
+    same rules.
+
+    A window of k words always normalises to a phrase of k words -
+    `_words` matches runs of letters and digits, and `normalise` keeps
+    every one of them - so a phrase longer than `longest` cannot be the
+    answer to any window, and sweeping wider than the longest thing
+    anybody is asking about would only find phrases nobody can look up.
+    """
+    words = _words(text)
+    found: set[str] = set()
+    for size in range(min(longest, len(words)), 0, -1):
+        for i in range(len(words) - size + 1):
+            start, end = words[i][0], words[i + size - 1][1]
+            if text[max(0, start - 2):start] == "**" or text[end:end + 2] == "**":
+                continue
+            if not _one_phrase(text, start, end, words):
+                continue
+            found.add(normalise(text[start:end]))
+    return found
+
+
 def mark(
     text: str,
     known: dict[str, str],
@@ -1935,12 +1970,19 @@ def marked_in_room(content: "Content") -> dict[str, set[str]]:
         # rather than a mark, so it teaches nothing and is not counted.
         known = {p: next(iter(v)) for p, v in here.items() if len(v) == 1}
         found = marked.setdefault(room_id, set())
+        if not known:
+            continue
+        longest = max(len(phrase.split()) for phrase in known)
         for text in texts:
             if not text:
                 continue
-            for phrase in known:
-                if _says(text, phrase):
-                    found.add(known[phrase])
+            # **A phrase the writer bolded by hand is already spent.**
+            # `mark` registers it before the sweep begins and then
+            # declines to mark the same thing twice, so asking through
+            # `mark` answered no for it - and this has to answer no too.
+            spent = {normalise(phrase) for phrase in _bolded_in(text)}
+            for phrase in (known.keys() & _phrases_in(text, longest)) - spent:
+                found.add(known[phrase])
     return marked
 
 
