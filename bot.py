@@ -799,6 +799,44 @@ async def restock_sweep() -> None:
         if any(_slid_into_the_channel(guild.id, row) for row in report.placed):
             await _announce_arrival(guild)
 
+    await _announce_deliveries(report)
+
+
+async def _announce_deliveries(report) -> None:
+    """Tell each room what landed in it, once per delivery.
+
+    **Everybody in the thread hears it, fed or not.** A player who has
+    not fed the cat cannot see the shipping box in their room text yet,
+    and they are standing in the Entryway thread all the same - so the
+    notice is the first they know of it. The line is deliberately vague
+    about what arrived, which turns that from a leak into a tease.
+
+    Cosmetic, like every other public line: a delivery that has already
+    landed is not undone by failing to mention it.
+    """
+    for guild_id, room_id, key in report.announce:
+        guild = bot.get_guild(guild_id)
+        if guild is None:
+            continue
+        try:
+            line = await phrasing.default_say(key)
+            if not line:
+                continue
+            channel = await _game_channel(guild)
+            if channel is None:
+                continue
+            name = await resolve.room_name(room_id)
+            thread = await house_utils.get_thread_for_room(channel, name)
+            if thread is not None:
+                await thread.send(line)
+        except (discord.HTTPException, SQLAlchemyError):
+            log.warning(
+                "Could not announce a delivery in %s of guild %s",
+                room_id,
+                guild_id,
+                exc_info=True,
+            )
+
 
 def _slid_into_the_channel(guild_id: int, placed) -> bool:
     """Whether this placement is a thing now lying on the channel floor.
@@ -2778,6 +2816,36 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
             await _use_transform(interaction, state, found, row)
             return
 
+        # **"Not at all" is answered before "not again yet".**
+        #
+        # A refusal written for the state the world is in outranks the
+        # cooldown, because they answer different questions and only one
+        # of them is about this player. In `stairs_upper` the lumber has
+        # a refusal and no success text - the top steps are out of reach
+        # from the floor until somebody brings the ladder - so a player
+        # who already laid a plank today must be told about the steps,
+        # not about their muscles. Reading the clock first told
+        # half the server the wrong reason the staircase had stopped.
+        #
+        # It hands over to `_finish_use` rather than repeating the
+        # refusal, which is the one place that knows how a use is turned
+        # down, and the condition is deliberately narrow: a written
+        # refusal *and* no success beside it. A thing with neither still
+        # goes through its cooldown and falls through to `use.default`,
+        # which is what every thing without state-specific text does.
+        forbidden = await _state_refusal(
+            guild_id, user.id, found.thing_id, found.name
+        )
+        if forbidden:
+            await interaction.followup.send(forbidden, ephemeral=True)
+            await _turned_away(
+                interaction,
+                telemetry.USE,
+                telemetry.WRONG_STATE,
+                thing_id=found.thing_id,
+            )
+            return
+
         if row.use_cooldown_daily:
             await _use_once_a_day(interaction, state, found, row)
             return
@@ -2877,7 +2945,7 @@ async def _finish_use(interaction, state, found) -> None:
     user, guild_id = interaction.user, interaction.guild_id
 
     held = await states.in_force(guild_id, user.id)
-    current = sorted(held)[0] if held else resolve.DEFAULT_STATE
+    current = states.in_priority_order(held) if held else resolve.DEFAULT_STATE
     if not await phrasing.say(guild_id, found.thing_id, "use", state=current):
         refusal = await phrasing.say(
             guild_id, found.thing_id, "use_fail", state=current, name=found.name
@@ -2950,12 +3018,16 @@ async def _finish_use(interaction, state, found) -> None:
     # The text is resolved *after* the effect, so a use that changes a state
     # can be described by the state it produced rather than the one it left.
     held = await states.in_force(guild_id, user.id)
-    current = sorted(held)[0] if held else resolve.DEFAULT_STATE
+    current = states.in_priority_order(held) if held else resolve.DEFAULT_STATE
 
     reply = await phrasing.say(
         guild_id, found.thing_id, "use", state=current,
         fallback="use.default", name=found.name, **tokens,
     )
+    # The use path already has the numbers in `tokens`, so it needs the
+    # break and not the lookup.
+    if "n" in tokens and "total" in tokens:
+        reply = _count_on_its_own_line(reply, tokens["n"], tokens["total"])
     # Marked before anything is appended to it. What follows the reply -
     # an achievement, a relationship line, the hint rail - is the game
     # talking about itself rather than about the room, and nothing in it
@@ -3758,6 +3830,38 @@ async def _use_transform(interaction, state, found, row) -> None:
     await _finish_use(interaction, state, found)
 
 
+async def _state_refusal(
+    guild_id: int, user_id: int, thing_id: str, name: str
+) -> str | None:
+    """The refusal a held state writes for a thing it forbids outright.
+
+    **Read one state at a time, most specific first.** The first state
+    that writes anything at all about using this thing decides it: a
+    success means allowed, and a refusal with no success means refused.
+    A state that is silent is passed over, which is what lets
+    `house_unlocked` have nothing to say about lumber.
+
+    `default` is walked last, so a thing whose ordinary row is a refusal
+    with no success - the cat, the crumbled staircase - is turned down
+    here too. That was already `_finish_use`'s rule; doing it here as
+    well is what puts it in front of the cooldown and in front of `/go`.
+
+    Returns the text rather than a flag, because the two callers send it
+    themselves: `/use` must not spend a turn on a refused use, and
+    `/go` must not move anybody.
+    """
+    held = await states.in_force(guild_id, user_id)
+    for state in (*states.in_priority_order(held), resolve.DEFAULT_STATE):
+        if await resolve.thing_text_in_state(guild_id, thing_id, "use", state):
+            return None
+        refusal = await resolve.thing_text_in_state(
+            guild_id, thing_id, "use_fail", state
+        )
+        if refusal:
+            return phrasing.fill(refusal, name=name)
+    return None
+
+
 async def _use_once_a_day(interaction, state, found, row) -> None:
     """A thing that can be used once per Pacific day, not once per N hours.
 
@@ -3776,6 +3880,15 @@ async def _use_once_a_day(interaction, state, found, row) -> None:
     The refusal still carries {time}, now meaning the time until
     midnight, because the default string asks for it and a player who
     is told "not yet" deserves to know how long.
+
+    **Which refusal, in three steps.** `use_fail_cooldown` first, then
+    `use_fail`, then the house default. The middle one is where every
+    thing with a cooldown kept its line until drop 20, and still does -
+    the cat bed has no `use_fail_cooldown` and reads exactly as it
+    always has. The first exists because the staircase's `stairs_upper`
+    rows need `use_fail` for something else: it says the top steps are
+    out of reach, which is true for the whole server, where this
+    sentence is about one player's arms.
     """
     user, guild_id = interaction.user, interaction.guild_id
 
@@ -3784,17 +3897,24 @@ async def _use_once_a_day(interaction, state, found, row) -> None:
         today = await database.server_today(guild_id)
         opened, closes = database.pacific_day_bounds_utc(today)
         if previous >= opened:
-            await interaction.followup.send(
-                await phrasing.say(
+            held = await states.in_force(guild_id, user.id)
+            current = (
+                states.in_priority_order(held) if held else resolve.DEFAULT_STATE
+            )
+            left = phrasing.approximate_duration(
+                closes - await database.server_now(guild_id)
+            )
+            refusal = await phrasing.say(
+                guild_id, found.thing_id, "use_fail_cooldown",
+                state=current, name=found.name, time=left,
+            )
+            if not refusal:
+                refusal = await phrasing.say(
                     guild_id, found.thing_id, "use_fail",
                     fallback="use_fail.cooldown",
-                    name=found.name,
-                    time=phrasing.approximate_duration(
-                        closes - await database.server_now(guild_id)
-                    ),
-                ),
-                ephemeral=True,
-            )
+                    state=current, name=found.name, time=left,
+                )
+            await interaction.followup.send(refusal, ephemeral=True)
             await _turned_away(
                 interaction,
                 telemetry.USE,
@@ -3920,6 +4040,26 @@ async def _use_exit(interaction, state, found, row) -> None:
                 fallback="use_fail.default", name=found.name,
             ),
             ephemeral=True,
+        )
+        return
+
+    # **After the gates above, not before them.** Those two carry their
+    # own consequences - the front door's refusal is what teaches a
+    # player the house is there - so this only catches an exit they
+    # would otherwise have walked through.
+    #
+    # Drop 20's staircase is the first exit refused by a state rather
+    # than by a lock: the Upstairs Hallway is `open_at_launch`, so
+    # nothing in `rooms_unlocked` was ever going to stop anybody
+    # climbing a staircase with whole steps missing.
+    forbidden = await _state_refusal(guild_id, user.id, found.thing_id, found.name)
+    if forbidden:
+        await interaction.followup.send(forbidden, ephemeral=True)
+        await _turned_away(
+            interaction,
+            telemetry.MOVE,
+            telemetry.WRONG_STATE,
+            thing_id=found.thing_id,
         )
         return
 
@@ -4568,20 +4708,27 @@ async def _look_here(guild_id: int, user_id: int, room_id: str) -> str:
     return await _look_around(guild_id, user_id, room_id)
 
 
-async def _current_state(guild_id: int, user_id: int) -> str:
+async def _current_state(guild_id: int, user_id: int) -> tuple[str, ...] | str:
     """Which state's text this player sees.
 
     Nothing sets a state in 2c, so this is always `default` today - the
     staircase and the drawer are 2c.5. The plumbing is here so that when states
     start being set, the text follows without another pass over /look.
 
-    A player holding two states that both have text for the same entity is
-    unspecified in the Functional Spec. Sorting makes the choice deterministic
-    rather than dependent on row order, which is the least surprising thing to
-    do until somebody rules on it.
+    **Every state held, in priority order, rather than one of them.**
+    A player holding two states that both have text for the same entity
+    was unspecified in the Functional Spec, and the code took the
+    alphabetically first - deterministic, and wrong as soon as it
+    mattered. Drop 20 made it matter: a server holding `house_unlocked`
+    and `stairs_upper` described the staircase as a ruin, because `h`
+    sorts before `s`.
+
+    The resolvers take a sequence and walk it, so handing them the whole
+    set costs nothing and means a row written for any held state is
+    read. `states.in_priority_order` decides which wins.
     """
     held = await database.states_of(guild_id, user_id)
-    return sorted(held)[0] if held else resolve.DEFAULT_STATE
+    return states.in_priority_order(held) if held else resolve.DEFAULT_STATE
 
 
 async def _is_this_room(room_id: str, typed: str) -> bool:
@@ -4855,6 +5002,45 @@ async def _look_in_the_channel(guild_id: int, user_id: int) -> str:
     return description or line or await phrasing.default_say("channel.look_empty")
 
 
+# The one sentence in the game that reports a shared number, written
+# once in `defaults`-style prose across four rows: the lumber's look and
+# use, and the staircase's look, in two states each.
+REPAIR_COUNT = "{n} of {total} repairs done."
+
+
+def _count_on_its_own_line(text: str, placed: int, required: int) -> str:
+    """Move the repair count onto its own line.
+
+    **A line break the writers cannot type.** A TSV cell is one line by
+    construction, so the content says "...less like a ruin. 3 of 90
+    repairs done." and the break is put in here. It reads as a status
+    line under the prose rather than as a clause in it, which is what it
+    is: the only number in the game that belongs to the whole server.
+
+    Matched against the rendered sentence rather than guessed at with a
+    pattern, so there is nothing to go wrong when a room's prose happens
+    to use the word "repairs".
+    """
+    rendered = REPAIR_COUNT.format(n=placed, total=required)
+    return text.replace(" " + rendered, "\n" + rendered)
+
+
+async def _with_the_repair_count(guild_id: int, text: str) -> str:
+    """Fill {n} and {total} from the staircase, if the text asked for them.
+
+    **Asked for, not assumed.** `phrasing.fill` leaves a token it was
+    given no value for exactly where it found it, so text that still
+    says `{n}` after being filled is text that wants the count - which
+    makes this content-driven and free for every other look in the game.
+    A room full of scenery costs one substring test; only the lumber and
+    the staircase cost the two reads.
+    """
+    placed, required = await world.planks(guild_id)
+    return _count_on_its_own_line(
+        phrasing.fill(text, n=placed, total=required), placed, required
+    )
+
+
 async def _look_at(
     guild_id: int, user_id: int, room_id: str, found
 ) -> tuple[str, str | None]:
@@ -4899,6 +5085,11 @@ async def _look_at(
         )
     if not description:
         description = f"You see {name}."
+
+    # Before the marking, so that the count's own line is in place when
+    # the nouns are bolded and nothing gets marked across the break.
+    if "{n}" in description or "{total}" in description:
+        description = await _with_the_repair_count(guild_id, description)
 
     # **`looking_at`, which is the thing this paragraph is about.** A
     # source and what it hands out are one candidate to the resolver -

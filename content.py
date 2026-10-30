@@ -194,6 +194,14 @@ THING_TEXT_COLUMNS = (
     "take",
     "drop",
     "use_fail",
+    # **The clock's refusal, where it differs from the state's.**
+    # Blank on all but the lumber's two `stairs_upper` rows, and blank
+    # means "use `use_fail`", which is what every other thing with a
+    # cooldown wants. The two parted company in drop 20: in
+    # `stairs_upper` the lumber's `use_fail` says the top steps are out
+    # of reach, which is true for everybody, and a player who has
+    # simply already laid a plank today needs the other sentence.
+    "use_fail_cooldown",
     "take_fail",
     "drop_fail",
     # Per-exit overrides for the lines a move posts in the rooms it leaves and
@@ -251,6 +259,22 @@ class Thing:
     # Once per Pacific day rather than once per N hours. A different
     # kind of cooldown, not a different length of one.
     use_cooldown_daily: bool = False
+    # **May a randomly scattered thing land in this one?** Default yes,
+    # because almost everything open is fair game and the scatter is
+    # most of what makes the house feel lived in. The shipping box says
+    # no: its contents are a delivery on a schedule, and a used baby
+    # bottle turning up among David's spice jars reads as a bug rather
+    # than as a joke. A restock row that *names* the box still fills it
+    # - this is only about the ones that pick a container at random.
+    scatter_target: bool = True
+    # **Does standing in the room with it count as having it to hand?**
+    # Default no, which is the rule `requires` has always had for a
+    # thing somebody could pick up: the can opener has to be carried.
+    # The ladder is the exception the column exists for - it is takeable
+    # and it is also furniture while it is propped against the stairs,
+    # so a player laying a plank beside it should not have to pick it up
+    # first. Nothing sets it until the ladder arrives in drop 30.
+    to_hand_in_room: bool = False
 
     @property
     def is_exit(self) -> bool:
@@ -310,6 +334,15 @@ class Restock:
     config_key: str | None
     since_drop: int
     notes: str | None
+    # A `defaults.tsv` key posted in the room when this row delivers, or
+    # blank for the rows nobody is told about. The spice jars have one:
+    # players who have not fed the cat share the Entryway thread and
+    # cannot see the box in their room text yet, so the notice is their
+    # first sign of it - vague enough to read as a tease.
+    #
+    # Last and defaulted, like `consumed_on_use` on a thing: the rows
+    # built by hand in the tests outnumber the one that wants this.
+    arrival_notice: str | None = None
 
 
 @dataclass(frozen=True)
@@ -638,6 +671,8 @@ def load_files(directory: Path | None = None) -> Content:
                 droppable=_bool(row.get("droppable"), default=True),
                 consumed_on_use=_bool(row.get("consumed_on_use")),
                 use_cooldown_daily=_bool(row.get("use_cooldown_daily")),
+                scatter_target=_bool(row.get("scatter_target"), default=True),
+                to_hand_in_room=_bool(row.get("to_hand_in_room")),
                 cross_weight=_int(row.get("cross_weight"), default=0) or 0,
                 max_per_player=_int(row.get("max_per_player")),
                 requires=_text(row.get("requires")),
@@ -690,6 +725,7 @@ def load_files(directory: Path | None = None) -> Content:
                 window_start=_text(row.get("window_start")) or "00:00",
                 window_end=_text(row.get("window_end")) or "23:59",
                 config_key=_text(row.get("config_key")),
+                arrival_notice=_text(row.get("arrival_notice")),
                 since_drop=_since_drop(row),
                 notes=_text(row.get("notes")),
             )

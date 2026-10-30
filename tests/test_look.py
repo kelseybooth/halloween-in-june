@@ -437,15 +437,32 @@ async def test_a_bag_reads_the_way_a_room_does(house):
 # --------------------------------------------------------------------------
 
 
-async def test_looking_at_alexa_works_anywhere_in_the_house(house):
-    """`room_id = ALL`. Her description was unreachable until `reach` learned
-    the sentinel the content files had always used."""
+async def test_looking_at_the_cat_works_anywhere_in_the_house(house):
+    """`room_id = ALL`. The description was unreachable until `reach`
+    learned the sentinel the content files had always used.
+
+    This was Alexa's test until drop 20 parked her; the cat has the same
+    `room_id` and has had it since drop 0, so the mechanism is tested
+    against a row that is not waiting on a feature.
+    """
+    await content_loader.load_content(content_module.load_files())
+
+    for room in ("EN", "KI", "BE", "NU"):
+        await database.update_current_room(ALICE, GUILD_A, room)
+        reply = (await look(thing="cat")).reply
+        assert "sleek black cat winding between your feet" in reply, room
+
+
+async def test_looking_at_alexa_finds_nothing_while_she_waits(house):
+    """Parked at 99 and `room_id = ALL`, so the refusal has to be the
+    same in every room: the drop 20 work order's own acceptance test."""
     await content_loader.load_content(content_module.load_files())
 
     for room in ("EN", "KI", "BE", "NU"):
         await database.update_current_room(ALICE, GUILD_A, room)
         reply = (await look(thing="alexa")).reply
-        assert "smart speaker the size of a tuna can" in reply, room
+        assert "smart speaker" not in reply, room
+        assert "don't see" in reply, room
 
 
 async def test_alexa_is_not_in_the_also_here_line(house):

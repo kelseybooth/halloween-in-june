@@ -52,6 +52,9 @@ class RestockReport:
     """What one sweep placed, for the logs and the tests."""
 
     placed: list[tuple[int, str, str, str, int]] = field(default_factory=list)
+    # (guild, room, default key) for each delivery a room should be told
+    # about. Only the shipping box has one today.
+    announce: list[tuple[int, str, str]] = field(default_factory=list)
     guilds: int = 0
 
     @property
@@ -137,6 +140,13 @@ async def _slots(guild_id: int) -> tuple[list[tuple[str, str]], dict[str, str]]:
     exactly as likely as a whole room, which is what the work order specifies.
     The map comes back too, because a `container` row needs to find its own
     container whether or not anything else is inside it.
+
+    **A container with `scatter_target = no` is left out of the slots
+    and kept in the map**, which is the whole distinction: a row that
+    names the shipping box still delivers into it, and a row that picks
+    a container at random never picks it. The box is the only one. Its
+    contents are David's spice order arriving on a schedule, and a used
+    baby bottle among them reads as a bug rather than as a joke.
     """
     session_factory = database._require_session()
     async with session_factory() as session:
@@ -155,18 +165,28 @@ async def _slots(guild_id: int) -> tuple[list[tuple[str, str]], dict[str, str]]:
         ).all()
 
     by_container: dict[str, str] = {}
+    no_scatter: set[str] = set()
     async with session_factory() as session:
         for container_id, _ in containers:
-            room = await session.scalar(
-                select(database.ThingType.room_id).where(
-                    database.ThingType.thing_id == container_id
+            row = (
+                await session.execute(
+                    select(
+                        database.ThingType.room_id, database.ThingType.scatter_target
+                    ).where(database.ThingType.thing_id == container_id)
                 )
-            )
-            if room:
-                by_container[container_id] = room
+            ).first()
+            if row is None or not row[0]:
+                continue
+            by_container[container_id] = row[0]
+            if not row[1]:
+                no_scatter.add(container_id)
 
     slots = [(room, database.LOOSE_IN_ROOM) for room in rooms]
-    slots += [(room, container) for container, room in sorted(by_container.items())]
+    slots += [
+        (room, container)
+        for container, room in sorted(by_container.items())
+        if container not in no_scatter
+    ]
     return slots, by_container
 
 
@@ -407,6 +427,11 @@ async def run_for_guild(
             report.placed.append(
                 (guild_id, room_id, container_id, thing_id, restock.amount)
             )
+            if restock.arrival_notice:
+                # The room hears the delivery land. Collected rather than
+                # posted here: `restocking` has no Discord client, and the
+                # sweep that calls it does.
+                report.announce.append((guild_id, room_id, restock.arrival_notice))
 
         await _record_progress(guild_id, restock.restock_id, max(due))
 
@@ -545,5 +570,6 @@ async def run_all(guild_ids: list[int], *, now: datetime | None = None) -> Resto
     for guild_id in guild_ids:
         report = await run_for_guild(guild_id, now=now)
         combined.placed.extend(report.placed)
+        combined.announce.extend(report.announce)
     combined.guilds = len({row[0] for row in combined.placed})
     return combined

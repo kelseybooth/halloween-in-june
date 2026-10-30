@@ -71,8 +71,11 @@ def test_the_shipped_file_parses():
     # Thirty-five from Release 1, nine added by V3, the two October
     # holidays the writers added on 21 October, *Room Service*, which is
     # what drop 10's quest ends in, and *Bug Catcher*, which is awarded
-    # by hand and cannot be played for.
-    assert len(parsed.achievements) == 48
+    # by hand and cannot be played for. Then drop 20's two: *Are You
+    # David?* at a thousand points, and *Board Meeting*, which is parked
+    # at 99 until drop 30 builds a group award that names its
+    # contributors.
+    assert len(parsed.achievements) == 50
     assert len(parsed.achievement_ids) == 48
 
 

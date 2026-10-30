@@ -688,7 +688,9 @@ async def test_the_shipped_schedules_run(server):
     assert placed["spice_jar"] > 0
 
 
-async def test_the_spice_jars_go_in_the_amazon_box(server):
+async def test_the_spice_jars_go_in_the_shipping_box(server):
+    """Renamed from `amazon_box` in drop 20, with the brand out of the
+    prose. The id moved in four places and this is the fifth."""
     await content_loader.load_content(content_module.load_files())
     await started(days_ago=4)
 
@@ -696,7 +698,49 @@ async def test_the_spice_jars_go_in_the_amazon_box(server):
     jars = [row for row in report.placed if row[3] == "spice_jar"]
 
     assert jars
-    assert all(row[2] == "amazon_box" and row[1] == "EN" for row in jars)
+    assert all(row[2] == "shipping_box" and row[1] == "EN" for row in jars)
+
+
+async def test_nothing_scatters_into_the_shipping_box(server):
+    """**A delivery, not a dumping ground.** The bottles and the diapers
+    pick a container at random, and the box is the one container they may
+    never pick: what is in it is David's spice order, and a used baby
+    bottle among the jars reads as a bug.
+
+    The row that names the box still fills it, which is the distinction
+    `scatter_target` draws - so this asserts both halves at once, by
+    running a day's worth of scatter and checking who landed where.
+    """
+    await content_loader.load_content(content_module.load_files())
+    await started(days_ago=4)
+
+    report = await restocking.run_for_guild(GUILD_A)
+
+    into_the_box = {row[3] for row in report.placed if row[2] == "shipping_box"}
+    assert into_the_box == {"spice_jar"}
+
+
+async def test_the_delivery_is_announced_in_the_room(server):
+    """Collected here and posted by the sweep, which has the client."""
+    await content_loader.load_content(content_module.load_files())
+    await started(days_ago=4)
+
+    report = await restocking.run_for_guild(GUILD_A)
+
+    assert (GUILD_A, "EN", "delivery.arrived.public") in report.announce
+
+
+async def test_a_scattered_row_announces_nothing(server):
+    """Only the spice order has a notice. Eight bottles a day with a
+    line each would be the room talking over the players."""
+    await content_loader.load_content(content_module.load_files())
+    await started(days_ago=4)
+
+    report = await restocking.run_for_guild(GUILD_A)
+    bottles = [row for row in report.placed if row[3] == "used_baby_bottle"]
+
+    assert bottles
+    assert all(key == "delivery.arrived.public" for _, _, key in report.announce)
 
 
 async def test_the_box_is_empty_until_day_two(server):

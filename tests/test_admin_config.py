@@ -38,38 +38,38 @@ async def server(db):
 
 
 async def test_a_setting_can_be_changed(server):
-    interaction = await configure("planks_required", 4)
+    interaction = await configure("staircase_planks", 4)
 
-    assert await database.get_setting(GUILD_A, "planks_required") == 4
+    assert await database.get_setting(GUILD_A, "staircase_planks") == 4
     assert "4" in interaction.reply
     assert interaction.was_private
 
 
 async def test_the_reply_says_what_it_was(server):
-    await configure("planks_required", 4)
-    interaction = await configure("planks_required", 6)
+    await configure("staircase_planks", 4)
+    interaction = await configure("staircase_planks", 6)
 
     assert "was 4" in interaction.reply
 
 
 async def test_an_unset_setting_reads_as_its_default(server):
-    default = database.CONFIG_KEYS["planks_required"][0]
-    assert await database.get_setting(GUILD_A, "planks_required") == default
+    default = database.CONFIG_KEYS["staircase_planks"][0]
+    assert await database.get_setting(GUILD_A, "staircase_planks") == default
 
 
 async def test_keys_are_case_insensitive_and_trimmed(server):
-    await configure("  PLANKS_REQUIRED  ", 3)
-    assert await database.get_setting(GUILD_A, "planks_required") == 3
+    await configure("  STAIRCASE_PLANKS  ", 3)
+    assert await database.get_setting(GUILD_A, "staircase_planks") == 3
 
 
 async def test_settings_are_per_server(db):
     for guild in (GUILD_A, GUILD_B):
         await db.ensure_user_exists(ALICE, guild)
-    await configure("planks_required", 3, guild_id=GUILD_A)
+    await configure("staircase_planks", 3, guild_id=GUILD_A)
 
-    assert await database.get_setting(GUILD_A, "planks_required") == 3
-    assert await database.get_setting(GUILD_B, "planks_required") == (
-        database.CONFIG_KEYS["planks_required"][0]
+    assert await database.get_setting(GUILD_A, "staircase_planks") == 3
+    assert await database.get_setting(GUILD_B, "staircase_planks") == (
+        database.CONFIG_KEYS["staircase_planks"][0]
     )
 
 
@@ -119,15 +119,15 @@ async def test_an_unreadable_stored_value_falls_back_to_the_default(server):
         session.add(
             database.ConfigHistory(
                 guild_id=GUILD_A,
-                key="planks_required",
+                key="staircase_planks",
                 value="lots",
                 effective_from=datetime(2026, 10, 1),
             )
         )
         await session.commit()
 
-    assert await database.get_setting(GUILD_A, "planks_required") == (
-        database.CONFIG_KEYS["planks_required"][0]
+    assert await database.get_setting(GUILD_A, "staircase_planks") == (
+        database.CONFIG_KEYS["staircase_planks"][0]
     )
 
 
@@ -146,7 +146,7 @@ async def test_lowering_the_plank_target_finishes_a_stalled_staircase(server):
     await database.record_use(ALICE, GUILD_A, "lumber")
     assert not await states.has(GUILD_A, ALICE, world.STAIRS_REPAIRED)
 
-    interaction = await configure("planks_required", 1)
+    interaction = await configure("staircase_planks", 1)
 
     assert "the staircase is finished" in interaction.reply.lower()
     assert await states.has(GUILD_A, ALICE, world.STAIRS_REPAIRED)
@@ -158,14 +158,14 @@ async def test_raising_the_target_does_not_unrepair_it(server):
     import world
 
     await database.record_use(ALICE, GUILD_A, "lumber")
-    await configure("planks_required", 1)
-    await configure("planks_required", 50)
+    await configure("staircase_planks", 1)
+    await configure("staircase_planks", 50)
 
     assert await states.has(GUILD_A, ALICE, world.STAIRS_REPAIRED)
 
 
 async def test_no_such_note_when_the_target_is_not_met(server):
-    interaction = await configure("planks_required", 8)
+    interaction = await configure("staircase_planks", 8)
     assert "already placed" not in interaction.reply
 
 

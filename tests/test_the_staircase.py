@@ -1,0 +1,372 @@
+"""Drop 20: the grand staircase, which the whole server repairs together.
+
+Ninety planks, one per player per day, counted per server. It is the
+game's first shared job with a number attached, and nearly everything
+here follows from that one sentence.
+
+**Why planks and not people.** It counted distinct players until drop
+20, when ten of them finished it and the wait between turns was 48
+rolling hours. Ninety at one a day means a server of 27 takes about
+three and a half days, and the 18 most active players cannot quietly
+finish it on their own in an afternoon.
+
+**Why it stops at 72.** The last fifth of the stairs is out of reach
+from the floor. The ladder arrives in drop 30, so drop 20 ships the
+stopping point without the thing that passes it: the repair reaches
+`stairs_upper` and waits there, on purpose, and the prose says so.
+
+The drop matters in this file, so every test sets it. At drop 20 the
+lumber's `stairs_upper` row has a refusal and no success text; the drop
+30 row has the ladder's success text, and a test standing on drop 50
+would be testing next drop's staircase.
+"""
+
+import pytest
+
+from conftest import ALICE, BOB, GUILD_A
+from fake_discord import FakeChannel, FakeGuild, FakeInteraction, FakeMember
+
+import achievements
+import bot
+import content as content_module
+import content_loader
+import database
+import resolve
+import states
+import triggers
+import world
+
+
+THIS_DROP = 20
+
+
+@pytest.fixture(autouse=True)
+def registry():
+    achievements.clear()
+    triggers.register_all()
+    triggers.forget_arrivals()
+    yield
+    achievements.clear()
+
+
+@pytest.fixture(autouse=True)
+def forget_admissions():
+    bot._ADMITTING.clear()
+    yield
+    bot._ADMITTING.clear()
+
+
+@pytest.fixture
+async def hall(db):
+    """Drop 20, the front door open, Alice and Bob in the Entryway.
+
+    Both have fed the cat. The repair does not require it - a player who
+    guesses "lumber" can lay a plank, which drop 20 decided on purpose -
+    but the room text does, and a fixture that left them unfed would
+    make every description assertion here fail on a condition none of
+    these tests is about. `test_feeding` owns that gate.
+    """
+    halloween = FakeChannel(name="halloween")
+    guild = FakeGuild(
+        GUILD_A, channels=[halloween], members=[FakeMember(ALICE), FakeMember(BOB)]
+    )
+    await content_loader.load_content(content_module.load_files())
+    rooms = {rid: name for rid, name in await resolve.all_rooms()}
+    halloween.add_active(*[name for rid, name in rooms.items() if rid != "CH"])
+    await database.set_announcement_channel(GUILD_A, halloween.id)
+    await resolve.set_current_drop(GUILD_A, THIS_DROP)
+    await states.set_server_state(GUILD_A, world.HOUSE_UNLOCKED)
+    for who in (ALICE, BOB):
+        await db.start_game(who, GUILD_A, "EN", await resolve.rooms_open_at_launch())
+        await db.notice(GUILD_A, who, content_module.FED_THE_CAT)
+    return db, guild, halloween, rooms
+
+
+def thread(hall, room_name):
+    _, _, halloween, _ = hall
+    return next(t for t in halloween.threads if t.name == room_name)
+
+
+async def run(hall, command, arg=None, *, who=ALICE):
+    _, guild, _, rooms = hall
+    interaction = FakeInteraction(
+        who, GUILD_A, guild=guild, channel=thread(hall, rooms["EN"])
+    )
+    args = () if arg is None else (arg,)
+    await command.callback(interaction, *args)
+    return interaction
+
+
+def replies(interaction) -> str:
+    return "\n".join(text for text, _ in interaction.sent if text)
+
+
+async def plank(hall, who=ALICE) -> str:
+    return replies(await run(hall, bot.use, "lumber", who=who))
+
+
+async def a_day_later(db, days=1):
+    await db.set_setting(GUILD_A, database.CLOCK_KEY, days)
+
+
+async def target(db, planks):
+    """A smaller staircase, so a test can reach its end in a few calls."""
+    await db.set_setting(GUILD_A, world.PLANKS_SETTING, planks)
+
+
+# --------------------------------------------------------------------------
+# The count
+# --------------------------------------------------------------------------
+
+
+async def test_a_plank_is_counted(hall):
+    await plank(hall)
+
+    placed, _ = await world.planks(GUILD_A)
+    assert placed == 1
+
+
+async def test_the_count_is_planks_and_not_people(hall):
+    """**The change drop 20 made.** Two players, two planks, and the
+    count is two either way - so this would pass under the old rule as
+    well. What distinguishes them is the next test."""
+    await plank(hall)
+    await plank(hall, who=BOB)
+
+    placed, _ = await world.planks(GUILD_A)
+    assert placed == 2
+
+
+async def test_the_same_player_on_two_days_counts_twice(hall):
+    """Under the old distinct-player rule this stayed at one forever,
+    which is what made ten players enough to finish the staircase."""
+    db, *_ = hall
+    await plank(hall)
+    await a_day_later(db)
+
+    await plank(hall)
+
+    placed, _ = await world.planks(GUILD_A)
+    assert placed == 2
+
+
+async def test_the_default_target_is_ninety(hall):
+    _, required = await world.planks(GUILD_A)
+    assert required == 90
+
+
+async def test_a_plank_pays_no_relationship(hall):
+    """It is work done on the house, not attention paid to the cat.
+
+    Worth pinning because *Are You David?* arrived in the same drop: if
+    a plank paid points, a server could hammer its way to a thousand.
+    """
+    db, *_ = hall
+    before = await db.get_relationship(ALICE, GUILD_A)
+
+    await plank(hall)
+
+    assert await db.get_relationship(ALICE, GUILD_A) == before
+
+
+# --------------------------------------------------------------------------
+# One a day
+# --------------------------------------------------------------------------
+
+
+async def test_a_second_plank_the_same_day_is_refused(hall):
+    await plank(hall)
+
+    assert "muscles will want about" in await plank(hall)
+
+
+async def test_and_does_not_count(hall):
+    await plank(hall)
+    await plank(hall)
+
+    placed, _ = await world.planks(GUILD_A)
+    assert placed == 1
+
+
+async def test_tomorrow_it_works_again(hall):
+    db, *_ = hall
+    await plank(hall)
+    await a_day_later(db)
+
+    assert "hammer" in await plank(hall)
+
+
+async def test_the_limit_is_per_player(hall):
+    """Alice using her turn does not spend Bob's."""
+    await plank(hall)
+
+    assert "muscles" not in await plank(hall, who=BOB)
+
+
+# --------------------------------------------------------------------------
+# What the count looks like
+# --------------------------------------------------------------------------
+
+
+async def test_the_use_reports_the_count_on_its_own_line(hall):
+    reply = await plank(hall)
+
+    assert "\n1 of 90 repairs done." in reply
+
+
+async def test_looking_at_the_lumber_reports_it_too(hall):
+    """The open question drop 20 answered: between planks a player had
+    no way to see where the work had got to."""
+    await plank(hall)
+
+    reply = replies(await run(hall, bot.look, "lumber"))
+
+    assert "\n1 of 90 repairs done." in reply
+
+
+async def test_looking_at_the_staircase_reports_it_too(hall):
+    await plank(hall)
+
+    reply = replies(await run(hall, bot.look, "staircase"))
+
+    assert "\n1 of 90 repairs done." in reply
+
+
+async def test_a_look_that_never_asked_for_the_count_is_untouched(hall):
+    """The filling is driven by the text asking for it, so everything
+    else in the house costs one substring test and no queries."""
+    reply = replies(await run(hall, bot.look, "mirror"))
+
+    assert "repairs done" not in reply
+    assert "{n}" not in reply
+
+
+async def test_no_token_survives_into_a_reply(hall):
+    """The failure this whole change existed to fix: before it, the
+    lumber's look showed players a literal `{n} of {total}`."""
+    await plank(hall)
+
+    for subject in ("lumber", "staircase"):
+        assert "{" not in replies(await run(hall, bot.look, subject))
+
+
+# --------------------------------------------------------------------------
+# The top steps
+# --------------------------------------------------------------------------
+
+
+async def test_the_upper_state_arrives_at_four_fifths(hall):
+    """Five planks, so the threshold is four. Rounded down, which is
+    what makes a QA server reach the same moment as a real one."""
+    db, *_ = hall
+    await target(db, 5)
+
+    for day in range(3):
+        await a_day_later(db, day)
+        await plank(hall)
+        assert not await states.has(GUILD_A, ALICE, world.STAIRS_UPPER), day
+
+    await a_day_later(db, 3)
+    await plank(hall)
+
+    assert await states.has(GUILD_A, ALICE, world.STAIRS_UPPER)
+
+
+async def test_and_the_staircase_is_not_repaired_by_it(hall):
+    db, *_ = hall
+    await target(db, 5)
+    for day in range(4):
+        await a_day_later(db, day)
+        await plank(hall)
+
+    assert not await states.has(GUILD_A, ALICE, world.STAIRS_REPAIRED)
+
+
+async def test_the_next_plank_is_refused_for_the_steps(hall):
+    db, *_ = hall
+    await target(db, 5)
+    for day in range(4):
+        await a_day_later(db, day)
+        await plank(hall)
+    await a_day_later(db, 5)
+
+    assert "too high to fix without something to stand on" in await plank(hall)
+
+
+async def test_the_count_stops_there(hall):
+    db, *_ = hall
+    await target(db, 5)
+    for day in range(4):
+        await a_day_later(db, day)
+        await plank(hall)
+    await a_day_later(db, 5)
+    await plank(hall)
+
+    placed, _ = await world.planks(GUILD_A)
+    assert placed == 4
+
+
+async def test_the_steps_are_the_reason_even_for_a_player_who_already_laid_one(hall):
+    """**The ordering this drop had to fix.**
+
+    A player who has already used their turn today, in `stairs_upper`,
+    was told their muscles needed a rest - which is a true sentence
+    about them and the wrong answer about the staircase. "Not at all"
+    outranks "not again yet", because only one of them is about this
+    player, and a server reading the cooldown line would conclude the
+    repair was still going.
+    """
+    db, *_ = hall
+    await target(db, 5)
+    for day in range(3):
+        await a_day_later(db, day)
+        await plank(hall)
+    await a_day_later(db, 3)
+    await plank(hall, who=BOB)  # the fourth plank, which sets the state
+    assert await states.has(GUILD_A, ALICE, world.STAIRS_UPPER)
+
+    # Alice already laid hers today, before the state changed.
+    reply = await plank(hall)
+
+    assert "too high to fix" in reply
+    assert "muscles" not in reply
+
+
+async def test_the_room_says_the_stairs_are_mostly_mended(hall):
+    db, *_ = hall
+    await target(db, 5)
+    for day in range(4):
+        await a_day_later(db, day)
+        await plank(hall)
+
+    reply = replies(await run(hall, bot.look))
+
+    assert "mended most of the way up" in reply
+    assert "is a ruin" not in reply
+
+
+async def test_going_up_runs_out_of_steps(hall):
+    db, *_ = hall
+    await target(db, 5)
+    for day in range(4):
+        await a_day_later(db, day)
+        await plank(hall)
+
+    reply = replies(await run(hall, bot.go, "staircase"))
+
+    assert "before the steps run out" in reply
+
+
+async def test_drop_20_cannot_finish_the_staircase(hall):
+    """The drop's own limit, stated as a test. Four fifths of the work
+    is all that is reachable, so no amount of hammering gets there."""
+    db, *_ = hall
+    await target(db, 5)
+    for day in range(12):
+        await a_day_later(db, day)
+        await plank(hall)
+        await plank(hall, who=BOB)
+
+    placed, _ = await world.planks(GUILD_A)
+    assert placed == 4
+    assert not await states.has(GUILD_A, ALICE, world.STAIRS_REPAIRED)

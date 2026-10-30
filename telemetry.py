@@ -56,6 +56,7 @@ from database import (  # noqa: F401 - the vocabulary, re-exported for call site
     UNLOCK,
     USE,
     WRONG_PLACE,
+    WRONG_STATE,
     WRONG_ROOM,
     WRONG_TIME_AND_PLACE,
 )

@@ -251,6 +251,8 @@ def _rows_for(parsed: Content) -> dict[str, list[dict]]:
                 "droppable": t.droppable,
                 "consumed_on_use": t.consumed_on_use,
                 "use_cooldown_daily": t.use_cooldown_daily,
+                "scatter_target": t.scatter_target,
+                "to_hand_in_room": t.to_hand_in_room,
                 "cross_weight": t.cross_weight,
                 "max_per_player": t.max_per_player,
                 "requires": t.requires,
@@ -355,6 +357,7 @@ def _rows_for(parsed: Content) -> dict[str, list[dict]]:
                 "window_start": r.window_start,
                 "window_end": r.window_end,
                 "config_key": r.config_key,
+                "arrival_notice": r.arrival_notice,
                 "since_drop": r.since_drop,
                 "notes": r.notes,
             }
