@@ -37,7 +37,7 @@ In plain terms: start ≤ now < end, with both ends converted from Pacific time.
 | Achievement | Trigger | Unlock text | Drop |
 | --- | --- | --- | --- |
 | *Brewing Trouble* | Any successful `/use` of the coffee maker | Drank coffee. | 30 |
-| *Say Cheese* | Any successful `/use` of any of the three mirrors | Checked a mirror. | 20 |
+| *Self-Reflection* | Any successful `/use` of any of the three mirrors | Checked a mirror. | 20 |
 | *Using Your Noodle* | Any successful `/use` of the pasta pot | Put a pot on. | 30 |
 | *Nacho Average Ghost* | Any successful `/use` of the nacho chips. **Changed 30 October** | Snacked on the nacho chips. | 30 |
 | *Green Thumb* | All three, per player, in any order and on any days: `/use` the watering can, `/take` herbs from the herb garden, `/use` (carve) a pumpkin. Listens on `on_use` and `on_take`, and needs a per-player record of which of the three are done. **Changed 30 October** | Watered the garden, picked the herbs and carved a pumpkin. The courtyard has a gardener again. | 30, but carving needs the carving tools from drop 40 |
@@ -52,7 +52,7 @@ Use a QA server with a fake clock, or an admin override for "now".
 - **Familiar:** a command at 30 Oct 14:59 UTC earns nothing. One at 15:00 UTC earns it. `/stats` and `/help` count. One at 1 Nov 10:59 UTC still earns it, and one at 11:00 UTC doesn't.
 - **Lucky Black Cat:** a pet at 26 Oct 15:00 UTC earns it, an unfriendly pet included. A pet at 28 Oct 10:00 UTC doesn't.
 - **Curbside Pickup,** at drop 30: `/use trash can` on a Monday at 08:00 Pacific earns it, and on a Wednesday at 03:00 Pacific doesn't.
-- **Undated:** *Say Cheese* fires from `/use mirror` on an ordinary day at drop 20, and *Nacho Average Ghost* from `/use nacho chips` at drop 30.
+- **Undated:** *Self-Reflection* fires from `/use mirror` on an ordinary day at drop 20, and *Nacho Average Ghost* from `/use nacho chips` at drop 30.
 - **Green Thumb,** at drop 40: watering, picking herbs and carving a pumpkin on three different days earns it after the third. Any two of them earn nothing.
 - **Trash Panda** doesn't appear in any achievement list.
 
