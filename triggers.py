@@ -11,8 +11,11 @@ what fires. Where a predicate departs from it, the docstring says so and why.
 
 Three families do most of the work and are written once:
 
-- **the date-gated seven** share `_on_date`, parameterised by a day test and a
-  set of targets, because six fixed dates and one weekday are the same shape
+- **the date-gated six** share `_on_date`, parameterised by a day test and a
+  set of targets, because five fixed dates and one weekday are the same shape.
+  They were seven: *Say Cheese* lost its date on 21 October, and four more are
+  due to - see `Date-restricted achievements.md`, which is authoritative for
+  which achievements check a date at all
 - **the three group achievements** share one per-room read, because all three
   are the same `GROUP BY room_id` with a different `HAVING`
 - **the seven blocked** share `_blocked`, which is a predicate that says no.
@@ -160,9 +163,9 @@ def _window_is_open(now: datetime, matches: "Callable[[date], bool]") -> bool:
 def on_october(day_of_month: int) -> "Callable[[date], bool]":
     """A fixed October date, in any year.
 
-    Year-agnostic on purpose: pinning 2026 would quietly retire seven
-    achievements on 1 January, and "this thing, this day, Pacific" says
-    nothing about the year.
+    Year-agnostic on purpose: pinning 2026 would quietly retire the
+    dated achievements on 1 January, and "this thing, this day,
+    Pacific" says nothing about the year.
     """
     return lambda day: day.month == 10 and day.day == day_of_month
 
@@ -241,8 +244,28 @@ async def familiar(context: Context) -> bool:
     return _window_is_open(context.when, on_october(HALLOWEEN))
 
 
+def _on_thing(targets: set[str]):
+    """One thing (or one of a set), on any day at all.
+
+    **What a dated achievement becomes when the date comes off.** The
+    writers retired six of the dates - the rooms three of them need open
+    at drop 30, which is after their days had passed, so a dated version
+    could not be earned this year by anybody. `Date-restricted
+    achievements.md` carries the decision and the reasoning.
+
+    The `since_drop` gate still applies, and for *Say Cheese* it is the
+    whole of what is left: drop 20 opened the Entryway's mirror, and the
+    two other mirrors arrive with drops 40 and 50.
+    """
+
+    async def predicate(context: Context) -> bool:
+        return context.thing_id in targets
+
+    return predicate
+
+
 def _on_date(matches, targets: set[str], *, source_only: bool = False):
-    """One thing (or one of a set), on one day. Six of the seven are this.
+    """One thing (or one of a set), on one day. Five of the six are this.
 
     `source_only` is *Green Thumb*'s `on_take` half: taking herbs **from the
     herb garden** is gardening, and picking up a `herbs` somebody dropped in
@@ -783,7 +806,9 @@ def register_all() -> None:
     add("signed_sealed_delivered", "on_use", _blocked("the doorbell"))
     add("brewing_trouble", "on_use", _on_date(on_october(1), {KEURIG}))
     add("trash_panda", "on_use", _on_date(on_october(1), {TRASH_CAN}))
-    add("say_cheese", "on_use", _on_date(on_october(2), MIRRORS))
+    # No longer World Smile Day. Any mirror, any day, any year - the one
+    # of the six undated ones whose room is already open.
+    add("say_cheese", "on_use", _on_thing(MIRRORS))
     # The one that shapes the signature: three things across two hooks.
     add(
         "green_thumb",

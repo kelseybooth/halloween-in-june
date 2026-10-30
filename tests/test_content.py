@@ -61,8 +61,12 @@ def test_the_shipped_content_parses():
     # coming open. Then one more, where `pet.crowding` became a line per
     # mood: the standoffish one replaces the response it used to follow.
     # Then drop 20's two: the spice delivery landing in the shipping box,
-    # and the last plank going into the staircase.
-    assert len(c.defaults) == 124
+    # and the last plank going into the staircase. Then the shipping
+    # box's four own play refusals, which the drop 2 deck wrote and the
+    # picker could not reach until it was handed a thing id. The twelve
+    # generic ones moved under `any.` in the same change and are still
+    # twelve rows.
+    assert len(c.defaults) == 128
     assert len(c.drops) == 9      # 0 to 3 built; 10 to 50 named ahead of their content
     assert len(c.restocks) == 4  # the toy channel row joined them
 

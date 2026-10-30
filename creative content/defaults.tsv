@@ -88,18 +88,22 @@ hint.new_quest.named	A new quest is available. {quest_name}: {quest_prompt}
 channel.look_empty	Nothing here but the cat, and she was here already.
 channel.arrival	The cat swats her paw and something slides a couple feet away... something that didn't appear to be here before now.
 drop.1.announce	The cat swats her paw and something slides a couple feet away... something that didn't appear to be here before now.
-use_fail.toy.1	The cat looks at the {name}. She looks at you.
-use_fail.toy.2	You have the cat's attention for most of a second. The {name} does not hold it.
-use_fail.toy.3	One of the cat's ears turns toward the {name}. The rest of her declines to follow.
-use_fail.toy.4	The cat watches the {name}.
-use_fail.toy.5	The cat's tail moves once. You could choose to read this as interest, if you were hopeful.
-use_fail.toy.6	The cat blinks at the {name}, then at the middle distance, where something more interesting is apparently happening.
-use_fail.toy.7	The cat lies down, but keeps one eye on the {name}.
-use_fail.toy.8	The cat sits up and watches you. She does not get up.
-use_fail.toy.9	The cat sniffs the {name} once and settles back down.
-use_fail.toy.10	The cat crosses half the room, stops short of the {name}, and sits.
-use_fail.toy.11	The cat puts one paw on the {name} and leaves it there.
-use_fail.toy.12	The cat's pupils go wide at the {name}. Nothing else about her moves.
+use_fail.toy.any.1	The cat looks at the {name}. She looks at you.
+use_fail.toy.any.2	You have the cat's attention for most of a second. The {name} does not hold it.
+use_fail.toy.any.3	One of the cat's ears turns toward the {name}. The rest of her declines to follow.
+use_fail.toy.any.4	The cat watches the {name}.
+use_fail.toy.any.5	The cat's tail moves once. You could choose to read this as interest, if you were hopeful.
+use_fail.toy.any.6	The cat blinks at the {name}, then at the middle distance, where something more interesting is apparently happening.
+use_fail.toy.any.7	The cat lies down, but keeps one eye on the {name}.
+use_fail.toy.any.8	The cat sits up and watches you. She does not get up.
+use_fail.toy.any.9	The cat sniffs the {name} once and settles back down.
+use_fail.toy.any.10	The cat crosses half the room, stops short of the {name}, and sits.
+use_fail.toy.any.11	The cat puts one paw on the {name} and leaves it there.
+use_fail.toy.any.12	The cat's pupils go wide at the {name}. Nothing else about her moves.
+use_fail.toy.shipping_box.1	You fold the flaps back. The cat crosses the room to see what you are doing, and stops there.
+use_fail.toy.shipping_box.2	You pick the box up and give it a heft, for no reason you could name. The cat watches you do it with real interest.
+use_fail.toy.shipping_box.3	You spin the box on the floor. It makes one full turn before coming to a halt. The cat side-eyes it from where she is.
+use_fail.toy.shipping_box.4	You push the box a few inches to the left, which improves nothing. The cat tracks it the whole way.
 hint.look_toy	You can look at this new item. Try /look {name}.
 hint.take_toy	This toy can be picked up. Try /take {name}.
 hint.use_toy	Give this toy a shake. Try /use {name}.

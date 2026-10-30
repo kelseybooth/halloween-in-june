@@ -276,8 +276,42 @@ async def test_a_date_achievement_is_not_pinned_to_2026(playing):
 
 @pytest.mark.parametrize("mirror", sorted(triggers.MIRRORS))
 async def test_say_cheese_takes_any_of_the_three_mirrors(playing, mirror):
+    """On an ordinary day, which is the change. It was World Smile Day,
+    2 October, and the writers took the date off on 21 October."""
     assert "say_cheese" in await earned(
-        a_context("on_use", thing_id=mirror, now=pacific(2026, 10, 2))
+        a_context("on_use", thing_id=mirror, now=pacific(2026, 6, 14))
+    )
+
+
+@pytest.mark.parametrize(
+    "when",
+    [
+        pacific(2026, 10, 2),
+        pacific(2026, 9, 30),
+        pacific(2026, 12, 25),
+        pacific(2027, 3, 1),
+    ],
+    ids=["its old day", "the day before the old window", "midwinter", "next year"],
+)
+async def test_say_cheese_no_longer_reads_the_clock(playing, when):
+    """**The whole of the change, from the player's side.**
+
+    Its own day still works - taking a date off is not a date swap - and
+    so does every other day, in this year and the next. The reason the
+    date went is in `Date-restricted achievements.md`: drop 20 opened the
+    Entryway's mirror on 29 October, so 2 October had passed before any
+    player could reach a mirror at all, and a dated version of this could
+    not be earned by anybody this year.
+    """
+    assert "say_cheese" in await earned(
+        a_context("on_use", thing_id="ornate_mirror", now=when)
+    )
+
+
+async def test_the_wrong_thing_still_earns_nothing(playing):
+    """Undated is not unconditional. It is still three mirrors."""
+    assert "say_cheese" not in await earned(
+        a_context("on_use", thing_id="sink", now=pacific(2026, 6, 14))
     )
 
 
@@ -305,14 +339,28 @@ async def test_the_tuesday_window_widens_the_same_way(playing):
     )
 
 
-async def test_the_tuesday_windows_near_october_first_do_not_collide(playing):
-    """*Trash Panda* and *Curbside Pickup* both watch the trash can. The
-    nearest Tuesday windows close on 30 September at 03:00 and reopen on 5
-    October at 08:00, both clear of the 1 October window."""
-    both = await earned(
-        a_context("on_use", thing_id="trash_can", now=pacific(2026, 10, 1, 12))
+async def test_the_trash_can_on_the_first_of_october_earns_nothing(playing):
+    """**What is left of the Trash Panda collision.**
+
+    Both used to watch the trash can - *Trash Panda* on 1 October,
+    *Curbside Pickup* every Tuesday - and the nearest Tuesday windows
+    close on 30 September at 03:00 and reopen on 5 October at 08:00,
+    both clear of it. The collision cannot happen now: *Trash Panda* is
+    parked at drop 99, so it never arrives and nothing dispatches it.
+    1 October 2026 is a Thursday, and the trash can on a Thursday is
+    nobody's achievement.
+
+    This asserted `{"trash_panda"}` until today, and passed only when
+    the run happened to put it behind something that left the registry
+    in a different state. `-n 4` reshuffles that distribution whenever
+    the suite gains a test, which is what finally made it fail.
+    """
+    assert (
+        await earned(
+            a_context("on_use", thing_id="trash_can", now=pacific(2026, 10, 1, 12))
+        )
+        == set()
     )
-    assert both == {"trash_panda"}
 
 
 async def test_trash_panda_and_curbside_pickup_are_both_evaluated(playing):

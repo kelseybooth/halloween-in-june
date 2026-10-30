@@ -153,9 +153,32 @@ until this row every toy was carriable and every fixture was not.
   rail never names it — not even the rung that tells you a toy can be picked up, which
   would be false of this one anyway.
 * **Its `use_fail` is the cooldown line**, "The cat has moved on", which is what a toy's
-  `use_fail` means. The four box-specific refusals in the deck have nowhere to go yet:
-  the ramp draws from the shared `use_fail.toy.1`–`12` pool, and a per-thing version of
-  those is its own change.
+  `use_fail` means — she is finished, not uninterested. A player reads it only after
+  a play has landed, by offering the box again inside the ten-minute cooldown.
+* **Its four own refusals are live**, as of 30 October. See below.
+
+### A toy can have refusals of its own (30 October)
+
+The twelve rotating refusals a failed offer draws from have moved from
+`use_fail.toy.1`–`12` to **`use_fail.toy.any.1`–`12`**, and a single toy's own lines
+go beside them as **`use_fail.toy.<thing_id>.1`, `.2`, …** — so the shipping box's
+four, written in *Drop 2 copy deck — toys* §4 and marked Final since drop 2, are
+`use_fail.toy.shipping_box.1` through `.4`. They had no home until now: the picker took
+a toy's *name* and never its id, so the only pool was the generic twelve.
+
+Three things to know before writing more of them.
+
+* **Custom lines join the pool; they do not replace it.** This is §4's own rule — the
+  twelve stay available as a backstop, so one good line for a toy is one row rather than
+  twelve, and nothing is left uncovered. Four beside twelve means the box's own come up
+  about a quarter of the time.
+* **Which is also what keeps §4's other rule affordable.** No refusal may read as a
+  verdict on the object. The same custom line on every failed offer is a verdict however
+  carefully it is worded, so a short list drawn among the twelve is the shape that works.
+* **A key naming no toy is now an error at load**, rather than copy nobody ever reads.
+  `use_fail.toy.shiping_box.1` used to be a line that simply never appeared, with nothing
+  anywhere to say so; the loader refuses it now. `any` is the generic pool and owns no
+  thing.
 
 ## Changes on 27 September
 
@@ -242,7 +265,7 @@ to `48` on `lumber` and blank everywhere else. New default `use_fail.cooldown`. 
 because "You've already done your part" was true under the old one-plank-ever rule and
 is wrong now:
 
-> You've set your plank. Your muscles will want about {time} before the next one.
+> You've set your plank. Your muscles will want {time} before the next one.
 
 *Added by the drop 20 build:* that line now lives in a new `thing_text.tsv` column,
 `use_fail_cooldown`, on the lumber's two `stairs_upper` rows. The two refusals had to
@@ -253,6 +276,12 @@ Leave `use_fail_cooldown` blank on anything else and the cooldown keeps reading
 
 `{time}` is a new template token — the remaining cooldown, rendered by the engine. It
 needs adding to the Templating section of the Content Schema.
+
+**The token already says "about".** It renders as `about 14 hours`, `about 40 minutes`, `about 2
+days`, or `a minute` when the wait is nearly up — the vagueness is the point, so nobody sits
+watching a countdown. A sentence that writes its own *about* in front of it reads "want about
+about 14 hours", which is what the line quoted above did until 30 October. Write around the
+token, not up to it.
 
 The engine side is the real cost: nothing currently records a per-player, per-thing last
 used time. `pet_events` is the only behavioral log and it is shaped for the mood window.

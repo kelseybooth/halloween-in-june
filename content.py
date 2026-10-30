@@ -186,6 +186,15 @@ CARRIABLE_TYPES = {"object", "toy"}
 # A room_id every server has, used by things that exist everywhere (the Alexa).
 EVERYWHERE = "ALL"
 
+# Where a toy's rotating play refusals live. Two prefixes in one family:
+# this plus `any.` is every line any toy can draw, and this plus a
+# `thing_id` is one toy's own. The generic twelve are numbered under
+# `any` rather than directly under the family because a bare
+# `use_fail.toy.` would match both pools at once, and the picker reads
+# each of them with a plain prefix match.
+TOY_REFUSAL_PREFIX = "use_fail.toy."
+ANY_TOY_REFUSAL_PREFIX = TOY_REFUSAL_PREFIX + "any."
+
 # Text columns, in the order a resolver falls back through them.
 THING_TEXT_COLUMNS = (
     "look",
@@ -871,6 +880,7 @@ def validate(content: Content) -> list[str]:
     problems += _check_art(content)
     problems += _check_consumables(content)
     problems += _check_cooldowns(content)
+    problems += _check_toy_refusals(content)
     return problems
 
 
@@ -1690,6 +1700,36 @@ def _check_consumables(content: Content) -> list[str]:
                 "transforms into or restocks it, so using it would destroy it "
                 "for good"
             )
+    return problems
+
+
+def _check_toy_refusals(content: Content) -> list[str]:
+    """A toy's own play refusal has to name a toy that exists.
+
+    **This one fails silently by construction.** The pool is found by
+    prefix, so a key nothing matches is not an error at runtime - the
+    toy draws from the generic twelve, the player reads a perfectly good
+    refusal, and the custom lines are never seen by anybody. The four
+    the writers wrote for the shipping box sat in the deck unreachable
+    for a month for want of the per-thing lookup; a typo in the id now
+    fails the same way and just as quietly, which is what this is for.
+
+    `any` is the generic pool and owns no thing. A numeric owner is the
+    old flat `use_fail.toy.5` shape, which this also catches.
+    """
+    toys = {thing.thing_id for thing in content.things if thing.type == "toy"}
+    problems = []
+    for key in sorted(content.defaults):
+        if not key.startswith(TOY_REFUSAL_PREFIX):
+            continue
+        owner = key[len(TOY_REFUSAL_PREFIX) :].split(".")[0]
+        if owner == "any" or owner in toys:
+            continue
+        problems.append(
+            f"default {key} is a play refusal for '{owner}', which is not a "
+            "toy; the pool is matched by prefix, so nothing would ever read "
+            "it and nothing would say so"
+        )
     return problems
 
 

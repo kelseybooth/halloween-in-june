@@ -145,11 +145,19 @@ class _First:
 
     Which is what makes the two draw tests sharp: the box sorts to the
     front of the toys by `sort_order`, so a pool that still contains it
-    hands it over first.
+    hands it over first. It doubles as the generic end of the refusal
+    pool, where the twelve sit ahead of any one toy's own lines.
     """
 
     def choice(self, pool):
         return pool[0]
+
+
+class _Last:
+    """And the back, which is where a toy's own refusals are appended."""
+
+    def choice(self, pool):
+        return pool[-1]
 
 
 async def a_success(entryway, monkeypatch, who=ALICE):
@@ -389,5 +397,67 @@ def test_a_thing_the_engine_lists_does_not_have_to_be_named():
     nothing takeable and finite is named in prose, because the engine
     lists those and the prose would go stale."""
     problems = content_module.validate(a_world(a_thing("odd_lamp", type="toy")))
+
+    assert not any("odd_lamp" in problem for problem in problems)
+
+
+# --------------------------------------------------------------------------
+# Its own refusals, which the deck wrote and nothing could reach
+# --------------------------------------------------------------------------
+
+
+async def test_the_box_draws_refusals_of_its_own(entryway, monkeypatch):
+    """**Four Final lines that no player could read until now.**
+
+    The deck wrote them in drop 2. The picker took a toy's *name* and
+    never its id, so the only pool was the generic twelve and the four
+    sat in a spreadsheet - not an error anywhere, because a prefix that
+    matches nothing simply falls back to lines that read perfectly well.
+    """
+    always(monkeypatch, succeed=False)
+    monkeypatch.setattr(bot, "random", _Last())
+
+    said = await play(entryway)
+
+    assert "You push the box a few inches to the left" in said
+
+
+async def test_the_twelve_are_still_the_backstop(entryway, monkeypatch):
+    """**Its own lines join the pool; they do not replace it.**
+
+    The deck is explicit about why: a writer with one good line for a
+    toy should be able to add one line rather than twelve. It is also
+    what keeps section 4's other rule - a refusal may never read as a
+    verdict on the object - affordable, because the same custom line
+    every time is a verdict however it is worded.
+    """
+    always(monkeypatch, succeed=False)
+    monkeypatch.setattr(bot, "random", _First())
+
+    said = await play(entryway)
+
+    assert "The cat looks at the shipping box. She looks at you." in said
+
+
+async def test_a_refusal_written_for_no_toy_is_caught_at_load():
+    """**The one failure mode this whole shape has.** The pool is found
+    by prefix, so a key with a typo in the id is read by nothing and
+    reported by nothing - the toy draws the twelve and the player is
+    none the wiser, which is exactly how the box's four went unnoticed
+    for a month.
+    """
+    world_ = a_world(a_thing("odd_lamp", type="toy"))
+    world_.defaults["use_fail.toy.odd_lmap.1"] = "The cat regards the lamp."
+
+    problems = content_module.validate(world_)
+
+    assert any("odd_lmap" in problem for problem in problems)
+
+
+async def test_a_refusal_written_for_a_real_toy_is_fine():
+    world_ = a_world(a_thing("odd_lamp", type="toy"))
+    world_.defaults["use_fail.toy.odd_lamp.1"] = "The cat regards the lamp."
+
+    problems = content_module.validate(world_)
 
     assert not any("odd_lamp" in problem for problem in problems)

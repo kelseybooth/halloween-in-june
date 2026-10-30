@@ -175,9 +175,18 @@ async def test_a_plank_pays_no_relationship(hall):
 
 
 async def test_a_second_plank_the_same_day_is_refused(hall):
-    await plank(hall)
+    """**The "about" belongs to the token, not to the sentence.**
 
-    assert "muscles will want about" in await plank(hall)
+    `{time}` renders as "about 14 hours" on its own, so the cell that
+    wrote its own *about* in front of it read "want about about 14
+    hours" for ten days. This assertion was true before and after,
+    which is exactly how it got there - a prefix is not a sentence.
+    """
+    await plank(hall)
+    reply = await plank(hall)
+
+    assert "muscles will want about" in reply
+    assert "about about" not in reply
 
 
 async def test_and_does_not_count(hall):
