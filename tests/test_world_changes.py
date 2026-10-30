@@ -373,6 +373,11 @@ async def test_everything_capped_is_capped_at_one(house):
         "skeleton_key": 1,
         "carving_tools": 1,
         "can_opener": 1,
+        # The ladder, which is one per player because there is one
+        # ladder: a cap on a thing with `quantity = 1` says what the
+        # count already says, and says it to the second player who
+        # tries rather than letting the first hold a spare.
+        "ladder": 1,
         # Both toys, so one player cannot hold the channel's whole supply.
         "feather_wand": 1,
         "crinkle_ball": 1,

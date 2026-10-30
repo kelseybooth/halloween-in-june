@@ -513,14 +513,15 @@ async def test_the_shipped_content_loads(two_servers):
     report = await content_loader.load_content(parsed)
 
     assert report.content_rows["room_types"] == 10  # nine rooms and the channel
-    # ...the house across the road, her bowl, and the key to its door
-    assert report.content_rows["thing_types"] == 165
+    # ...the house across the road, her bowl, and the key to its door,
+    # and the ladder's four.
+    assert report.content_rows["thing_types"] == 169
     assert report.content_rows["drops"] == 9  # 0 to 3 built, 10 to 50 named
     assert report.content_rows["restocks"] == 4  # the toy channel row joined them
 
 
-async def test_the_shipped_content_places_four_things_per_server(two_servers):
-    """Four physical copies across four things.
+async def test_the_shipped_content_places_five_things_per_server(two_servers):
+    """Five physical copies across five things.
 
     The work order said six. The gourmet can became a source on 27 September so
     that every player could earn the five-flavour achievement rather than only
@@ -539,13 +540,18 @@ async def test_the_shipped_content_places_four_things_per_server(two_servers):
     since it was written - so the row said only where they stood, which
     is what the prose and the reach are for. The roll-top desk names
     them now.
+
+    **The ladder rejoined it on 30 October**, which is the first thing
+    to be added to this set rather than taken out of it: one copy, in
+    the Courtyard, `takeable` and finite, so it is stock and the loader
+    places it. It is where the set came back to five.
     """
     parsed = content_module.load_files()
     await content_loader.load_content(parsed)
 
     placed = await contents(two_servers, GUILD_A)
-    assert len(placed) == 4
-    assert sum(row[3] for row in placed) == 4
+    assert len(placed) == 5
+    assert sum(row[3] for row in placed) == 5
 
 
 async def test_placement_respects_containment(two_servers):

@@ -174,11 +174,17 @@ async def test_a_thing_with_a_refusal_and_no_success_refuses(house):
     # The house across the road joined them in drop 10's addendum, and
     # for the exits' reason rather than a new one: its `default` row is
     # the locked door, which has a refusal to give and nowhere to go.
+    #
+    # Her other two bowls joined on 30 October, with the ladder that put
+    # her upstairs and out in the courtyard: same shape, same reason,
+    # and the same sentence about there being nothing to do with an
+    # empty bowl. This is the test catching exactly what it is for -
+    # two rows of this shape arriving - and finding them deliberate.
     assert shaped == {
         "eunoia", "EH", "HE", "LS", "SL", "house",
         "cat_food_chicken", "cat_food_tuna",
         "cat_food_expired", "cat_food_gourmet",
-        "cat_bowl",
+        "cat_bowl", "cat_bowl_courtyard", "cat_bowl_hallway",
         "branches", "leaves", "fence", "wasp_nest",
         "stand", "shelves", "firewood_bin", "coin_slot",
     }

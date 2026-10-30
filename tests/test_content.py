@@ -51,7 +51,10 @@ def test_the_shipped_content_parses():
     # brass key that opens the front door. Drop 20 added no thing: the
     # hall was written whole at drop 10 and its rows were waiting on
     # `since_drop`, and `amazon_box` became `shipping_box` in place.
-    assert len(c.things) == 165
+    # Then the ladder's four: the ladder itself, the piece of wasp nest
+    # it reaches, and a cat bowl each for the Courtyard and the upstairs
+    # hallway, so she has somewhere to be fed on three floors.
+    assert len(c.things) == 169
     # Five out with `/enter`: its three lines, `#welcome`, and the
     # tutorial, which it was the only thing that posted. Five in: the two
     # wrong-place replies, `/go`'s own refusal, and the two hints that
@@ -65,8 +68,11 @@ def test_the_shipped_content_parses():
     # box's four own play refusals, which the drop 2 deck wrote and the
     # picker could not reach until it was handed a thing id. The twelve
     # generic ones moved under `any.` in the same change and are still
-    # twelve rows.
-    assert len(c.defaults) == 128
+    # twelve rows. Then the ladder's three: the refusal for anything a
+    # player cannot do with their arms full, and its two public lines -
+    # the cat beating them to the top, and the carry ending in a dropped
+    # ladder.
+    assert len(c.defaults) == 131
     assert len(c.drops) == 9      # 0 to 3 built; 10 to 50 named ahead of their content
     assert len(c.restocks) == 4  # the toy channel row joined them
 
