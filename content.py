@@ -1831,11 +1831,25 @@ def _phrases_in(text: str, longest: int) -> set[str]:
     looking the phrases up in the result asks the same question of the
     same rules.
 
-    A window of k words always normalises to a phrase of k words -
-    `_words` matches runs of letters and digits, and `normalise` keeps
-    every one of them - so a phrase longer than `longest` cannot be the
-    answer to any window, and sweeping wider than the longest thing
-    anybody is asking about would only find phrases nobody can look up.
+    **Nothing here consumes the text, and that is what makes it
+    equivalent.** `mark` takes the longest phrase first and then refuses
+    any span inside one it has already taken, so answering this question
+    by simulating a single `mark` over every phrase at once - the
+    optimisation it obviously looks like - gives a different answer:
+    "cat food" nested inside "tuna cat food" comes back unmarked, where
+    asking about it on its own says marked. Windows here are collected
+    independently, so both land in the set and the nested phrase is
+    still found. Anything that reintroduces consuming breaks this, and
+    it will pass a casual reading on the way.
+
+    **A window of k word-runs always normalises to k words**, which is
+    the invariant `longest` rests on: `_words` matches runs of letters
+    and digits and `normalise` keeps every one of them, so
+    "door-hardware manual" is three of each and "cat's" is two. A phrase
+    longer than `longest` therefore cannot answer any window, and
+    sweeping wider would only turn up phrases nobody can look up. A
+    change to `normalise` that dropped a token would narrow this sweep
+    silently.
     """
     words = _words(text)
     found: set[str] = set()
