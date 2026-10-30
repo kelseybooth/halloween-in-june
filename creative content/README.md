@@ -122,10 +122,40 @@ This is easy to break by accident. Two cases in the last pass named nothing at a
 gold band on the label" — and were still false once the chocolate and the tin were
 taken. Write hints that stay true either way.
 
+**The converse is now checked as well.** Anything a player cannot pick up is never
+listed, so some sentence has to name it or nobody will ever learn it is there. That has
+held for sources and scenery since they existed and for fixtures since drop 10; the
+loader now asks it of every unlistable thing, whatever its `type` column says. It caught
+the reading glasses, which nothing in the Upstairs Hallway named — the roll-top desk
+mentions them now, in both its states, and that clause is a draft. Exits, sources and
+scenery keep their own stricter versions of the rule.
+
 **Sources are inexhaustible; objects are finite.** A stash of cat food is a `source`
 that never runs out and can't be carried; a can is an `object` with no room of its own
 that exists once drawn. Sources never appear in the `Also here:` line, so every source
 must be named in its room's description or in the text of the thing that holds it.
+
+## The shipping box is a toy (30 October)
+
+`/use shipping box` plays with the cat now, on the same ramp and cooldown as every other
+toy, with the copy from *Drop 2 copy deck — toys* §4. Its `type` is `toy` and its
+`takeable` is still `no` — a combination the files could not express before, because
+until this row every toy was carriable and every fixture was not.
+
+* **`type` says what a thing is to the cat; `takeable` says whether it is stock.** The
+  box answers `toy` to the first and `no` to the second, so the cat plays with it where
+  it stands and nobody carries it off. `/take box` still refuses.
+* **Nothing delivers it.** The channel's `type:toy` restock row and the cat bed both
+  draw from the toys a player could carry, so neither can hand out a shipping box.
+* **It is still not listed, and the Entryway's prose still names it** — the rule above,
+  which is why the box reads once in a `/look` and not twice.
+* **It gets no hint, on purpose.** `/use` doing anything at all is an easter egg, so the
+  rail never names it — not even the rung that tells you a toy can be picked up, which
+  would be false of this one anyway.
+* **Its `use_fail` is the cooldown line**, "The cat has moved on", which is what a toy's
+  `use_fail` means. The four box-specific refusals in the deck have nowhere to go yet:
+  the ramp draws from the shared `use_fail.toy.1`–`12` pool, and a per-thing version of
+  those is its own change.
 
 ## Changes on 27 September
 

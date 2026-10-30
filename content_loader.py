@@ -377,12 +377,29 @@ def things_to_place(parsed: Content) -> list[tuple[str, str, str, int, int]]:
     roomless starts nowhere: it arrives when a source yields it, something
     transforms into it, or a restock scatters it.
 
+    **And only if it can actually be carried.** `takeable = no` on a
+    carriable kind means the thing stands where the files put it - the
+    shipping box, which the cat plays with and nobody lifts, and the
+    reading glasses. A stock row for one is a count that can never
+    change, and it is not what makes the thing reachable: `reach` finds
+    anything untakeable from its room in the files, which it has to,
+    because a server already on drop 20 has no row for the box. It
+    loaded as a fixture, so one was never written, and placement skips
+    what a server already knows. A row here would be a second answer to
+    "is it there" that only some servers have.
+
+    It would not have shown up in `Also here:` either way - that reads
+    `loose_here`, which has filtered on `takeable` since it was written,
+    and is the reason the reading glasses have never been listed.
+
     `since_drop` rides along because whether a thing may be placed *yet* depends
     on the server, not on the file - see _arrived_drops.
     """
     placements = []
     for thing in parsed.things:
         if thing.type not in content_module.CARRIABLE_TYPES or not thing.room_id:
+            continue
+        if not thing.takeable:
             continue
         if thing.quantity in (None, 0):
             continue

@@ -4053,17 +4053,27 @@ async def count_of_type(guild_id: int, room_id: str, kind: str) -> int:
     return int(total or 0)
 
 
-async def ids_of_type(kind: str, arrived: set[int]) -> list[str]:
-    """Every thing of one kind whose drop has arrived, in a stable order.
+async def stock_of_type(kind: str, arrived: set[int]) -> list[str]:
+    """Every thing of one kind that can be delivered, in a stable order.
 
-    The pool a class selector draws from. Ordered so a seeded draw gives
-    the same answer twice, which is what makes a restock reproducible.
+    The pool a class selector draws from, and the pool the cat bed
+    stashes a toy out of. Ordered so a seeded draw gives the same answer
+    twice, which is what makes a restock reproducible.
+
+    **Only what a player could pick up.** `type` says what a thing is to
+    the cat; `takeable` says whether it is stock. The two were the same
+    question until a toy was written that nobody can carry - the
+    shipping box plays like a toy and stands in the Entryway - and a
+    draw that went by kind alone would deliver shipping boxes into the
+    channel and hand one out of the cat bed. A thing nobody can lift is
+    where the files put it and is never anywhere else, so it is not a
+    thing a schedule can place.
     """
     session_factory = _require_session()
     async with session_factory() as session:
         rows = await session.execute(
             select(ThingType.thing_id, ThingType.since_drop)
-            .where(ThingType.type == kind)
+            .where(ThingType.type == kind, ThingType.takeable)
             .order_by(ThingType.sort_order, ThingType.thing_id)
         )
     return [thing_id for thing_id, since_drop in rows if since_drop in arrived]

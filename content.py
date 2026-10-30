@@ -499,8 +499,15 @@ class Content:
         `_check_obtainable_things` calls a restock-only toy
         unreachable.
         """
+        # **A class expands to what a schedule could place**, which is
+        # the takeable things of that kind - the same pool
+        # `database.stock_of_type` draws from. A toy nobody can carry
+        # stands where the files put it, so `type:toy` is not a route to
+        # the shipping box and must not be read as one.
         by_type: dict[str, set[str]] = {}
         for thing in self.things:
+            if not thing.takeable:
+                continue
             by_type.setdefault(thing.type, set()).add(thing.thing_id)
 
         ids: set[str] = set()
@@ -851,7 +858,7 @@ def validate(content: Content) -> list[str]:
     problems += _check_sources_are_named_in_prose(content, rooms)
     problems += _check_no_hand_written_bolding(content)
     problems += _check_scenery_is_named_in_prose(content)
-    problems += _check_fixtures_are_named_in_prose(content)
+    problems += _check_unlisted_things_are_named_in_prose(content)
     problems += _check_scenery_aliases_are_unique(content)
     problems += _check_visibility_gates(content)
     problems += _check_public_lines_name_the_player(content)
@@ -2335,8 +2342,8 @@ def naming_notes(content: Content) -> list[str]:
     return notes
 
 
-def _check_fixtures_are_named_in_prose(content: Content) -> list[str]:
-    """A fixture is never listed either, so some sentence has to name it.
+def _check_unlisted_things_are_named_in_prose(content: Content) -> list[str]:
+    """What the engine will not list, some sentence has to name.
 
     **The rule the house has always followed, written down.** `Also
     here:` carries finite takeables and nothing else, because the engine
@@ -2350,6 +2357,18 @@ def _check_fixtures_are_named_in_prose(content: Content) -> list[str]:
     The channel was the exception and is not one any more: it listed its
     fixtures while it had no prose to name them with, and now that it has
     prose it lists what every other room lists.
+
+    **Asked of `takeable`, not of `fixture`.** The rule is about the
+    listing, and the listing goes by whether a thing can be carried - so
+    reading the kind instead held only while the two agreed. The
+    shipping box is the row where they parted: a `toy`, because the cat
+    plays with it, and furniture to the engine, which is why the
+    Entryway's own prose has always described it against the wall. Keyed
+    on the kind, the box would have slipped out of this check on the day
+    its type changed, and the guarantee would have lapsed in silence.
+
+    The reading glasses come in the same way, and the three kinds that
+    have their own stricter checks stay out.
 
     **Naming, not bolding** - unlike scenery. Bolding is the stronger
     contract and the house will want it before drop 3 opens, but no house
@@ -2383,7 +2402,13 @@ def _check_fixtures_are_named_in_prose(content: Content) -> list[str]:
 
     problems = []
     for thing in content.things:
-        if thing.type != "fixture" or not thing.room_id:
+        if thing.takeable or not thing.room_id:
+            continue
+        if thing.type in {"exit", "source"} | SCENERY_TYPES:
+            # Each of these is already held to something stricter: an
+            # exit is reached by `/go` and listed among them, a source
+            # must be named in its container's text for the right state,
+            # and scenery must be bolded rather than merely named.
             continue
         if thing.room_id == EVERYWHERE:
             continue
@@ -2397,9 +2422,9 @@ def _check_fixtures_are_named_in_prose(content: Content) -> list[str]:
         if not any(re.search(rf"\b{re.escape(name.lower())}\b", prose)
                    for name in thing.names):
             problems.append(
-                f"fixture {thing.thing_id} is named nowhere a player in room "
-                f"{thing.room_id} can read; fixtures are not listed, so no "
-                "player could learn it is there"
+                f"{thing.type} {thing.thing_id} is named nowhere a player "
+                f"in room {thing.room_id} can read; only takeables are "
+                "listed, so no player could learn it is there"
             )
     return problems
 
