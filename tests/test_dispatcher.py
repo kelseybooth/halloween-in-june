@@ -226,9 +226,9 @@ async def test_only_the_predicates_on_this_hook_run(guild):
 
         return predicate
 
-    await a_world_with("gourd_job", "say_cheese")
+    await a_world_with("gourd_job", "self_reflection")
     achievements.register("gourd_job", "on_take", await note("take"))
-    achievements.register("say_cheese", "on_pet", await note("pet"))
+    achievements.register("self_reflection", "on_pet", await note("pet"))
 
     await achievements.fire(a_context(hook="on_take"))
     assert ran == ["take"]
@@ -248,12 +248,12 @@ async def test_one_action_can_earn_two(guild):
 async def test_a_raising_predicate_does_not_stop_the_others(guild):
     """A player who loses an achievement to an exception can earn it next
     time. Losing the other thirty-four with it would not be recoverable."""
-    await a_world_with("gourd_job", "say_cheese")
+    await a_world_with("gourd_job", "self_reflection")
     achievements.register("gourd_job", "on_use", explodes)
-    achievements.register("say_cheese", "on_use", always)
+    achievements.register("self_reflection", "on_use", always)
 
     earned = await achievements.fire(a_context(hook="on_use"))
-    assert [e.achievement_id for e in earned] == ["say_cheese"]
+    assert [e.achievement_id for e in earned] == ["self_reflection"]
 
 
 async def test_a_raising_predicate_is_logged(guild, caplog):

@@ -254,7 +254,7 @@ async def test_an_unarrived_drop_does_not_exist_yet(guild):
     parsed = a_calendar(a_drop(1), a_drop(2))
     parsed.achievements = [
         an_achievement("gourd_job"),
-        an_achievement("say_cheese", since_drop=2),
+        an_achievement("self_reflection", since_drop=2),
     ]
     await content_loader.load_content(parsed)
     await resolve.set_current_drop(GUILD_A, 1)
@@ -360,11 +360,11 @@ async def test_two_players_can_each_earn_the_same_one(guild):
 
 async def test_one_player_can_earn_several(guild):
     await database.award_player_achievement(GUILD_A, ALICE, "gourd_job")
-    await database.award_player_achievement(GUILD_A, ALICE, "say_cheese")
+    await database.award_player_achievement(GUILD_A, ALICE, "self_reflection")
 
     assert set(await database.player_achievements_of(GUILD_A, ALICE)) == {
         "gourd_job",
-        "say_cheese",
+        "self_reflection",
     }
 
 
