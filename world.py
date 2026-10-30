@@ -25,6 +25,7 @@ from datetime import timedelta
 
 import content as content_module
 import database
+import telemetry
 import resolve
 import states
 import telemetry
@@ -169,8 +170,18 @@ CRAVING_FROM_DROP = 3
 def play_chance(ramp: int) -> int:
     """Percentage chance that this attempt lands, from the ramp."""
     return min(100, max(0, RAMP_STEP * ramp))
-PLANKS_SETTING = "planks_required"
+PLANKS_SETTING = "staircase_planks"
 STAIRS_REPAIRED = "stairs_repaired"
+
+# The last fifth of the staircase is out of reach from the floor. At the
+# default ninety that is plank 72, where `stairs_upper` is set and the
+# repair stops until somebody brings the ladder, which is drop 30.
+#
+# A fraction rather than a number so that a QA server with
+# `staircase_planks = 5` reaches the same moment at plank 4 instead of
+# never reaching it at all.
+STAIRS_UPPER = "stairs_upper"
+WITHIN_REACH = 0.8
 
 # The jammed drawer: graphite, and only in the hallway it is jammed in.
 GRAPHITE = "graphite_powder"
@@ -382,22 +393,58 @@ class Effect:
 async def planks(guild_id: int) -> tuple[int, int]:
     """(placed, required) for this server's staircase.
 
-    Counted by distinct player rather than by uses: the staircase is one plank
-    per person however many times they swing.
+    Counted by plank rather than by player. It was by distinct player
+    while the cooldown was 48 rolling hours and ten people finished the
+    job; drop 20 makes it ninety planks at one per player per day, so a
+    server of 27 takes about three and a half days and the people who
+    turn up twice as often do not finish it alone.
     """
-    placed = await database.distinct_users_of(guild_id, LUMBER)
+    placed = await database.total_uses_of(guild_id, LUMBER)
     required = await database.get_setting(guild_id, PLANKS_SETTING)
     return placed, required
 
 
-async def check_staircase(guild_id: int) -> bool:
-    """Open the staircase if enough different players have placed a plank.
+def reachable_from_the_floor(required: int) -> int:
+    """How many planks go in before the top steps are out of reach.
 
-    Called after each plank and again whenever `planks_required` changes, which
-    is what makes lowering the target finish a stalled staircase rather than
-    leaving it stuck one plank short of a number nobody can reach.
+    Rounded down, so a five-plank QA server stops at four and a
+    ninety-plank one at seventy-two.
+    """
+    return int(required * WITHIN_REACH)
+
+
+async def check_staircase(guild_id: int) -> bool:
+    """Move the staircase on if this plank was the one that did it.
+
+    Two thresholds now, and they are checked in the order they happen.
+    `stairs_upper` is the last fifth, where the work stops being
+    something a person can reach from the floor; `stairs_repaired` is
+    the end of it.
+
+    Called after each plank and again whenever `staircase_planks`
+    changes, which is what makes lowering the target finish a stalled
+    staircase rather than leaving it stuck one plank short of a number
+    nobody can reach. Lowering it past a threshold already crossed is
+    why both are plain `>=` tests on the count rather than anything
+    that watches for the moment of crossing.
+
+    Returns True only when the staircase *finished* on this call, which
+    is what the public line and the lumber's own reply read.
     """
     placed, required = await planks(guild_id)
+    if placed >= reachable_from_the_floor(required):
+        if await states.set_server_state(guild_id, STAIRS_UPPER):
+            # Only on the crossing. `set_server_state` returns True the
+            # once, which is what keeps this one row and not one per
+            # plank laid against a staircase that has already stopped.
+            await telemetry.system(
+                guild_id,
+                telemetry.STAIRS_UPPER_REACHED,
+                detail=(
+                    f"n={placed} total={required} "
+                    f"players={await database.distinct_users_of(guild_id, LUMBER)}"
+                ),
+            )
     if placed < required:
         return False
     return await states.set_server_state(guild_id, STAIRS_REPAIRED)

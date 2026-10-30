@@ -94,25 +94,47 @@ async def test_an_unknown_state_is_refused(house):
 # --------------------------------------------------------------------------
 
 
-async def test_one_plank_per_player_however_many_times_they_swing(house):
-    await database.record_use(ALICE, GUILD_A, "lumber")
-    await database.record_use(ALICE, GUILD_A, "lumber")
-    await database.record_use(ALICE, GUILD_A, "lumber")
+async def test_every_swing_is_a_plank(house):
+    """**Drop 20 changed the unit.** It counted distinct players while
+    the wait between turns was 48 rolling hours and ten of them finished
+    the job. Ninety planks at one per player per day means the count has
+    to be the planks, and the daily cooldown is what stops one person
+    laying them all - so three uses are three planks here, where the
+    engine is asked directly and no clock is involved.
+    """
+    for _ in range(3):
+        await database.record_use(ALICE, GUILD_A, "lumber")
 
     placed, _ = await world.planks(GUILD_A)
-    assert placed == 1
+    assert placed == 3
+
+
+async def test_two_players_one_plank_each_is_two(house):
+    await database.record_use(ALICE, GUILD_A, "lumber")
+    await database.record_use(BOB, GUILD_A, "lumber")
+
+    placed, _ = await world.planks(GUILD_A)
+    assert placed == 2
 
 
 async def test_the_target_comes_from_server_config(house):
-    await database.set_setting(GUILD_A, "planks_required", 3)
+    await database.set_setting(GUILD_A, world.PLANKS_SETTING, 3)
     _, required = await world.planks(GUILD_A)
     assert required == 3
+
+
+async def test_the_top_steps_are_four_fifths_of_it_rounded_down(house):
+    """A fraction rather than a number, so a QA server with five planks
+    reaches the same moment at four instead of never reaching it."""
+    assert world.reachable_from_the_floor(90) == 72
+    assert world.reachable_from_the_floor(5) == 4
+    assert world.reachable_from_the_floor(1) == 0
 
 
 async def test_the_last_plank_opens_the_staircase_for_everyone(house):
     """Server-wide: the reward for collective labour lands for the whole room,
     not for whoever happened to place the final plank."""
-    await database.set_setting(GUILD_A, "planks_required", 2)
+    await database.set_setting(GUILD_A, world.PLANKS_SETTING, 2)
 
     await use(ALICE)
     assert not await states.has(GUILD_A, BOB, "stairs_repaired")
@@ -123,7 +145,7 @@ async def test_the_last_plank_opens_the_staircase_for_everyone(house):
 
 
 async def test_it_only_announces_once(house):
-    await database.set_setting(GUILD_A, "planks_required", 1)
+    await database.set_setting(GUILD_A, world.PLANKS_SETTING, 1)
 
     first = await use(ALICE)
     assert "staircase is finished" in first.reply.lower()
@@ -132,8 +154,26 @@ async def test_it_only_announces_once(house):
     assert "staircase is finished" not in second.reply.lower()
 
 
+async def test_the_upper_state_is_set_on_the_way(house):
+    """Both thresholds, from one count. Five planks puts the top steps
+    at four, so the fourth sets `stairs_upper` and the fifth finishes
+    the job."""
+    await database.set_setting(GUILD_A, world.PLANKS_SETTING, 5)
+    for _ in range(3):
+        await database.record_use(ALICE, GUILD_A, "lumber")
+
+    await world.check_staircase(GUILD_A)
+    assert not await states.has(GUILD_A, ALICE, "stairs_upper")
+
+    await database.record_use(ALICE, GUILD_A, "lumber")
+    await world.check_staircase(GUILD_A)
+
+    assert await states.has(GUILD_A, ALICE, "stairs_upper")
+    assert not await states.has(GUILD_A, ALICE, "stairs_repaired")
+
+
 async def test_the_reply_carries_the_count_and_the_target(house):
-    await database.set_setting(GUILD_A, "planks_required", 4)
+    await database.set_setting(GUILD_A, world.PLANKS_SETTING, 4)
     reply = (await use(ALICE)).reply
 
     assert "1" in reply and "4" in reply
@@ -142,7 +182,7 @@ async def test_the_reply_carries_the_count_and_the_target(house):
 async def test_placing_a_plank_posts_publicly(house):
     """The only public /use in the game. The others in the room need to see
     the work happen rather than hear about it later."""
-    await database.set_setting(GUILD_A, "planks_required", 5)
+    await database.set_setting(GUILD_A, world.PLANKS_SETTING, 5)
     interaction = await use(ALICE)
 
     # The private reply always goes out; the public one needs a channel, which
@@ -220,7 +260,7 @@ async def test_the_staircase_is_per_server(db):
     for guild in (GUILD_A, GUILD_B):
         await enter(db, ALICE, guild)
     await content_loader.load_content(content_module.load_files())
-    await database.set_setting(GUILD_A, "planks_required", 1)
+    await database.set_setting(GUILD_A, world.PLANKS_SETTING, 1)
 
     await use(ALICE, GUILD_A)
 

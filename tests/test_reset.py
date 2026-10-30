@@ -57,7 +57,7 @@ async def play(db, guild_id):
     await states.set_server_state(guild_id, "stairs_repaired")
     await db.award_player_achievement(guild_id, ALICE, "gourd_job")
     await db.award_server_achievement(guild_id, "making_a_mess")
-    await db.set_setting(guild_id, "planks_required", 3)
+    await db.set_setting(guild_id, "staircase_planks", 3)
     await db.record_art(guild_id, "black_cat_icon", "https://cdn.test/icon.png")
     await restocking.set_initialized_on(guild_id)
     await craving.credit(guild_id, ALICE, database.pacific_today())
@@ -272,11 +272,11 @@ async def test_the_report_says_what_it_did(two_games):
 
 async def test_the_tunables_go_with_everything_else(two_games):
     """`server_config` is not exempt. Two of its rows are."""
-    assert await database.get_setting(GUILD_A, "planks_required") == 3
+    assert await database.get_setting(GUILD_A, "staircase_planks") == 3
 
     await reset(two_games)
 
-    assert await database.get_setting(GUILD_A, "planks_required") == 10  # the default
+    assert await database.get_setting(GUILD_A, "staircase_planks") == 90  # the default
 
 
 async def test_the_game_stays_where_it_was(two_games):

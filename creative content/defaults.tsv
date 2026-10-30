@@ -121,3 +121,5 @@ feed.not_hungry	The cat looks at the can, then at you, with the mild disappointm
 en_settles	The cat starts eating, and when you look up you notice more of the room.
 bed_yield.key.public	{player} fluffs the cat bed, and something small but heavy falls out of it with a clink.
 unlock.public	{player} unlocked the front door of the house.
+delivery.arrived.public	Something thumps against the front door, and when you look, the shipping box is a little fuller.
+stairs.repaired.public	{player} hammers in the last plank. The grand staircase is whole again, thanks to everyone who lent a hand.

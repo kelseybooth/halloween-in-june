@@ -9,10 +9,11 @@ CH	default	1	80		The air smells of cold and wet earth.
 EN	default	10	1		A tall foyer under a water-stained ceiling. The front door is shut behind you, with a crowded coat tree beside it and an empty cat bowl on the floor.
 EN	default	20	2	fed_the_cat	A cloudy mirror hangs by the door.
 EN	default	20	3	fed_the_cat	A stroller is parked in the corner by a pile of shoes and tiny booties.
-EN	default	20	4	fed_the_cat	A bulletin board hangs over a small table where a smart speaker blinks blue.
-EN	default	20	5	fed_the_cat	An Amazon box sits half-opened against the wall.
+EN	default	99	4	fed_the_cat	A bulletin board hangs over a small table where a smart speaker blinks blue.
+EN	default	20	5	fed_the_cat	A shipping box sits half-opened against the wall.
 EN	default	30	6	fed_the_cat	An arched doorway opens on one side, and a wide doorway on the other.
 EN	default	20	7	fed_the_cat	The grand staircase is a ruin, with fresh lumber stacked beside it.
+EN	stairs_upper	20	7	fed_the_cat	The grand staircase is mended most of the way up, but the top steps are still missing, with fresh lumber stacked beside its base.
 EN	stairs_repaired	20	7	fed_the_cat	A patched grand staircase sweeps up to the floor above.
 DI	default	30	0		A long wooden table is set for three: two plates and a high chair pulled up at the end, its tray crusted with dried sweet potato puree. Two chairs are pushed back as if their owners stood up in a hurry, and a wine glass lies on its side above a dark stain. A bowl of Halloween candy sits on the sideboard next to a vase of wilting flowers. Tall windows look out over an overgrown garden. The arched doorway leads back to the entryway, and at the far end a swinging door, scuffed white at hand height, gives onto the kitchen.
 KI	default	30	0		A big old-fashioned kitchen with a cast-iron stove, a deep sink and a pantry door that won't quite shut. The pantry is completely filled with cans and cans of cat food, and behind its door a narrow back staircase climbs steeply out of sight. An empty drying rack sits by the sink. The single-serve Keurig has a carousel of pods beside it and a clean mug waiting underneath. A tall fridge-freezer hums in the alcove beside a kitchen trash can, its bag tied off and ready to go out. A pasta pot sits out on the counter, its lid askew. A plain white cake box sits at the far side of the counter. A swinging door leads back toward the dining room, and a glazed back door opens onto tangled green.

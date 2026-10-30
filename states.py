@@ -32,7 +32,16 @@ log = logging.getLogger(__name__)
 # the rule that decides server over player. The staircase takes a plank
 # from several people; the front door takes one key, found by one person
 # and turned once, and it opens for everybody afterwards.
-SERVER_STATES = {"stairs_repaired", "house_unlocked"}
+# `stairs_upper` is drop 20's: the last fifth of the staircase, where
+# the steps stop being reachable from the floor. It is a state rather
+# than a number read from the count because three different things read
+# it the way they read any other state - the lumber's text, the
+# staircase's text and the Entryway's seventh fragment - and none of
+# them should have to know what 80% of `staircase_planks` is.
+#
+# Permanent like the other two. A server that lowers `staircase_planks`
+# after reaching it keeps it, which is correct: those planks are in.
+SERVER_STATES = {"stairs_repaired", "stairs_upper", "house_unlocked"}
 PLAYER_STATES = {
     "has_key",
     "passage_open",
@@ -51,6 +60,51 @@ PLAYER_STATES = {
     "tutorial_seen",
     "diaper_seen",
 }
+
+# **Which state's text wins when a player holds several.**
+#
+# Until drop 20 it did not come up: no entity had text for two states a
+# player could hold at once, and the callers took `sorted(held)[0]` to
+# be deterministic rather than right. Drop 20 broke that by adding
+# `stairs_upper` to a server that already holds `house_unlocked` - and
+# `house_unlocked` sorts first, so the staircase, the lumber and the
+# Entryway's seventh fragment all kept describing a ruin while the
+# repair was most of the way up.
+#
+# Later beats earlier, which is the only general rule that fits: a
+# state is something that has become true, so the most recent one is
+# the most specific description of the world. `stairs_repaired` beats
+# `stairs_upper` beats everything that was already true.
+#
+# Unknown states sort last, alphabetically, so a state added here
+# without a thought about priority still resolves the same way twice.
+STATE_PRIORITY = (
+    "stairs_repaired",
+    "stairs_upper",
+    "library_found",
+    "passage_open",
+    "drawer_unjammed",
+    "house_unlocked",
+    "has_key",
+    "diaper_seen",
+    "tutorial_seen",
+)
+
+
+def in_priority_order(held: "set[str] | frozenset[str]") -> tuple[str, ...]:
+    """The states this player holds, most specific first.
+
+    Handed to the resolvers whole rather than collapsed to one, because
+    `_best` already walks a sequence: it tries each state in turn and
+    falls through to `default`. Passing one state meant an entity with
+    text for a *different* held state fell back to `default` and the
+    writers' row was never read.
+    """
+    ranked = {state: index for index, state in enumerate(STATE_PRIORITY)}
+    return tuple(
+        sorted(held, key=lambda state: (ranked.get(state, len(ranked)), state))
+    )
+
 
 def required_things(requires: str | None) -> list[str]:
     """The thing ids a `requires` cell names, pipe separated as aliases are.

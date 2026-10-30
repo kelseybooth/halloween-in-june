@@ -62,7 +62,7 @@ NO_GAME = None
 # that was supposed to catch it has been rewritten to actually do so -
 # see `test_the_ceiling_is_not_below_the_commands`, which asks the one
 # other file that records which drops exist.
-LAST_PLAYABLE_DROP = 10
+LAST_PLAYABLE_DROP = 20
 
 
 class UnknownDrop(Exception):
@@ -274,6 +274,53 @@ async def room_fragments(
             break
 
     return parts
+
+
+async def thing_text_in_state(
+    guild_id: int, thing_id: str, column: str, state: str
+) -> str | None:
+    """One column, read only from the rows written for exactly `state`.
+
+    **The opposite of `thing_text`, and needed because of what blank
+    means there.** `_best` skips a blank cell and keeps looking, which
+    is right nearly everywhere: a row that fills in `use` and leaves
+    `look` alone is saying "this state changes how using it goes", not
+    "this state has no description". So a blank cell cannot say "not in
+    this state at all".
+
+    The staircase needs to say exactly that. In `stairs_upper` the
+    lumber has a refusal and no success, and asking `thing_text` for its
+    `use` walked past the blank, past the state, and came back with the
+    *default* row's plank line - so the repair carried on hammering
+    steps nobody could reach.
+
+    Reading one state at a time lets the caller see the difference
+    between "this state writes nothing about using it" and "this state
+    writes only a refusal". Within the state the highest arrived drop
+    still wins, which is how the lumber's drop 30 row takes over from
+    its drop 20 one when the ladder arrives.
+    """
+    if column not in database.ThingText.__table__.columns:
+        raise ValueError(f"{column!r} is not a thing text column")
+
+    arrived = await arrived_drop_ids(guild_id)
+    session_factory = database._require_session()
+    async with session_factory() as session:
+        rows = (
+            await session.execute(
+                select(database.ThingText).where(
+                    database.ThingText.thing_id == thing_id,
+                    database.ThingText.state == state,
+                )
+            )
+        ).scalars().all()
+
+    candidates = [
+        row for row in rows if row.since_drop in arrived and getattr(row, column)
+    ]
+    if not candidates:
+        return None
+    return getattr(max(candidates, key=lambda row: row.since_drop), column)
 
 
 async def gate_reveals_more(

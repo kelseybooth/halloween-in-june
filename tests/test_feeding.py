@@ -599,8 +599,23 @@ async def test_feeding_her_opens_the_rest(house):
     reply = replies(await run(house, bot.look))
 
     assert "cloudy" in reply
-    assert "Amazon box" in reply
+    assert "shipping box" in reply
     assert "arched doorway" in reply
+
+
+async def test_but_not_the_fragment_that_waits(house):
+    """**Fragment 4 names two things that are not built.** Alexa needs a
+    notes feature and the bulletin board needs somewhere to pin them, so
+    both sit at drop 99 - and a sentence that names only delayed things
+    has to wait with them, or the room describes furniture a player
+    cannot look at."""
+    await take_a_can(house)
+    await feed(house)
+
+    reply = replies(await run(house, bot.look))
+
+    assert "bulletin board" not in reply
+    assert "smart speaker" not in reply
 
 
 async def test_the_room_opens_for_that_player_alone(house):

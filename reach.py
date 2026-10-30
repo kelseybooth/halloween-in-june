@@ -24,7 +24,7 @@ import enum
 import re
 from dataclasses import dataclass, field
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 import content
 import database
@@ -433,6 +433,16 @@ async def missing_requirements(
     the split is `takeable`, the column that already says whether a thing
     is the sort you hold.
 
+    **`to_hand_in_room` is the exception to that split, per thing.** A
+    takeable thing lying in the room counts as to hand when its own row
+    says so. It is set on nothing today; the ladder in drop 30 is what
+    it is for - propped against the staircase it is furniture, and a
+    player laying a plank beside it should not have to pick it up first.
+    Opt-in rather than a change to the rule, because widening it for
+    everything would mean a can opener on the kitchen floor let anybody
+    feed the cat without lifting it, which `test_feeding` pins as
+    deliberate.
+
     **The order of the answer is the order of the cell**, because the
     caller has one refusal string and has to decide which missing item
     it is about. `can_opener|cat_bowl` names the opener first, so a
@@ -468,12 +478,40 @@ async def missing_requirements(
                     database.ThingType.thing_id, database.ThingType.present_when
                 ).where(
                     database.ThingType.thing_id.in_(thing_ids),
-                    database.ThingType.takeable.is_(False),
+                    or_(
+                        database.ThingType.takeable.is_(False),
+                        database.ThingType.to_hand_in_room.is_(True),
+                    ),
                     database.ThingType.room_id.in_([room_id, content.EVERYWHERE]),
                 )
             )
             if states.passes(present_when, held_states)
         }
+        # A takeable thing counts only where it actually is. Its
+        # `room_id` is where the house put it at load, and a ladder can
+        # be carried off - so for those, ask the room's contents.
+        opted_in = {
+            thing_id
+            for thing_id, in await session.execute(
+                select(database.ThingType.thing_id).where(
+                    database.ThingType.thing_id.in_(thing_ids),
+                    database.ThingType.to_hand_in_room.is_(True),
+                )
+            )
+        }
+        if opted_in:
+            here = {
+                row[0]
+                for row in await session.execute(
+                    select(database.RoomContents.thing_id).where(
+                        database.RoomContents.guild_id == guild_id,
+                        database.RoomContents.room_id == room_id,
+                        database.RoomContents.thing_id.in_(opted_in),
+                        database.RoomContents.count > 0,
+                    )
+                )
+            }
+            standing = (standing - opted_in) | here
     to_hand = carried | standing
     return [thing_id for thing_id in thing_ids if thing_id not in to_hand]
 

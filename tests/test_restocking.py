@@ -85,6 +85,21 @@ async def started(days_ago=0, guild_id=GUILD_A):
     return on
 
 
+async def into_the_drop(db, days=4, guild_id=GUILD_A):
+    """Put the clock `days` past the moment this server reached its drop.
+
+    **An interval row counts from the drop, not from the first
+    `/enter`.** The fixtures set the drop pointer at setup time, so
+    without this the spice order's day two is tomorrow and nothing has
+    been dispatched - which is correct, and not what a test about
+    deliveries wants to assert.
+
+    `started()` is still needed beside it: the bottles and the toys
+    count days from initialization, and they are the rest of the house.
+    """
+    await db.set_setting(guild_id, database.CLOCK_KEY, days)
+
+
 def end_of_day(offset=0):
     """The last moment of a Pacific day, as naive UTC.
 
@@ -679,6 +694,7 @@ async def test_a_players_bag_is_never_swept(two_drops):
 async def test_the_shipped_schedules_run(server):
     await content_loader.load_content(content_module.load_files())
     await started(days_ago=4)
+    await into_the_drop(server)
 
     report = await restocking.run_for_guild(GUILD_A)
     placed = Counter(row[3] for row in report.placed)
@@ -688,15 +704,62 @@ async def test_the_shipped_schedules_run(server):
     assert placed["spice_jar"] > 0
 
 
-async def test_the_spice_jars_go_in_the_amazon_box(server):
+async def test_the_spice_jars_go_in_the_shipping_box(server):
+    """Renamed from `amazon_box` in drop 20, with the brand out of the
+    prose. The id moved in four places and this is the fifth."""
     await content_loader.load_content(content_module.load_files())
     await started(days_ago=4)
+    await into_the_drop(server)
 
     report = await restocking.run_for_guild(GUILD_A)
     jars = [row for row in report.placed if row[3] == "spice_jar"]
 
     assert jars
-    assert all(row[2] == "amazon_box" and row[1] == "EN" for row in jars)
+    assert all(row[2] == "shipping_box" and row[1] == "EN" for row in jars)
+
+
+async def test_nothing_scatters_into_the_shipping_box(server):
+    """**A delivery, not a dumping ground.** The bottles and the diapers
+    pick a container at random, and the box is the one container they may
+    never pick: what is in it is David's spice order, and a used baby
+    bottle among the jars reads as a bug.
+
+    The row that names the box still fills it, which is the distinction
+    `scatter_target` draws - so this asserts both halves at once, by
+    running a day's worth of scatter and checking who landed where.
+    """
+    await content_loader.load_content(content_module.load_files())
+    await started(days_ago=4)
+    await into_the_drop(server)
+
+    report = await restocking.run_for_guild(GUILD_A)
+
+    into_the_box = {row[3] for row in report.placed if row[2] == "shipping_box"}
+    assert into_the_box == {"spice_jar"}
+
+
+async def test_the_delivery_is_announced_in_the_room(server):
+    """Collected here and posted by the sweep, which has the client."""
+    await content_loader.load_content(content_module.load_files())
+    await started(days_ago=4)
+    await into_the_drop(server)
+
+    report = await restocking.run_for_guild(GUILD_A)
+
+    assert (GUILD_A, "EN", "delivery.arrived.public") in report.announce
+
+
+async def test_a_scattered_row_announces_nothing(server):
+    """Only the spice order has a notice. Eight bottles a day with a
+    line each would be the room talking over the players."""
+    await content_loader.load_content(content_module.load_files())
+    await started(days_ago=4)
+
+    report = await restocking.run_for_guild(GUILD_A)
+    bottles = [row for row in report.placed if row[3] == "used_baby_bottle"]
+
+    assert bottles
+    assert all(key == "delivery.arrived.public" for _, _, key in report.announce)
 
 
 async def test_the_box_is_empty_until_day_two(server):
@@ -1066,3 +1129,107 @@ def test_the_shipped_toy_row_points_at_a_registered_key():
     assert toys.config_key == "toys_present"
     assert toys.config_key in database.CONFIG_KEYS
 
+
+# --------------------------------------------------------------------------
+# Drop 20: deliveries on a random interval, clocked from the drop
+# --------------------------------------------------------------------------
+
+
+def test_the_first_delivery_can_be_any_time_on_the_first_day():
+    """Drawn across the whole day rather than `min_hours` after
+    midnight: "two jars arrive on the second day" should be able to mean
+    the afternoon."""
+    midnight = datetime(2026, 11, 1, 7, 0)  # Pacific midnight, as naive UTC
+    firsts = {
+        restocking.interval_times(GUILD_A + n, 1, midnight, midnight + timedelta(days=1), 2, 10)[0]
+        for n in range(40)
+    }
+
+    spread = max(firsts) - min(firsts)
+    assert spread > timedelta(hours=8)
+
+
+def test_the_gaps_stay_inside_the_range():
+    midnight = datetime(2026, 11, 1, 7, 0)
+    times = restocking.interval_times(
+        GUILD_A, 1, midnight, midnight + timedelta(days=6), 2, 10
+    )
+
+    gaps = [b - a for a, b in zip(times, times[1:])]
+    assert gaps
+    assert all(timedelta(hours=2) <= gap <= timedelta(hours=10) for gap in gaps)
+
+
+def test_asking_twice_gives_the_same_answer():
+    """Derived, not rolled - the property the per-day times have, for
+    the same reason: a sweep must not be able to skip or double a
+    delivery by re-deciding when it was due."""
+    midnight = datetime(2026, 11, 1, 7, 0)
+    args = (GUILD_A, 1, midnight, midnight + timedelta(days=3), 2, 10)
+
+    assert restocking.interval_times(*args) == restocking.interval_times(*args)
+
+
+def test_two_servers_do_not_deliver_in_lockstep():
+    midnight = datetime(2026, 11, 1, 7, 0)
+    until = midnight + timedelta(days=3)
+
+    ours = restocking.interval_times(GUILD_A, 1, midnight, until, 2, 10)
+    theirs = restocking.interval_times(GUILD_B, 1, midnight, until, 2, 10)
+
+    assert ours != theirs
+
+
+def test_a_zero_hour_interval_cannot_spin():
+    """A row written with no gap would otherwise walk forever. The
+    guard is a floor on the gap and a ceiling on the walk."""
+    midnight = datetime(2026, 11, 1, 7, 0)
+
+    times = restocking.interval_times(
+        GUILD_A, 1, midnight, midnight + timedelta(days=400), 0, 0
+    )
+
+    assert len(times) <= restocking.MAX_CATCHUP_DAYS * 24 + 24
+
+
+async def test_the_box_is_empty_on_the_drops_first_day(server):
+    """**The acceptance test the clock change exists for.**
+
+    `first_day = 2` used to count from the first `/enter`. The beta had
+    been playing for weeks when drop 20 landed, so day two was long
+    past and one sweep would have filled the box to its cap of sixteen
+    on the drop's opening day - where the design has it empty, and its
+    own look text says so.
+    """
+    await content_loader.load_content(content_module.load_files())
+    await started(days_ago=30)  # a server that has been up for a month
+
+    report = await restocking.run_for_guild(GUILD_A)
+
+    assert not [row for row in report.placed if row[3] == "spice_jar"]
+
+
+async def test_and_delivers_from_the_second_day(server):
+    await content_loader.load_content(content_module.load_files())
+    await started(days_ago=30)
+    await into_the_drop(server, days=2)
+
+    report = await restocking.run_for_guild(GUILD_A)
+
+    assert [row for row in report.placed if row[3] == "spice_jar"]
+
+
+async def test_the_box_never_holds_more_than_sixteen(server):
+    """`max_present` 16, against a catch-up long enough to want more."""
+    await content_loader.load_content(content_module.load_files())
+    await started(days_ago=30)
+    await into_the_drop(server, days=12)
+
+    await restocking.run_for_guild(GUILD_A)
+
+    assert (
+        await database.how_many_in_container(
+            GUILD_A, "EN", "shipping_box", "spice_jar"
+        )
+        <= 16
+    )

@@ -71,9 +71,12 @@ def test_the_shipped_file_parses():
     # Thirty-five from Release 1, nine added by V3, the two October
     # holidays the writers added on 21 October, *Room Service*, which is
     # what drop 10's quest ends in, and *Bug Catcher*, which is awarded
-    # by hand and cannot be played for.
-    assert len(parsed.achievements) == 48
-    assert len(parsed.achievement_ids) == 48
+    # by hand and cannot be played for. Then drop 20's two: *Are You
+    # David?* at a thousand points, and *Board Meeting*, which is parked
+    # at 99 until drop 30 builds a group award that names its
+    # contributors.
+    assert len(parsed.achievements) == 50
+    assert len(parsed.achievement_ids) == 50
 
 
 def test_the_shipped_file_validates():
@@ -86,14 +89,22 @@ def test_every_kind_is_represented():
     assert kinds == content_module.ACHIEVEMENT_KINDS
 
 
-def test_the_three_group_achievements_are_the_room_ones():
+def test_the_group_achievements_are_the_room_ones_and_the_staircase():
     """A group achievement has no earner, so which ones they are is a design
-    fact worth pinning rather than a detail of the file."""
+    fact worth pinning rather than a detail of the file.
+
+    *Board Meeting* is the fourth and the odd one out: the three room
+    achievements go to the server and name nobody, which is what `group`
+    means today, while this one is meant for the players who laid a
+    plank. That award shape does not exist yet, so the row is parked at
+    `NEVER` and drop 30 builds it.
+    """
     parsed = content_module.load_files()
     assert {a.achievement_id for a in parsed.achievements if a.kind == "group"} == {
         "strength_in_numbers",
         "making_a_mess",
         "the_feline_collection",
+        "board_meeting",
     }
 
 
@@ -184,7 +195,7 @@ async def test_the_rows_reach_the_database(db):
 async def test_the_whole_shipped_file_loads(db):
     await content_loader.load_content(content_module.load_files())
 
-    assert await row_count(db, "achievements") == 48
+    assert await row_count(db, "achievements") == 50
 
 
 async def test_a_reload_replaces_the_rows(db):

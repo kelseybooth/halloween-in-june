@@ -2,7 +2,8 @@ achievement_id	kind	name	unlock	since_drop	sort_order	offered	prompt	requires	no
 strength_in_numbers	group	Strength in Numbers	Who knows why you all collected 25 of something, but here's a prize.	20	10				
 making_a_mess	group	Making a Mess	Amassed 200 things into a single room.	20	20				
 the_feline_collection	group	The Feline Collection	There was a LOT of cat food in that mess.	20	30				
-passing_a_message_to_david	public	Passing a Message to David	Used Alexa to remind David about his auto-delivery.	20	10				
+board_meeting	group	Board Meeting	Got together and nailed down the grand staircase repair.	99	40				Awarded when the last staircase plank goes in, right after stairs.repaired.public, but only to players who laid at least one plank. Announced once, in the group style; players who never laid a plank don't get it. Parked at 99 by the drop 20 build: the repair stops at plank 72 until the ladder arrives, so this cannot be earned in drop 20, and a contributor-only group award is a shape the engine does not have - a group row awards the server and names no player. Drop 30 builds that and moves this to 30.
+passing_a_message_to_david	public	Passing a Message to David	Used Alexa to remind David about his auto-delivery.	99	10				Blocked: waits for Alexa, held back for more testing on 29 October
 charcuterie_board	public	Charcuterie Board	Collected all five flavors of cat food.	40	20				
 found_the_specs	public	Found the Specs	Found David's reading glasses in the desk.	40	30				
 somethings_cooking	public	Something's Cooking	Cooked something chocolatey and delicious.	30	40				
@@ -37,6 +38,7 @@ not_so_picky_eater	secret	Not-So-Picky Eater	Ate ten of Aunt Sue's frozen burrit
 making_first_contact	secret	Making First Contact	The cat let you pet her. Don't let it go to your head.	0	190				Drop 0. The spine: a surprise that teaches achievements exist.
 a_paw_in_the_door	public	A Paw in the Door	You've earned 50 relationship points with the cat. She has noticed you and has decided you may stay.	0	200	yes	Attain a relationship of +50 with the cat	making_first_contact	Drop 0. The first open quest.
 favorite_human	secret	Favorite Human	You reached 250 relationship points with the cat. She has stopped pretending she doesn't like you.	0	210				Drop 0. Needs the upper clamp off the meter.
+are_you_david	secret	Are You David?	You've earned 1,000 relationship points with the cat.	20	215				Drop 20. Players already past 1,000 when the drop opens get it on their next cat interaction.
 fluffed_to_perfection	public	Fluffed to Perfection	You fluffed the cat's bed to her standards. Well done.	1	220	yes	Give the cat a cozy nap spot	making_first_contact	Drop 1.
 persuasive	public	Purrsuasive	Tempted the cat into playing with a toy.	2	230	yes	Play with the cat	making_first_contact	Drop 2. Final copy, no content yet.
 impressively_bad_luck	secret	Impressively Bad Luck	The cat ignored your attempts to play four times in a row.	2	240				Drop 2. Four, not five: the ramp ends at 100%, so five refusals have probability zero. Four is 9.4%.

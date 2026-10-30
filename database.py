@@ -138,6 +138,31 @@ FULL_HANDS = "full_hands"
 # player reads, which is what keeps a disguised exit disguised - so the
 # only place the difference is visible at all is this column.
 NOT_AN_EXIT = "not_an_exit"
+# A state the world is in that forbids this thing outright: the content
+# writes a refusal for the state and no success beside it. Drop 20's
+# staircase is the first - in `stairs_upper` the top steps are out of
+# reach from the floor - and it is deliberately not `cooldown`, because
+# the whole question the repair's data has to answer is whether players
+# stopped because of the clock or because of the steps.
+WRONG_STATE = "wrong_state"
+
+# The staircase reaching the last fifth, where the steps stop being
+# reachable from the floor. A system row rather than a player's: the
+# plank that crossed the line is already logged as that player's use,
+# and this is the server's event. `detail` carries how many different
+# people had laid one by then, which is the question the repair's pace
+# is really about - ninety planks laid by six players is a different
+# game from ninety laid by thirty.
+STAIRS_UPPER_REACHED = "stairs_upper"
+
+# One row per restock placement. `detail` says what landed where and how
+# much of it is now there, which answers both of the questions the
+# scatter raises: whether the spice box fills and drains at a rate
+# players can keep up with, and - for the bottles and the diapers -
+# which container each one chose, so a QA run can confirm that none of
+# them ever picked the shipping box.
+RESTOCK_PLACED = "restock_placed"
+
 # A use whose whole effect has already happened, and cannot happen
 # twice. The brass key in an unlocked door is the only one: the thing
 # still works, the player still holds it, and there is nothing left for
@@ -697,6 +722,16 @@ class ThingType(Base):
     use_cooldown_daily: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("0")
     )
+    # Whether a randomly scattered thing may land inside this one. The
+    # shipping box is the only no: what arrives in it is a delivery.
+    scatter_target: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("1")
+    )
+    # Whether standing in the room with it satisfies a `requires` that
+    # names it, although it is takeable. The ladder, from drop 30.
+    to_hand_in_room: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("0")
+    )
     cross_weight: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     max_per_player: Mapped[int | None] = mapped_column(Integer, nullable=True)
     requires: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -764,6 +799,8 @@ class ThingText(Base):
     take: Mapped[str | None] = mapped_column(Text, nullable=True)
     drop: Mapped[str | None] = mapped_column(Text, nullable=True)
     use_fail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # What a cooldown says, when the state's own refusal would be wrong.
+    use_fail_cooldown: Mapped[str | None] = mapped_column(Text, nullable=True)
     take_fail: Mapped[str | None] = mapped_column(Text, nullable=True)
     drop_fail: Mapped[str | None] = mapped_column(Text, nullable=True)
     # What the rooms either side of a move are told. The house default names
@@ -870,6 +907,12 @@ class Restock(Base):
     # stops topping up. Null means no cap, which is every row but the
     # toys: the others top up by rate alone.
     max_present: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # A defaults key the room is told when this row delivers, or null.
+    arrival_notice: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # The gap between deliveries, drawn uniformly in this range. Set
+    # together or not at all; a row with them ignores `times_per_day`.
+    interval_min_hours: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    interval_max_hours: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Separate occurrences, not one delivery of `amount` - eight bottles a day is
     # eight arrivals at eight independently drawn times.
     times_per_day: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
@@ -1333,6 +1376,12 @@ _LATER_COLUMNS: list[tuple[str, str, str]] = [
     ("things", "cohort", "VARCHAR(1)"),
     ("thing_types", "consumed_on_use", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ("thing_types", "use_cooldown_daily", "BOOLEAN NOT NULL DEFAULT FALSE"),
+    ("restocks", "arrival_notice", "VARCHAR(64)"),
+    ("restocks", "interval_min_hours", "INTEGER"),
+    ("restocks", "interval_max_hours", "INTEGER"),
+    ("thing_types", "scatter_target", "BOOLEAN NOT NULL DEFAULT TRUE"),
+    ("thing_types", "to_hand_in_room", "BOOLEAN NOT NULL DEFAULT FALSE"),
+    ("thing_text", "use_fail_cooldown", "TEXT"),
     ("thing_text", "move_depart", "TEXT"),
     ("thing_text", "move_arrive", "TEXT"),
     ("things", "can_take", "BOOLEAN NOT NULL DEFAULT FALSE"),
@@ -3255,11 +3304,103 @@ async def server_achievements_of(guild_id: int) -> dict[str, datetime]:
     return {row[0]: row[1] for row in rows}
 
 
+async def when_drop_arrived(guild_id: int, drop_id: int) -> datetime | None:
+    """When this server first stood on `drop_id` or anything past it.
+
+    **"Or past it", because drops can be skipped.** A server taken from
+    10 straight to 30 reached drop 20's content at that moment, and a
+    row that waited for the exact value would wait forever.
+
+    Read from `config_history`, which is the config rather than a
+    journal beside it - the earliest window that opened on a high
+    enough number. Values are strings there, so the comparison is done
+    here: a guild has a handful of these rows, and a cast in SQL that
+    meets a non-numeric value fails the whole query.
+
+    None when the server has never had a drop pointer at all, or never
+    reached this one.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = (
+            await session.execute(
+                select(ConfigHistory.value, ConfigHistory.effective_from).where(
+                    ConfigHistory.guild_id == guild_id,
+                    ConfigHistory.key == resolve_drop_key(),
+                )
+            )
+        ).all()
+
+    arrivals = []
+    for value, effective_from in rows:
+        try:
+            reached = int(value)
+        except (TypeError, ValueError):
+            continue
+        if reached >= drop_id and effective_from is not None:
+            arrivals.append(effective_from)
+    return min(arrivals) if arrivals else None
+
+
+def resolve_drop_key() -> str:
+    """`resolve.DROP_KEY`, without importing `resolve` into `database`.
+
+    The key is a string the two modules have to agree on, and the
+    dependency only runs one way: `resolve` imports `database`.
+    """
+    return "current_drop"
+
+
+async def how_many_in_container(
+    guild_id: int, room_id: str, container_id: str, thing_id: str
+) -> int:
+    """How many of a thing are in one container in one room."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        return (
+            await session.scalar(
+                select(RoomContents.count).where(
+                    RoomContents.guild_id == guild_id,
+                    RoomContents.room_id == room_id,
+                    RoomContents.container_id == container_id,
+                    RoomContents.thing_id == thing_id,
+                )
+            )
+        ) or 0
+
+
+async def total_uses_of(guild_id: int, thing_id: str) -> int:
+    """How many times a thing has been used in this server, by anybody.
+
+    The staircase's count. `use_count` is per (player, thing), so this
+    sums it: ninety planks is ninety uses however they are shared out,
+    and the daily cooldown is what stops one player laying all of them.
+
+    **Summed from `thing_uses` rather than counted from
+    `interaction_log`.** The log is the natural place to count events
+    and it is the wrong one here: it started empty, part-way through
+    the beta, so a server that had been playing for a week would have
+    read as having laid no planks at all. The use rows go back to the
+    first use.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        return (
+            await session.scalar(
+                select(func.coalesce(func.sum(ThingUse.use_count), 0)).where(
+                    ThingUse.guild_id == guild_id, ThingUse.thing_id == thing_id
+                )
+            )
+        ) or 0
+
+
 async def distinct_users_of(guild_id: int, thing_id: str) -> int:
     """How many different players have used a thing in this server.
 
-    The staircase counts planks by distinct player, so somebody using lumber
-    twice still contributes one.
+    No longer the staircase's count - drop 20 made that one plank per
+    player per *day*, so the thing it needs is the total. Kept because
+    "how many people have ever done this" is the question the group
+    achievements and the tuning reports ask.
     """
     session_factory = _require_session()
     async with session_factory() as session:
@@ -3349,10 +3490,15 @@ async def states_of(guild_id: int, user_id: int) -> set[str]:
 # --------------------------------------------------------------------------
 
 CONFIG_KEYS: dict[str, tuple[int, str]] = {
-    "planks_required": (
-        10,
-        "How many different players must place a plank before the staircase is "
-        "repaired.",
+    # Renamed from `planks_required` in drop 20, because the quantity
+    # changed under it: it counted distinct players and now counts
+    # planks. A rename rather than a new default on the old key, so that
+    # a server carrying `planks_required = 10` does not quietly become a
+    # staircase that finishes on the tenth plank.
+    "staircase_planks": (
+        90,
+        "How many planks the grand staircase needs before it is repaired. "
+        "One per player per day, shared across the server.",
     ),
     "bottles_per_day": (
         8,

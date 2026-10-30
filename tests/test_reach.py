@@ -563,37 +563,44 @@ async def test_the_source_id_is_the_stash_not_the_can(house):
 #
 # `content.EVERYWHERE` marks a thing present in every room. The validator has
 # always exempted it from the "is this a real room?" check, and nothing else
-# implemented it - so Alexa, the one thing declared to be everywhere, was
-# reachable nowhere. Her look text and her take_fail were both dead.
+# implemented it - so the things declared to be everywhere were reachable
+# nowhere, and their look text and take_fail were both dead.
+#
+# **These used to be Alexa's tests.** She was the example because she was
+# the only thing in the house that was everywhere; drop 20 parked her at
+# `NEVER` until the notes feature she needs exists, so she is now the
+# example of the opposite and the cat carries the mechanism. The cat is
+# the better subject anyway: she has been everywhere since drop 0, so
+# these no longer depend on a row that may move again.
 # --------------------------------------------------------------------------
 
 
-ALEXA_ROOMS = ["EN", "DI", "KI", "CO", "LI", "SE", "UH", "BE", "NU"]
+EVERY_ROOM = ["EN", "DI", "KI", "CO", "LI", "SE", "UH", "BE", "NU"]
 
 
-@pytest.mark.parametrize("room", ALEXA_ROOMS)
-async def test_alexa_is_reachable_in_every_room(house, room):
+@pytest.mark.parametrize("room", EVERY_ROOM)
+async def test_the_cat_is_reachable_in_every_room(house, room):
     await content_loader.load_content(content_module.load_files())
 
-    result = await reach.find(GUILD_A, ALICE, room, "alexa", Scope.ROOM)
+    result = await reach.find(GUILD_A, ALICE, room, "cat", Scope.ROOM)
     assert isinstance(result, Found)
-    assert result.thing_id == "alexa"
+    assert result.thing_id == "eunoia"
 
 
-@pytest.mark.parametrize("typed", ["alexa", "speaker", "smart speaker", "echo"])
+@pytest.mark.parametrize("typed", ["cat", "black cat", "kitty", "eunoia"])
 async def test_every_name_for_her_resolves(house, typed):
     await content_loader.load_content(content_module.load_files())
 
     result = await reach.find(GUILD_A, ALICE, "KI", typed, Scope.ROOM)
-    assert getattr(result, "thing_id", None) == "alexa"
+    assert getattr(result, "thing_id", None) == "eunoia"
 
 
 async def test_she_is_reachable_by_a_verb_that_reaches_the_bag_too(house):
-    """REACH is /use's scope, and she has a use text."""
+    """REACH is /use's scope, and she has a use_fail for it."""
     await content_loader.load_content(content_module.load_files())
 
-    result = await reach.find(GUILD_A, ALICE, "BE", "alexa", Scope.REACH)
-    assert getattr(result, "thing_id", None) == "alexa"
+    result = await reach.find(GUILD_A, ALICE, "BE", "cat", Scope.REACH)
+    assert getattr(result, "thing_id", None) == "eunoia"
 
 
 async def test_she_is_not_in_the_bag(house):
@@ -601,8 +608,25 @@ async def test_she_is_not_in_the_bag(house):
     the inventory, and a fixture never enters it."""
     await content_loader.load_content(content_module.load_files())
 
-    result = await reach.find(GUILD_A, ALICE, "KI", "alexa", Scope.CARRIED)
+    result = await reach.find(GUILD_A, ALICE, "KI", "cat", Scope.CARRIED)
     assert isinstance(result, NotFound)
+
+
+@pytest.mark.parametrize("room", EVERY_ROOM)
+async def test_a_parked_thing_is_everywhere_and_reachable_nowhere(house, room):
+    """**What parking has to mean, room by room.**
+
+    Alexa's `room_id` is `ALL`, which is why delaying her is a decision
+    about every room at once rather than about the Entryway. Her drop is
+    99 and `drops.tsv` stops at 50, so she never arrives - and a player
+    who types her name anywhere gets the same answer as for a word the
+    game has never heard.
+    """
+    await content_loader.load_content(content_module.load_files())
+
+    for typed in ("alexa", "smart speaker", "echo"):
+        result = await reach.find(GUILD_A, ALICE, room, typed, Scope.REACH)
+        assert isinstance(result, NotFound), (room, typed)
 
 
 async def test_an_ordinary_room_id_still_means_one_room(house):

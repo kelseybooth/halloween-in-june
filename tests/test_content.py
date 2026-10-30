@@ -48,7 +48,9 @@ def test_the_shipped_content_parses():
     c = content.load_files()
     assert len(c.rooms) == 10  # nine rooms and the channel
     # ...the stand's four, the house across the road, her bowl, and the
-    # brass key that opens the front door
+    # brass key that opens the front door. Drop 20 added no thing: the
+    # hall was written whole at drop 10 and its rows were waiting on
+    # `since_drop`, and `amazon_box` became `shipping_box` in place.
     assert len(c.things) == 165
     # Five out with `/enter`: its three lines, `#welcome`, and the
     # tutorial, which it was the only thing that posted. Five in: the two
@@ -58,7 +60,9 @@ def test_the_shipped_content_parses():
     # the addendum's two: the key falling out of the bed, and the door
     # coming open. Then one more, where `pet.crowding` became a line per
     # mood: the standoffish one replaces the response it used to follow.
-    assert len(c.defaults) == 122
+    # Then drop 20's two: the spice delivery landing in the shipping box,
+    # and the last plank going into the staircase.
+    assert len(c.defaults) == 124
     assert len(c.drops) == 9      # 0 to 3 built; 10 to 50 named ahead of their content
     assert len(c.restocks) == 4  # the toy channel row joined them
 
@@ -100,18 +104,24 @@ def test_the_secret_library_is_the_only_room_locked_at_launch(shipped):
 
 
 def test_what_carries_a_cooldown(shipped):
-    """**Two kinds, and the bed changed kind.**
+    """**One kind now, and both things changed to it.**
 
-    The staircase waits two rolling days between planks: forty-eight
-    hours from whenever the last one went in. The bed waits for Pacific
-    midnight, which resets for everybody at the same instant.
+    Everything on a cooldown waits for Pacific midnight, which resets
+    for everybody at the same instant.
 
-    It used to be rolling hours here too, because that is what the
-    column meant and the design accepted it rather than coding around
-    it. A rolling day drifts - fluff at nine tonight and the next turn
-    is nine tomorrow - so anybody taking their turn at the first
+    The bed moved first. It used to be rolling hours, because that is
+    what the column meant and the design accepted it rather than coding
+    around it. A rolling day drifts - fluff at nine tonight and the next
+    turn is nine tomorrow - so anybody taking their turn at the first
     opportunity loses a few minutes a day forever, and somebody who
     fluffs just before midnight loses nearly all of the next day.
+
+    Drop 20 moved the staircase for a second reason on top of that one.
+    The repair is a shared job measured in days - ninety planks at one
+    per player per day - so "a day" has to mean the same day for
+    everybody, or two players who both laid a plank this afternoon are
+    on different clocks tomorrow. The 48-hour wait went with it: at one
+    plank every two days, a server of 27 players would need a week.
     """
     hourly = {
         t.thing_id: t.use_cooldown_hours
@@ -120,8 +130,8 @@ def test_what_carries_a_cooldown(shipped):
     }
     daily = {t.thing_id for t in shipped.things if t.use_cooldown_daily}
 
-    assert hourly == {"lumber": 48}
-    assert daily == {"cat_bed"}
+    assert hourly == {}
+    assert daily == {"cat_bed", "lumber"}
     assert not (set(hourly) & daily)  # the loader refuses both on one row
 
 
@@ -171,8 +181,8 @@ def test_a_duplicate_thing_id_is_caught(shipped):
 
 
 def test_two_levels_of_containment_are_caught(shipped):
-    """spice_jar is in amazon_box; putting amazon_box inside something makes it two."""
-    broken = replace_thing(shipped, "amazon_box", contained_in="ornate_mirror")
+    """spice_jar is in shipping_box; putting that inside something makes it two."""
+    broken = replace_thing(shipped, "shipping_box", contained_in="ornate_mirror")
     assert problems_matching(broken, "containment is one level only")
 
 

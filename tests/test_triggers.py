@@ -96,16 +96,46 @@ async def has(user_id=ALICE, guild_id=GUILD_A) -> set[str]:
 
 def test_every_achievement_in_the_file_has_a_trigger():
     parsed = content_module.load_files()
-    assert achievements.registration_problems(parsed.achievement_ids) == []
+    assert (
+        achievements.registration_problems(
+            parsed.achievement_ids, parked=content_module.parked_achievements(parsed)
+        )
+        == []
+    )
 
 
 def test_every_row_in_the_file_is_registered():
     """Thirty-five from Release 1, and V3's seven. The count is pinned
     against the file rather than written down twice, so adding a row and
-    forgetting the predicate fails here as well as at boot."""
+    forgetting the predicate fails here as well as at boot.
+
+    **Except the parked ones.** A row at `NEVER` waits on machinery that
+    does not exist - *Board Meeting* goes to every player who laid a
+    plank and announces once, and a `group` row awards the server and
+    names nobody - so drop 20 shipped its line and left the award to
+    drop 30. It cannot be earned either way, because its drop is not in
+    `drops.tsv`, which is what makes the exemption safe.
+    """
     parsed = content_module.load_files()
 
-    assert achievements.registered_ids() == set(parsed.achievement_ids)
+    assert achievements.registered_ids() - set(parsed.achievement_ids) == set()
+
+
+def test_a_parked_row_is_the_only_one_allowed_to_be_unwired():
+    """The other direction, and the exact size of the hole parking cuts
+    in it.
+
+    **Most parked rows are wired anyway**, which is why this is not
+    simply `registered == file - parked`: the ghosts, the doorbell and
+    Alexa all have working predicates waiting for content, and
+    subtracting every parked row would assert they were missing. The
+    rule is narrower - a row may be unwired *only* if it is parked -
+    and *Board Meeting* is the only one taking the exemption today.
+    """
+    parsed = content_module.load_files()
+    unwired = set(parsed.achievement_ids) - achievements.registered_ids()
+
+    assert unwired <= content_module.parked_achievements(parsed)
 
 
 def test_registering_twice_is_a_no_op():
@@ -530,12 +560,14 @@ def test_what_can_actually_be_earned():
     counts what the engine can answer for, and the drop decides
     separately whether anybody will ever be asked.
 
-    Forty, still: *Bug Catcher* is registered like the rest and is not
-    one of them, because no play produces it.
+    Forty-one with drop 20's *Are You David?*, the fourth score
+    threshold. *Bug Catcher* is registered like the rest and is not one
+    of them, because no play produces it; *Board Meeting* is not
+    registered at all, which is the one case this count does not see.
     """
     earnable = achievements.registered_ids() - set(BLOCKED) - set(BY_HAND)
 
-    assert len(earnable) == 40
+    assert len(earnable) == 41
 
 
 # --------------------------------------------------------------------------
@@ -786,10 +818,22 @@ async def test_favorite_human_needs_a_meter_with_no_ceiling(playing):
 
 
 async def test_passing_a_message_to_david(playing):
+    """**The predicate works; the row is parked, so nothing lands.**
+
+    Alexa went to `NEVER` on 29 October - she needs a notes feature and
+    more testing before players meet her - and this is the achievement
+    for talking to her. Both halves are asserted on purpose: the logic
+    is still right and still tested, and the parking is what withholds
+    the award rather than anything being broken.
+
+    When Alexa ships, the row moves to her drop and the second assertion
+    below is the one that fails, which is the reminder to delete it.
+    """
     said = "Alexa, remind David about the cat food delivery"
-    assert "passing_a_message_to_david" in await earned(
-        a_context("on_message", extra={"content": said})
-    )
+    context = a_context("on_message", extra={"content": said})
+
+    assert await triggers.passing_a_message_to_david(context)
+    assert "passing_a_message_to_david" not in await earned(context)
 
 
 async def test_talking_to_alexa_about_anything_else_earns_nothing(playing):

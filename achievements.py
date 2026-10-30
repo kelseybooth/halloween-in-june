@@ -183,7 +183,9 @@ def clear() -> None:
         _BY_HOOK[hook] = []
 
 
-def registration_problems(achievement_ids: set[str]) -> list[str]:
+def registration_problems(
+    achievement_ids: set[str], parked: "set[str] | frozenset[str]" = frozenset()
+) -> list[str]:
     """Both directions: every row wired up, and every trigger backed by a row.
 
     The check worth building carefully. It catches the day somebody adds a
@@ -193,9 +195,25 @@ def registration_problems(achievement_ids: set[str]) -> list[str]:
 
     Takes the ids rather than the parsed content so it can be asked about a
     subset, and so `content.py` stays free of anything that touches a database.
+
+    **`parked` are the rows whose drop is `NEVER`, and they may be
+    unwired.** That is what parking a row means: written, approved, and
+    waiting on machinery that does not exist. *Board Meeting* goes to
+    every player who laid a plank and announces once, which is a shape
+    the engine has no word for - a `group` row awards the server and
+    names no player - so drop 20 shipped the line and left the award to
+    drop 30. Demanding a trigger for it would have forced a stub that
+    could never fire, which is the thing this check exists to catch.
+
+    The exemption is safe because it is not a weakening: a `NEVER` row
+    waits for a drop that is not in `drops.tsv`, so `fire` would decline
+    to award it even if something did ask. It cannot be earned, wired or
+    not. **Only this direction is relaxed** - a trigger registered for a
+    name no row carries is still an error, parked or not, because that
+    one awards something with nothing to announce.
     """
     problems = []
-    for achievement_id in sorted(achievement_ids - registered_ids()):
+    for achievement_id in sorted(achievement_ids - parked - registered_ids()):
         problems.append(
             f"achievement {achievement_id} is in the file with no registered "
             "trigger, so nothing could ever award it"
