@@ -11,11 +11,12 @@ what fires. Where a predicate departs from it, the docstring says so and why.
 
 Three families do most of the work and are written once:
 
-- **the date-gated six** share `_on_date`, parameterised by a day test and a
-  set of targets, because five fixed dates and one weekday are the same shape.
-  They were seven: *Self-Reflection* lost its date on 21 October, and
-  four more are due to - see `Date-restricted achievements.md`, which is
-  authoritative for which achievements check a date at all
+- **the dated three** read the same 43-hour window. *Curbside Pickup* is
+  "this thing, on this day" and is the last user of `_on_date`; the two
+  holidays have no thing behind them and read `_window_is_open` directly.
+  There were nine - six fixed October dates came off on 21 and 30 October,
+  and `Date-restricted achievements.md` is authoritative for which
+  achievements check a date at all
 - **the three group achievements** share one per-room read, because all three
   are the same `GROUP BY room_id` with a different `HAVING`
 - **the seven blocked** share `_blocked`, which is a predicate that says no.
@@ -176,8 +177,9 @@ def on_tuesday(day: date) -> bool:
     Without it a player in Japan could only earn *Curbside Pickup* between
     17:00 Tuesday and 17:00 Wednesday their time. The nearest Tuesday windows
     to 1 October close on 30 September at 03:00 and reopen on 5 October at
-    08:00, both clear of the 1 October window, so this introduces no collision
-    with *Trash Panda*.
+    08:00, both clear of the 1 October window - which used to matter, because
+    *Trash Panda* watched the same trash can on 1 October. It has no date now,
+    so the collision this was written against cannot happen.
     """
     return day.weekday() == 1
 
@@ -265,7 +267,14 @@ def _on_thing(targets: set[str]):
 
 
 def _on_date(matches, targets: set[str], *, source_only: bool = False):
-    """One thing (or one of a set), on one day. Five of the six are this.
+    """One thing (or one of a set), on one day. *Curbside Pickup* alone.
+
+    It was six of the seven. Five of those lost their dates - the three
+    one-liners became `_on_thing`, *Green Thumb* became three parts with
+    no day at all, and *Trash Panda* is waiting on a trash can that
+    holds things - and this is kept rather than inlined because the
+    window machinery it stands on is shared with the two holidays and
+    is the part worth having one of.
 
     `source_only` is *Green Thumb*'s `on_take` half: taking herbs **from the
     herb garden** is gardening, and picking up a `herbs` somebody dropped in
@@ -281,6 +290,53 @@ def _on_date(matches, targets: set[str], *, source_only: bool = False):
         return context.thing_id in targets
 
     return predicate
+
+
+# --------------------------------------------------------------------------
+# Green Thumb
+#
+# The only achievement assembled out of several different actions rather
+# than counted or triggered by one, which is what makes it the only one
+# that needs to remember anything between commands.
+# --------------------------------------------------------------------------
+
+GREEN_THUMB_PARTS = (WATERING_CAN, PUMPKINS, HERB_GARDEN)
+
+
+async def green_thumb(context: Context) -> bool:
+    """Watered, picked and carved. Any order, any days, no date.
+
+    It was 15 October and could not be earned: the Courtyard opens at
+    drop 30 and the carving tools at drop 40, both after the day had
+    passed. `Date-restricted achievements.md` took the date off and
+    replaced it with the thing the deck wanted all along - three jobs a
+    gardener does, in whatever order a player gets to them.
+
+    **Three `thing_uses` rows, which is the whole of the state.** Using
+    the watering can and carving a pumpkin each stamp one through
+    `record_use`; drawing herbs stamps one for the **herb garden**,
+    because `take_from_source` is the only path that yields herbs from
+    it and the garden's row carries no other meaning. Nothing new is
+    stored and nothing is counted - twenty waterings are still one part.
+
+    **The source is what separates gardening from scavenging**, and it
+    does it by what gets written rather than by a test here: herbs
+    somebody dropped in the Entryway come out of the room, not out of
+    the garden, so they stamp nothing and cannot complete a part.
+
+    **No early-out on the thing being used**, though one would save a
+    query on every unrelated `/use` in the game. The condition this
+    achievement has is "all three parts done" and nothing else, and a
+    guard reading "...and this action was one of them" would be a
+    second condition that the file does not ask for - true only because
+    the third part is always the action that completes it. The read is
+    one indexed select on three ids, and `fire` already runs a dozen
+    predicates that touch the database.
+    """
+    done = await database.which_of_these_used(
+        context.user_id, context.guild_id, GREEN_THUMB_PARTS
+    )
+    return len(done) == len(GREEN_THUMB_PARTS)
 
 
 # --------------------------------------------------------------------------
@@ -804,23 +860,19 @@ def register_all() -> None:
     add("favorite_human", "on_relationship_change", favorite_human)
     add("are_you_david", "on_relationship_change", are_you_david)
     add("signed_sealed_delivered", "on_use", _blocked("the doorbell"))
-    add("brewing_trouble", "on_use", _on_date(on_october(1), {KEURIG}))
-    add("trash_panda", "on_use", _on_date(on_october(1), {TRASH_CAN}))
+    add("brewing_trouble", "on_use", _on_thing({KEURIG}))
+    # Not a date any more and not yet a trigger either: the file asks for
+    # taking an item *out of* the trash can, and the trash can holds
+    # nothing. Blocked says that, where a date it can never match only
+    # looked like it said something.
+    add("trash_panda", "on_take", _blocked("items in the trash can"))
     # No longer World Smile Day. Any mirror, any day, any year - the one
     # of the six undated ones whose room is already open.
     add("self_reflection", "on_use", _on_thing(MIRRORS))
-    # The one that shapes the signature: three things across two hooks.
-    add(
-        "green_thumb",
-        ("on_use", "on_take"),
-        _on_date(
-            on_october(15),
-            {WATERING_CAN, PUMPKINS, HERB_GARDEN},
-            source_only=True,
-        ),
-    )
-    add("nacho_average_ghost", "on_use", _on_date(on_october(21), {NACHO_CHIPS}))
-    add("using_your_noodle", "on_use", _on_date(on_october(25), {PASTA_POT}))
+    # The one that shapes the signature: three parts across two hooks.
+    add("green_thumb", ("on_use", "on_take"), green_thumb)
+    add("nacho_average_ghost", "on_use", _on_thing({NACHO_CHIPS}))
+    add("using_your_noodle", "on_use", _on_thing({PASTA_POT}))
     add("getting_into_the_spirit", "on_use", _blocked("the ghost system"))
     add("ghostbuster", "on_use", _blocked("the ghost system"))
     add("breaking_into_the_halloween_candy", "on_use", _used(CANDY))

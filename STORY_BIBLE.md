@@ -312,11 +312,13 @@ Only the date-based achievements have fixed dates so far. The rest need to be pl
 | Date | Drop | Fixed content |
 | --- | --- | --- |
 | Launch (TBD) | Drop 1: the house as players first find it | Starting achievements (TBD) |
-| Oct 1 | Coffee Day / Raccoon Day | Coffee maker and trash can achievements |
-| Oct 2 | World Smile Day | Mirror achievement |
-| Oct 15 | International Day of Rural Women | Watering can achievement |
-| Oct 21 | International Day of the Nacho | Nacho chips achievement |
-| Oct 25 | World Pasta Day | Pasta pot achievement |
+| Oct 1 | Coffee Day / Raccoon Day | Coffee maker and trash can achievements *(no longer dated)* |
+| Oct 2 | World Smile Day | Mirror achievement *(no longer dated)* |
+| Oct 15 | International Day of Rural Women | Watering can achievement *(no longer dated)* |
+| Oct 21 | International Day of the Nacho | Nacho chips achievement *(no longer dated)* |
+| Oct 25 | World Pasta Day | Pasta pot achievement *(no longer dated)* |
+
+*The five dates above came off on 21 and 30 October: every one of them needs a room that opens at drop 30 or later, so the day had passed before any player could reach the thing. The two holidays that remain, Black Cat Day and Halloween, need nothing but the cat. See `Date-restricted achievements.md`.*
 | — | *Follow Your Nose* | **No longer a drop.** A per-player discovery, available from launch: free the roll-top desk's jammed drawer with graphite |
 | TBD, late October | *Forwarding Address* | A letter for L arrives; players forward it to the right address |
 | Oct 31 | Halloween | Finale drop (see the Release Timeline) |
@@ -326,7 +328,7 @@ All dates and times are Pacific, matching the bot's existing midnight job.
 
 ### Example drop
 
-*Follow Your Nose was the worked example here, and it is no longer a drop — it became a per-player discovery available from launch (see the Upstairs Hallway). A dated drop still needs a worked example; the Oct 21 nacho achievement or the Forwarding Address letter would both serve.* **TBD.**
+*Follow Your Nose was the worked example here, and it is no longer a drop — it became a per-player discovery available from launch (see the Upstairs Hallway). A dated drop still needs a worked example; the nacho achievement was the other candidate and is no longer dated either, so the Forwarding Address letter is the one left.* **TBD.**
 
 What the change illustrates is worth keeping, because it will come up again: a drop makes something happen to everyone at once, and a discovery makes something happen to one player when they earn it. Reach for a drop when the house itself should change — new things, new descriptions, an announcement. Reach for a discovery when the point is the moment of working it out, because a drop spends that moment on whoever happens to be online.
 
@@ -412,12 +414,12 @@ A **bonus** achievement is not a fourth kind. It is either of the two earned by 
 | **Trying to Make Friends** | Pet the cat 200 times while your relationship is zero or below |  |
 | **Cat's Best Friend** | Reach a perfect relationship with Eunoia | Perfect means a relationship score of 100, the top of a meter that runs −100 to 100 |
 | **Signed, Sealed, Delivered** | `/use intercom` within three minutes of the doorbell ringing | The doorbell is a live event the bot announces. Delivery driver dialogue TBD |
-| **Brewing Trouble** | Use the Keurig on Oct 1 | International Coffee Day |
-| **Trash Panda** | Use the trash can on Oct 1 | International Raccoon Appreciation Day. The achievements doc gives Oct 1 in one place and Oct 2 in another; Oct 1 is the real date |
-| **Say Cheese** | Use a mirror on Oct 2 | World Smile Day. Any mirror in the house counts: the ornate mirror (Entryway), the cracked mirrors (Secret Library) or the dresser mirror (Bedroom) |
-| **Green Thumb** | Use the watering can or take herbs from the herb garden or use (carve) pumpkin on Oct 15 | International Day of Rural Women |
-| **Nacho Average Ghost** | Use the nacho chips on Oct 21 | International Day of the Nacho |
-| **Using Your Noodle** | Use the pasta pot on Oct 25 | World Pasta Day |
+| **Brewing Trouble** | Use the Keurig | Was International Coffee Day, Oct 1 |
+| **Trash Panda** | Take an item out of the trash can | Was International Raccoon Appreciation Day, Oct 1. The trash can holds no items yet, so this waits on a future release |
+| **Self-Reflection** | Use a mirror | Was World Smile Day, Oct 2, and was called *Say Cheese*. Any mirror in the house counts: the ornate mirror (Entryway), the cracked mirrors (Secret Library) or the dresser mirror (Bedroom) |
+| **Green Thumb** | Use the watering can **and** take herbs from the herb garden **and** use (carve) a pumpkin, in any order and on any days | Was International Day of Rural Women, Oct 15, and any one of the three used to be enough |
+| **Nacho Average Ghost** | Use the nacho chips | Was International Day of the Nacho, Oct 21 |
+| **Using Your Noodle** | Use the pasta pot | Was World Pasta Day, Oct 25 |
 | **Getting into the Spirit** | As the day's ghost, haunt a room with `/use bedsheet` | One random player per day is the ghost. See The ghost of the day |
 | **Ghostbuster** | Correctly name the day's ghost with `/use spirit board` | Secret Library. One accusation per player per day |
 | **Breaking into the Halloween Candy** | `/use candy` to eat it |  |
@@ -465,7 +467,7 @@ For each thing: **Take** means it can go in an inventory. **Achievement** links 
 | Intercom | No | Answer the door when the doorbell rings | Signed, Sealed, Delivered |
 | Amazon box | No | Contains the spice jar. Its description does **not** name the jar, so it stays true once somebody takes it | Something's Cooking |
 | Spice jar | Yes | Recipe ingredient, inside the box | Something's Cooking |
-| Ornate mirror | No | Reflections occasionally show the other house | Say Cheese (Oct 2) |
+| Ornate mirror | No | Reflections occasionally show the other house | Self-Reflection |
 | Bulletin board | No | Archive of every note that has dropped | — |
 | Coat rack | No | A cardboard flat of **salmon** is tucked in behind it | Charcuterie Board / Bulk Buyer |
 | Stroller, shoes, booties | No | Flavor: a baby lives here | — |
@@ -496,10 +498,10 @@ For each thing: **Take** means it can go in an inventory. **Achievement** links 
 | --- | --- | --- | --- |
 | Stove | No | Cook with all three ingredients | Something's Cooking |
 | Sink | No | `/use bottle` here turns a used baby bottle into a sanitized baby bottle | Squeaky Clean |
-| Keurig | No | A single-serve machine with pods beside it, so a player can **make** fresh coffee rather than only find a cold pot. Use on Oct 1 | Brewing Trouble |
-| Trash can | No | Use on Oct 1; take out on Tuesdays | Trash Panda / Curbside Pickup |
-| Pasta pot | No | Use on Oct 25 | Using Your Noodle |
-| Nacho chips | Yes | Use on Oct 21. Not named in the room description, because one player takes them and the description would then be lying | Nacho Average Ghost |
+| Keurig | No | A single-serve machine with pods beside it, so a player can **make** fresh coffee rather than only find a cold pot | Brewing Trouble |
+| Trash can | No | Take an item out of it; take the can out on Tuesdays | Trash Panda *(blocked)* / Curbside Pickup |
+| Pasta pot | No | Use it | Using Your Noodle |
+| Nacho chips | Yes | Use them. Not named in the room description, because one player takes them and the description would then be lying | Nacho Average Ghost |
 | Pantry | No | Holds the **tuna** stash, towers of cans squared off at the corners | Charcuterie Board / Bulk Buyer |
 | Gourmet wet cat food | — | **Not here.** The jar labelled "EUNOIA — PREMIUM" that used to sit on this counter has gone; the one tin is under the bed in the Bedroom | Charcuterie Board |
 | Freezer: Aunt Sue's breakfast burritos | No | Flavor: "From Aunt Sue — 2 dozen! To help you both adjust to parenthood!" | — |
@@ -515,7 +517,7 @@ For each thing: **Take** means it can go in an inventory. **Achievement** links 
 | Herb garden | No | A **source**: the bed stays put and the cuttings are what you carry | Something's Cooking |
 | Herbs | Yes | Recipe ingredient, cut from the garden | Something's Cooking |
 | Pumpkins | No | Carve with the tools (context `/use`) | Gourd Job |
-| Watering can | No | Use on Oct 15 | Green Thumb |
+| Watering can | No | Use it; one of Green Thumb's three parts | Green Thumb |
 | Stone circle | No | Flavor; where Elena tested the diagram before moving indoors | — |
 | Sunhat, rattle, picnic blanket, bench, ivy, stone wall | No | Flavor | — |
 | Oak tree | No | `/use tree` climbs to the library window: the way into the Secret Library | — |
@@ -549,7 +551,7 @@ For each thing: **Take** means it can go in an inventory. **Achievement** links 
 | Scorch circle | No | Where the experiment happened | — |
 | Ritual diagram | No | Elena's diagram, pinned to the shelf edge; readable | — |
 | Copper wire coil | No | A **source**: Elena's salvaged wire, paid out and re-wound many times | — |
-| Cracked mirrors | No | Flavor; show glimpses of the other house | Say Cheese (Oct 2) |
+| Cracked mirrors | No | Flavor; show glimpses of the other house | Self-Reflection |
 | Empty cat bed | No | Eunoia hasn't slept here since the split | — |
 | Spirit board | No | Elena's board. Accuse a player of being the day's ghost | Ghostbuster |
 | Skeleton key | Yes, one per player | Unlocks the curiosity cabinet passage to the Living Room. Can't be dropped, taken from another player or sent to Dimension B | — |
@@ -608,7 +610,7 @@ The clue trail is already in the house and uses things that otherwise do nothing
 | Unmade bed | No | A crate of **chicken** is shoved underneath, within arm's reach of the pillow | Charcuterie Board / Bulk Buyer |
 | Gourmet wet cat food | Yes, one per player ever | Pushed in behind the crate, further back than you would reach by accident. **The only one in the house** | Charcuterie Board |
 | Dresser | No | Drawers half out; the laptop and a printout on top | — |
-| Dresser mirror | No | One of the mirrors that counts for the Oct 2 achievement | Say Cheese (Oct 2) |
+| Dresser mirror | No | One of the three mirrors that count | Self-Reflection |
 | Bottle warmer | No | Plugged in, up to temperature, with no bottle in it | — |
 | Laptop | No | Open search tabs: "all doors and windows stuck at once," "can a house settle overnight," "graphite vs WD-40" | Clue for the jammed drawer |
 

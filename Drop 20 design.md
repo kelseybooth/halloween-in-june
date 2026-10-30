@@ -25,7 +25,7 @@ Fragment 4 names both delayed things, so the whole fragment waits with them. Fra
 | grand staircase (`EH`) | Unsafe until repaired. Once repaired, it holds, but the way up waits for drop 40 |
 | shipping box, spice jar | Jars arrive in the box on a schedule, below |
 | intercom | Scenery. The front door's drop 20 look already names it |
-| mirror | Scenery. Using it earns *Say Cheese* |
+| mirror | Scenery. Using it earns *Self-Reflection* (named *Say Cheese* when this was written) |
 | stroller, shoes, booties | Scenery |
 | Alexa | **Waits (99).** Her `room_id` is `ALL`, so delaying her takes her out of every room |
 | bulletin board | **Waits (99),** until players can pin their own notes |

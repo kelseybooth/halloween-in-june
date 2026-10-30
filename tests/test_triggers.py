@@ -249,28 +249,66 @@ def test_no_october_window_crosses_a_daylight_saving_boundary():
         assert closes - opens == timedelta(hours=43), day
 
 
+# These four used to be asked of *Brewing Trouble*, which was the
+# cheapest of the six fixed dates to stand in for the rest. It has no
+# date now, and `_on_date` has one user left - so the family tests and
+# *Curbside Pickup*'s own tests are asking about the same achievement
+# from two directions, which is worth keeping while the machinery is
+# still shared with the two holidays.
+
+TUESDAY = pacific(2026, 10, 6)
+
+
 async def test_a_date_achievement_fires_inside_its_window(playing):
-    assert "brewing_trouble" in await earned(
-        a_context("on_use", thing_id="coffee_maker", now=pacific(2026, 10, 1))
+    assert "curbside_pickup" in await earned(
+        a_context("on_use", thing_id="trash_can", now=TUESDAY)
     )
 
 
 async def test_a_date_achievement_does_not_fire_outside_it(playing):
     assert await earned(
-        a_context("on_use", thing_id="coffee_maker", now=pacific(2026, 9, 20))
+        a_context("on_use", thing_id="trash_can", now=pacific(2026, 10, 8))
     ) == set()
 
 
 async def test_the_right_day_but_the_wrong_thing_earns_nothing(playing):
-    assert "brewing_trouble" not in await earned(
-        a_context("on_use", thing_id="sink", now=pacific(2026, 10, 1))
+    assert "curbside_pickup" not in await earned(
+        a_context("on_use", thing_id="sink", now=TUESDAY)
     )
 
 
 async def test_a_date_achievement_is_not_pinned_to_2026(playing):
-    """Pinning the year would quietly retire seven achievements on 1 January."""
-    assert "brewing_trouble" in await earned(
-        a_context("on_use", thing_id="coffee_maker", now=pacific(2027, 10, 1))
+    """Pinning the year would quietly retire the dated ones on 1 January."""
+    assert "curbside_pickup" in await earned(
+        a_context("on_use", thing_id="trash_can", now=pacific(2027, 10, 5))
+    )
+
+
+@pytest.mark.parametrize(
+    ("achievement_id", "thing_id"),
+    [
+        ("brewing_trouble", "coffee_maker"),
+        ("nacho_average_ghost", "nacho_chips"),
+        ("using_your_noodle", "pasta_pot"),
+    ],
+)
+@pytest.mark.parametrize(
+    "when",
+    [pacific(2026, 6, 14), pacific(2026, 10, 1), pacific(2027, 2, 2)],
+    ids=["an ordinary day", "one of the old days", "next year"],
+)
+async def test_the_three_that_stopped_being_dated(
+    playing, achievement_id, thing_id, when
+):
+    """**Three one-line changes, and the reason for all three is one
+    sentence.** The kitchen opens at drop 30, which is after 1, 21 and
+    25 October, so none of them could be earned this year by anybody.
+
+    Their old days still work, because taking a date off is not a date
+    swap, and so does every other day.
+    """
+    assert achievement_id in await earned(
+        a_context("on_use", thing_id=thing_id, now=when)
     )
 
 
@@ -363,51 +401,142 @@ async def test_the_trash_can_on_the_first_of_october_earns_nothing(playing):
     )
 
 
-async def test_trash_panda_and_curbside_pickup_are_both_evaluated(playing):
-    """Not chained with an elif. They cannot collide in 2026, but the
-    dispatcher must not assume that."""
-    assert set(achievements.listening_on("on_use")) >= {"trash_panda", "curbside_pickup"}
+async def test_trash_panda_waits_on_a_trash_can_that_holds_things(playing):
+    """**It stopped being a date and did not become a trigger.**
+
+    The file asks for taking an item *out of* the trash can, and the
+    trash can holds nothing - so it moves to `on_take` and to the
+    blocked family, which is the one that says "waiting on a system"
+    out loud. A 1 October gate it could never match looked like a
+    condition and was not one; it is also parked at drop 99, so nothing
+    dispatched it in any case.
+    """
+    assert "trash_panda" in achievements.listening_on("on_take")
+    assert "trash_panda" not in achievements.listening_on("on_use")
+    assert achievements.trigger_for("trash_panda").predicate.blocked_on == (
+        "items in the trash can"
+    )
 
 
 # --------------------------------------------------------------------------
 # Green Thumb: three things, two hooks, one registration
 # --------------------------------------------------------------------------
 
-OCT_15 = pacific(2026, 10, 15)
+# It was one thing on 15 October. It is three jobs a gardener does, in
+# any order and on any days, and the day was dropped because the
+# Courtyard opens at drop 30 and the carving tools at drop 40 - both
+# after 15 October, so nobody could have done even one part in time.
+
+WATERED = "watering_can"
+CARVED = "pumpkins"
+PICKED = "herb_garden"
 
 
-async def test_green_thumb_from_the_watering_can(playing):
+async def water(who=ALICE):
+    await database.record_use(who, GUILD_A, WATERED)
+
+
+async def carve(who=ALICE):
+    await database.record_use(who, GUILD_A, CARVED)
+
+
+async def pick(who=ALICE):
+    """Herbs out of the garden, which stamps the garden and not the herbs."""
+    await database.take_from_source(who, GUILD_A, "herbs", source_id=PICKED)
+
+
+async def test_green_thumb_takes_all_three(playing):
+    await water()
+    await pick()
+    await carve()
+
+    assert "green_thumb" in await earned(a_context("on_use", thing_id=CARVED))
+
+
+@pytest.mark.parametrize("missing", ["watering", "picking", "carving"])
+async def test_green_thumb_takes_nothing_less(playing, missing):
+    if missing != "watering":
+        await water()
+    if missing != "picking":
+        await pick()
+    if missing != "carving":
+        await carve()
+
+    assert "green_thumb" not in await earned(a_context("on_use", thing_id=CARVED))
+
+
+async def test_green_thumb_does_not_care_about_the_order(playing):
+    """Or the days. Three parts on three dates, finished in the spring."""
+    await carve()
+    await water()
+    await pick()
+
     assert "green_thumb" in await earned(
-        a_context("on_use", thing_id="watering_can", now=OCT_15)
+        a_context("on_take", thing_id="herbs", source_id=PICKED, now=pacific(2027, 4, 1))
     )
 
 
-async def test_green_thumb_from_carving_the_pumpkin(playing):
-    assert "green_thumb" in await earned(
-        a_context("on_use", thing_id="pumpkins", now=OCT_15)
-    )
+async def test_twenty_waterings_are_still_one_part(playing):
+    """`which_of_these_used` asks which, not how many - and the
+    difference is the whole reason it exists beside `uses_of_any`."""
+    for _ in range(20):
+        await water()
 
-
-async def test_green_thumb_from_taking_herbs_from_the_garden(playing):
-    assert "green_thumb" in await earned(
-        a_context("on_take", thing_id="herbs", source_id="herb_garden", now=OCT_15)
-    )
+    assert "green_thumb" not in await earned(a_context("on_use", thing_id=WATERED))
 
 
 async def test_green_thumb_is_not_earned_by_scavenging(playing):
-    """Picking up herbs somebody dropped in the Entryway is not gardening,
-    and both paths hand over an identical `herbs`."""
+    """**Still the sharpest test here, and it now holds for a better
+    reason.** Herbs somebody dropped in the Entryway hand over an
+    identical `herbs`, and the old predicate had to look at `source_id`
+    to tell them apart. Nothing looks now: a floor pickup goes through
+    `take_from_room`, which stamps no source, so the garden's part
+    simply never gets done.
+    """
+    await water()
+    await carve()
+
     assert "green_thumb" not in await earned(
-        a_context("on_take", thing_id="herbs", source_id=None, now=OCT_15)
+        a_context("on_take", thing_id="herbs", source_id=None)
     )
 
 
-async def test_carving_a_pumpkin_on_the_fifteenth_earns_both(playing):
+async def test_the_third_part_is_what_earns_it(playing):
+    """And it is earned on the action that completes it, not on the next
+    one - which is what the player sees."""
+    await water()
+    await carve()
+
+    assert "green_thumb" not in await earned(a_context("on_use", thing_id=CARVED))
+
+    await pick()
+
+    assert "green_thumb" in await earned(
+        a_context("on_take", thing_id="herbs", source_id=PICKED)
+    )
+
+
+async def test_carving_a_pumpkin_earns_both(playing):
     """The dispatcher must not stop at the first match."""
     await database.take_from_source(ALICE, GUILD_A, "carving_tools")
+    await water()
+    await pick()
+    await carve()
 
-    both = await earned(a_context("on_use", thing_id="pumpkins", now=OCT_15))
-    assert both == {"gourd_job", "green_thumb"}
+    assert await earned(a_context("on_use", thing_id=CARVED)) == {
+        "gourd_job",
+        "green_thumb",
+    }
+
+
+async def test_one_players_gardening_is_not_anothers(playing):
+    await water()
+    await pick()
+    await carve()
+
+    assert "green_thumb" not in await earned(
+        a_context("on_use", thing_id=CARVED, user_id=BOB)
+    )
 
 
 # --------------------------------------------------------------------------
@@ -526,6 +655,9 @@ async def test_group_achievements_are_scoped_to_one_server(playing, db):
 
 BLOCKED = [
     # Waiting on cat crossing, the ghosts, the doorbell and the letter.
+    # *Trash Panda* joined them on 30 October: it wants an item taken out
+    # of the trash can, and the trash can does not hold items.
+    "trash_panda",
     "unsticking_the_situation",
     "return_to_sender",
     "it_takes_a_village",
@@ -612,10 +744,15 @@ def test_what_can_actually_be_earned():
     threshold. *Bug Catcher* is registered like the rest and is not one
     of them, because no play produces it; *Board Meeting* is not
     registered at all, which is the one case this count does not see.
+
+    **Forty on 30 October**, when *Trash Panda* joined the blocked. It
+    was never earnable - parked at drop 99 and gated on a day it could
+    not reach - but it counted here, because a date is a condition and
+    this subtraction only knows about the ones that say no outright.
     """
     earnable = achievements.registered_ids() - set(BLOCKED) - set(BY_HAND)
 
-    assert len(earnable) == 41
+    assert len(earnable) == 40
 
 
 # --------------------------------------------------------------------------
@@ -1051,10 +1188,12 @@ async def test_nacho_average_ghost(playing):
     )
 
 
-async def test_nacho_average_ghost_is_not_earnable_the_week_before(playing):
+async def test_nacho_average_ghost_wants_nothing_but_the_chips(playing):
+    """It wanted 21 October as well until today. The kitchen opens at
+    drop 30, so that day had passed before anybody could reach a chip."""
     assert await earned(
         a_context("on_use", thing_id="nacho_chips", now=pacific(2026, 10, 14))
-    ) == set()
+    ) == {"nacho_average_ghost"}
 
 
 async def test_using_your_noodle(playing):
@@ -1063,10 +1202,11 @@ async def test_using_your_noodle(playing):
     )
 
 
-async def test_using_your_noodle_is_not_earnable_the_day_after_its_window(playing):
+async def test_using_your_noodle_wants_nothing_but_the_pot(playing):
+    """The day after its old window, which is now an ordinary day."""
     assert await earned(
         a_context("on_use", thing_id="pasta_pot", now=pacific(2026, 10, 26, 12))
-    ) == set()
+    ) == {"using_your_noodle"}
 
 
 async def test_catproof_cannot_be_farmed_by_dropping_and_re_taking(playing):

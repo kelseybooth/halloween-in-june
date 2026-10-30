@@ -2609,14 +2609,32 @@ def _add_to_room(
     )
 
 
-async def take_from_source(user_id: int, guild_id: int, thing_id: str) -> None:
-    """Hand a player one of what a source yields. The source is not consumed."""
+async def take_from_source(
+    user_id: int, guild_id: int, thing_id: str, source_id: str | None = None
+) -> None:
+    """Hand a player one of what a source yields. The source is not consumed.
+
+    **`source_id` stamps the source in `thing_uses`**, which is how a
+    draw becomes something an achievement can still read tomorrow.
+    *Green Thumb* needs "this player has picked herbs from the garden"
+    to survive the player dropping the herbs, and an inventory cannot
+    answer that. A move already writes to `thing_uses` for the same
+    reason, so this is the shape rather than a new idea.
+
+    **The source and not the yield.** Stamping `herbs` would read more
+    naturally and would be a bug: *Bulk Buyer* counts cans out of
+    `thing_uses`, and a can drawn from a stash would start counting as a
+    can offered to the cat. A source is never used, so its row carries
+    no other meaning and can safely mean "drawn from".
+    """
     session_factory = _require_session()
     insert = _upsert_statement()
     await ensure_user_exists(user_id, guild_id)
     async with session_factory() as session:
         await session.execute(_add_to_inventory(insert, user_id, guild_id, thing_id, 1))
         await session.commit()
+    if source_id is not None:
+        await record_use(user_id, guild_id, source_id)
     log.info("User %s drew %s from a source in guild %s", user_id, thing_id, guild_id)
 
 
@@ -2790,6 +2808,32 @@ async def record_use(user_id: int, guild_id: int, thing_id: str) -> UseRecord:
         last_used_at=previous[0] if previous else None,
         use_count=(previous[1] if previous else 0) + 1,
     )
+
+
+async def which_of_these_used(
+    user_id: int, guild_id: int, thing_ids: Iterable[str]
+) -> set[str]:
+    """Which of these this player has a `thing_uses` row for at all.
+
+    `uses_of_any` sums, which answers "how many times" and cannot
+    answer "which ones" - and an achievement made of several different
+    actions wants the second. *Green Thumb* is the first of those: three
+    parts, in any order, on any days, and twenty waterings are still one
+    part.
+    """
+    wanted = sorted(set(thing_ids))
+    if not wanted:
+        return set()
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(ThingUse.thing_id).where(
+                ThingUse.guild_id == guild_id,
+                ThingUse.user_id == user_id,
+                ThingUse.thing_id.in_(wanted),
+            )
+        )
+    return {row[0] for row in rows}
 
 
 async def last_used_any(

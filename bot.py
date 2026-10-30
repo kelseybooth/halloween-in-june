@@ -5346,7 +5346,9 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
         # holding `taken`, whose text the reply uses.
         taken = found.yields or found.thing_id
         if found.is_source:
-            await database.take_from_source(user.id, guild_id, taken)
+            await database.take_from_source(
+                user.id, guild_id, taken, source_id=found.source_id
+            )
         elif not await database.take_from_room(
             user.id, guild_id, room_id, found.container_id or database.LOOSE_IN_ROOM,
             found.thing_id,

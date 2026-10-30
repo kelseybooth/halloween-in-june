@@ -214,7 +214,7 @@ Blocks B, D, E and F, so it goes first and alone.
 
 **The renumbering is in `achievements_since_drop.tsv`**, one row per achievement — the 35 original rows plus the ten added since — joined on `achievement_id`. Each value is the earliest drop where the trigger can actually be met. All six petting achievements are 0. Blocked achievements get 99 so they never surface as open quests until something schedules them. Two findings came out of it:
 
-- **Six dated achievements cannot be earned this year.** *Brewing Trouble* and *Trash Panda* (1 October), *Say Cheese* (2 October), *Green Thumb* (15 October), *Nacho Average Ghost* (21 October) and *Using Your Noodle* (25 October) all need rooms that open at drop 4 or 5, after their dates have passed. They need new dates or they stay dormant until next October; this is the achievement-calendar item already open with the writers.
+- **Six dated achievements could not be earned this year. Settled 21 and 30 October: none of them is dated any more.** *Brewing Trouble* and *Trash Panda* (1 October), *Self-Reflection* (2 October, and it was called *Say Cheese*), *Green Thumb* (15 October), *Nacho Average Ghost* (21 October) and *Using Your Noodle* (25 October) all needed rooms that open at drop 20 or later, after their dates had passed. Four are now "this thing, any day"; *Green Thumb* is three parts in any order; *Trash Panda* waits on a trash can that holds items. The writers' decision is in `Date-restricted achievements.md`, which is authoritative for which achievements check a date.
 - **`cats_best_friend` still says *a perfect relationship*,** which stopped being true when the meter lost its ceiling.
 
 ### B. Thread hygiene — small, independent, must precede drop 3
