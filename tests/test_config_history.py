@@ -58,18 +58,18 @@ async def live(guild_id, key):
 
 
 async def test_setting_a_value_opens_a_window(db):
-    await db.set_setting(GUILD_A, "planks_required", 4)
+    await db.set_setting(GUILD_A, "staircase_planks", 4)
 
-    assert await windows(GUILD_A, "planks_required") == [("4", False)]
-    assert await db.get_setting(GUILD_A, "planks_required") == 4
+    assert await windows(GUILD_A, "staircase_planks") == [("4", False)]
+    assert await db.get_setting(GUILD_A, "staircase_planks") == 4
 
 
 async def test_changing_it_closes_the_old_one(db):
-    await db.set_setting(GUILD_A, "planks_required", 4)
-    await db.set_setting(GUILD_A, "planks_required", 9)
+    await db.set_setting(GUILD_A, "staircase_planks", 4)
+    await db.set_setting(GUILD_A, "staircase_planks", 9)
 
-    assert await windows(GUILD_A, "planks_required") == [("4", True), ("9", False)]
-    assert await live(GUILD_A, "planks_required") == 1
+    assert await windows(GUILD_A, "staircase_planks") == [("4", True), ("9", False)]
+    assert await live(GUILD_A, "staircase_planks") == 1
 
 
 async def test_exactly_one_window_is_open_however_often_it_changes(db):
@@ -77,20 +77,20 @@ async def test_exactly_one_window_is_open_however_often_it_changes(db):
     one wins depends on row order; none and the setting silently
     reverts to its default."""
     for value in range(1, 8):
-        await db.set_setting(GUILD_A, "planks_required", value)
+        await db.set_setting(GUILD_A, "staircase_planks", value)
 
-    assert await live(GUILD_A, "planks_required") == 1
-    assert await db.get_setting(GUILD_A, "planks_required") == 7
+    assert await live(GUILD_A, "staircase_planks") == 1
+    assert await db.get_setting(GUILD_A, "staircase_planks") == 7
 
 
 async def test_setting_it_to_what_it_already_was_still_records(db):
     """Not waste. *Somebody set the decay rate on the 14th* is worth
     knowing even when they set it to what it already was, and a row
     costs nothing."""
-    await db.set_setting(GUILD_A, "planks_required", 4)
-    await db.set_setting(GUILD_A, "planks_required", 4)
+    await db.set_setting(GUILD_A, "staircase_planks", 4)
+    await db.set_setting(GUILD_A, "staircase_planks", 4)
 
-    assert await windows(GUILD_A, "planks_required") == [("4", True), ("4", False)]
+    assert await windows(GUILD_A, "staircase_planks") == [("4", True), ("4", False)]
 
 
 async def test_an_unset_key_reads_its_default(db):
@@ -99,10 +99,10 @@ async def test_an_unset_key_reads_its_default(db):
 
 
 async def test_servers_do_not_share_a_history(db):
-    await db.set_setting(GUILD_A, "planks_required", 4)
+    await db.set_setting(GUILD_A, "staircase_planks", 4)
 
-    assert await windows(GUILD_B, "planks_required") == []
-    assert await db.get_setting(GUILD_B, "planks_required") == 10
+    assert await windows(GUILD_B, "staircase_planks") == []
+    assert await db.get_setting(GUILD_B, "staircase_planks") == 90
 
 
 # --------------------------------------------------------------------------
@@ -114,18 +114,18 @@ async def test_clearing_closes_the_window_and_keeps_the_history(db):
     """Unsetting is itself a tuning decision and is dated like any
     other. A window that closed with nothing after it reads as "from
     here, the default", which is the truth."""
-    await db.set_setting(GUILD_A, "planks_required", 4)
+    await db.set_setting(GUILD_A, "staircase_planks", 4)
 
-    await db.clear_setting(GUILD_A, "planks_required")
+    await db.clear_setting(GUILD_A, "staircase_planks")
 
-    assert await windows(GUILD_A, "planks_required") == [("4", True)]
-    assert await db.get_setting(GUILD_A, "planks_required") == 10
+    assert await windows(GUILD_A, "staircase_planks") == [("4", True)]
+    assert await db.get_setting(GUILD_A, "staircase_planks") == 90
 
 
 async def test_clearing_something_never_set_does_nothing(db):
-    await db.clear_setting(GUILD_A, "planks_required")
+    await db.clear_setting(GUILD_A, "staircase_planks")
 
-    assert await windows(GUILD_A, "planks_required") == []
+    assert await windows(GUILD_A, "staircase_planks") == []
 
 
 # --------------------------------------------------------------------------
@@ -224,7 +224,7 @@ async def test_an_old_database_keeps_its_settings(db):
         )
         session.add(
             database.ServerConfig(
-                guild_id=GUILD_A, key="planks_required", value="6"
+                guild_id=GUILD_A, key="staircase_planks", value="6"
             )
         )
         await session.commit()
@@ -232,8 +232,8 @@ async def test_an_old_database_keeps_its_settings(db):
     async with database._engine.begin() as conn:
         await database._migrate_config_to_history(conn)
 
-    assert await windows(GUILD_A, "planks_required") == [("6", False)]
-    assert await db.get_setting(GUILD_A, "planks_required") == 6
+    assert await windows(GUILD_A, "staircase_planks") == [("6", False)]
+    assert await db.get_setting(GUILD_A, "staircase_planks") == 6
 
 
 async def test_it_does_not_run_twice(db):
@@ -243,7 +243,7 @@ async def test_it_does_not_run_twice(db):
         await session.execute(database.ConfigHistory.__table__.delete())
         session.add(
             database.ServerConfig(
-                guild_id=GUILD_A, key="planks_required", value="6"
+                guild_id=GUILD_A, key="staircase_planks", value="6"
             )
         )
         await session.commit()
@@ -252,4 +252,4 @@ async def test_it_does_not_run_twice(db):
         async with database._engine.begin() as conn:
             await database._migrate_config_to_history(conn)
 
-    assert await windows(GUILD_A, "planks_required") == [("6", False)]
+    assert await windows(GUILD_A, "staircase_planks") == [("6", False)]

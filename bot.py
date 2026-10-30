@@ -2834,7 +2834,10 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
         # goes through its cooldown and falls through to `use.default`,
         # which is what every thing without state-specific text does.
         forbidden = await _state_refusal(
-            guild_id, user.id, found.thing_id, found.name
+            guild_id,
+            found.thing_id,
+            found.name,
+            await states.in_force(guild_id, user.id),
         )
         if forbidden:
             await interaction.followup.send(forbidden, ephemeral=True)
@@ -3831,7 +3834,7 @@ async def _use_transform(interaction, state, found, row) -> None:
 
 
 async def _state_refusal(
-    guild_id: int, user_id: int, thing_id: str, name: str
+    guild_id: int, thing_id: str, name: str, held: "set[str] | frozenset[str]"
 ) -> str | None:
     """The refusal a held state writes for a thing it forbids outright.
 
@@ -3849,8 +3852,14 @@ async def _state_refusal(
     Returns the text rather than a flag, because the two callers send it
     themselves: `/use` must not spend a turn on a refused use, and
     `/go` must not move anybody.
+
+    **`held` is passed in, because the callers do not agree on it.** An
+    exit reads `world.states_for_exit`, which folds in `has_key` -
+    derived from the inventory rather than stored, so `states.in_force`
+    has never carried it. Reading the stored set here refused the
+    curiosity cabinet to a player holding the skeleton key, which is
+    the one thing that opens it.
     """
-    held = await states.in_force(guild_id, user_id)
     for state in (*states.in_priority_order(held), resolve.DEFAULT_STATE):
         if await resolve.thing_text_in_state(guild_id, thing_id, "use", state):
             return None
@@ -4052,7 +4061,7 @@ async def _use_exit(interaction, state, found, row) -> None:
     # than by a lock: the Upstairs Hallway is `open_at_launch`, so
     # nothing in `rooms_unlocked` was ever going to stop anybody
     # climbing a staircase with whole steps missing.
-    forbidden = await _state_refusal(guild_id, user.id, found.thing_id, found.name)
+    forbidden = await _state_refusal(guild_id, found.thing_id, found.name, held)
     if forbidden:
         await interaction.followup.send(forbidden, ephemeral=True)
         await _turned_away(
