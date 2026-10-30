@@ -4754,10 +4754,22 @@ async def _look_at_one_thing(
         # rail must not go on telling them to look at a feather wand.
         await hints.did(guild_id, user_id, hints.DID_LOOK)
         await hints.did(guild_id, user_id, hints.DID_LOOK_TOY)
-        text = hints.beneath(
-            text,
-            await hints.after(guild_id, user_id, hints.TAKE_TOY, name=found.name),
-        )
+        if row.takeable:
+            # **Only a toy they could pick up.** The shipping box is
+            # played with where it stands, so this rung would send a
+            # player to `take_fail` - and it is an easter egg besides.
+            # The copy deck is explicit that naming the box in the rail
+            # spends the joke: `/use` doing anything at all is meant to
+            # be found by accident or by word of mouth.
+            #
+            # The two rungs above still tick. Looking at the box is
+            # looking at a toy, whoever else agrees that it is one.
+            text = hints.beneath(
+                text,
+                await hints.after(
+                    guild_id, user_id, hints.TAKE_TOY, name=found.name
+                ),
+            )
 
     content_, embed = await _with_art(interaction.guild, text, art)
     await interaction.followup.send(content_, embed=embed, ephemeral=True)

@@ -3,7 +3,7 @@ alexa	Alexa	smart speaker|speaker|echo	fixture	ALL	1	no	yes	0										99	1
 eunoia	cat	cat|black cat|kitty|kitten|eunoia|paw|paws|eyes|tail	fixture	ALL	1	no	yes	0										0	0				
 lumber	lumber	lumber|planks|plank|wood|stack of lumber	object	EN	many	no	yes	0			!stairs_repaired							20	2		yes		
 intercom	intercom	intercom|door buzzer|buzzer	fixture	EN	1	no	yes	0										20	3				
-shipping_box	shipping box	shipping box|delivery box|amazon box|box|parcel|package	fixture	EN	1	no	yes	0										20	4			no	
+shipping_box	shipping box	shipping box|delivery box|amazon box|box|parcel|package	toy	EN	1	no	yes	0										20	4			no	
 spice_jar	spice jar	spice|spice jar|jar of spice	object	EN	0	yes	yes	1								shipping_box		20	5				
 ornate_mirror	mirror	ornate mirror|mirror|hall mirror	fixture	EN	1	no	yes	0										20	6				
 bulletin_board	bulletin board	bulletin board|board|cork board|notes	fixture	EN	1	no	yes	0										99	7				

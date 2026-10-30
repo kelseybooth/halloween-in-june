@@ -519,8 +519,8 @@ async def test_the_shipped_content_loads(two_servers):
     assert report.content_rows["restocks"] == 4  # the toy channel row joined them
 
 
-async def test_the_shipped_content_places_five_things_per_server(two_servers):
-    """Five physical copies across five things.
+async def test_the_shipped_content_places_four_things_per_server(two_servers):
+    """Four physical copies across four things.
 
     The work order said six. The gourmet can became a source on 27 September so
     that every player could earn the five-flavour achievement rather than only
@@ -531,23 +531,51 @@ async def test_the_shipped_content_places_five_things_per_server(two_servers):
     `quantity = 0` now: the channel opens empty and the restock
     schedule is the only thing that puts a toy in it, so arrival
     places nothing there.
+
+    The reading glasses left it on 30 October 2026, when the shipping
+    box became a toy and `takeable` became the question the loader asks
+    instead of `type`. They are `takeable = no`, and were never listed
+    even while they had a row - `loose_here` has filtered on `takeable`
+    since it was written - so the row said only where they stood, which
+    is what the prose and the reach are for. The roll-top desk names
+    them now.
     """
     parsed = content_module.load_files()
     await content_loader.load_content(parsed)
 
     placed = await contents(two_servers, GUILD_A)
-    assert len(placed) == 5
-    assert sum(row[3] for row in placed) == 5
+    assert len(placed) == 4
+    assert sum(row[3] for row in placed) == 4
 
 
-async def test_the_shipped_content_respects_containment(two_servers):
+async def test_placement_respects_containment(two_servers):
+    """A thing with a `contained_in` is placed inside it, not loose.
+
+    **Asked of a made-up world rather than of the shipped files.** The
+    reading glasses were the only shipped row placed into a container at
+    load, and they are not stock any more, so nothing in the house
+    exercises this. A check on the loader should not depend on the
+    writers happening to ship a case for it.
+    """
+    await content_loader.load_content(
+        a_world(
+            a_thing("cupboard", type="fixture", takeable=False),
+            a_thing("teacup", contained_in="cupboard"),
+        )
+    )
+
+    by_thing = {row[2]: row for row in await contents(two_servers, GUILD_A)}
+    assert by_thing["teacup"][1] == "cupboard"
+
+
+async def test_a_source_is_not_stock(two_servers):
+    """The other half of what the test above used to carry. The gourmet
+    can is drawn from a source in the cake box rather than placed, so it
+    is deliberately absent from room_contents at load."""
     parsed = content_module.load_files()
     await content_loader.load_content(parsed)
 
     by_thing = {row[2]: row for row in await contents(two_servers, GUILD_A)}
-    assert by_thing["reading_glasses"][1] == "rolltop_desk"
-    # The gourmet can is drawn from a source in the cake box rather than placed,
-    # so it is deliberately absent from room_contents at load.
     assert "cat_food_gourmet" not in by_thing
 
 

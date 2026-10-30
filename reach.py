@@ -255,6 +255,7 @@ async def _gather(
                     database.ThingType.contained_in,
                     database.ThingType.present_when,
                     database.ThingType.quantity,
+                    database.ThingType.takeable,
                 ).where(
                     # `ALL` is a room nobody stands in: it marks a thing that
                     # is present everywhere. Alexa is the only one, and until
@@ -356,7 +357,10 @@ async def _gather(
                 container or None,
             )
 
-        for thing_id, name, aliases, kind, yields, contained_in, gate, quantity in in_room:
+        for (
+            thing_id, name, aliases, kind, yields, contained_in, gate,
+            quantity, takeable,
+        ) in in_room:
             if thing_id not in visible or not states.passes(gate, held):
                 continue
             if kind == "source" and yields:
@@ -380,20 +384,26 @@ async def _gather(
                     # does that today, and the reply would be identical anyway.
                     candidate.copies[Where.SOURCE] = (1, contained_in or None)
                     candidate.source_id = thing_id
-            elif kind in {"fixture", "exit"} | content.SCENERY_TYPES:
-                # Scenery resolves exactly as a fixture does: no stock row,
-                # never takeable, always there. It is listed here rather
-                # than left to fall through because falling through is
-                # silent - the word is bolded in the prose, the player
-                # types it, and the house says there is no such thing.
-                entry(thing_id, name, _names_of(name, aliases)).copies.setdefault(
-                    Where.ROOM, (1, contained_in or None)
-                )
-            elif kind == "object" and quantity is None:
-                # `quantity = many` is a shared pool rather than stock - lumber
-                # is the only one. It is never placed in room_contents, so
-                # without this it would be unreachable and /use lumber could
-                # never fire at all.
+            elif not takeable or quantity is None:
+                # **Two ways to be here without a stock row, and one
+                # answer to both.**
+                #
+                # A thing nobody can pick up is wherever the files put
+                # it, for as long as they say so: a fixture, an exit,
+                # scenery - and now a toy, because the shipping box is a
+                # toy to the cat and furniture to everybody else. Asked
+                # by kind this read `fixture, exit, scenery`, which was
+                # the same question until that row existed.
+                #
+                # And `quantity = many` is a shared pool rather than
+                # stock, which lumber is the only one of. It is never
+                # placed in room_contents, so without this it would be
+                # unreachable and /use lumber could never fire at all.
+                #
+                # Both are listed here rather than left to fall through,
+                # because falling through is silent - the word is bolded
+                # in the prose, the player types it, and the house says
+                # there is no such thing.
                 entry(thing_id, name, _names_of(name, aliases)).copies.setdefault(
                     Where.ROOM, (1, contained_in or None)
                 )

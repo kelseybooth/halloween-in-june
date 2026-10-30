@@ -592,7 +592,7 @@ async def _what_to_place(restock, arrived: set[int], rng) -> str | None:
     if not restock.thing_id.startswith(content_module.CLASS_PREFIX):
         return restock.thing_id
     kind = restock.thing_id[len(content_module.CLASS_PREFIX):]
-    pool = await database.ids_of_type(kind, arrived)
+    pool = await database.stock_of_type(kind, arrived)
     return rng.choice(pool) if pool else None
 
 

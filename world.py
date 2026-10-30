@@ -504,7 +504,7 @@ async def dislodge_from_bed(guild_id: int, user_id: int, rng=None) -> str | None
     if await database.has_been_told(guild_id, user_id, BED_STASH):
         return None
     arrived = await resolve.arrived_drop_ids(guild_id)
-    pool = await database.ids_of_type(TOY, arrived)
+    pool = await database.stock_of_type(TOY, arrived)
     if not pool:
         # No toys here yet, so there is nothing in the bed to find. The
         # flag stays unset: this player gets theirs when drop 2 opens.

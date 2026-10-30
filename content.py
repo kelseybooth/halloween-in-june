@@ -499,8 +499,15 @@ class Content:
         `_check_obtainable_things` calls a restock-only toy
         unreachable.
         """
+        # **A class expands to what a schedule could place**, which is
+        # the takeable things of that kind - the same pool
+        # `database.stock_of_type` draws from. A toy nobody can carry
+        # stands where the files put it, so `type:toy` is not a route to
+        # the shipping box and must not be read as one.
         by_type: dict[str, set[str]] = {}
         for thing in self.things:
+            if not thing.takeable:
+                continue
             by_type.setdefault(thing.type, set()).add(thing.thing_id)
 
         ids: set[str] = set()
