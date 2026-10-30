@@ -27,6 +27,7 @@ import pytest
 
 from conftest import ALICE, BOB, GUILD_A
 from fake_discord import FakeChannel, FakeGuild, FakeInteraction, FakeMember
+from test_loader import a_thing, a_world
 
 import achievements
 import bot
@@ -358,3 +359,35 @@ def test_a_class_selector_is_not_a_route_to_it():
 
     assert BOX not in content.restocked_thing_ids
     assert WAND in content.restocked_thing_ids
+
+
+# --------------------------------------------------------------------------
+# And the check that keeps it named
+# --------------------------------------------------------------------------
+
+
+def test_an_unlistable_thing_has_to_be_named_in_the_prose():
+    """**The guarantee that would otherwise have lapsed in silence.**
+
+    The box is not listed, so the Entryway's paragraph is the only thing
+    that can reveal it - and the check that holds the writers to that
+    was keyed on `fixture`, which the box stopped being. Asked of
+    `takeable` it still covers the box, and it covers the next row that
+    makes the same move without anybody remembering to widen it again.
+
+    A toy nobody can carry, named nowhere, stands in for that row here.
+    """
+    problems = content_module.validate(
+        a_world(a_thing("odd_lamp", type="toy", takeable=False))
+    )
+
+    assert any("odd_lamp" in problem for problem in problems)
+
+
+def test_a_thing_the_engine_lists_does_not_have_to_be_named():
+    """The other side of it, and the older half of the same rule:
+    nothing takeable and finite is named in prose, because the engine
+    lists those and the prose would go stale."""
+    problems = content_module.validate(a_world(a_thing("odd_lamp", type="toy")))
+
+    assert not any("odd_lamp" in problem for problem in problems)
