@@ -649,8 +649,19 @@ def lumber():
 
 
 async def test_a_first_use_is_allowed(house):
+    """**Read off the count, not off the reply.** These cooldown tests
+    borrow the staircase because it is the thing with a cooldown, and
+    the staircase's line is posted to the room and sent to the player
+    not at all - this file's fake guild has no channels, so a success
+    is observable here only as a use that got recorded. The refusals
+    below still have a reply, because a refusal is private.
+    """
     await content_loader.load_content(lumber())
-    assert (await use(thing="lumber")).reply == "You hammer a plank into place."
+
+    interaction = await use(thing="lumber")
+
+    assert interaction.sent == []
+    assert await uses_of(ALICE, GUILD_A, "lumber") == 1
 
 
 async def test_a_second_use_inside_the_window_is_refused(house):
@@ -692,7 +703,8 @@ async def test_the_cooldown_expires(house):
         )
         await session.commit()
 
-    assert (await use(thing="lumber")).reply == "You hammer a plank into place."
+    await use(thing="lumber")
+
     assert await uses_of(ALICE, GUILD_A, "lumber") == 2
 
 
@@ -700,7 +712,9 @@ async def test_the_cooldown_is_per_player(house):
     await content_loader.load_content(lumber())
     await use(thing="lumber")
 
-    assert (await use(BOB, thing="lumber")).reply == "You hammer a plank into place."
+    await use(BOB, thing="lumber")
+
+    assert await uses_of(BOB, GUILD_A, "lumber") == 1
 
 
 async def test_planks_below_the_target_leave_the_staircase_alone(house):

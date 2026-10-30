@@ -25,6 +25,7 @@ import pytest
 
 from conftest import ALICE, BOB, GUILD_A
 from fake_discord import FakeChannel, FakeGuild, FakeInteraction, FakeMember
+from test_loader import a_thing, a_world
 
 import achievements
 import bot
@@ -102,7 +103,22 @@ def replies(interaction) -> str:
 
 
 async def plank(hall, who=ALICE) -> str:
+    """What the player was told privately, which on a success is nothing.
+
+    A laid plank is posted to the room and sent to nobody - see
+    `posted` below. Everything this still returns is a refusal.
+    """
     return replies(await run(hall, bot.use, "lumber", who=who))
+
+
+def posted(hall) -> str:
+    """What the Entryway thread has seen.
+
+    The staircase is the game's only public `/use`, and since 30 October
+    it is public *only*: the private copy said the same sentence to
+    somebody standing in the room reading both.
+    """
+    return "\n".join(thread(hall, hall[3]["EN"]).posted)
 
 
 async def a_day_later(db, days=1):
@@ -201,8 +217,9 @@ async def test_tomorrow_it_works_again(hall):
     db, *_ = hall
     await plank(hall)
     await a_day_later(db)
+    await plank(hall)
 
-    assert "hammer" in await plank(hall)
+    assert posted(hall).count("hammers it into place") == 2
 
 
 async def test_the_limit_is_per_player(hall):
@@ -218,9 +235,9 @@ async def test_the_limit_is_per_player(hall):
 
 
 async def test_the_use_reports_the_count_on_its_own_line(hall):
-    reply = await plank(hall)
+    await plank(hall)
 
-    assert "\n1 of 90 repairs done." in reply
+    assert "\n1 of 90 repairs done." in posted(hall)
 
 
 async def test_looking_at_the_lumber_reports_it_too(hall):
@@ -379,3 +396,118 @@ async def test_drop_20_cannot_finish_the_staircase(hall):
     placed, _ = await world.planks(GUILD_A)
     assert placed == 4
     assert not await states.has(GUILD_A, ALICE, world.STAIRS_REPAIRED)
+
+
+# --------------------------------------------------------------------------
+# Public, and public only
+# --------------------------------------------------------------------------
+
+
+async def test_a_laid_plank_is_posted_and_not_sent(hall):
+    """**Both halves of the change in one assertion.** The line goes to
+    the room, and the player who typed `/use lumber` is told nothing -
+    they are standing in the room, so the private copy was the same
+    sentence twice in two messages.
+    """
+    said = await plank(hall)
+
+    assert "hammers it into place" in posted(hall)
+    assert said == ""
+
+
+async def test_the_line_names_the_player(hall):
+    """It read "you haul a plank over to the staircase", posted under a
+    mention - so everybody else in the Entryway read a sentence
+    addressed to them about a plank they had not laid."""
+    await plank(hall)
+
+    assert posted(hall).startswith(
+        f"{FakeMember(ALICE).display_name} hauls a plank"
+    )
+    assert "You haul" not in posted(hall)
+
+
+async def test_the_post_is_not_prefixed_with_a_mention(hall):
+    """The line says who. A mention in front of it read "@Alice Alice
+    hauls a plank", and pinged the room for each of ninety boards."""
+    await plank(hall)
+
+    assert "<@" not in posted(hall)
+
+
+async def test_a_refused_plank_is_still_private(hall):
+    """Only the success is collective. A player inside their own daily
+    cooldown has told the room nothing, and the room should not hear
+    about it."""
+    await plank(hall)
+    before = posted(hall)
+
+    assert "muscles will want" in await plank(hall)
+    assert posted(hall) == before
+
+
+async def test_the_finish_line_goes_to_the_room(hall):
+    """The most collective moment the game has. `effect.announce` rides
+    the same line, so it is posted now rather than read by whoever
+    happened to lay the last board.
+
+    **A one-plank target is what makes this reachable.**
+    `reachable_from_the_floor(1)` is zero, so the first plank crosses
+    both thresholds at once - which is the only way to finish a
+    staircase at drop 20, because the top steps otherwise need the
+    ladder from drop 30.
+    """
+    db, *_ = hall
+    await target(db, 1)
+
+    await plank(hall)
+
+    assert "The staircase is finished. It holds." in posted(hall)
+
+
+async def test_and_the_next_plank_does_not_say_so_again(hall):
+    db, *_ = hall
+    await target(db, 1)
+    await plank(hall)
+
+    await plank(hall, who=BOB)
+
+    assert posted(hall).count("The staircase is finished") == 1
+
+
+# **The `stairs_upper` cell has no runtime test here, and had none before
+# this change either.** It is the drop 30 row, laid from the ladder, and
+# this fixture is drop 20. `_check_a_public_use_names_the_player` holds
+# it to naming the player whatever its state, which is the part this
+# change could have broken.
+
+
+def a_lumber_world(use_text):
+    world = a_world(a_thing("lumber", type="object"))
+    for row in world.thing_text:
+        if row.entity_id == "lumber":
+            row.text["use"] = use_text
+    return world
+
+
+def test_a_lumber_use_text_has_to_name_the_player():
+    """**The guarantee that would otherwise lapse in silence.**
+
+    Nothing in the files says this `use` is posted rather than sent, so
+    a writer rewriting the cell in the second person - which is correct
+    for every other `use` in the game - would put "you haul a plank"
+    back in front of a room full of people, and nothing would complain.
+    """
+    problems = content_module.validate(
+        a_lumber_world("You haul a plank over and hammer it in.")
+    )
+
+    assert any("lumber" in problem for problem in problems)
+
+
+def test_and_a_third_person_one_is_fine():
+    problems = content_module.validate(
+        a_lumber_world("{player} hauls a plank over and hammers it in.")
+    )
+
+    assert not any("lumber" in problem for problem in problems)

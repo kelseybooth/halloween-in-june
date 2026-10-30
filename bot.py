@@ -3081,7 +3081,8 @@ async def _finish_use(interaction, state, found) -> None:
 
     reply = await phrasing.say(
         guild_id, found.thing_id, "use", state=current,
-        fallback="use.default", name=found.name, **tokens,
+        fallback="use.default", name=found.name,
+        player=user.display_name, **tokens,
     )
     # The use path already has the numbers in `tokens`, so it needs the
     # break and not the lookup.
@@ -3134,7 +3135,23 @@ async def _finish_use(interaction, state, found) -> None:
         )
 
     privately = True
-    if found.thing_id == world.CAT_BED:
+    if effect is not None and effect.public:
+        # **The public line is the whole event.** The same call the cat
+        # bed's yield makes below: the room's copy and the player's were
+        # the same sentence, and the player is standing in the room
+        # reading both of them.
+        #
+        # Which is also why that sentence is third person now. It read
+        # "you haul a plank over to the staircase", posted into the
+        # thread under a mention - so everybody else in the Entryway got
+        # a line addressed to them about somebody else's plank. The
+        # mention went with it; `{player}` says who without the room
+        # being pinged every time anybody lays a board.
+        #
+        # The staircase is the only use this reaches, and no hint rides
+        # the reply, so nothing is lost by not sending it.
+        privately = False
+    elif found.thing_id == world.CAT_BED:
         # A successful fluff shakes something out of the bed, once per
         # player ever. The yield is what gives drop 2 something to
         # reach for when the toy is on its cooldown.
@@ -3503,7 +3520,14 @@ async def _place_for(channel, room_id: str, room_name: str | None):
 
 
 async def _post_in_room(interaction, room_id: str, message: str) -> None:
-    """Echo a use into the room thread. Only the staircase does this."""
+    """Put a use in the room thread. Only the staircase does this.
+
+    **Not an echo any more and not prefixed with a mention.** This is
+    the only copy of the line, and the line names the player itself, so
+    a mention in front of it read "@Alice Alice hauls a plank" - and
+    pinged the room for every board laid against a ninety-plank
+    staircase.
+    """
     if interaction.guild is None:
         return
     channel = await _game_channel(interaction.guild)
@@ -3513,7 +3537,7 @@ async def _post_in_room(interaction, room_id: str, message: str) -> None:
         name = await resolve.room_name(room_id)
         thread = await house_utils.get_thread_for_room(channel, name)
         if thread is not None:
-            await thread.send(f"{interaction.user.mention} {message}")
+            await thread.send(message)
     except (discord.HTTPException, SQLAlchemyError):
         # The use has already happened; failing to announce it is cosmetic.
         log.warning("Could not post a public use in %s", room_id, exc_info=True)
