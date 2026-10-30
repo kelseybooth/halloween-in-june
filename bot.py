@@ -1572,8 +1572,12 @@ _PUBLIC_PETS: dict[tuple[int, int, int], tuple[datetime, int]] = {}
 # rarer and better event.
 _PUBLIC_PLAYS: dict[tuple[int, int, int], tuple[datetime, int]] = {}
 
-# Where the twelve rotating play refusals live.
-REFUSAL_PREFIX = "use_fail.toy."
+# Where the twelve rotating play refusals live, and where a single
+# toy's own refusals live beside them. Two prefixes in one family so
+# that "every line any toy can draw" and "this toy's own lines" are
+# each a plain prefix match: `use_fail.toy.` would catch both.
+REFUSAL_PREFIX = content.ANY_TOY_REFUSAL_PREFIX
+THING_REFUSAL_PREFIX = content.TOY_REFUSAL_PREFIX
 
 
 def forget_public_pets() -> None:
@@ -3611,7 +3615,7 @@ async def _play_with_toy(interaction, state, found) -> None:
             thing_id=found.thing_id,
             detail=f"rung_after={effect.tokens.get('ramp')}",
         )
-        reply = await _a_play_refusal(found.name)
+        reply = await _a_play_refusal(found.thing_id, found.name)
 
     # The best moment in the drop, and the only thing that makes other
     # players visible to each other in a phase with no rooms. Refusals
@@ -3810,14 +3814,28 @@ async def _announce_bed_yield(interaction, key: bool = False) -> bool:
     return True
 
 
-async def _a_play_refusal(name: str) -> str:
-    """One of the twelve, picked uniformly.
+async def _a_play_refusal(thing_id: str, name: str) -> str:
+    """One of the twelve, or one of this toy's own, picked uniformly.
 
     Numbered keys rather than variants inside one cell: the writers
     review these as tables and `|` is the column delimiter, so the first
     edit would split a refusal in two. A thirteenth is a row.
+
+    **A toy's own lines join the pool rather than replacing it.** The
+    deck asks for exactly this: the twelve stay available as a backstop,
+    so a writer with one good line for a toy adds one line rather than
+    twelve and nothing is left uncovered. The box's four beside the
+    twelve means its own come up a quarter of the time, which is the
+    rate the deck's "waxes and wanes" wants - a custom line every time
+    would read as a verdict on the object, which section 4 forbids.
+
+    **Keyed on the thing, not on the kind.** Every other part of playing
+    with a toy is deliberately identical across toys - the ramp, the
+    cooldown, the award - and this is the one place a toy is allowed to
+    be itself, because the joke is specific to the object.
     """
     texts = await phrasing.defaults_matching(REFUSAL_PREFIX)
+    texts += await phrasing.defaults_matching(f"{THING_REFUSAL_PREFIX}{thing_id}.")
     if not texts:
         return await phrasing.default_say("use_fail.default", name=name)
     return phrasing.fill(random.choice(texts), name=name)

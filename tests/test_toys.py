@@ -260,7 +260,10 @@ async def test_the_refusals_rotate(channel, monkeypatch):
 
 
 async def test_every_refusal_names_the_toy(channel):
-    texts = await resolve.defaults_matching("use_fail.toy.")
+    """`REFUSAL_PREFIX`, not the family it sits in. The generic twelve
+    are numbered under `any` so that a toy's own lines can live in the
+    same family, and a bare `use_fail.toy.` now matches both pools."""
+    texts = await resolve.defaults_matching(bot.REFUSAL_PREFIX)
 
     assert len(texts) == 12
     assert len(set(texts)) == 12
@@ -595,3 +598,29 @@ async def test_the_newest_drops_hint_wins_on_a_first_look(channel):
 
     assert "cat bed" not in line
     assert "Try /look" in line
+
+
+async def test_one_toys_refusals_do_not_leak_into_another_toys_pool(
+    channel, monkeypatch
+):
+    """The shipping box has four of its own. The wand must not see them.
+
+    Taking the back of the pool is what makes this sharp: a toy's own
+    lines are appended after the twelve, so if the wand's pool had
+    picked them up at all, this is the line it would read.
+    """
+    always(monkeypatch, succeed=False)
+    monkeypatch.setattr(bot, "random", _Last())
+    await take(channel)
+
+    said = await play(channel)
+
+    assert "The cat sniffs the feather wand once and settles back down." in said
+    assert "flaps back" not in said
+
+
+class _Last:
+    """An rng that takes the back of any pool handed to it."""
+
+    def choice(self, pool):
+        return pool[-1]
