@@ -871,6 +871,7 @@ def validate(content: Content) -> list[str]:
     problems += _check_scenery_aliases_are_unique(content)
     problems += _check_visibility_gates(content)
     problems += _check_public_lines_name_the_player(content)
+    problems += _check_a_public_use_names_the_player(content)
     problems += _check_other_lines_are_not_second_person(content)
     problems += _check_emoji_groups(content)
     problems += _check_craving_reactions(content)
@@ -2148,6 +2149,12 @@ def _bolded_in(text: str) -> list[str]:
 # have to name whoever acted.
 PUBLIC_VERBS = ("take", "drop")
 
+# And the one `use` that is posted rather than sent. The staircase is
+# collective, so the whole room reads the line instead of the player
+# who laid the board - which `world` decides, not the files, so the
+# id is named here the way `world` names it there.
+PUBLIC_USE_THINGS = frozenset({"lumber"})
+
 
 def _check_public_lines_name_the_player(content: Content) -> list[str]:
     """A `take` or `drop` string must say who did it.
@@ -2173,6 +2180,32 @@ def _check_public_lines_name_the_player(content: Content) -> list[str]:
         for row in content.thing_text
         for verb in PUBLIC_VERBS
         if row.text.get(verb) and "{player}" not in row.text[verb]
+    ]
+
+
+def _check_a_public_use_names_the_player(content: Content) -> list[str]:
+    """The staircase's `use` text has the room for its audience.
+
+    **The third text in the game that is read by somebody other than the
+    player who typed the command**, and the newest: the plank's line
+    stopped being sent privately on 30 October and is now posted to the
+    room and nowhere else. The check above has held `take` and `drop` to
+    this since the release where all thirty-two of them said "you" to a
+    room full of people; a `use` in that voice would do the same thing
+    to everybody standing in the Entryway.
+
+    Named by id rather than derived, because nothing in the files says
+    which uses are public - `world._place_a_plank` does, and this is the
+    only one.
+    """
+    return [
+        f"{row.entity_id} has a use text with no {{player}} in it, and its "
+        "use is posted to the room: name who laid the plank rather than "
+        "addressing whoever reads it as 'you'"
+        for row in content.thing_text
+        if row.entity_id in PUBLIC_USE_THINGS
+        and row.text.get("use")
+        and "{player}" not in row.text["use"]
     ]
 
 

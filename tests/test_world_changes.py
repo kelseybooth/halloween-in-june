@@ -144,14 +144,19 @@ async def test_the_last_plank_opens_the_staircase_for_everyone(house):
     assert await states.has(GUILD_A, BOB, "stairs_repaired")
 
 
-async def test_it_only_announces_once(house):
+async def test_the_announcement_does_not_repeat(house):
+    """Asked of the effect, because the line it rides is posted to the
+    room now and this file's fake guild has no channels.
+    `test_the_staircase` asserts the announcement arriving, against a
+    thread; what belongs here is that it rides the crossing and not
+    every plank laid afterwards.
+    """
     await database.set_setting(GUILD_A, world.PLANKS_SETTING, 1)
+    await use(ALICE)
 
-    first = await use(ALICE)
-    assert "staircase is finished" in first.reply.lower()
+    again = await world.after_use(GUILD_A, BOB, "lumber", "EN")
 
-    second = await use(BOB)
-    assert "staircase is finished" not in second.reply.lower()
+    assert again.announce is None
 
 
 async def test_the_upper_state_is_set_on_the_way(house):
@@ -172,25 +177,34 @@ async def test_the_upper_state_is_set_on_the_way(house):
     assert not await states.has(GUILD_A, ALICE, "stairs_repaired")
 
 
-async def test_the_reply_carries_the_count_and_the_target(house):
+async def test_the_tokens_carry_the_count_and_the_target(house):
+    """The numbers the line is written around. Whether a player reads
+    them is `test_the_staircase`'s question now that the line is posted
+    rather than replied."""
     await database.set_setting(GUILD_A, world.PLANKS_SETTING, 4)
-    reply = (await use(ALICE)).reply
+    await use(ALICE)
 
-    assert "1" in reply and "4" in reply
-
-
-async def test_placing_a_plank_posts_publicly(house):
-    """The only public /use in the game. The others in the room need to see
-    the work happen rather than hear about it later."""
-    await database.set_setting(GUILD_A, world.PLANKS_SETTING, 5)
-    interaction = await use(ALICE)
-
-    # The private reply always goes out; the public one needs a channel, which
-    # the fake guild has none of - so what is asserted here is that the effect
-    # is marked public rather than that Discord accepted it.
     effect = await world.after_use(GUILD_A, ALICE, "lumber", "EN")
+
+    assert effect.tokens == {"n": 1, "total": 4}
+
+
+async def test_placing_a_plank_is_marked_public(house):
+    """The only public /use in the game. The others in the room need to see
+    the work happen rather than hear about it later.
+
+    **And since 30 October it is public instead of both**, not public as
+    well: the player is standing in the room, so the private copy was
+    the same sentence twice in two messages. This flag is what the
+    handler reads to make that choice, and the choice itself is
+    asserted in `test_the_staircase`, against a thread this file's fake
+    guild does not have.
+    """
+    await database.set_setting(GUILD_A, world.PLANKS_SETTING, 5)
+
+    effect = await world.after_use(GUILD_A, ALICE, "lumber", "EN")
+
     assert effect.public is True
-    assert interaction.was_private
 
 
 async def test_an_ordinary_use_is_not_public(house):
