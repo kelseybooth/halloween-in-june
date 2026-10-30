@@ -43,7 +43,9 @@ def _check_only() -> int:
     # Both directions: a row nobody wired up can never be announced, and a
     # trigger with no row would award something with no name. Neither errors
     # at runtime, which is exactly why they are caught here.
-    problems += achievements.registration_problems(parsed.achievement_ids)
+    problems += achievements.registration_problems(
+        parsed.achievement_ids, parked=content.parked_achievements(parsed)
+    )
     print(
         f"parsed {len(parsed.rooms)} rooms, {len(parsed.things)} things, "
         f"{len(parsed.room_text) + len(parsed.thing_text)} text rows, "

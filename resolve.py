@@ -62,7 +62,7 @@ NO_GAME = None
 # that was supposed to catch it has been rewritten to actually do so -
 # see `test_the_ceiling_is_not_below_the_commands`, which asks the one
 # other file that records which drops exist.
-LAST_PLAYABLE_DROP = 10
+LAST_PLAYABLE_DROP = 20
 
 
 class UnknownDrop(Exception):

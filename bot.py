@@ -324,7 +324,9 @@ async def _check_achievement_registry() -> None:
         log.error("Could not check the achievement registry: the content files did not parse")
         return
 
-    problems = achievements.registration_problems(parsed.achievement_ids)
+    problems = achievements.registration_problems(
+        parsed.achievement_ids, parked=content.parked_achievements(parsed)
+    )
     if not problems:
         log.info("All %d achievements are wired up", len(parsed.achievements))
         return

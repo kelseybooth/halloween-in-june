@@ -114,7 +114,7 @@ be in somebody else's bag by the time you walk in.
 **Nothing takeable and finite is named in prose.** Not in a room description, not in a
 container's description. The engine lists those separately, so the prose can't go stale.
 `/look` on a room prints the description and then `Also here: nacho chips`; `/look` on
-the Amazon box prints the box and then `Also here: spice jar`. When the thing is gone,
+the shipping box prints the box and then `Also here: spice jar`. When the thing is gone,
 the line is simply absent.
 
 This is easy to break by accident. Two cases in the last pass named nothing at all —
@@ -192,25 +192,27 @@ Your ten edited cells, all approved in conversation:
 |`halloween_box.use`|gained the cookie cutter clause|
 |`rolltop_desk.look`|no longer names the reading glasses (they're inside it)|
 |`rolltop_desk.use`|the bottom drawer is jammed shut, and no longer names the glasses|
-|`amazon_box.look`|no longer names the spice jar (it's inside it)|
-|`amazon_box.use`|same|
+|`shipping_box.look`|no longer names the spice jar (it's inside it)|
+|`shipping_box.use`|same|
 |`lumber.use_fail`|the 48-hour cooldown message, replacing "you've already done your part"|
 |`graphite_powder.look`|a carried twist of paper, not the tin — the tin's own words moved to `graphite_tin`|
 |`graphite_powder.take`|same|
 |`graphite_powder.drop`|same|
 
 The 48 new rows are 34 scenery fixtures, 9 sources, `cat_food_expired`, `bad_smell`,
-`graphite_tin`, `amazon_box`'s companion text, and the `drawer_unjammed` state row on
+`graphite_tin`, `shipping_box`'s companion text, and the `drawer_unjammed` state row on
 `rolltop_desk`.
 
-## Lumber: one plank per player per 48 hours
+## Lumber: one plank per player per day
 
-New column `use_cooldown_hours` on `things.tsv`, set to `48` on `lumber` and blank
-everywhere else. New default `use_fail.cooldown`. Lumber's own `use_fail` was rewritten,
+*Revised 29 October:* `lumber` now uses `use_cooldown_daily = yes`, the same daily reset
+as the cat bed, and its `use_cooldown_hours` is blank. The staircase needs 90 planks by
+default. The original note follows: new column `use_cooldown_hours` on `things.tsv`, set
+to `48` on `lumber` and blank everywhere else. New default `use_fail.cooldown`. Lumber's own `use_fail` was rewritten,
 because "You've already done your part" was true under the old one-plank-ever rule and
 is wrong now:
 
-> You've set your plank. Your shoulders will want about {time} before the next one.
+> You've set your plank. Your muscles will want about {time} before the next one.
 
 `{time}` is a new template token — the remaining cooldown, rendered by the engine. It
 needs adding to the Templating section of the Content Schema.

@@ -1196,14 +1196,24 @@ def _check_drop_references(content: Content) -> list[str]:
     rows at drops 4 to 7 while `drops.tsv` stopped at 3, and the only
     symptom was a test asking why an achievement could not be earned.
 
-    Achievements may say `NEVER`, and only `NEVER`. That is what
-    separates a row parked on purpose from a row with a typo in it.
+    **Any row may say `NEVER`, and only `NEVER`.** That is what
+    separates a row parked on purpose from a row with a typo in it, and
+    the distinction is what this check is for - an unknown drop is
+    unreachable either way, so the file has to say which it meant.
+
+    It was achievements alone until drop 20, on the reasoning that they
+    were the only rows whose triggers might not exist yet. Drop 20 found
+    the other half of that: Alexa and the bulletin board are written,
+    and the notes feature they need is not, so the thing, its text rows
+    and the room fragment that names them are all parked together. A
+    rule that covered only the achievement would have forced the writers
+    either to ship them or to delete them.
     """
     known = set(content.drops_by_id)
     problems = []
 
     def check(label: str, identifier: str, since_drop: int) -> None:
-        if since_drop not in known:
+        if since_drop != NEVER and since_drop not in known:
             problems.append(
                 f"{label} {identifier} waits for drop {since_drop}, which is not in drops.tsv"
             )
@@ -1211,10 +1221,7 @@ def _check_drop_references(content: Content) -> list[str]:
     for thing in content.things:
         check("thing", thing.thing_id, thing.since_drop)
     for row in content.achievements:
-        # The one file allowed to say "not scheduled", because it is the
-        # one with rows whose triggers do not exist yet.
-        if row.since_drop != NEVER:
-            check("achievement", row.achievement_id, row.since_drop)
+        check("achievement", row.achievement_id, row.since_drop)
     for row in content.room_text:
         check("room_text row for", row.entity_id, row.since_drop)
     for row in content.thing_text:
@@ -2229,6 +2236,19 @@ def _check_no_hand_written_bolding(content: Content) -> list[str]:
                     "asterisks out and it will bold what it can reach"
                 )
     return problems
+
+
+def parked_achievements(content: Content) -> set[str]:
+    """Achievement ids written but not scheduled.
+
+    `NEVER` is not a drop; it is the file saying "approved, not yet".
+    These rows can never be awarded, so they are the ones allowed to
+    have no trigger behind them yet - see
+    `achievements.registration_problems`.
+    """
+    return {
+        row.achievement_id for row in content.achievements if row.since_drop == NEVER
+    }
 
 
 def naming_notes(content: Content) -> list[str]:

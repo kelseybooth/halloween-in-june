@@ -89,10 +89,15 @@ BURRITOS_EATEN = 10
 CAT_BED = "cat_bed"
 FRIENDLY_PETS = 200
 
-# The three score thresholds, in the order a player meets them.
+# The four score thresholds, in the order a player meets them.
 PAW_IN_THE_DOOR = 50
 PERFECT_RELATIONSHIP = database.PERFECT_RELATIONSHIP  # 100
 FAVORITE_HUMAN = 250
+# Drop 20, and the first threshold named after something in the house
+# rather than after the cat: by a thousand points you are keeping her
+# the way David did, and the joke only lands once his name is on the
+# packing slip in the hall.
+ARE_YOU_DAVID = 1000
 STRENGTH_IN_NUMBERS = 25
 MAKING_A_MESS = 200
 FELINE_COLLECTION_CANS = 100
@@ -662,6 +667,21 @@ async def favorite_human(context: Context) -> bool:
     return await _score(context) >= FAVORITE_HUMAN
 
 
+async def are_you_david(context: Context) -> bool:
+    """A thousand, and deliberately `>=` rather than a crossing.
+
+    Drop 20 opens on servers where players are already past it - the
+    beta's leaders were over a thousand before the achievement existed -
+    and a trigger that watched for the moment the score *passed* a
+    thousand would never fire for any of them. The standing condition
+    lands on their next pet, toy, bed or feed instead.
+
+    A plank is not a cat interaction and pays no relationship, so the
+    staircase cannot award this however long somebody hammers.
+    """
+    return await _score(context) >= ARE_YOU_DAVID
+
+
 async def passing_a_message_to_david(context: Context) -> bool:
     """Asking Alexa to remind David about the auto-delivery.
 
@@ -759,6 +779,7 @@ def register_all() -> None:
     add("a_paw_in_the_door", "on_relationship_change", a_paw_in_the_door)
     add("cats_best_friend", "on_relationship_change", cats_best_friend)
     add("favorite_human", "on_relationship_change", favorite_human)
+    add("are_you_david", "on_relationship_change", are_you_david)
     add("signed_sealed_delivered", "on_use", _blocked("the doorbell"))
     add("brewing_trouble", "on_use", _on_date(on_october(1), {KEURIG}))
     add("trash_panda", "on_use", _on_date(on_october(1), {TRASH_CAN}))
