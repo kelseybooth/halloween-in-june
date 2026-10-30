@@ -211,12 +211,18 @@ async def test_the_content_is_still_loaded(two_games):
     await reset(two_games)
 
     assert len(await resolve.all_rooms()) == 10  # nine rooms and the channel
-    # Forty-one of the forty-eight: the seven parked at 99 are
-    # unreachable by design. The point of the assertion is that the load
-    # survived the reset, not that every row arrived. *Room Service* was
-    # the fortieth and arrived with feeding; *Bug Catcher* is the
-    # forty-first, and is awarded by hand rather than reached by play.
-    assert len(await resolve.achievements(GUILD_A)) == 41
+    # Forty of the fifty: the ten parked at 99 are unreachable by
+    # design. The point of the assertion is that the load survived the
+    # reset, not that every row arrived. *Room Service* arrived with
+    # feeding and *Bug Catcher* is awarded by hand rather than reached
+    # by play, and both are in the forty.
+    #
+    # It read 41 of 48 until today, and the row that made it wrong was
+    # a tenth achievement parked at 99 rather than anything about the
+    # reset. It passed anyway: both this and the trash can's window in
+    # `test_triggers` only fail when the run does not happen to put
+    # them behind a test that leaves a different registry behind.
+    assert len(await resolve.achievements(GUILD_A)) == 40
 
 
 async def test_the_art_is_kept_by_default(two_games):
