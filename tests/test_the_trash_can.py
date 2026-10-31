@@ -551,6 +551,63 @@ async def test_nor_does_taking_something_out_of_the_shipping_box(kitchen):
 
 
 # --------------------------------------------------------------------------
+# What being last costs the bin
+#
+# Pass two ranks a copy in the bin below a source in the same room, so a
+# kitchen with a freezer in it never hands anybody a burrito out of the
+# rubbish. That was asked for with the cost already weighed, and the cost
+# belongs in a test rather than in a comment: a burrito and a can opener
+# thrown away stay thrown away, and everything the kitchen cannot make
+# another of still comes back out. `test_the_nearest_hand` has the order
+# itself.
+# --------------------------------------------------------------------------
+
+
+async def test_a_burrito_in_the_bin_loses_to_the_freezer(kitchen):
+    """And the bin keeps it. Nobody picks the rubbish over the groceries,
+    and the freezer is inexhaustible."""
+    db, *_ = kitchen
+    await carry(db, "frozen_burrito")
+    await throw_away(kitchen, "frozen_burrito")
+
+    await run(kitchen, bot.take, "burrito")
+
+    assert await database.carried_of(ALICE, GUILD_A, "frozen_burrito") == 1
+    assert (await in_the_can()).get("frozen burrito") == 1
+
+
+async def test_and_that_take_is_not_going_through_the_trash(kitchen):
+    """The half a player sees: the ordinary take line, not the bin's, and
+    no secret for having opened the lid they did not open."""
+    db, *_ = kitchen
+    await carry(db, "frozen_burrito")
+    await throw_away(kitchen, "frozen_burrito")
+    place(kitchen).posted.clear()
+
+    await run(kitchen, bot.take, "burrito", who=BOB)
+
+    assert FISHED_PUBLIC not in posted(kitchen)
+    assert TRASH_PANDA not in await earned_by(BOB)
+
+
+async def test_a_diaper_in_the_bin_still_comes_back_out(kitchen):
+    """Nothing in the Kitchen hands out dirty diapers, so the bin is the
+    only rung with one on it. This is the case *Trash Panda* needs, and
+    the order leaves it exactly where it was."""
+    db, *_ = kitchen
+    await carry(db, "dirty_diaper")
+    await throw_away(kitchen, "dirty_diaper")
+    place(kitchen).posted.clear()
+
+    await run(kitchen, bot.take, "diaper", who=BOB)
+
+    assert await database.carried_of(BOB, GUILD_A, "dirty_diaper") == 1
+    assert "dirty diaper" not in await in_the_can()
+    assert FISHED_PUBLIC in posted(kitchen)
+    assert TRASH_PANDA in await earned_by(BOB)
+
+
+# --------------------------------------------------------------------------
 # Taking the bag out
 # --------------------------------------------------------------------------
 
