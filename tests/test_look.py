@@ -623,11 +623,12 @@ async def test_every_source_in_the_shipped_house_describes_itself(house):
         assert opening in reply, thing.thing_id
         checked += 1
 
-    # Seventeen have arrived; the can opener's rail is the eighteenth and
-    # waits on a drop. The count is here so a nineteenth added without a
-    # description fails rather than quietly joining the buried pile.
-    assert checked == 18
-    assert sum(1 for t in parsed.things if t.is_source) == 18
+    # Seventeen, down one from eighteen: the kitchen's tuna stash was
+    # deleted on 30 October and the dining room sideboard hands out tuna
+    # instead of salmon. The count is here so an eighteenth added without
+    # a description fails rather than quietly joining the buried pile.
+    assert checked == 17
+    assert sum(1 for t in parsed.things if t.is_source) == 17
 
 
 async def test_a_source_with_no_look_text_falls_back_to_its_yield(house):

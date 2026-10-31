@@ -1186,8 +1186,12 @@ async def test_a_fixture_cannot_be_consumable(real_house):
 
 
 async def test_a_can_cannot_be_opened_yet(real_house):
+    # The dining room, because that is where tuna is since 30 October. The
+    # room is only where a can can be picked up; what is asserted is the
+    # refusal of a player who has a can and no opener, and the opener's own
+    # drop is `test_the_opener_arrives_with_the_kitchen_it_is_in` below.
     db, guild = real_house
-    await enter_properly(db, room="KI")
+    await enter_properly(db, room="DI")
     await take(thing="tuna")
 
     reply = (await use(thing="tuna", guild=guild)).reply
