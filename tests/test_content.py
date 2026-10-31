@@ -89,7 +89,12 @@ def test_the_shipped_content_parses():
     # of that shape, and they live here for the reason the toys'
     # refusals do - a pool is a set of rows, and `thing_text` has one
     # row per state.
-    assert len(c.defaults) == 151
+    #
+    # And one more with the trash can itself: the line for a bag with
+    # more kinds in it than Discord will put in one menu. The only
+    # string in the family that is not the writers' - flagged as mine
+    # in the release that added it.
+    assert len(c.defaults) == 152
     assert len(c.drops) == 9      # 0 to 3 built; 10 to 50 named ahead of their content
     assert len(c.restocks) == 4  # the toy channel row joined them
 

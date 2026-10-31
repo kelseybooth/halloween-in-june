@@ -139,6 +139,7 @@ trash.number.invalid	That isn't a number you can throw away. Try a number from 1
 trash.done	You drop the {name} into the trash, and the lid swings shut.
 trash.done.multiple	You drop {amount} of them into the trash, and the lid swings shut.
 trash.done.public	{player} steps on the pedal and drops something in the trash.
+trash.too_much	There's more in your bag than you can rummage through at once. These are the first {count}.
 trash.nothing	You step on the pedal. The lid swings up. You have nothing to throw away, so it swings shut again.
 trash.take	You fish the {name} out of the trash. It seems fine. Mostly.
 trash.take.public	{player} goes through the trash and comes out with something.

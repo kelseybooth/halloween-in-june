@@ -260,27 +260,30 @@ TUESDAY = pacific(2026, 10, 6)
 
 
 async def test_a_date_achievement_fires_inside_its_window(playing):
+    """`on_take` since the trash can shipped. `/use trash can` opens the
+    menu for throwing something away; taking the trash out is `/take
+    trash can`, which is what "took the trash out" has always meant."""
     assert "curbside_pickup" in await earned(
-        a_context("on_use", thing_id="trash_can", now=TUESDAY)
+        a_context("on_take", thing_id="trash_can", now=TUESDAY)
     )
 
 
 async def test_a_date_achievement_does_not_fire_outside_it(playing):
     assert await earned(
-        a_context("on_use", thing_id="trash_can", now=pacific(2026, 10, 8))
+        a_context("on_take", thing_id="trash_can", now=pacific(2026, 10, 8))
     ) == set()
 
 
 async def test_the_right_day_but_the_wrong_thing_earns_nothing(playing):
     assert "curbside_pickup" not in await earned(
-        a_context("on_use", thing_id="sink", now=TUESDAY)
+        a_context("on_take", thing_id="sink", now=TUESDAY)
     )
 
 
 async def test_a_date_achievement_is_not_pinned_to_2026(playing):
     """Pinning the year would quietly retire the dated ones on 1 January."""
     assert "curbside_pickup" in await earned(
-        a_context("on_use", thing_id="trash_can", now=pacific(2027, 10, 5))
+        a_context("on_take", thing_id="trash_can", now=pacific(2027, 10, 5))
     )
 
 
@@ -357,7 +360,7 @@ async def test_curbside_pickup_is_the_trash_can_on_a_tuesday(playing):
     tuesday = date(2026, 10, 6)
     assert tuesday.weekday() == 1
     assert "curbside_pickup" in await earned(
-        a_context("on_use", thing_id="trash_can", now=pacific(2026, 10, 6))
+        a_context("on_take", thing_id="trash_can", now=pacific(2026, 10, 6))
     )
 
 
@@ -365,7 +368,7 @@ async def test_curbside_pickup_is_not_the_trash_can_on_a_thursday(playing):
     thursday = date(2026, 10, 8)
     assert thursday.weekday() == 3
     assert await earned(
-        a_context("on_use", thing_id="trash_can", now=pacific(2026, 10, 8, 12))
+        a_context("on_take", thing_id="trash_can", now=pacific(2026, 10, 8, 12))
     ) == set()
 
 
@@ -373,7 +376,7 @@ async def test_the_tuesday_window_widens_the_same_way(playing):
     """Monday 08:00 through Wednesday 03:00, or a player in Japan could only
     earn it between 17:00 Tuesday and 17:00 Wednesday their time."""
     assert "curbside_pickup" in await earned(
-        a_context("on_use", thing_id="trash_can", now=pacific(2026, 10, 5, 8, 0))
+        a_context("on_take", thing_id="trash_can", now=pacific(2026, 10, 5, 8, 0))
     )
 
 
@@ -388,34 +391,46 @@ async def test_the_trash_can_on_the_first_of_october_earns_nothing(playing):
     1 October 2026 is a Thursday, and the trash can on a Thursday is
     nobody's achievement.
 
-    This asserted `{"trash_panda"}` until today, and passed only when
-    the run happened to put it behind something that left the registry
-    in a different state. `-n 4` reshuffles that distribution whenever
-    the suite gains a test, which is what finally made it fail.
+    This asserted `{"trash_panda"}` until 30 October, and passed only
+    when the run happened to put it behind something that left the
+    registry in a different state. `-n 4` reshuffles that distribution
+    whenever the suite gains a test, which is what finally made it fail.
+
+    **Still nobody's**, now that both are real triggers. *Trash Panda*
+    reads the container and this take has none; *Curbside Pickup* reads
+    the day and 1 October 2026 is a Thursday.
     """
     assert (
         await earned(
-            a_context("on_use", thing_id="trash_can", now=pacific(2026, 10, 1, 12))
+            a_context("on_take", thing_id="trash_can", now=pacific(2026, 10, 1, 12))
         )
         == set()
     )
 
 
-async def test_trash_panda_waits_on_a_trash_can_that_holds_things(playing):
-    """**It stopped being a date and did not become a trigger.**
+async def test_trash_panda_reads_the_container_and_not_the_thing(playing):
+    """**Two releases blocked, and now a predicate.**
 
-    The file asks for taking an item *out of* the trash can, and the
-    trash can holds nothing - so it moves to `on_take` and to the
-    blocked family, which is the one that says "waiting on a system"
-    out loud. A 1 October gate it could never match looked like a
-    condition and was not one; it is also parked at drop 99, so nothing
-    dispatched it in any case.
+    It stopped being a date on 21 October, moved to `on_take` and to the
+    blocked family on 30 October because the trash can held nothing, and
+    now the can holds things. What it asks is where the player's hand
+    went: everything that can go in the bin can also be picked up off a
+    floor somewhere, so the thing id says nothing at all.
     """
     assert "trash_panda" in achievements.listening_on("on_take")
     assert "trash_panda" not in achievements.listening_on("on_use")
-    assert achievements.trigger_for("trash_panda").predicate.blocked_on == (
-        "items in the trash can"
+    assert "trash_panda" in await earned(
+        a_context("on_take", thing_id="candle_stub", container_id="trash_can")
     )
+
+
+async def test_and_nothing_off_a_floor_or_out_of_the_box(playing):
+    for container in ("", "shipping_box", "rolltop_desk"):
+        assert "trash_panda" not in await earned(
+            a_context(
+                "on_take", thing_id="candle_stub", container_id=container
+            )
+        ), container
 
 
 # --------------------------------------------------------------------------
@@ -655,9 +670,9 @@ async def test_group_achievements_are_scoped_to_one_server(playing, db):
 
 BLOCKED = [
     # Waiting on cat crossing, the ghosts, the doorbell and the letter.
-    # *Trash Panda* joined them on 30 October: it wants an item taken out
-    # of the trash can, and the trash can does not hold items.
-    "trash_panda",
+    # *Trash Panda* joined on 30 October and left again when the trash
+    # can learned to hold things, which is the shape this list is for:
+    # a row waits here by name until the system it names exists.
     "unsticking_the_situation",
     "return_to_sender",
     "it_takes_a_village",
@@ -673,8 +688,11 @@ BLOCKED = [
     # is the honest place for a row whose award the engine cannot yet
     # make - one that goes to the players who laid a plank and announces
     # once.
+    #
+    # *Trash Panda* and *Bin Looking for You* left again with the trash
+    # can, which leaves *Board Meeting* on its own: the staircase
+    # release is the last one that owes anything here.
     "board_meeting",
-    "bin_looking_for_you",
     # *Bowl Half Empty* left this list in drop 10, when feeding arrived
     # and gave it something to count - the same way the two toy ones
     # left it in drop 2.
@@ -768,10 +786,17 @@ def test_what_can_actually_be_earned():
     **Forty-one with the ladder**, which is *Hive Five* leaving the
     blocked list one release after joining it: there is a nest over the
     road, and now something that reaches it.
+
+    **Forty-three with the trash can**, and both of those are rows that
+    had been waiting rather than rows that are new. *Trash Panda* has
+    been written since Release 1 and blocked on a bin that held
+    nothing; *Bin Looking for You* was written for drop 30 and blocked
+    on a flag nothing kept. One release owes this list anything now,
+    and it is the staircase's.
     """
     earnable = achievements.registered_ids() - set(BLOCKED) - set(BY_HAND)
 
-    assert len(earnable) == 41
+    assert len(earnable) == 43
 
 
 # --------------------------------------------------------------------------
