@@ -189,6 +189,14 @@ async def test_a_thing_with_a_refusal_and_no_success_refuses(house):
     # stairs left the repaired staircase as the only way down, so its
     # unrepaired row went with them and the row that remains is a
     # success.
+    # **And the pasta pot on 30 October, which is the first row here to
+    # take this shape on purpose rather than by description.** The others
+    # refuse because there is nothing to succeed at - an empty bowl, a
+    # locked door, a can with no ring on the lid. The pot has a success to
+    # describe and is not allowed to give it yet: it requires `pasta`,
+    # parked at 99, so its old `use` line moved to `use_fail` and `use` is
+    # blank until the pasta is designed. When it ships, the pot leaves this
+    # set the way the salmon did.
     assert shaped == {
         "eunoia", "EH", "LS", "SL", "house", "ivy", "BC",
         "cat_food_chicken", "cat_food_tuna",
@@ -196,6 +204,7 @@ async def test_a_thing_with_a_refusal_and_no_success_refuses(house):
         "cat_bowl", "cat_bowl_courtyard", "cat_bowl_hallway",
         "branches", "leaves", "fence", "wasp_nest",
         "stand", "shelves", "firewood_bin", "coin_slot",
+        "pasta_pot",
     }
 
 

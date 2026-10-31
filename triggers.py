@@ -68,6 +68,7 @@ KEURIG = "coffee_maker"
 TRASH_CAN = "trash_can"
 PASTA_POT = "pasta_pot"
 NACHO_CHIPS = "nacho_chips"
+PLATES = "plates"
 FROZEN_BURRITO = "frozen_burrito"
 GRAPHITE = "graphite_powder"
 # A piece of the wasp nest, knocked down by climbing the ladder on the
@@ -960,7 +961,16 @@ def register_all() -> None:
     # The one that shapes the signature: three parts across two hooks.
     add("green_thumb", ("on_use", "on_take"), green_thumb)
     add("nacho_average_ghost", "on_use", _on_thing({NACHO_CHIPS}))
-    add("using_your_noodle", "on_use", _on_thing({PASTA_POT}))
+    # Blocked on 30 October rather than retired. The pot requires `pasta`,
+    # which is parked at 99, so there is no successful use of it to hook:
+    # the row keeps its registration so the both-directions check stays
+    # meaningful, and shipping the pasta is a one-line change back to
+    # `_on_thing({PASTA_POT})`.
+    add("using_your_noodle", "on_use", _blocked("the pasta"))
+    # The plates are the only thing in the house whose `use` text has the
+    # player taste it, so the achievement needs no condition beyond having
+    # used them: `/use plate` and `/use plates` both resolve to this thing.
+    add("clean_plate_club", "on_use", _on_thing({PLATES}))
     add("getting_into_the_spirit", "on_use", _blocked("the ghost system"))
     add("ghostbuster", "on_use", _blocked("the ghost system"))
     add("breaking_into_the_halloween_candy", "on_use", _used(CANDY))

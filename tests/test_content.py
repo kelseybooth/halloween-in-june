@@ -61,6 +61,11 @@ def test_the_shipped_content_parses():
     # already existed changing: the soft blocks became board books, the
     # nursery window became the bedroom window, and the courtyard ivy
     # became an exit.
+    # Still 168 on 30 October, by one out and one in. Out: the kitchen's
+    # tuna stash, with the dining room sideboard handing out tuna instead
+    # of salmon, so no flavour was lost - salmon comes from the Entryway
+    # alone now. In: `pasta`, parked at 99, which exists so the pasta pot
+    # can require something that is not there yet.
     assert len(c.things) == 168
     # Five out with `/enter`: its three lines, `#welcome`, and the
     # tutorial, which it was the only thing that posted. Five in: the two
@@ -245,7 +250,7 @@ def test_a_thing_in_a_room_that_does_not_exist_is_caught(shipped):
 
 
 def test_a_dangling_yields_target_is_caught(shipped):
-    broken = replace_thing(shipped, "cat_food_stash_pantry", yields="nonexistent_thing")
+    broken = replace_thing(shipped, "cat_food_stash_sideboard", yields="nonexistent_thing")
     assert problems_matching(broken, "is not a thing")
 
 

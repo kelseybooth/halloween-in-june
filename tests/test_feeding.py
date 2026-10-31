@@ -468,11 +468,19 @@ async def test_the_bowl_is_met_from_the_room_not_the_bag(house):
 
 
 async def test_a_takeable_requirement_still_has_to_be_carried(house):
-    """The can opener, which is the rule that did not move: the tuna is in
-    the pantry with the opener and still needs it in your hand."""
+    """The can opener, which is the rule that did not move: the opener is on
+    its hook in this room and still has to be in your hand.
+
+    The can is picked up in the dining room and carried in, because the tuna
+    moved to the sideboard on 30 October. That makes the point harder rather
+    than softer - the player is standing with the opener in reach and the
+    refusal still comes - where before it only showed that being in the
+    pantry was not enough.
+    """
     db, *_ = house
+    await db.update_current_room(ALICE, GUILD_A, "DI")
+    await run(house, bot.take, "tuna", room="DI")
     await db.update_current_room(ALICE, GUILD_A, "KI")
-    await run(house, bot.take, "tuna", room="KI")
 
     reply = replies(await run(house, bot.use, "tuna", room="KI"))
 
@@ -534,12 +542,16 @@ async def test_every_refusal_says_why(house, room, sated, reason):
 
 async def test_the_opener_and_the_bowl_are_told_apart(house):
     """`can_opener|cat_bowl` names the opener first, so a player in the
-    Kitchen with neither hears about the opener."""
+    Kitchen with neither hears about the opener.
+
+    The gourmet tin since 30 October, which carries that same requirement
+    and stayed in the Kitchen when the tuna moved to the dining room.
+    """
     db, *_ = house
     await db.update_current_room(ALICE, GUILD_A, "KI")
-    await run(house, bot.take, "tuna", room="KI")
+    await run(house, bot.take, "gourmet", room="KI")
 
-    await run(house, bot.use, "tuna", room="KI")
+    await run(house, bot.use, "gourmet", room="KI")
 
     rows = await logged(db, database.FEED)
     assert rows[-1].reason == database.NO_OPENER
