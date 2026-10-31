@@ -215,7 +215,7 @@ ALREADY_DONE = "already_done"
 # `wrong_time_and_place` is that same answer given to somebody who is
 # also nowhere near her bowl. `no_bowl` and `no_opener` are the hungry
 # half, split because they point at different drops - the bowl is in the
-# Entryway from drop 10 and the opener is in the kitchen at 30, so which
+# Entryway from drop 10 and the opener is in the kitchen at 25, so which
 # one players hit says which room they are stuck outside of.
 NOT_HUNGRY = "not_hungry"
 WRONG_TIME_AND_PLACE = "wrong_time_and_place"

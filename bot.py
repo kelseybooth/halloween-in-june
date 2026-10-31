@@ -3062,11 +3062,25 @@ async def _a_feed_refusal(interaction, found, missing: list[str]) -> bool:
     `feed.not_hungry`, which is the bed's register: she is fine, come
     back later, nothing is broken.
 
-    **Hungry and short of something** falls to the flavor's own
-    `use_fail`, which is the one string a writer has for it, so the
-    reason is logged rather than written: the bowl points at the
-    Entryway and the opener at the kitchen, and which one players hit
-    says which room they are stuck outside of.
+    **Hungry and short of something is two answers, not one.** It used
+    to be one - the flavor's own `use_fail`, whichever thing was
+    missing - so a player standing over the bowl with no opener read a
+    line written as though they had neither, which is what the writers
+    called inaccurate. The split was designed before the copy was:
+    `no_bowl` and `no_opener` have been separate reasons in the log
+    since feeding shipped, "split because they point at different
+    drops".
+
+    So the bowl gets `feed.no_bowl`, one shared line, because an empty
+    room reads the same whatever can is in your hand - the reason
+    `feed.public` is one line rather than five. The lid stays the can's
+    own `use_fail`, because that is where the writing is: a ring that
+    will not give, a seam with no tab on it, a gold lid set in tight.
+
+    **Short of both lands on the lid**, because `requires` names the
+    opener first, so a player hears about the bowl only once the opener
+    is in their hand. That ordering is older than this split and the
+    answer it gives is the same one.
 
     Nothing is consumed and no timer is stamped on any of these paths -
     a refused feed costs the player nothing but the command. The
@@ -3084,16 +3098,15 @@ async def _a_feed_refusal(interaction, found, missing: list[str]) -> bool:
         reason = (
             telemetry.WRONG_TIME_AND_PLACE if no_bowl else telemetry.NOT_HUNGRY
         )
+    elif missing[:1] == [world.CAT_BOWL]:
+        line = await phrasing.default_say("feed.no_bowl")
+        reason = telemetry.NO_BOWL
     elif missing:
         line = await phrasing.say(
             guild_id, found.thing_id, "use_fail",
             fallback="use_fail.default", name=found.name,
         )
-        reason = (
-            telemetry.NO_BOWL
-            if missing[0] == world.CAT_BOWL
-            else telemetry.NO_OPENER
-        )
+        reason = telemetry.NO_OPENER
     else:
         return False
 
