@@ -127,3 +127,6 @@ bed_yield.key.public	{player} fluffs the cat bed, and something small but heavy 
 unlock.public	{player} unlocked the front door of the house.
 delivery.arrived.public	Something thumps against the front door, and when you look, the shipping box is a little fuller.
 stairs.repaired.public	{player} hammers in the last plank. The grand staircase is whole again, thanks to everyone who lent a hand.
+carrying.ladder	You try, but can't figure out how while you're carrying this ladder.
+ladder.cat.public	{player} starts up the ladder, and the cat gets to the top first.
+ladder.exhausted.public	{player} drops the heavy wooden ladder out of exhaustion.

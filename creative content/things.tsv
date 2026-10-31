@@ -164,3 +164,7 @@ coin_slot	coin slot	slot|cash box|cashbox|money box|honor box|honesty box|cash|m
 house	house	house|haunted house|front door|door|inside|in	exit	CH	1	no	yes	0							EN			10	160				
 cat_bowl	cat bowl	bowl|dish|food bowl|food dish|cat dish|water bowl|saucer	fixture	EN	1	no	no	0										10	161				
 house_key	brass key	brass key|key|house key|front door key	object		0	yes	yes	1	1	house								10	162				
+ladder	ladder	ladder|wooden ladder|stepladder|step ladder|rungs	object	CO	1	yes	yes	1	1					wasp_nest_piece				30	163			no	yes
+wasp_nest_piece	piece of wasp nest	piece of wasp nest|wasp nest piece|nest piece|piece of nest|piece|scrap|nest fragment|fragment of nest|fragment of wasp nest	object	CH	0	yes	yes	1										30	164				
+cat_bowl_courtyard	cat bowl	bowl|dish|food bowl|food dish|cat dish|water bowl|saucer	fixture	CO	1	no	no	0										30	165				
+cat_bowl_hallway	cat bowl	bowl|dish|food bowl|food dish|cat dish|water bowl|saucer	fixture	UH	1	no	no	0										40	166				
