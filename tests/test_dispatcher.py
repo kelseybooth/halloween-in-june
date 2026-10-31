@@ -140,6 +140,15 @@ def test_every_hook_in_the_spec_exists():
         # was in the house on Halloween at all, and no narrower hook can
         # answer that.
         "on_command",
+        # A player looking around the room they are standing in. Added
+        # with the trash can for *Bin Looking for You*, which asks about
+        # the first time somebody reads the Kitchen: walking in prints
+        # nothing, so that first `/look` is when they see the bin.
+        #
+        # Deliberately not a look at a *thing*. `/look trash can` is
+        # somebody who has already read the room, and a hook that fired
+        # on both would have spent the one chance on the wrong command.
+        "on_look",
     }
 
 

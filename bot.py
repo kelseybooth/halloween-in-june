@@ -2958,6 +2958,15 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
             )
             return
 
+        if found.thing_id == world.TRASH_CAN:
+            # Its own branch, beside the toy's, because `/use` on the
+            # trash can opens a menu rather than producing a line. The
+            # can has no `use` text at all now, so without this it
+            # would fall through to the house's "you turn it over in
+            # your hands" and count as a use.
+            await _open_the_trash(interaction, state, found)
+            return
+
         if row.type == world.TOY:
             await _play_with_toy(interaction, state, found)
             return
@@ -3091,6 +3100,361 @@ async def _container_detail(guild_id: int, room_id: str, thing_id: str) -> str |
         guild_id, room_id, row.contained_in, thing_id
     )
     return f"container={row.contained_in} left={left}"
+
+
+# **Discord allows 25 options in one select, and the menu does not
+# page.** A bag with more kinds than that shows the first 25 and says
+# so. Paging is a second control and a second round trip for a case
+# drop 30's content can barely produce - sixteen spice jars are one
+# kind, not sixteen - and a player who wants something further down can
+# throw away what is in front of it or drop it on the floor instead.
+TRASH_MENU_LIMIT = 25
+
+# How long a menu stays live. It is one ephemeral message in front of
+# one player, so a deliberately short timeout: the controls go dead, the
+# player types the command again, and nothing is left holding state.
+#
+# **No `DynamicItem`, unlike the `/stats` buttons.** Those have to
+# survive a deploy because an ephemeral `/stats` can sit open for hours
+# and a dead rectangle is worse than none. A trash menu that dies on a
+# restart costs one retyped command.
+TRASH_MENU_TIMEOUT = 180
+
+
+async def _throwable(guild_id: int, user_id: int):
+    """What this player could throw away, and whether that is all of it.
+
+    Returns the list and the full count, so the caller can say "these
+    are the first 25" without counting twice.
+    """
+    carried = await database.carried_droppable(user_id, guild_id)
+    return carried[:TRASH_MENU_LIMIT], len(carried)
+
+
+async def _trash_menu(guild_id: int, user_id: int, room_id: str):
+    """The lid going up: the prompt, and the select under it.
+
+    None when there is nothing in the bag that can be put down, which
+    the caller answers with the writers' own line for an empty bag
+    rather than with an empty menu.
+    """
+    carried, total = await _throwable(guild_id, user_id)
+    if not carried:
+        return None, None
+
+    prompt = await phrasing.default_say("trash.menu")
+    if total > len(carried):
+        prompt = "\n\n".join(
+            part
+            for part in (
+                prompt,
+                await phrasing.default_say("trash.too_much", count=len(carried)),
+            )
+            if part
+        )
+    return prompt, _TrashMenu(room_id, carried)
+
+
+class _TrashMenu(discord.ui.View):
+    """One select, listing the bag."""
+
+    def __init__(self, room_id: str, carried):
+        super().__init__(timeout=TRASH_MENU_TIMEOUT)
+        self.add_item(_PickSomething(room_id, carried))
+
+
+class _PickSomething(discord.ui.Select):
+    """Step one: which thing.
+
+    Counts are on the labels rather than in the prompt, because the
+    prompt is the writers' line about stepping on the pedal and a list
+    of what is in somebody's bag does not belong in it.
+    """
+
+    def __init__(self, room_id: str, carried):
+        self._room_id = room_id
+        self._carried = {thing_id: (name, count) for thing_id, name, count in carried}
+        super().__init__(
+            placeholder="What are you throwing away?",
+            options=[
+                discord.SelectOption(
+                    label=f"{name} x{count}" if count > 1 else name,
+                    value=thing_id,
+                )
+                for thing_id, name, count in carried
+            ],
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        thing_id = self.values[0]
+        name, count = self._carried[thing_id]
+        if count == 1:
+            # **No "how many" for one of something.** The question would
+            # have one answer, and asking it is a click the player has to
+            # make to tell the game what it already knows.
+            await _threw_it_away(interaction, self._room_id, thing_id, name, 1)
+            return
+        await interaction.response.edit_message(
+            content=await phrasing.default_say("trash.how_many", count=count),
+            view=_HowMany(self._room_id, thing_id, name, count),
+        )
+
+
+class _HowMany(discord.ui.View):
+    """Step two: all of them, or a number."""
+
+    def __init__(self, room_id: str, thing_id: str, name: str, count: int):
+        super().__init__(timeout=TRASH_MENU_TIMEOUT)
+        self.add_item(_AllOfThem(room_id, thing_id, name, count))
+        self.add_item(_SomeOfThem(room_id, thing_id, name, count))
+
+
+class _AllOfThem(discord.ui.Button):
+    def __init__(self, room_id: str, thing_id: str, name: str, count: int):
+        self._what = (room_id, thing_id, name, count)
+        super().__init__(label=f"All {count}", style=discord.ButtonStyle.primary)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _threw_it_away(interaction, *self._what)
+
+
+class _SomeOfThem(discord.ui.Button):
+    def __init__(self, room_id: str, thing_id: str, name: str, count: int):
+        self._what = (room_id, thing_id, name, count)
+        super().__init__(label="Some", style=discord.ButtonStyle.secondary)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_modal(_HowManyExactly(*self._what))
+
+
+def _how_many(raw: str, carried: int) -> int | None:
+    """A number the player could actually throw away, or None.
+
+    Forgiving about spaces and nothing else. A blank box, a word, a
+    zero, a negative and a number larger than the bag all come back
+    None and get the writers' own line - which names the range, so the
+    player is told what would have worked rather than that they were
+    wrong.
+
+    A pure function because it is the half of the modal worth testing:
+    the rest is Discord handing a string to a callback.
+    """
+    try:
+        wanted = int(raw.strip())
+    except (AttributeError, ValueError):
+        return None
+    if 1 <= wanted <= carried:
+        return wanted
+    return None
+
+
+class _HowManyExactly(discord.ui.Modal):
+    """Step three, for "Some": a box with a number in it."""
+
+    def __init__(self, room_id: str, thing_id: str, name: str, count: int):
+        self._what = (room_id, thing_id, name, count)
+        super().__init__(title=f"Throw away: {name}"[:45], timeout=TRASH_MENU_TIMEOUT)
+        self.amount = discord.ui.TextInput(
+            label=f"How many? (1 to {count})"[:45],
+            max_length=len(str(count)),
+            required=True,
+        )
+        self.add_item(self.amount)
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        room_id, thing_id, name, count = self._what
+        wanted = _how_many(self.amount.value, count)
+        if wanted is None:
+            await interaction.response.send_message(
+                await phrasing.default_say("trash.number.invalid", count=count),
+                ephemeral=True,
+            )
+            return
+        await _threw_it_away(interaction, room_id, thing_id, name, wanted)
+
+
+class _ThrowAnother(discord.ui.Button):
+    """The lid, still open. Offered after every successful throw."""
+
+    def __init__(self, room_id: str):
+        self._room_id = room_id
+        super().__init__(
+            label="Throw away something else", style=discord.ButtonStyle.secondary
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        prompt, view = await _trash_menu(
+            interaction.guild_id, interaction.user.id, self._room_id
+        )
+        if prompt is None:
+            await _instead(interaction, await phrasing.default_say("trash.nothing"))
+            return
+        await _instead(interaction, prompt, view)
+
+
+class _Again(discord.ui.View):
+    def __init__(self, room_id: str):
+        super().__init__(timeout=TRASH_MENU_TIMEOUT)
+        self.add_item(_ThrowAnother(room_id))
+
+
+async def _instead(interaction, content: str, view=None) -> None:
+    """Replace the message the control was on, or answer with a new one.
+
+    Every path into this is a component or a modal submitted from one,
+    and both carry the message - so the replacement is what normally
+    happens, and a player who throws six things away reads six results
+    in one message rather than a column of them. The fallback is for a
+    submit that arrives without one, which should not happen and must
+    not swallow the reply if it does.
+    """
+    if getattr(interaction, "message", None) is not None:
+        await interaction.response.edit_message(content=content, view=view)
+        return
+    await interaction.response.send_message(content, view=view, ephemeral=True)
+
+
+async def _threw_it_away(
+    interaction, room_id: str, thing_id: str, name: str, amount: int
+) -> None:
+    """Move it, say so privately, and tell the room something went in.
+
+    **The room is told that something was thrown away and not what.**
+    That is the writers' line and the mechanic at once: the only way to
+    find out what is in the bin is to go and look in it.
+
+    The private half replaces the menu rather than arriving under it, so
+    a player who throws six things away reads six results in one message
+    instead of a column of them.
+    """
+    guild_id, user = interaction.guild_id, interaction.user
+    moved = await database.put_into_container(
+        user.id, guild_id, room_id, world.TRASH_CAN, thing_id, amount
+    )
+    if not moved:
+        # Their bag changed under them - another tab, or a scatter that
+        # took the last one. Nothing is in the bin and nothing is said
+        # to the room.
+        await _instead(
+            interaction,
+            await phrasing.default_say("drop_fail.not_carried", name=name),
+        )
+        return
+
+    left = await database.carried_of(user.id, guild_id, thing_id)
+    await telemetry.succeeded(
+        guild_id,
+        user.id,
+        telemetry.THREW_AWAY,
+        thing_id=thing_id,
+        detail=f"amount={moved} kept={left}",
+    )
+
+    private = await phrasing.default_say(
+        "trash.done" if moved == 1 else "trash.done.multiple",
+        name=name,
+        amount=moved,
+    )
+    await _instead(interaction, private, _Again(room_id))
+
+    line = await phrasing.default_say(
+        "trash.done.public", player=user.display_name
+    )
+    channel = interaction.channel
+    if line and channel is not None and hasattr(channel, "send"):
+        await _post_quietly(channel, line)
+
+
+async def _open_the_trash(interaction, state, found) -> None:
+    """`/use trash can`: the lid goes up and the bag is offered.
+
+    **A use that does not go through `_finish_use`**, like a toy's play
+    and an exit's move. Nothing is recorded here: stepping on the pedal
+    is not using the trash can, and what counts is what goes in - which
+    `_threw_it_away` logs, once per throw, with how many.
+
+    That also settles *Curbside Pickup*, which used to fire on this
+    command on a Tuesday. It is on `/take trash can` now, where taking
+    the trash out actually happens.
+    """
+    guild_id, user = interaction.guild_id, interaction.user
+    prompt, view = await _trash_menu(guild_id, user.id, state.current_room)
+    if prompt is None:
+        await interaction.followup.send(
+            await phrasing.default_say("trash.nothing"), ephemeral=True
+        )
+        await _turned_away(
+            interaction,
+            telemetry.USE,
+            telemetry.NOT_CARRIED,
+            thing_id=found.thing_id,
+        )
+        return
+    await interaction.followup.send(prompt, view=view, ephemeral=True)
+
+
+async def _take_the_trash_out(interaction, state, found) -> None:
+    """`/take trash can`: the bag goes to the curb and a fresh one goes in.
+
+    **The one `/take` in the game that is not picking something up**,
+    which is why it is intercepted ahead of the refusal table: the can
+    is a fixture and every rule in there would have turned it down.
+
+    The player stays in the kitchen. What was in the bin is gone, except
+    for anything the house cannot make another of - that is somewhere
+    else now, and the clink on the steps is the only thing that says so.
+    """
+    guild_id, user = interaction.guild_id, interaction.user
+    run = await world.take_the_trash_out(guild_id, state.current_room)
+
+    if run.was_empty:
+        private = await phrasing.default_say("trash.out.empty")
+    else:
+        private = await phrasing.default_say("trash.out")
+        if run.put_back:
+            clink = await phrasing.default_say("trash.out.clink")
+            if clink:
+                private = f"{private}\n\n{clink}" if private else clink
+
+    await telemetry.succeeded(
+        guild_id,
+        user.id,
+        telemetry.TRASH_EMPTIED,
+        thing_id=found.thing_id,
+        detail=_trash_detail(run),
+    )
+
+    await interaction.followup.send(private, ephemeral=True)
+    line = await phrasing.default_say("trash.out.public", player=user.display_name)
+    channel = interaction.channel
+    if line and channel is not None and hasattr(channel, "send"):
+        await _post_quietly(channel, line)
+
+    # **`on_take` of the can itself**, which is what *Curbside Pickup*
+    # watches for now. Fired after the reply, like every other award.
+    await _fire(
+        achievements.Context(
+            guild_id=guild_id,
+            hook="on_take",
+            user_id=user.id,
+            thing_id=found.thing_id,
+            room_id=state.current_room,
+        ),
+        interaction=interaction,
+    )
+
+
+def _trash_detail(run) -> str:
+    """What the bag held, and where the keepable half went.
+
+    The only record anywhere of where a one-of-a-kind thing was put
+    back. A player who threw the brass key away and cannot find it will
+    ask, and the clink is deliberately silent about it - so the answer
+    has to be in the log or it is nowhere.
+    """
+    gone = " ".join(f"{thing}x{count}" for thing, count in run.deleted)
+    kept = " ".join(f"{thing}->{room}/{box}" for thing, room, box in run.put_back)
+    return f"deleted=[{gone}] put_back=[{kept}]"
 
 
 async def _arms_full(guild_id: int, user_id: int) -> str | None:
@@ -4944,6 +5308,29 @@ async def look(interaction: discord.Interaction, thing: str | None = None) -> No
                 )
             await interaction.followup.send(reply, ephemeral=True)
             await telemetry.succeeded(guild_id, user.id, telemetry.LOOK, detail=room_id)
+            # **Only a look at the room**, never at a thing in it: the
+            # hook exists for the moment a player first reads a room,
+            # and `/look trash can` is somebody who has already read
+            # the Kitchen.
+            #
+            # The flag is written here rather than in the predicate.
+            # `notice` reports the transition, which is exactly "this
+            # was their first" - and a predicate that wrote it would be
+            # deciding something as well as answering, which nothing in
+            # `triggers` does.
+            first = await database.notice(
+                guild_id, user.id, f"{LOOKED_AT}{room_id}"
+            )
+            await _fire(
+                achievements.Context(
+                    guild_id=guild_id,
+                    hook="on_look",
+                    user_id=user.id,
+                    room_id=room_id,
+                    extra={triggers.FIRST_LOOK: first},
+                ),
+                interaction=interaction,
+            )
             return
 
         await _look_at_one_thing(interaction, guild_id, user.id, room_id, thing)
@@ -4951,6 +5338,13 @@ async def look(interaction: discord.Interaction, thing: str | None = None) -> No
         log.exception("Failed to look at %r in guild %s", thing, guild_id)
         await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
 
+
+# Where "this player has read this room" is written down, one notice
+# per room. A notice rather than a player state because it is a fact
+# about having been told something, which is the whole of what that
+# table is for - and `/qa-reset-player` already clears it, so a tester
+# gets their one chance at the Kitchen back.
+LOOKED_AT = "looked_at."
 
 # The bed, which is drop 1's achievement and the condition on the hint
 # that points at the house. Any successful fluff earns it; a refused one
@@ -5650,6 +6044,16 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
             return
 
         row = await phrasing.thing_row(found.thing_id)
+
+        if found.thing_id == world.TRASH_CAN:
+            # Ahead of the refusal table, because the can is a fixture
+            # and every rule in there would turn it down. `/take trash
+            # can` is the bag going out, not the can being pocketed -
+            # which is what the writers' two aliases, *trash bag* and
+            # *garbage bag*, are for.
+            await _take_the_trash_out(interaction, state, found)
+            return
+
         refusal = await _cannot_take(guild_id, user.id, found, row)
         if refusal:
             line, reason = refusal
@@ -5691,13 +6095,26 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
 
         taken_row = await phrasing.thing_row(taken)
         name = taken_row.name if taken_row else found.name
-        reply = (
-            await phrasing.say(
-                guild_id, taken, "take", fallback="take.default",
-                name=name, player=user.display_name,
+        # **Out of the trash is its own pair of lines**, and the only
+        # take in the game that says something privately. Every other
+        # one is a single third-person sentence to the room, because the
+        # room and the player want the same words; here they do not. The
+        # player gets "it seems fine, mostly", which is about the state
+        # of the thing, and the room gets that somebody went through the
+        # bin and came out with something, which does not say what.
+        out_of_the_trash = found.container_id == world.TRASH_CAN
+        if out_of_the_trash:
+            reply = await phrasing.default_say(
+                "trash.take.public", player=user.display_name
             )
-            or f"{user.display_name} takes the {name}."
-        )
+        else:
+            reply = (
+                await phrasing.say(
+                    guild_id, taken, "take", fallback="take.default",
+                    name=name, player=user.display_name,
+                )
+                or f"{user.display_name} takes the {name}."
+            )
 
         # `{name}` here is **the toy they just picked up**, not whichever
         # is lying in the channel: they are holding it, and naming a
@@ -5721,10 +6138,15 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
                 )
             )
 
-        # **The line is public and nothing else.** Every written take
-        # string is third person and names the player, so there is one
-        # sentence and the room is its audience - the player reads it
-        # there like everybody else.
+        # **The line is public and nothing else**, with the trash can
+        # the one exception. Every written take string is third person
+        # and names the player, so there is one sentence and the room is
+        # its audience - the player reads it there like everybody else.
+        if out_of_the_trash:
+            nudges = [
+                await phrasing.default_say("trash.take", name=name),
+                *nudges,
+            ]
         await _say_in_the_room(interaction, reply, nudges)
 
         # `source_id` is what separates gardening from scavenging: taking herbs
@@ -5738,6 +6160,12 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
                 user_id=user.id,
                 thing_id=taken,
                 source_id=found.source_id,
+                # Which container it came out of, which is the same kind
+                # of fact as `source_id` and the one *Trash Panda* turns
+                # on: a spice jar out of the shipping box is a delivery,
+                # and the same jar out of the bin is going through the
+                # trash.
+                container_id=found.container_id,
                 room_id=room_id,
             ),
             interaction=interaction,

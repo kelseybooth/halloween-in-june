@@ -75,6 +75,12 @@ GRAPHITE = "graphite_powder"
 # road. The id is the key the climb reports under, which is why this
 # names a thing the predicate never looks up.
 NEST_PIECE = "wasp_nest_piece"
+DIRTY_DIAPER = "dirty_diaper"
+KITCHEN = "KI"
+# The key the look reports under when it was this player's first in the
+# room. Written by the handler, because a predicate that set a flag of
+# its own would be deciding something as well as answering.
+FIRST_LOOK = "first_look"
 # The oak tree in the Courtyard is an exit, not an object - using it moves the
 # player into the Secret Library, which is why this listens on `on_move`.
 TREE = "CS"
@@ -289,6 +295,46 @@ async def hive_five(context: Context) -> bool:
     later climb that drops a piece passes this and creates nothing.
     """
     return bool(context.extra.get(NEST_PIECE))
+
+
+async def trash_panda(context: Context) -> bool:
+    """Anything taken out of the trash can, the first time.
+
+    **Read off the container and not the thing.** Everything that can
+    go in the bin can also be picked up off a floor somewhere, so the
+    thing id says nothing - it is where the player's hand went that
+    makes it going through the trash. Which is why the take hook
+    carries the container at all.
+
+    Somebody else's rubbish counts, and that is the file's own wording:
+    *went through the trash and came out with something*. Nothing in it
+    asks whose.
+    """
+    return context.container_id == TRASH_CAN
+
+
+async def bin_looking_for_you(context: Context) -> bool:
+    """A dirty diaper carried into the Kitchen, on the first look.
+
+    **One chance, ever**, which is what makes it a secret. Walking into
+    a room prints nothing, so a player's first `/look` in the Kitchen is
+    the moment they first see the trash can - and if they are not
+    holding a diaper then, they never get another go. Diapers have been
+    turning up since drop 3 and the carried one already says the player
+    has started planning where to put it down; this pays that off.
+
+    The first-look half is reported by the handler rather than asked
+    here, because asking would mean writing the flag from a predicate -
+    and a predicate that decides as well as answers cannot be run twice
+    safely. Nothing else in this file writes anything.
+    """
+    if context.room_id != KITCHEN or not context.extra.get(FIRST_LOOK):
+        return False
+    if context.user_id is None:
+        return False
+    return bool(
+        await database.carried_of(context.user_id, context.guild_id, DIRTY_DIAPER)
+    )
 
 
 def _on_date(matches, targets: set[str], *, source_only: bool = False):
@@ -886,11 +932,11 @@ def register_all() -> None:
     add("are_you_david", "on_relationship_change", are_you_david)
     add("signed_sealed_delivered", "on_use", _blocked("the doorbell"))
     add("brewing_trouble", "on_use", _on_thing({KEURIG}))
-    # Not a date any more and not yet a trigger either: the file asks for
-    # taking an item *out of* the trash can, and the trash can holds
-    # nothing. Blocked says that, where a date it can never match only
-    # looked like it said something.
-    add("trash_panda", "on_take", _blocked("items in the trash can"))
+    # The trash can holds things now, so this is a predicate rather than
+    # a promise. It was blocked for two releases: parked at drop 99 and
+    # gated on a day it could never match, then honestly blocked on 30
+    # October when the date came off.
+    add("trash_panda", "on_take", trash_panda)
     # No longer World Smile Day. Any mirror, any day, any year - the one
     # of the six undated ones whose room is already open.
     add("self_reflection", "on_use", _on_thing(MIRRORS))
@@ -910,7 +956,11 @@ def register_all() -> None:
     add("getting_into_the_spirit", "on_use", _blocked("the ghost system"))
     add("ghostbuster", "on_use", _blocked("the ghost system"))
     add("breaking_into_the_halloween_candy", "on_use", _used(CANDY))
-    add("curbside_pickup", "on_use", _on_date(on_tuesday, {TRASH_CAN}))
+    # **`on_take`, not `on_use`.** `/use trash can` opens the menu for
+    # throwing something away; taking the trash out is `/take trash
+    # can`, which is what "took the trash out on a Tuesday" has always
+    # meant. The trigger moved with the mechanic.
+    add("curbside_pickup", "on_take", _on_date(on_tuesday, {TRASH_CAN}))
     add("not_so_picky_eater", "on_use", not_so_picky_eater)
     # **Three rows that moved to drop 30 and need a trigger for it.**
     # `NEVER` is what buys a row the right to be unwired, and all three
@@ -921,8 +971,4 @@ def register_all() -> None:
     # rooms from the playtest.
     add("board_meeting", "on_use", _blocked("the contributor-only group award"))
     add("hive_five", "on_use", hive_five)
-    add(
-        "bin_looking_for_you",
-        "on_command",
-        _blocked("the first-look-at-the-Kitchen flag"),
-    )
+    add("bin_looking_for_you", "on_look", bin_looking_for_you)

@@ -223,6 +223,18 @@ GUARDED = "guarded"
 # ladder rather than climbing one somebody else left standing.
 CARRIED = "carried"
 
+# The kitchen trash can. A container players throw things into, fish
+# things out of, and empty - three mechanics on one fixture, and the
+# only `/take` in the game that does something other than pick a thing
+# up.
+TRASH_CAN = "trash_can"
+
+# Where a one-of-a-kind thing may not be put back. The Secret Library
+# is excluded because a player who has not found it could never get the
+# thing back, which would turn taking the trash out into a way of
+# destroying the one thing the bin is not allowed to destroy.
+NO_PUTTING_BACK_IN = ("SE",)
+
 # The jammed drawer: graphite, and only in the hallway it is jammed in.
 GRAPHITE = "graphite_powder"
 DRAWER_ROOM = "UH"
@@ -616,6 +628,129 @@ async def set_down_forgotten_ladders(
                 )
                 moved.append((guild_id, user_id, room_id))
     return moved
+
+
+@dataclass
+class TrashRun:
+    """What taking the bag out to the curb actually did.
+
+    Two lists, because the two halves read differently to a player. The
+    deleted things are gone and nothing says which; the one-of-a-kind
+    ones are somewhere else in the house, and the only hint is a clink
+    on the steps. The caller needs the second list to know whether to
+    say even that much.
+    """
+
+    deleted: list[tuple[str, int]] = field(default_factory=list)
+    # (thing_id, room_id, container_id) for each one put back.
+    put_back: list[tuple[str, str, str]] = field(default_factory=list)
+
+    @property
+    def was_empty(self) -> bool:
+        return not self.deleted and not self.put_back
+
+
+async def renewable_things() -> set[str]:
+    """Everything the house can make another of, by any route it has.
+
+    The test the trash can applies, and the only one: a thing the house
+    produces again costs the server nothing when it goes out to the
+    curb, so it goes. Cat food, candy, spice jars, bottles, diapers,
+    toys, herbs, pieces of wasp nest - all of those come back.
+
+    **`type:` rows are expanded here**, because this is the layer that
+    knows what the prefix means. The toy restock names `type:toy`, so
+    every toy is renewable including the ones whose drop has not landed:
+    a toy thrown away now and restockable in a fortnight is still a
+    thing the house can make more of.
+
+    Global rather than per server. It is a fact about the content files,
+    and two servers cannot disagree about whether the house has a
+    cupboard full of salmon.
+    """
+    named = await database.things_the_house_makes()
+    renewable = set()
+    for thing_id in named:
+        if thing_id.startswith(content_module.CLASS_PREFIX):
+            kind = thing_id[len(content_module.CLASS_PREFIX) :]
+            renewable |= await database.thing_ids_of_type(kind)
+        else:
+            renewable.add(thing_id)
+    return renewable
+
+
+async def places_to_put_things_back(guild_id: int) -> list[tuple[str, str]]:
+    """(room, container) for every container a thing could be put back in.
+
+    **Containers only, never a bare floor.** The clink on the steps is
+    the whole of the hint, and a music box lying in the middle of the
+    Entryway would be found by the next person to type `/look` rather
+    than by anybody looking for it. Tucked inside something, it has to
+    be searched for.
+
+    Three exclusions. A container with `scatter_target = no` is out -
+    the same column and the same reason the restock scatter reads it:
+    the shipping box holds David's spice order, and the trash can is
+    where the thing has just come from. The Secret Library is out
+    because a player who has not found it could never get the thing
+    back. And a container whose drop has not arrived is out, because a
+    thing put there is a thing in a room nobody can reach.
+    """
+    arrived = await resolve.arrived_drop_ids(guild_id)
+    return sorted(
+        (room_id, thing_id)
+        for thing_id, room_id, scatter, since_drop in (
+            await database.containers_in_rooms()
+        )
+        if room_id
+        and scatter
+        and thing_id != TRASH_CAN
+        and room_id not in NO_PUTTING_BACK_IN
+        and since_drop in arrived
+    )
+
+
+async def take_the_trash_out(guild_id: int, room_id: str, rng=None) -> TrashRun:
+    """Empty the trash can: delete what is replaceable, rehome what is not.
+
+    **The brass key is in the second group on purpose.** Before the
+    front door opens, the cat bed's spare is the only other one - so
+    throwing the only key away would lock a server out of its own house
+    until the bed happened to drop another.
+
+    Nothing is put back if there is nowhere to put it, which a server
+    whose drop has opened no container could manage. The thing is
+    deleted in that case rather than left in limbo, and what the player
+    reads is the same either way: the clink is not a promise about where
+    anything went.
+    """
+    inside = await database.empty_container(guild_id, room_id, TRASH_CAN)
+    if not inside:
+        return TrashRun()
+
+    renewable = await renewable_things()
+    destinations = await places_to_put_things_back(guild_id)
+    run = TrashRun()
+    for thing_id, count in inside:
+        if thing_id in renewable or not destinations:
+            run.deleted.append((thing_id, count))
+            continue
+        # One at a time, each drawn separately. Two copies of a
+        # one-of-a-kind thing is not a case the content has, and the
+        # loop reads the same if it ever does.
+        for _ in range(count):
+            where, container = (rng or random).choice(destinations)
+            await database.place_in_room(
+                guild_id, where, thing_id, 1, container_id=container
+            )
+            run.put_back.append((thing_id, where, container))
+    log.info(
+        "Guild %s took the trash out: deleted %s, put back %s",
+        guild_id,
+        run.deleted,
+        run.put_back,
+    )
+    return run
 
 
 async def dislodge_from_bed(guild_id: int, user_id: int, rng=None) -> str | None:
