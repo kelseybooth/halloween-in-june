@@ -226,6 +226,10 @@ async def test_the_content_is_still_loaded(two_games):
     # are new rows: *Bin Looking for You* and *Hive Five* were written
     # for drop 30, and *Trash Panda* and *Board Meeting* came down off
     # 99 to join them.
+    # Still forty-four after 30 October, by one in and one out. In:
+    # *Clean Plate Club*, a new drop 30 row. Out: *Using Your Noodle*,
+    # which went to 99 when the pasta pot started requiring pasta, so it
+    # has not arrived for a guild on the ground floor any more.
     assert len(await resolve.achievements(GUILD_A)) == 44
 
 

@@ -499,10 +499,10 @@ async def test_the_shipped_house_resolves_an_exit_by_alias(house):
     assert isinstance(result, Found)
 
 
-async def test_taking_cat_food_in_the_kitchen_reaches_the_pantry_stash(house):
+async def test_taking_cat_food_in_the_dining_room_reaches_the_sideboard_stash(house):
     await content_loader.load_content(content_module.load_files())
 
-    result = await reach.find(GUILD_A, ALICE, "KI", "tuna", Scope.ROOM)
+    result = await reach.find(GUILD_A, ALICE, "DI", "tuna", Scope.ROOM)
     assert isinstance(result, Found)
     assert result.where is Where.SOURCE
     assert result.yields == "cat_food_tuna"
@@ -550,12 +550,18 @@ async def test_a_loose_copy_reports_no_source(house):
 
 async def test_the_source_id_is_the_stash_not_the_can(house):
     """The cat food stashes are the case with the most rows: six of them hand
-    out five flavors, and two of the five come from two stashes each."""
+    out five flavors, and chicken comes from two stashes.
+
+    Tuna moved from the kitchen pantry to the dining room sideboard on 30
+    October, so this asks in DI. The point of the test is the indirection -
+    typing a flavor finds the stash, not the can - and that is unchanged by
+    which room the stash stands in.
+    """
     await content_loader.load_content(content_module.load_files())
 
-    result = await reach.find(GUILD_A, ALICE, "KI", "tuna", Scope.ROOM)
+    result = await reach.find(GUILD_A, ALICE, "DI", "tuna", Scope.ROOM)
     assert result.yields == "cat_food_tuna"
-    assert result.source_id == "cat_food_stash_pantry"
+    assert result.source_id == "cat_food_stash_sideboard"
 
 
 # --------------------------------------------------------------------------

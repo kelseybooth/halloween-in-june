@@ -292,7 +292,6 @@ async def test_a_date_achievement_is_not_pinned_to_2026(playing):
     [
         ("brewing_trouble", "coffee_maker"),
         ("nacho_average_ghost", "nacho_chips"),
-        ("using_your_noodle", "pasta_pot"),
     ],
 )
 @pytest.mark.parametrize(
@@ -300,15 +299,19 @@ async def test_a_date_achievement_is_not_pinned_to_2026(playing):
     [pacific(2026, 6, 14), pacific(2026, 10, 1), pacific(2027, 2, 2)],
     ids=["an ordinary day", "one of the old days", "next year"],
 )
-async def test_the_three_that_stopped_being_dated(
+async def test_the_two_that_stopped_being_dated(
     playing, achievement_id, thing_id, when
 ):
-    """**Three one-line changes, and the reason for all three is one
-    sentence.** The kitchen opens at drop 30, which is after 1, 21 and
-    25 October, so none of them could be earned this year by anybody.
+    """**Two one-line changes, and the reason for both is one sentence.**
+    The kitchen opens at drop 30, which is after 1 and 21 October, so
+    neither could be earned this year by anybody.
 
     Their old days still work, because taking a date off is not a date
     swap, and so does every other day.
+
+    There were three until 30 October. *Using Your Noodle* left when the
+    pasta pot started requiring pasta: it is in `BLOCKED` now, so the
+    undated-ness it gained is beside the point until the pasta ships.
     """
     assert achievement_id in await earned(
         a_context("on_use", thing_id=thing_id, now=when)
@@ -693,6 +696,12 @@ BLOCKED = [
     # can, which leaves *Board Meeting* on its own: the staircase
     # release is the last one that owes anything here.
     "board_meeting",
+    # *Using Your Noodle* arrived the same day the trash can's two left,
+    # and it is the one deliberate step backwards on this list: the pasta
+    # pot now requires pasta, which is parked at 99, so "put a pot on"
+    # cannot succeed until the pasta is designed. It had a working trigger
+    # and gave it up to make the pot's refusal honest.
+    "using_your_noodle",
     # *Bowl Half Empty* left this list in drop 10, when feeding arrived
     # and gave it something to count - the same way the two toy ones
     # left it in drop 2.
@@ -793,6 +802,14 @@ def test_what_can_actually_be_earned():
     nothing; *Bin Looking for You* was written for drop 30 and blocked
     on a flag nothing kept. One release owes this list anything now,
     and it is the staircase's.
+
+    **Still forty-three after the dining room**, by one in and one out.
+    In: *Clean Plate Club*, earnable on arrival because the trigger it
+    needs is a successful `/use` of a thing that already exists. Out:
+    *Using Your Noodle*, for the opposite reason - the pasta pot started
+    requiring pasta that nobody can hold yet. The two cancel, so this
+    number is the one place that change does not show; both halves are
+    in `BLOCKED`'s comments instead.
     """
     earnable = achievements.registered_ids() - set(BLOCKED) - set(BY_HAND)
 
@@ -1203,7 +1220,10 @@ async def test_an_empty_handed_stove_earns_nothing(playing, halloween):
 
 
 async def test_taking_the_fifth_flavour_announces_it(playing, halloween):
-    await database.update_current_room(ALICE, GUILD_A, "KI")
+    # Tuna is the fifth here, and it moved to the dining room sideboard on
+    # 30 October. The other four are taken straight from the source, so the
+    # room only has to be the one the last flavour is actually in.
+    await database.update_current_room(ALICE, GUILD_A, "DI")
     for flavour in ("cat_food_chicken", "cat_food_salmon", "cat_food_expired", "cat_food_gourmet"):
         await database.take_from_source(ALICE, GUILD_A, flavour)
     interaction = FakeInteraction(ALICE, GUILD_A, guild=halloween)
@@ -1240,17 +1260,48 @@ async def test_nacho_average_ghost_wants_nothing_but_the_chips(playing):
     ) == {"nacho_average_ghost"}
 
 
-async def test_using_your_noodle(playing):
-    assert "using_your_noodle" in await earned(
-        a_context("on_use", thing_id="pasta_pot", now=pacific(2026, 10, 25))
+async def test_using_your_noodle_waits_for_the_pasta(playing):
+    """**It used to be earned here, and giving that up was the point.**
+
+    The pot requires `pasta`, parked at 99, so `/use pasta pot` can only
+    reach `use_fail` - and an achievement that fires on a use that cannot
+    succeed would announce nothing while looking wired. Asserted on the
+    day its old window closed, so this fails if the trigger is quietly
+    restored before the pasta is designed.
+    """
+    assert "using_your_noodle" not in await earned(
+        a_context("on_use", thing_id="pasta_pot", now=pacific(2026, 10, 26, 12))
     )
 
 
-async def test_using_your_noodle_wants_nothing_but_the_pot(playing):
-    """The day after its old window, which is now an ordinary day."""
+async def test_clean_plate_club(playing):
+    assert "clean_plate_club" in await earned(
+        a_context("on_use", thing_id="plates", now=pacific(2026, 10, 30))
+    )
+
+
+async def test_clean_plate_club_wants_nothing_but_the_plates(playing):
+    """Undated from the start, so any day earns it and no other day-gated
+    achievement comes along with it."""
     assert await earned(
-        a_context("on_use", thing_id="pasta_pot", now=pacific(2026, 10, 26, 12))
-    ) == {"using_your_noodle"}
+        a_context("on_use", thing_id="plates", now=pacific(2027, 3, 9))
+    ) == {"clean_plate_club"}
+
+
+async def test_clean_plate_club_wants_the_use_and_not_the_take(playing):
+    """`on_take` is one of the five real hooks, so this fails if the trigger
+    is ever registered against every hook instead of against the use."""
+    assert "clean_plate_club" not in await earned(
+        a_context("on_take", thing_id="plates", now=pacific(2026, 10, 30))
+    )
+
+
+async def test_clean_plate_club_wants_the_plates_and_nothing_else(playing):
+    """The high chair stands at the same table and carries a plate of its
+    own in the same sentence; using it is not licking a dirty plate."""
+    assert "clean_plate_club" not in await earned(
+        a_context("on_use", thing_id="high_chair", now=pacific(2026, 10, 30))
+    )
 
 
 async def test_catproof_cannot_be_farmed_by_dropping_and_re_taking(playing):

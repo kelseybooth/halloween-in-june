@@ -78,8 +78,11 @@ def test_the_shipped_file_parses():
     # Two new ones with the ground floor: *Bin Looking for You*, for
     # walking into the Kitchen holding a dirty diaper, and *Hive Five*,
     # for the first climb that knocks a piece off the wasp nest.
-    assert len(parsed.achievements) == 52
-    assert len(parsed.achievement_ids) == 52
+    # Then *Clean Plate Club*, from playtesting on 30 October: the plates'
+    # use text has the player taste the dried food, so the achievement is
+    # the use and nothing more.
+    assert len(parsed.achievements) == 53
+    assert len(parsed.achievement_ids) == 53
 
 
 def test_the_shipped_file_validates():
@@ -198,7 +201,7 @@ async def test_the_rows_reach_the_database(db):
 async def test_the_whole_shipped_file_loads(db):
     await content_loader.load_content(content_module.load_files())
 
-    assert await row_count(db, "achievements") == 52
+    assert await row_count(db, "achievements") == 53
 
 
 async def test_a_reload_replaces_the_rows(db):
