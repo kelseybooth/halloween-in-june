@@ -21,6 +21,8 @@ import content as content_module
 import content_loader
 import database
 import reach
+import resolve
+import states
 from reach import Ambiguous, Found, NotFound, Scope, Where
 from test_loader import a_thing
 from test_world import a_house, carry
@@ -35,6 +37,112 @@ async def house(db):
 
 async def find(room="EN", typed="", scope=Scope.REACH, user=ALICE):
     return await reach.find(GUILD_A, user, room, typed, scope)
+
+
+# --------------------------------------------------------------------------
+# A thing you cannot see yet is not a typo for one you can
+#
+# The forgiving pass runs over the candidates, and the candidates are
+# what the player can see - so until 31 October it could reach past a
+# thing standing right there. Drop 25 found it with two doorways: `living
+# room` is two edits from `dining room`, so an Entryway with the arch
+# open and the wide doorway still to come took a player who had spelled
+# the Living Room correctly and walked them through the other one.
+#
+# Both halves of "cannot see yet" are here, because both are per-room and
+# only one of them is per-server.
+# --------------------------------------------------------------------------
+
+
+def a_doorway(thing_id, name, *aliases, **overrides):
+    return a_thing(
+        thing_id, name=name, aliases=aliases, type="scenery", takeable=False,
+        quantity=None, **overrides,
+    )
+
+
+@pytest.fixture
+async def one_doorway(house):
+    """An arch that has arrived and a wide doorway that has not."""
+    parsed = a_house(
+        a_doorway("ED", "arched doorway", "doorway", "dining room"),
+        a_doorway("EL", "wide doorway", "doorway", "living room", since_drop=2),
+    )
+    parsed.drops.append(
+        content_module.Drop(
+            drop_id=2, trigger="manual", date=None, event=None,
+            name="The Other Doorway", notes=None,
+        )
+    )
+    await content_loader.load_content(parsed)
+    await resolve.set_current_drop(GUILD_A, 1)
+    return house
+
+
+async def test_the_doorway_that_has_not_arrived_is_refused_and_not_corrected(one_doorway):
+    """The bug, in the two words that found it."""
+    result = await find(typed="living room")
+
+    assert isinstance(result, NotFound)
+    assert result.exists_elsewhere
+
+
+async def test_and_the_one_that_has_arrived_answers_to_its_own_words(one_doorway):
+    """The guard is on the forgiving pass alone, so nothing a player
+    spells correctly about a thing they can see is affected."""
+    assert (await find(typed="arched doorway")).thing_id == "ED"
+    assert (await find(typed="dining room")).thing_id == "ED"
+
+
+async def test_a_typo_is_still_forgiven(one_doorway):
+    """`arched doorwy` is one edit from a word in the room and spells
+    nothing, so it is corrected exactly as before. The guard asks whether
+    the word *is* something here, not whether it is close to it."""
+    result = await find(typed="arched doorwy")
+
+    assert result.thing_id == "ED"
+    assert result.fuzzy == "arched doorwy→arched doorway"
+
+
+async def test_and_the_wide_doorway_resolves_once_its_drop_arrives(one_doorway):
+    await resolve.set_current_drop(GUILD_A, 2)
+
+    assert (await find(typed="living room")).thing_id == "EL"
+
+
+@pytest.fixture
+async def a_gated_doorway(house):
+    """The same shape, with a per-player gate instead of a drop.
+
+    Which is the half that was already possible before drop 25: both of
+    the Entryway's doorways sit behind `fed_the_cat`, and an unfed player
+    typing one of their names has been getting the other one. The gate
+    here is `drawer_unjammed` because it is a state a test can set -
+    `fed_the_cat` is a notice, and `_describe_room` is what turns it
+    into one of these.
+    """
+    await content_loader.load_content(
+        a_house(
+            a_doorway("ED", "arched doorway", "doorway", "dining room"),
+            a_doorway(
+                "EL", "wide doorway", "doorway", "living room",
+                present_when="drawer_unjammed",
+            ),
+        )
+    )
+    return house
+
+
+async def test_a_doorway_behind_a_gate_is_refused_the_same_way(a_gated_doorway):
+    result = await find(typed="living room")
+
+    assert isinstance(result, NotFound)
+
+
+async def test_and_opens_to_the_player_who_has_passed_it(a_gated_doorway):
+    await states.set_player_state(GUILD_A, ALICE, "drawer_unjammed")
+
+    assert (await find(typed="living room")).thing_id == "EL"
 
 
 # --------------------------------------------------------------------------

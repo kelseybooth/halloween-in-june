@@ -517,7 +517,7 @@ async def test_the_shipped_content_loads(two_servers):
     # the ladder's four, and the ground floor's net one fewer: the back
     # stairs out, the bedroom's ivy in.
     assert report.content_rows["thing_types"] == 168
-    assert report.content_rows["drops"] == 9  # 0 to 3 built, 10 to 50 named
+    assert report.content_rows["drops"] == 10  # 0 to 3 built, 10 to 50 named
     assert report.content_rows["restocks"] == 4  # the toy channel row joined them
 
 

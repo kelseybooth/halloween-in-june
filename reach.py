@@ -414,6 +414,39 @@ async def _gather(
     return candidates
 
 
+async def _not_here_yet(guild_id: int, user_id: int, room_id: str) -> set[str]:
+    """Every word for a thing in this room that this player cannot see yet.
+
+    Two ways to be in a room and out of `_gather`'s candidates: the
+    thing's drop has not arrived, or its `present_when` gate is not in
+    force for this player. Both are read here the same way `_gather`
+    reads them, and for the same reason - a gate is per player, so two
+    people in one room are looking at different rooms.
+
+    Asked only on the cold path: an exact match failed and a near one
+    was found. One query, and only then.
+    """
+    visible = await resolve.visible_thing_ids(guild_id)
+    held = await states.in_force(guild_id, user_id)
+    session_factory = database._require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(
+                database.ThingType.thing_id,
+                database.ThingType.name,
+                database.ThingType.aliases,
+                database.ThingType.present_when,
+            ).where(database.ThingType.room_id.in_([room_id, content.EVERYWHERE]))
+        )
+
+    words: set[str] = set()
+    for thing_id, name, aliases, gate in rows:
+        if thing_id in visible and states.passes(gate, held):
+            continue
+        words |= _names_of(name, aliases)
+    return words
+
+
 async def _exists_anywhere(typed: str) -> bool:
     """Whether the game knows this word at all, without saying where.
 
@@ -625,6 +658,23 @@ async def find(
         # exact pass has failed, so a word somebody spelled correctly can never
         # lose to somebody else's near miss.
         near = _nearest(needle, candidates.values()) if fuzzy else None
+        # **And never a near miss on something standing beside it that
+        # has not arrived.** The rule above holds inside the candidate
+        # set, and the candidate set is what the player can see: `living
+        # room` is two edits from `dining room`, so an Entryway with the
+        # arch open and the wide doorway still to come took a player who
+        # had spelled the Living Room correctly and walked them through
+        # the other doorway without a word about it.
+        #
+        # Drop 25 surfaced this rather than causing it. The same pair,
+        # with one of them unearned, has been able to do it since
+        # `fed_the_cat` went onto the exits themselves - and the answer
+        # is the one the refusal gives anyway: *you don't see a wide
+        # doorway here*, which is true, and says nothing about why.
+        if near is not None and needle in await _not_here_yet(
+            guild_id, user_id, room_id
+        ):
+            near = None
         if near is None:
             carried_elsewhere = False
             if scope is Scope.ROOM:

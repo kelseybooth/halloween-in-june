@@ -137,12 +137,20 @@ def test_the_ceiling_reaches_the_ground_floor():
 
 async def test_the_four_rooms_are_open_at_this_drop(ground_floor):
     """The other half of the ceiling: a drop that can be reached and whose
-    rooms do not load is a drop that opened on nothing."""
+    rooms do not load is a drop that opened on nothing.
+
+    **Asked of `arrived_rooms` and not of `all_rooms`.** It was the
+    second until 31 October, which reads `rooms.tsv` and knows nothing
+    about drops - so it passed at drop 0, and it would have passed if
+    drop 25 had opened the Dining Room with no door into it. The right
+    question of the wrong function, and the same shape as the mutation
+    the last plank's release found.
+    """
     assert THIS_DROP in await resolve.arrived_drop_ids(GUILD_A)
 
-    open_now = dict(await resolve.all_rooms())
+    here = await resolve.arrived_rooms(GUILD_A)
     for room_id in ("DI", "KI", "CO", "LI"):
-        assert room_id in open_now
+        assert room_id in here
 
 
 # --------------------------------------------------------------------------
