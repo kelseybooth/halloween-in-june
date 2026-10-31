@@ -253,8 +253,9 @@ CARRIED = "carried"
 # The kitchen trash can. A container players throw things into, fish
 # things out of, and empty - three mechanics on one fixture, and the
 # only `/take` in the game that does something other than pick a thing
-# up.
-TRASH_CAN = "trash_can"
+# up. The id itself is `content`'s, because `reach` ranks a copy in the
+# bin last and cannot import this module.
+TRASH_CAN = content_module.TRASH_CAN
 
 # Where a one-of-a-kind thing may not be put back. The Secret Library
 # is excluded because a player who has not found it could never get the

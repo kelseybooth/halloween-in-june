@@ -50,7 +50,15 @@ class Scope(enum.Enum):
 
 
 class Where(enum.Enum):
-    """Which of the three places a copy was found in, in pass-two order."""
+    """Which of the three places a copy was found in.
+
+    Three places and five rungs: the room holds more than one copy of a
+    thing at a time, and which of them a verb acts on is `_rungs`'
+    question rather than this enum's. A copy fished out of the bin is
+    `ROOM` like any other, and what marks it is the container it came
+    out of - which is the same fact the take reply and *Trash Panda*
+    both read.
+    """
 
     CARRIED = "carried"
     ROOM = "room"
@@ -215,6 +223,15 @@ class _Candidate:
     name: str
     names: set[str]
     copies: dict[Where, tuple[int, str | None]]  # where -> (count, container)
+    # Every copy lying in this room, by the container holding it, with
+    # the open floor keyed `None`. A mapping rather than one entry
+    # because `container_id` is part of room_contents' key and so the
+    # same thing is in several places at once: a dirty bottle on the
+    # kitchen floor, a second in the pantry and a third in the bin are
+    # three rows in one room. Collapsed into a single `copies[ROOM]`
+    # they were two rows thrown away and whichever the database handed
+    # back last - an order nothing chose.
+    room_copies: dict[str | None, int] = field(default_factory=dict)
     yields: str | None = None
     # The source that put the SOURCE copy here, set with it and never apart.
     source_id: str | None = None
@@ -267,20 +284,19 @@ async def _gather(
             )
         ).all()
 
-        stock = {
-            row[0]: (row[1], row[2])
-            for row in await session.execute(
-                select(
-                    database.RoomContents.thing_id,
-                    database.RoomContents.count,
-                    database.RoomContents.container_id,
-                ).where(
-                    database.RoomContents.guild_id == guild_id,
-                    database.RoomContents.room_id == room_id,
-                    database.RoomContents.count > 0,
-                )
+        stock: dict[str, dict[str | None, int]] = {}
+        for thing_id, count, container in await session.execute(
+            select(
+                database.RoomContents.thing_id,
+                database.RoomContents.count,
+                database.RoomContents.container_id,
+            ).where(
+                database.RoomContents.guild_id == guild_id,
+                database.RoomContents.room_id == room_id,
+                database.RoomContents.count > 0,
             )
-        }
+        ):
+            stock.setdefault(thing_id, {})[container or None] = count
 
         carried = {
             row[0]: row[1]
@@ -346,15 +362,14 @@ async def _gather(
             )
 
     if include_room:
-        for thing_id, (count, container) in stock.items():
+        for thing_id, where_it_lies in stock.items():
             if thing_id not in visible or thing_id not in details:
                 continue
             if not states.passes(gates.get(thing_id), held):
                 continue
             _, name, aliases, _kind, _y = details[thing_id]
-            entry(thing_id, name, _names_of(name, aliases)).copies[Where.ROOM] = (
-                count,
-                container or None,
+            entry(thing_id, name, _names_of(name, aliases)).room_copies.update(
+                where_it_lies
             )
 
         for (
@@ -404,8 +419,8 @@ async def _gather(
                 # because falling through is silent - the word is bolded
                 # in the prose, the player types it, and the house says
                 # there is no such thing.
-                entry(thing_id, name, _names_of(name, aliases)).copies.setdefault(
-                    Where.ROOM, (1, contained_in or None)
+                entry(thing_id, name, _names_of(name, aliases)).room_copies.setdefault(
+                    contained_in or None, 1
                 )
             elif kind == "object" and thing_id not in stock:
                 # An object with a room but no stock row left: taken, and gone.
@@ -445,6 +460,93 @@ async def _not_here_yet(guild_id: int, user_id: int, room_id: str) -> set[str]:
             continue
         words |= _names_of(name, aliases)
     return words
+
+
+# **Which copy of a thing a verb acts on**, in order. Pass two used to
+# be three places deep and one of them was "the room", which is the
+# question this answers properly: a room holds a thing in several places
+# at once and the nearest hand wins.
+#
+#   a word only the source answers to, your hands, the floor, a
+#   cupboard, a source, the bin.
+#
+# The three in the middle are what "nearest hand" means in a room.
+# Something lying out is nearer than something inside the pantry, and
+# both are nearer than opening the freezer for a new one.
+#
+# **The bin is last, and below the source deliberately.** A player who
+# types `/take burrito` in a kitchen with a freezer in it means the
+# freezer; nobody picks the rubbish over the groceries. The price is the
+# one the writers accepted when they asked for this: while a source is
+# standing in the room its copy in the bin can never be reached, so a
+# burrito or a can opener thrown away is thrown away. Everything whose
+# only copy is in there - a diaper, a spice jar, a toy, a bottle, a cat
+# bowl - still comes back out, which is all *Trash Panda* ever needed.
+ITS_OWN_WORD = 0
+IN_YOUR_HANDS = 1
+ON_THE_FLOOR = 2
+IN_A_CUPBOARD = 3
+FROM_A_SOURCE = 4
+IN_THE_BIN = 5
+
+
+def _rungs(
+    candidate: _Candidate, scope: Scope, word: str
+) -> list[tuple[Where, int, str | None]]:
+    """Every copy of this thing the scope allows, nearest hand first.
+
+    `scope` is applied here as well as in `_gather`, where it decides
+    what is collected at all. Twice on purpose: the bug Scope exists to
+    prevent is a verb acting on a place it has no business in, and a
+    list built in one function and ranked in another is two chances to
+    widen it by accident.
+    """
+    rungs: list[tuple[int, str, Where, int, str | None]] = []
+
+    if scope in (Scope.CARRIED, Scope.REACH) and Where.CARRIED in candidate.copies:
+        count, container = candidate.copies[Where.CARRIED]
+        rungs.append((IN_YOUR_HANDS, "", Where.CARRIED, count, container))
+
+    if scope in (Scope.ROOM, Scope.REACH):
+        for container, count in candidate.room_copies.items():
+            if container is None:
+                rung = ON_THE_FLOOR
+            elif container == content.TRASH_CAN:
+                rung = IN_THE_BIN
+            else:
+                rung = IN_A_CUPBOARD
+            rungs.append((rung, container or "", Where.ROOM, count, container))
+
+        if Where.SOURCE in candidate.copies:
+            count, container = candidate.copies[Where.SOURCE]
+            # **A word only the source answers to means the source.**
+            # `pack` is the pack of salmon and not a can out of it, so
+            # `/look pack` describes the pack even with a loose can on
+            # the floor - and `/take pack` records the stash, which is
+            # what tells a harvest from a pickup and what *Green Thumb*
+            # turns on. Both were going to the can, because the ladder
+            # was written for the words they share and never asked which
+            # kind this was.
+            #
+            # A shared word - `salmon`, `cat food` - leaves the order
+            # alone: the player who says `cat food` holding a can means
+            # that can.
+            its_own = word in candidate.source_names and word not in candidate.yield_names
+            rungs.append(
+                (
+                    ITS_OWN_WORD if its_own else FROM_A_SOURCE,
+                    "",
+                    Where.SOURCE,
+                    count,
+                    container,
+                )
+            )
+
+    # Ranked, then by container id - so two cupboards holding the same
+    # thing resolve to the same one twice running. Nothing in the house
+    # does that today and the database's row order would have decided it.
+    rungs.sort(key=lambda rung: (rung[0], rung[1]))
+    return [(where, count, container) for _, _, where, count, container in rungs]
 
 
 async def _exists_anywhere(typed: str) -> bool:
@@ -702,47 +804,23 @@ async def find(
                 guild_id, action=action, user_id=user_id, detail=f"fuzzy={correction}"
             )
 
-    # Pass two: which copy. First hit down the ladder wins.
+    # Pass two: which copy. First rung of the ladder wins - see `_rungs`.
     candidate = matches[0]
-    order = (
-        (Where.CARRIED, Where.ROOM, Where.SOURCE)
-        if scope is not Scope.ROOM
-        else (Where.ROOM, Where.SOURCE)
+    nearest = _rungs(candidate, scope, word)
+    if not nearest:
+        return NotFound(typed=typed, exists_elsewhere=await _exists_anywhere(typed))
+
+    where, count, container = nearest[0]
+    return Found(
+        thing_id=candidate.thing_id,
+        name=candidate.name,
+        where=where,
+        count=count,
+        container_id=container,
+        yields=candidate.yields if where is Where.SOURCE else None,
+        source_id=candidate.source_id if where is Where.SOURCE else None,
+        fuzzy=correction,
     )
-
-    # **A word only the source answers to means the source.** `pack` is the
-    # pack of salmon and not a can out of it, so `/look pack` describes the
-    # pack even with a loose can on the floor - and `/take pack` records the
-    # stash, which is what tells a harvest from a pickup and what *Green
-    # Thumb* turns on. Both were going to the can, because the ladder below
-    # was written for the words they share and never asked which kind this
-    # was.
-    #
-    # A shared word - `salmon`, `cat food` - keeps the ladder exactly as it
-    # was: the copy in your hands, then the one on the floor, then the
-    # source. The player who says `cat food` holding a can means that can.
-    if (
-        Where.SOURCE in candidate.copies
-        and word in candidate.source_names
-        and word not in candidate.yield_names
-    ):
-        order = (Where.SOURCE,) + tuple(w for w in order if w is not Where.SOURCE)
-    for where in order:
-        if where not in candidate.copies:
-            continue
-        count, container = candidate.copies[where]
-        return Found(
-            thing_id=candidate.thing_id,
-            name=candidate.name,
-            where=where,
-            count=count,
-            container_id=container,
-            yields=candidate.yields if where is Where.SOURCE else None,
-            source_id=candidate.source_id if where is Where.SOURCE else None,
-            fuzzy=correction,
-        )
-
-    return NotFound(typed=typed, exists_elsewhere=await _exists_anywhere(typed))
 
 
 # --------------------------------------------------------------------------

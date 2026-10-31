@@ -75,6 +75,12 @@ LAUNCH = "launch"
 # ordinary path, rather than the channel being a special case in every verb.
 CHANNEL_ROOM = "CH"
 
+# The kitchen trash can. Named here with the other content ids because
+# `reach` needs it - a copy in the bin is the last rung of pass two - and
+# `reach` cannot import `world`, which is where the fixture's three
+# mechanics live and which imports `reach` itself.
+TRASH_CAN = "trash_can"
+
 # Conditions an `event` drop may name. Release 1 ships none; the registry exists so
 # the second one needs no migration, and so a typo in the file is caught at load
 # rather than becoming a drop that never arrives.
