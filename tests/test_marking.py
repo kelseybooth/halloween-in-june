@@ -187,10 +187,16 @@ async def test_resetting_a_player_returns_them_to_a_first_look(channel):
 
 
 async def test_a_house_room_is_never_marked(channel):
-    """Nine rooms have one fragment each and nothing ever adds to them,
-    so the rule is a no-op there - which is the point of doing it
-    generally rather than in the channel's own renderer. It costs those
-    rooms one row per player and no reading change at all."""
+    """The rule is a no-op in a room nothing ever adds to, which is the
+    point of doing it generally rather than in the channel's own
+    renderer. It costs such a room one row per player and no reading
+    change at all.
+
+    **It is no longer nine rooms with one fragment each.** The Entryway
+    has eight, and the Kitchen two since drop 25 split the back door off
+    into its own; what this test asks is unchanged, because it looks
+    twice and compares rather than counting anything.
+    """
     db, _, _ = channel
     await db.ensure_user_exists(ALICE, GUILD_A)
     await db.start_game(ALICE, GUILD_A, "EN", ["EN"])

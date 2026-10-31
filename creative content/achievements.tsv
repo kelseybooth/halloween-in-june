@@ -24,20 +24,20 @@ making_friends	secret	Making Friends	Built a good relationship by petting the ca
 trying_to_make_friends	secret	Trying to Make Friends	Had a negative relationship despite petting the cat 200 times. Don't feel bad. Cats are hard to please.	0	50				
 cats_best_friend	secret	Cat's Best Friend	You've earned 100 relationship points with the cat. She has started looking for you when you're not around.	0	60				
 signed_sealed_delivered	secret	Signed, Sealed, Delivered	Answered the intercom within three minutes of the doorbell.	99	70				Blocked: the doorbell is not built
-brewing_trouble	secret	Brewing Trouble	Drank coffee.	30	80				Not date-gated since 21 October: any successful /use of the coffee maker
-trash_panda	secret	Trash Panda	Went through the trash and came out with something.	30	90				Earned the first time a player takes anything out of the trash can, including things somebody else threw away. Not date-gated since 30 October
-bin_looking_for_you	secret	Bin Looking for You	Walked into the kitchen with a dirty diaper in hand and found the trash can at last.	30	95				Checked only on a player's first /look in the Kitchen: earned if they're carrying a dirty_diaper then. One chance per player
+brewing_trouble	secret	Brewing Trouble	Drank coffee.	25	80				Not date-gated since 21 October: any successful /use of the coffee maker
+trash_panda	secret	Trash Panda	Went through the trash and came out with something.	25	90				Earned the first time a player takes anything out of the trash can, including things somebody else threw away. Not date-gated since 30 October
+bin_looking_for_you	secret	Bin Looking for You	Walked into the kitchen with a dirty diaper in hand and found the trash can at last.	25	95				Checked only on a player's first /look in the Kitchen: earned if they're carrying a dirty_diaper then. One chance per player
 self_reflection	secret	Self-Reflection	Checked a mirror.	20	100				Not date-gated since 21 October: any successful /use of any of the three mirrors
 green_thumb	secret	Green Thumb	Watered the garden, picked the herbs and carved a pumpkin. The courtyard has a gardener again.	30	110				Not date-gated since 30 October. Earned once a player has done all three, in any order and on any days: /use the watering can, /take herbs from the herb garden, and /use (carve) a pumpkin. Carving needs the carving tools, which arrive at drop 40, so it can't be completed before then
-nacho_average_ghost	secret	Nacho Average Ghost	Snacked on the nacho chips.	30	120				Not date-gated since 30 October: any successful /use of the nacho chips
-clean_plate_club	secret	Clean Plate Club	Licked a dirty plate. Nobody asked you to.	30	125				Added 30 October from playtesting: any successful /use of the plates.
+nacho_average_ghost	secret	Nacho Average Ghost	Snacked on the nacho chips.	25	120				Not date-gated since 30 October: any successful /use of the nacho chips
+clean_plate_club	secret	Clean Plate Club	Licked a dirty plate. Nobody asked you to.	25	125				Added 30 October from playtesting: any successful /use of the plates.
 using_your_noodle	secret	Using Your Noodle	Put a pot on.	99	130				Parked at 99 on 30 October: the pot now requires pasta, which does not exist yet, so a successful use is unreachable until the pasta ships.
 getting_into_the_spirit	secret	Getting into the Spirit	Put on a ghost costume and haunted your friends.	99	140				Blocked: the ghost system is not built
 ghostbuster	secret	Ghostbuster	Guessed the day's ghost correctly.	99	150				Blocked: the ghost system is not built
-breaking_into_the_halloween_candy	secret	Breaking into the Halloween Candy	Got into the Halloween candy. It was always going to happen.	30	160				
-curbside_pickup	secret	Curbside Pickup	Took the trash out on a Tuesday, like a responsible adult.	30	170				Earned on /take trash can (taking the bag out to the curb) on a Tuesday, Pacific time. Was /use trash can until 30 October
+breaking_into_the_halloween_candy	secret	Breaking into the Halloween Candy	Got into the Halloween candy. It was always going to happen.	25	160				
+curbside_pickup	secret	Curbside Pickup	Took the trash out on a Tuesday, like a responsible adult.	25	170				Earned on /take trash can (taking the bag out to the curb) on a Tuesday, Pacific time. Was /use trash can until 30 October
 hive_five	secret	Hive Five	That wasp nest played hard to get, but you got it anyway.	30	175				Earned on a player's first road climb that knocks a wasp_nest_piece down. A climb where the cat takes the ladder drops no piece and doesn't count, and picking up a piece someone else knocked down doesn't count either
-not_so_picky_eater	secret	Not-So-Picky Eater	Ate ten of Aunt Sue's frozen burritos, brave soul.	30	180				
+not_so_picky_eater	secret	Not-So-Picky Eater	Ate ten of Aunt Sue's frozen burritos, brave soul.	25	180				
 making_first_contact	secret	Making First Contact	The cat let you pet her. Don't let it go to your head.	0	190				Drop 0. The spine: a surprise that teaches achievements exist.
 a_paw_in_the_door	public	A Paw in the Door	You've earned 50 relationship points with the cat. She has noticed you and has decided you may stay.	0	200	yes	Attain a relationship of +50 with the cat	making_first_contact	Drop 0. The first open quest.
 favorite_human	secret	Favorite Human	You reached 250 relationship points with the cat. She has stopped pretending she doesn't like you.	0	210				Drop 0. Needs the upper clamp off the meter.

@@ -18,8 +18,9 @@ The schedule divides the Entryway's *things* across drops 10 and 20. The *prose*
 | 3 | 20 | yes | the **stroller**, the **shoes**, the **booties** |
 | 4 | 20 | yes | the **bulletin board**, the **smart speaker** |
 | 5 | 20 | yes | the **Amazon box** |
-| 6 | 30 | **yes** | the arched **doorway**, the wide **doorway** |
-| 7 | 20 | yes | the **staircase** and the **lumber** |
+| 6 | **25** | **yes** | the arched **doorway** |
+| 7 | **30** | **yes** | the wide **doorway** |
+| 8 | 20 | yes | the **staircase** and the **lumber** |
 
 **Fragment 6 is gated too, and so are the Entryway's exits. Decided 26 October.** Until a player has fed the cat, the doorways are missing from the room text and /go through them does not work, though the front door back to the road always does, so an occasional player who has fallen behind meets one room and one task rather than four rooms at once. The old objection was that a player who never completed drop 10's quest would be stuck in the Entryway at drop 30 with no way out of it. That can no longer happen: the cat is always there, a never-fed player is always eligible to feed her, and the salmon and the bowl are both in the room. An ungraduated player at drop 30 reads the foyer, the front door, the coat tree and the bowl, and keeps the quest prompt.
 
@@ -50,9 +51,12 @@ It wants a one-time private notice when the gate flips, the Entryway's equivalen
 | 3 | default | 20 | yes | A **stroller** is parked in the corner by a pile of **shoes** and tiny **booties**. |
 | 4 | default | 20 | yes | A **bulletin board** hangs over a small table where a **smart speaker** blinks blue. |
 | 5 | default | 20 | yes | An **Amazon box** sits half-opened against the wall. |
-| 6 | default | 30 | yes | An **arched doorway** opens on one side, and a **wide doorway** on the other. |
-| 7 | default | 20 | yes | The grand **staircase** is a ruin, with fresh **lumber** stacked beside it. |
-| 7 | stairs\_repaired | 20 | yes | A patched **staircase** sweeps up to the floor above. |
+| 6 | default | **25** | yes | An **arched doorway** opens on one side of the hall. |
+| 7 | default | **30** | yes | A **wide doorway** opens on the other. |
+| 8 | default | 20 | yes | The grand **staircase** is a ruin, with fresh **lumber** stacked beside it. |
+| 8 | stairs\_repaired | 20 | yes | A patched **staircase** sweeps up to the floor above. |
+
+**Fragment 6 split in two on 31 October**, when the ground floor did. The Dining Room opens at 25 and the Living Room at 30, so the approved clause pair had to become two sentences that arrive five drops apart — and because the pair sits in the middle of the paragraph, the staircase's three rows moved from fragment 7 to 8 to keep the reading order. That renumbering orphans every `seen.EN.7`, so a player who has already read the hall sees the staircase sentence italicised once more. It buys the reveal: a new way out of a room is the one thing a player must not miss, and superseding fragment 6 in place would have let the second doorway arrive unmarked.
 
 **All together**, once every fragment is showing (96 words):
 

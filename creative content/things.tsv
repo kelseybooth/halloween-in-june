@@ -10,26 +10,26 @@ bulletin_board	bulletin board	bulletin board|board|cork board|notes	fixture	EN	1
 stroller	stroller	stroller|pram|buggy	fixture	EN	1	no	yes	0										20	8				
 shoes	pile of shoes	shoes|boots|pile of shoes	fixture	EN	1	no	yes	0										20	9				
 booties	booties	booties|baby booties|knit booties	fixture	EN	1	no	yes	0										20	10				
-candy_bowl	bowl of Halloween candy	candy bowl|bowl of candy|bowl|halloween candy|candy|sweets	source	DI	1	no	yes	0						candy		sideboard		30	11				
-candy	piece of candy	candy|piece of candy|sweet|chocolate bar	object		0	yes	yes	1										30	12	yes			
+candy_bowl	bowl of Halloween candy	candy bowl|bowl of candy|bowl|halloween candy|candy|sweets	source	DI	1	no	yes	0						candy		sideboard		25	11				
+candy	piece of candy	candy|piece of candy|sweet|chocolate bar	object		0	yes	yes	1										25	12	yes			
 to_do_list	to-do list	to-do list|todo list|to do list|list	fixture	DI	1	no	yes	0								sideboard		99	13				
-david_journal_page	journal page	journal page|david's journal|page	fixture	DI	1	no	yes	0								dining_table		30	14				
-silver_spoon	silver baby spoon	spoon|silver spoon|baby spoon	object	DI	1	yes	yes	1										30	15				
-candle_stub	candle stub	candle|candle stub|stub	object	DI	1	yes	yes	1										30	16				
-stove	cast-iron stove	stove|range|oven|burner	fixture	KI	1	no	yes	0		herbs|dark_chocolate|spice_jar								30	17				
-sink	kitchen sink	sink|basin|tap|faucet	fixture	KI	1	no	yes	0										30	18				
-coffee_maker	Keurig	keurig|coffee maker|coffee machine|coffee|pods|pod|k-cup|k-cups|mug	fixture	KI	1	no	yes	0										30	19				
-trash_can	trash can	trash can|bin|rubbish bin|garbage|trash bin|trash|garbage bin|garbage can|trash bag|garbage bag	fixture	KI	1	no	yes	0										30	20			no	
-pasta_pot	pasta pot	pasta pot|stockpot|big pot|pot	fixture	KI	1	no	yes	0		pasta								30	21				
-chip_box	box of tortilla chips	case of chips|chip case|chips|tortilla chips|nachos|case of tortilla chips|chip box|box|bulk box|bulk box of tortilla chips	source	KI	1	no	yes	0						nacho_chips		pantry		30	22				
-nacho_chips	tortilla chips	tortilla chips|nacho chips|chips|nachos|tortilla	object		0	yes	yes	1										30	22	yes			
-burritos	freezer of burritos	burritos|freezer|fridge|fridge-freezer|breakfast burritos|foil	source	KI	1	no	yes	0						frozen_burrito				30	23				
-frozen_burrito	frozen burrito	burrito|frozen burrito|foil brick|breakfast burrito	object		0	yes	yes	1										30	24	yes			
+david_journal_page	journal page	journal page|david's journal|page	fixture	DI	1	no	yes	0								dining_table		25	14				
+silver_spoon	silver baby spoon	spoon|silver spoon|baby spoon	object	DI	1	yes	yes	1										25	15				
+candle_stub	candle stub	candle|candle stub|stub	object	DI	1	yes	yes	1										25	16				
+stove	cast-iron stove	stove|range|oven|burner	fixture	KI	1	no	yes	0		herbs|dark_chocolate|spice_jar								25	17				
+sink	kitchen sink	sink|basin|tap|faucet	fixture	KI	1	no	yes	0										25	18				
+coffee_maker	Keurig	keurig|coffee maker|coffee machine|coffee|pods|pod|k-cup|k-cups|mug	fixture	KI	1	no	yes	0										25	19				
+trash_can	trash can	trash can|bin|rubbish bin|garbage|trash bin|trash|garbage bin|garbage can|trash bag|garbage bag	fixture	KI	1	no	yes	0										25	20			no	
+pasta_pot	pasta pot	pasta pot|stockpot|big pot|pot	fixture	KI	1	no	yes	0		pasta								25	21				
+chip_box	box of tortilla chips	case of chips|chip case|chips|tortilla chips|nachos|case of tortilla chips|chip box|box|bulk box|bulk box of tortilla chips	source	KI	1	no	yes	0						nacho_chips		pantry		25	22				
+nacho_chips	tortilla chips	tortilla chips|nacho chips|chips|nachos|tortilla	object		0	yes	yes	1										25	22	yes			
+burritos	freezer of burritos	burritos|freezer|fridge|fridge-freezer|breakfast burritos|foil	source	KI	1	no	yes	0						frozen_burrito				25	23				
+frozen_burrito	frozen burrito	burrito|frozen burrito|foil brick|breakfast burrito	object		0	yes	yes	1										25	24	yes			
 cat_food_chicken	chicken cat food	chicken cat food|chicken|cat food	object		0	yes	yes	1		can_opener|cat_bowl								30	24	yes			
 cat_food_salmon	salmon cat food	salmon cat food|salmon|cat food	object		0	yes	yes	1		cat_bowl								10	25	yes			
-cat_food_tuna	tuna cat food	tuna cat food|tuna|cat food	object		0	yes	yes	1		can_opener|cat_bowl								30	26	yes			
+cat_food_tuna	tuna cat food	tuna cat food|tuna|cat food	object		0	yes	yes	1		can_opener|cat_bowl								25	26	yes			
 cat_food_expired	expired cat food	expired cat food|expired|off cat food	object		0	yes	yes	1		can_opener								40	27	yes			
-cat_food_gourmet	gourmet wet cat food	gourmet|gourmet cat food|good cat food|can|tin|gold can	object		0	yes	yes	1	1	can_opener|cat_bowl								30	28	yes			
+cat_food_gourmet	gourmet wet cat food	gourmet|gourmet cat food|good cat food|can|tin|gold can	object		0	yes	yes	1	1	can_opener|cat_bowl								25	28	yes			
 herb_garden	herb garden	herb garden|herb bed|garden|lavender|sage|rosemary|herbs	source	CO	1	no	yes	0						herbs				30	29				
 herbs	herbs	herbs|sprigs|cut herbs|herb	object		0	yes	yes	1										30	30	yes			
 pumpkins	pumpkins	pumpkins|pumpkin	fixture	CO	6	no	yes	0										30	31				
@@ -62,8 +62,8 @@ oak_wardrobe	oak wardrobe	wardrobe|oak wardrobe|closet	fixture	UH	1	no	yes	0				
 faded_portraits	faded portraits	portraits|paintings|photographs|pictures	fixture	UH	1	no	yes	0										40	55				
 halloween_box	Halloween box	halloween box|moving box|box	fixture	BE	1	no	yes	0										40	56				
 carving_tools	carving tools	carving tools|tools|carving kit	object		0	yes	no	0	1									40	57				
-can_opener	can opener	can opener|opener|tin opener	object		0	yes	yes	0	1									30	0				
-can_opener_hook	hook of can openers	can opener|can openers|openers|hook|tin opener|tin openers	source	KI	1	no	yes	0						can_opener		pantry		30	0				
+can_opener	can opener	can opener|opener|tin opener	object		0	yes	yes	0	1									25	0				
+can_opener_hook	hook of can openers	can opener|can openers|openers|hook|tin opener|tin openers	source	KI	1	no	yes	0						can_opener		pantry		25	0				
 costume	costume	costume|cape|vampire cape|witch hat	object		0	yes	yes	1										40	58				
 cookie_cutters	pumpkin cookie cutters	cookie cutters|cutters	fixture	BE	1	no	yes	0										40	59				
 spider_web	fake spider web	spider web|web|cobweb	fixture	BE	1	no	yes	0										40	60				
@@ -81,17 +81,17 @@ crib	crib	crib|cot|bed	fixture	NU	1	no	yes	0										40	71
 coat_rack	coat tree	coat tree|tree|coat stand|coat rack|rack|coats|jackets	fixture	EN	1	no	yes	0										10	72				
 front_door	front door	front door|door|entrance|outside|out|road	exit	EN	1	no	yes	0							CH			10	73				
 ceiling	ceiling	ceiling|water stain|stain	fixture	EN	1	no	yes	0										10	74				
-dining_table	long table	table|dining table|long table|wooden table	fixture	DI	1	no	yes	0										30	75				
-plates	plates	plates|plate|dinner plates	fixture	DI	1	no	yes	0										30	76				
-high_chair	high chair	high chair|highchair|tray	fixture	DI	1	no	yes	0										30	77				
-chairs	dining chairs	chairs|dining chairs|chair	fixture	DI	1	no	yes	0										30	78				
-wine_glass	wine glass	wine glass|glass|wine	fixture	DI	1	no	yes	0										30	79				
-sideboard	sideboard	sideboard|buffet	fixture	DI	1	no	yes	0										30	80				
-flowers	vase of flowers	flowers|vase|wilting flowers	fixture	DI	1	no	yes	0										30	81				
-tall_windows	tall windows	windows|window|tall windows	fixture	DI	1	no	yes	0										30	82				
-pantry	pantry	pantry|pantry door|cupboard|larder	fixture	KI	1	no	yes	0										30	83				
-drying_rack	drying rack	drying rack|rack|dish rack	fixture	KI	1	no	yes	0										30	84				
-counter	counter	counter|countertop|worktop	fixture	KI	1	no	yes	0										30	85				
+dining_table	long table	table|dining table|long table|wooden table	fixture	DI	1	no	yes	0										25	75				
+plates	plates	plates|plate|dinner plates	fixture	DI	1	no	yes	0										25	76				
+high_chair	high chair	high chair|highchair|tray	fixture	DI	1	no	yes	0										25	77				
+chairs	dining chairs	chairs|dining chairs|chair	fixture	DI	1	no	yes	0										25	78				
+wine_glass	wine glass	wine glass|glass|wine	fixture	DI	1	no	yes	0										25	79				
+sideboard	sideboard	sideboard|buffet	fixture	DI	1	no	yes	0										25	80				
+flowers	vase of flowers	flowers|vase|wilting flowers	fixture	DI	1	no	yes	0										25	81				
+tall_windows	tall windows	windows|window|tall windows	fixture	DI	1	no	yes	0										25	82				
+pantry	pantry	pantry|pantry door|cupboard|larder	fixture	KI	1	no	yes	0										25	83				
+drying_rack	drying rack	drying rack|rack|dish rack	fixture	KI	1	no	yes	0										25	84				
+counter	counter	counter|countertop|worktop	fixture	KI	1	no	yes	0										25	85				
 ivy	ivy	ivy|creeper|vines	exit	CO	1	no	yes	0							BE			30	86				
 stone_wall	stone wall	stone wall|wall|garden wall	fixture	CO	1	no	yes	0										30	87				
 bench	stone bench	bench|stone bench|seat	fixture	CO	1	no	yes	0										30	88				
@@ -117,18 +117,18 @@ cat_food_stash_hall	pack of salmon cat food	salmon cat food|salmon|cat food|cans
 cat_food_stash_drawer	cans of expired cat food	expired cat food|expired|cat food|cans|drawer|stash|drawer of expired cat food|drawer of cat food	source	UH	1	no	yes	0			drawer_unjammed			cat_food_expired		rolltop_desk		40	109				
 graphite_tin	tin of graphite powder	graphite|graphite powder|tin|graphite tin	source	BE	1	no	yes	0						graphite_powder				40	110				
 cat_food_stash_bed	crate of chicken cat food	chicken cat food|chicken|cat food|cans|crate|stash	source	BE	1	no	yes	0						cat_food_chicken		bed		40	111				
-cat_food_stash_sideboard	cupboard of tuna cat food	tuna cat food|tuna|cat food|cans|cupboard|stash	source	DI	1	no	yes	0						cat_food_tuna		sideboard		30	112				
+cat_food_stash_sideboard	cupboard of tuna cat food	tuna cat food|tuna|cat food|cans|cupboard|stash	source	DI	1	no	yes	0						cat_food_tuna		sideboard		25	112				
 copper_wire_coil	coil of copper wire	copper wire|wire|copper|coil	source	SE	1	no	yes	0						copper_wire				50	113				
 carving_tool_sleeve	carving tool sets	carving tools|tools|carving kit|sleeve|sets	source	BE	1	no	yes	0						carving_tools		halloween_box		40	114				
 costume_pile	pile of costumes	costumes|costume|costume pile|pile	source	BE	1	no	yes	0						costume		halloween_box		40	115				
-ED	arched doorway	arch|arched doorway|doorway|dining room|dining	exit	EN	1	no	yes	0							DI			30	116				
-DE	arched doorway	arch|arched doorway|entryway|hall|doorway|door	exit	DI	1	no	yes	0							EN			30	117				
+ED	arched doorway	arch|arched doorway|doorway|dining room|dining	exit	EN	1	no	yes	0							DI			25	116				
+DE	arched doorway	arch|arched doorway|entryway|hall|doorway|door	exit	DI	1	no	yes	0							EN			25	117				
 EL	wide doorway	wide doorway|doorway|living room|living	exit	EN	1	no	yes	0							LI			30	118				
 LE	wide doorway	wide doorway|doorway|entryway|hall|door	exit	LI	1	no	yes	0							EN			30	119				
 EH	grand staircase	main staircase|staircase|stairs|banister|upstairs|grand staircase	exit	EN	1	no	yes	0							UH			20	120				
 HE	grand staircase	grand staircase|main staircase|staircase|stairs|downstairs	exit	UH	1	no	yes	0							EN			40	121				
-DK	swinging door	swinging door|kitchen door|kitchen|doorway|door	exit	DI	1	no	yes	0							KI			30	122				
-KD	swinging door	swinging door|dining room|dining|doorway|door	exit	KI	1	no	yes	0							DI			30	123				
+DK	swinging door	swinging door|kitchen door|kitchen|doorway|door	exit	DI	1	no	yes	0							KI			25	122				
+KD	swinging door	swinging door|dining room|dining|doorway|door	exit	KI	1	no	yes	0							DI			25	123				
 KC	back door	back door|courtyard|garden|outside|glazed back door|glass door|doorway|door	exit	KI	1	no	yes	0							CO			30	124				
 CK	back door	back door|kitchen|inside|door|kitchen door|steps|doorway	exit	CO	1	no	yes	0							KI			30	125				
 LS	curiosity cabinet	curiosity cabinet|cabinet|glass cabinet	exit	LI	1	no	yes	0							SE			30	128				
@@ -140,8 +140,8 @@ BH	bedroom door	bedroom door|hallway|door|out|panelled door|paneled door|doorway
 BC	ivy	ivy|vines|creeper	exit	BE	1	no	yes	0							CO			40	167				
 HN	nursery door	nursery door|nursery|green door|sage door|doorway|door	exit	UH	1	no	yes	0							NU			40	134				
 NH	nursery door	nursery door|hallway|door|out|sage door|green door|doorway|hall door|hallway door	exit	NU	1	no	yes	0							UH			40	135				
-cake_box	cake box	cake box|white box|bakery box|caramel apple cake|cake	fixture	KI	1	no	yes	0										30	136				
-cat_food_stash_gourmet	cans of gourmet cat food	gourmet cans|two cans|gourmet wet food|gourmet wet cat food|gourmet food|gourmet|gourmet cat food|good cat food|fancy cat food|gold cans	source	KI	1	no	yes	0						cat_food_gourmet		cake_box		30	137				
+cake_box	cake box	cake box|white box|bakery box|caramel apple cake|cake	fixture	KI	1	no	yes	0										25	136				
+cat_food_stash_gourmet	cans of gourmet cat food	gourmet cans|two cans|gourmet wet food|gourmet wet cat food|gourmet food|gourmet|gourmet cat food|good cat food|fancy cat food|gold cans	source	KI	1	no	yes	0						cat_food_gourmet		cake_box		25	137				
 cat_bed	cat bed	cat bed|bed|cushion|cat cushion|cooler|icebox|egg cooler|catbed	fixture	CH	1	no	no											1	138		yes		
 feather_wand	feather wand	wand|feather|feathers|feather toy|cat toy|toy|featherwand|ribbon|stick	toy	CH	0	yes	yes	1	1									2	148				
 crinkle_ball	crinkle ball	ball|foil ball|crinkle|crinkle toy|cat toy|toy	toy	CH	0	yes	yes	1	1									2	158				

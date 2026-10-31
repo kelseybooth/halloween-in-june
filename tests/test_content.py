@@ -100,7 +100,10 @@ def test_the_shipped_content_parses():
     # string in the family that is not the writers' - flagged as mine
     # in the release that added it.
     assert len(c.defaults) == 152
-    assert len(c.drops) == 9      # 0 to 3 built; 10 to 50 named ahead of their content
+    # Ten since 31 October: the ground floor arrives in two halves, and
+    # 25 sits below the ceiling rather than above it, which is why
+    # nothing else in the suite noticed.
+    assert len(c.drops) == 10     # 0 to 3 built; 10 to 50 named ahead of their content
     assert len(c.restocks) == 4  # the toy channel row joined them
 
 

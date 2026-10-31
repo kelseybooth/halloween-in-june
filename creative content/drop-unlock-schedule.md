@@ -10,6 +10,7 @@
 > - Old **6**, Upstairs → **40**
 > - Old **7**, The Secret Library → **50**
 > - New: **3**, the craving game
+> - New: **25**, Through the Arch — the Dining Room and the Kitchen alone, split out of 30 on 31 October so the ground floor can be playtested in two sittings. Old drop 5's notes below describe both halves together; 30 is now the Courtyard, the Living Room, and the two doors that reach them.
 >
 > The content files use the new numbers, and `drops.tsv` is the authority on which drops exist.
 

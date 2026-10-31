@@ -11,13 +11,15 @@ EN	default	20	2	fed_the_cat	A cloudy mirror hangs by the door.
 EN	default	20	3	fed_the_cat	A stroller is parked in the corner by a pile of shoes and tiny booties.
 EN	default	99	4	fed_the_cat	A bulletin board hangs over a small table where a smart speaker blinks blue.
 EN	default	20	5	fed_the_cat	A shipping box sits half-opened against the wall.
-EN	default	30	6	fed_the_cat	An arched doorway opens on one side, and a wide doorway on the other.
-EN	default	20	7	fed_the_cat	The grand staircase is a ruin, with fresh lumber stacked beside it.
-EN	stairs_upper	20	7	fed_the_cat	The grand staircase is mended most of the way up, but the top steps are still missing, with fresh lumber stacked beside its base.
-EN	stairs_repaired	20	7	fed_the_cat	A patched grand staircase sweeps up to the floor above.
-DI	default	30	0		Two dining chairs are pushed back from a long table, with a high chair beside. The tall windows above the sideboard look onto an overgrown garden. Through the arched doorway you can see a crowded coat tree, and a swinging door lets through the hum of a fridge.
+EN	default	25	6	fed_the_cat	An arched doorway opens on one side of the hall.
+EN	default	30	7	fed_the_cat	A wide doorway opens on the other.
+EN	default	20	8	fed_the_cat	The grand staircase is a ruin, with fresh lumber stacked beside it.
+EN	stairs_upper	20	8	fed_the_cat	The grand staircase is mended most of the way up, but the top steps are still missing, with fresh lumber stacked beside its base.
+EN	stairs_repaired	20	8	fed_the_cat	A patched grand staircase sweeps up to the floor above.
+DI	default	25	0		Two dining chairs are pushed back from a long table, with a high chair beside. The tall windows above the sideboard look onto an overgrown garden. Through the arched doorway you can see a crowded coat tree, and a swinging door lets through the hum of a fridge.
 DI	default	99	1		A to-do list in pencil is propped against the lamp on the sideboard.
-KI	default	30	0		A big old-fashioned kitchen. A pasta pot sits on the cast-iron stove, a drying rack stands empty by the kitchen sink, and a Keurig waits with a clean mug. The fridge-freezer hums beside the trash can, a cake box sits at the end of the counter, and the pantry door is ajar. A swinging door shows a sliver of a long table each time it moves, and through the glazed back door there are steps, then tangled green.
+KI	default	25	0		A big old-fashioned kitchen. A pasta pot sits on the cast-iron stove, a drying rack stands empty by the kitchen sink, and a Keurig waits with a clean mug. The fridge-freezer hums beside the trash can, a cake box sits at the end of the counter, and the pantry door is ajar. A swinging door shows a sliver of a long table each time it moves.
+KI	default	30	1		Through the glazed back door there are steps, then tangled green.
 CO	default	30	0		An overgrown sunken courtyard. Ivy swallows the side of the house, and a stone wall enclosed herb garden has run wild beside a watering can. A picnic blanket is spread over a stone bench. In the middle, a stone circle holds the last of a chalk diagram. An autumn-bronzed oak tree crowds the far wing of the house. Pumpkins wait by the kitchen steps next to a cat bowl, and at the top, the back door glows warm and smells faintly of coffee.
 LI	default	30	0		A room for long evenings: a deep sofa with a baby blanket, two armchairs, bookshelves and a fireplace full of cold ash. One armchair has been turned to face a bare patch of wall. A stack of board books sits on the rug. A tall curiosity cabinet stands in the corner. Through the wide doorway you can see the foot of a staircase and a pile of shoes.
 SE	default	50	0		A cozy library with floor to ceiling shelves packed with occult tomes bound in leather, books of folklore, and a row of paperback thrillers. A circle of scorch marks is burned into the floorboards, surrounded by scattered objects including a coil of copper wire. A spirit board lies on the floorboards just outside the circle, its planchette resting on the letter S. The air feels charged, like the moment before a storm. An empty cat bed sits in the corner. The back of a heavy cabinet blocks one wall, a keyhole set into it at waist height, and behind the shelves at the far end a small window stands propped open a crack, the crown of an oak filling it.
