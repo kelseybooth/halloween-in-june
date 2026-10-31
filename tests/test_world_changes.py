@@ -133,8 +133,18 @@ async def test_the_top_steps_are_four_fifths_of_it_rounded_down(house):
 
 async def test_the_last_plank_opens_the_staircase_for_everyone(house):
     """Server-wide: the reward for collective labour lands for the whole room,
-    not for whoever happened to place the final plank."""
+    not for whoever happened to place the final plank.
+
+    **The ladder has to be in the hall for this, since 30 October.** A
+    two-plank target puts `stairs_upper` at one, so the second plank is
+    a top-step plank and the top steps need something to stand on. It
+    is not a quirk of a small target either: it is the same arithmetic
+    on a ninety-plank server, where plank 73 onwards needs the ladder.
+    Standing in the Entryway rather than carried, which is the half of
+    `to_hand_in_room` that matters here - neither player picks it up.
+    """
     await database.set_setting(GUILD_A, world.PLANKS_SETTING, 2)
+    await database.place_in_room(GUILD_A, "EN", world.LADDER, 1)
 
     await use(ALICE)
     assert not await states.has(GUILD_A, BOB, "stairs_repaired")

@@ -336,6 +336,24 @@ async def bin_looking_for_you(context: Context) -> bool:
     )
 
 
+async def board_meeting(context: Context) -> bool:
+    """The plank that finished the staircase.
+
+    **Reads the recipients, which is the same question.** The handler
+    puts a list of everybody who laid a plank on the use that crossed
+    the line and on no other, so "is there a list" and "did the
+    staircase just finish" are one condition - and the predicate stays
+    the pure answer it is supposed to be.
+
+    What makes this row different from the other three group ones is
+    where the award lands rather than when it fires: *Strength in
+    Numbers* goes to the server and names nobody, and this goes to the
+    people who did the work. `achievements._award` holds that
+    distinction; this only says the moment.
+    """
+    return bool(context.recipients)
+
+
 def _on_date(matches, targets: set[str], *, source_only: bool = False):
     """One thing (or one of a set), on one day. *Curbside Pickup* alone.
 
@@ -952,13 +970,11 @@ def register_all() -> None:
     # meant. The trigger moved with the mechanic.
     add("curbside_pickup", "on_take", _on_date(on_tuesday, {TRASH_CAN}))
     add("not_so_picky_eater", "on_use", not_so_picky_eater)
-    # **Three rows that moved to drop 30 and need a trigger for it.**
-    # `NEVER` is what buys a row the right to be unwired, and all three
-    # have just given that up: the content for drop 30 ships ahead of
-    # three of its mechanics, so the rows are real, dated, and waiting.
-    # Blocked says so out loud, where leaving them out would have failed
-    # the wiring check and leaving them at 99 would have hidden four
-    # rooms from the playtest.
-    add("board_meeting", "on_use", _blocked("the contributor-only group award"))
+    # The last of the three that moved to drop 30 ahead of their
+    # mechanics. It was never registered at all before that - `NEVER`
+    # buys a row the right to be unwired, and this one sat at 99 for
+    # exactly that reason - then blocked for two releases, and now the
+    # staircase can be finished and the award has a shape.
+    add("board_meeting", "on_use", board_meeting)
     add("hive_five", "on_use", hive_five)
     add("bin_looking_for_you", "on_look", bin_looking_for_you)

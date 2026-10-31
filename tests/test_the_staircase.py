@@ -40,6 +40,11 @@ import world
 
 THIS_DROP = 20
 
+# A phrase out of `stairs.repaired.public`, which is what the room reads
+# when the last plank goes in. Not the whole line: it opens with
+# `{player}`, and the fake's display names are long numbers.
+FINISHED = "The grand staircase is whole again"
+
 
 @pytest.fixture(autouse=True)
 def registry():
@@ -453,16 +458,23 @@ async def test_the_finish_line_goes_to_the_room(hall):
 
     **A one-plank target is what makes this reachable.**
     `reachable_from_the_floor(1)` is zero, so the first plank crosses
-    both thresholds at once - which is the only way to finish a
-    staircase at drop 20, because the top steps otherwise need the
-    ladder from drop 30.
+    both thresholds at once. That is also why the ladder gate drop 30
+    added does not stop it: the gate reads `stairs_upper` as it stood
+    *before* this plank, and the plank that crosses into it is by
+    definition one somebody could still reach from the floor.
+
+    **The line is the writers' since 30 October.** It was a sentence
+    typed into `world._place_a_plank` while `stairs.repaired.public`
+    sat in the deck unread - the shipping box's failure in another
+    costume - so the assertion moved to the row that was always
+    supposed to carry it.
     """
     db, *_ = hall
     await target(db, 1)
 
     await plank(hall)
 
-    assert "The staircase is finished. It holds." in posted(hall)
+    assert FINISHED in posted(hall)
 
 
 async def test_and_the_next_plank_does_not_say_so_again(hall):
@@ -472,7 +484,7 @@ async def test_and_the_next_plank_does_not_say_so_again(hall):
 
     await plank(hall, who=BOB)
 
-    assert posted(hall).count("The staircase is finished") == 1
+    assert posted(hall).count(FINISHED) == 1
 
 
 # **The `stairs_upper` cell has no runtime test here, and had none before

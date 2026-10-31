@@ -3777,6 +3777,28 @@ async def distinct_users_of(guild_id: int, thing_id: str) -> int:
         ) or 0
 
 
+async def users_of(guild_id: int, thing_id: str) -> list[int]:
+    """Which players have ever used a thing here, oldest first.
+
+    `distinct_users_of` beside this counts them, which is what the
+    tuning reports want. *Board Meeting* wants the names: it goes to
+    everybody who laid a plank and to nobody who did not, and a count
+    cannot say who.
+
+    Ordered by when they first used it, so a list of recipients is the
+    order people turned up rather than an order the database happened
+    to return.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(ThingUse.user_id)
+            .where(ThingUse.guild_id == guild_id, ThingUse.thing_id == thing_id)
+            .order_by(ThingUse.last_used_at, ThingUse.user_id)
+        )
+    return [row[0] for row in rows]
+
+
 # --------------------------------------------------------------------------
 # Listings: what `/look` shows in a room or inside a container
 # --------------------------------------------------------------------------

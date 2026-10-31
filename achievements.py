@@ -114,6 +114,10 @@ class Context:
     # Passed in rather than read from the clock, so a date-gated achievement
     # can be tested at both edges of its window without faking a timezone.
     now: datetime | None = None
+    # Who a `group` row should go to, when it goes to the people who did
+    # the work rather than to the server. None for every other award,
+    # which is every award but one - see `_award`.
+    recipients: tuple[int, ...] | None = None
     extra: dict = field(default_factory=dict)
 
     @property
@@ -282,7 +286,36 @@ async def fire(context: Context) -> list[Earned]:
 
 
 async def _award(context: Context, row: resolve.AchievementRow) -> Earned | None:
-    """Write the award. None when the player or server already had it."""
+    """Write the award. None when the player or server already had it.
+
+    **Three shapes, and the third is new with drop 30.** A player row
+    goes to one person. A `group` row goes to the server and names
+    nobody, which is what *Strength in Numbers* and the other two want:
+    the whole server collected 25 of something.
+
+    A `group` row with `recipients` goes to those players and still
+    announces once, in the group style. *Board Meeting* is the only one,
+    and the distinction is the whole reason it sat parked at 99 for two
+    releases: the staircase is collective work that not everybody did,
+    so a server row would hand it to players who never picked up a
+    hammer, and a player row would announce it once per contributor.
+
+    Rows for the people, so `/stats` shows it to a contributor and to
+    nobody else; one `Earned` with no `user_id`, so the announcement
+    reads as the server's. **Not a server row as well** - that is
+    exactly what would put it in every member's `/stats`, which is the
+    thing being avoided.
+    """
+    if row.kind == "group" and context.recipients:
+        created = False
+        for user_id in context.recipients:
+            created |= await database.award_player_achievement(
+                context.guild_id, user_id, row.achievement_id
+            )
+        if not created:
+            return None
+        return Earned(row.achievement_id, row.kind, row.name, row.unlock, None)
+
     if row.kind == "group":
         created = await database.award_server_achievement(
             context.guild_id, row.achievement_id

@@ -690,9 +690,9 @@ BLOCKED = [
     # once.
     #
     # *Trash Panda* and *Bin Looking for You* left again with the trash
-    # can, which leaves *Board Meeting* on its own: the staircase
-    # release is the last one that owes anything here.
-    "board_meeting",
+    # can, and *Board Meeting* with the last plank. Drop 30 owes this
+    # list nothing: everything still here waits on cat crossing, the
+    # ghosts, the doorbell or the letter.
     # *Bowl Half Empty* left this list in drop 10, when feeding arrived
     # and gave it something to count - the same way the two toy ones
     # left it in drop 2.
@@ -791,12 +791,16 @@ def test_what_can_actually_be_earned():
     had been waiting rather than rows that are new. *Trash Panda* has
     been written since Release 1 and blocked on a bin that held
     nothing; *Bin Looking for You* was written for drop 30 and blocked
-    on a flag nothing kept. One release owes this list anything now,
-    and it is the staircase's.
+    on a flag nothing kept.
+
+    **Forty-four with the last plank**, which is *Board Meeting* and the
+    end of drop 30's debt to the blocked list. It had been parked at 99
+    since drop 20 for want of an award shape: a group row that goes to
+    the people who did the work rather than to the server.
     """
     earnable = achievements.registered_ids() - set(BLOCKED) - set(BY_HAND)
 
-    assert len(earnable) == 43
+    assert len(earnable) == 44
 
 
 # --------------------------------------------------------------------------
