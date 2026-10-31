@@ -464,10 +464,20 @@ def test_a_state_row_written_for_a_later_drop_is_fine(shipped):
 
 
 def test_a_source_that_arrives_before_its_yield_is_caught(shipped):
-    """The sideboard cupboard at 30 handing out a can written for 40."""
+    """The sideboard cupboard handing out a can written for drop 40.
+
+    The cupboard's own drop is read out of the files rather than written
+    down here. It was 30 when this check was added and it is 25 now,
+    because the Dining Room moved - and a test that hard-codes a drop
+    number out of the content goes red the next time the writers move a
+    room, which is the one thing the schedule exists to let them do.
+    """
+    arrives = thing(shipped, "cat_food_stash_sideboard").since_drop
+    assert arrives < 40, "the cupboard has to arrive first for this to be the bug"
     broken = replace_thing(shipped, "cat_food_tuna", since_drop=40)
     assert problems_matching(
-        broken, "source cat_food_stash_sideboard arrives at drop 30 and hands out"
+        broken,
+        f"source cat_food_stash_sideboard arrives at drop {arrives} and hands out",
     )
 
 
