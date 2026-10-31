@@ -37,6 +37,9 @@ import resolve
 import states
 import triggers
 import world
+# An inventory row written straight in, so a test need not walk the
+# house for a can it is not testing the taking of.
+from test_world import carry
 
 
 ROOM_SERVICE = "room_service"
@@ -351,6 +354,137 @@ async def test_the_gate_counts_even_when_the_player_already_holds_it(house):
 
     assert await resolve.gate_reveals_more(
         GUILD_A, "EN", content_module.FED_THE_CAT, unlocked=held
+    )
+
+
+@pytest.mark.parametrize("flavour", sorted(world.FEEDS))
+async def test_every_flavour_can_actually_be_fed_to_her(house, flavour):
+    """**Parametrised over `world.FEEDS` rather than written out**, so a
+    flavour added to the set is covered the day it is added.
+
+    This file fed the salmon everywhere, and the salmon was the only one
+    that worked. Salmon is drop 10 and has a pull ring, so it needs no
+    opener and its `use_fail` is about the bowl; the three flavours added
+    after it all need the opener, and each was given a refusal and never
+    a success. A `use_fail` with no `use` beside it is how the content
+    says *this never works at all* - `_state_refusal` reads it that way
+    for the crumbled staircase and for the expired can - so the tuna,
+    the chicken and the gourmet were refused outright, in every room,
+    holding everything, for as long as they had been in the files.
+
+    Asserted on the log and the bag rather than on the copy: a refused
+    feed writes `use/refused/wrong_state` and keeps the can, and a feed
+    that happens writes `feed/success` and eats it.
+    """
+    db, *_ = house
+    await carry(db, ALICE, GUILD_A, "can_opener")
+    await carry(db, ALICE, GUILD_A, flavour)
+
+    await run(house, bot.use, flavour.removeprefix("cat_food_"))
+
+    rows = await logged(db, database.FEED)
+    assert rows[-1].outcome == database.SUCCESS
+    assert await database.carried_of(ALICE, GUILD_A, flavour) == 0
+
+
+async def test_the_expired_can_costs_her_trust(house):
+    """The only negative delta in the game, and the can goes with it.
+
+    She is not refusing a meal here - she is being handed something
+    that has gone off, by somebody with four good cans to choose from.
+
+    **Seventy-five written out, not `world.DISGUST_POINTS`.** The first
+    version of this read the constant, which made it prove only that the
+    branch applies whatever the constant says: flipping it to `+75`
+    passed, and so did softening it to `-10`. A number the writers chose
+    has to be written down somewhere a mutation cannot move, and the sign
+    is asserted on its own below, because a penalty that became a reward
+    is the one failure here that would look like the feature working.
+    """
+    db, *_ = house
+    await carry(db, ALICE, GUILD_A, "can_opener")
+    await carry(db, ALICE, GUILD_A, "cat_food_expired")
+    before = await db.get_relationship(ALICE, GUILD_A)
+
+    await run(house, bot.use, "expired")
+
+    assert await db.get_relationship(ALICE, GUILD_A) == before - 75
+    assert await database.carried_of(ALICE, GUILD_A, "cat_food_expired") == 0
+
+
+async def test_and_it_costs_more_than_a_good_can_earns(house):
+    """The shape of the number rather than the number: it is negative,
+    and it is steeper than a feed, so no amount of arithmetic drift turns
+    the mistake into a way to farm her."""
+    assert world.DISGUST_POINTS < 0
+    assert world.DISGUST_POINTS < -world.FEED_POINTS
+
+
+async def test_and_it_is_still_not_a_feed(house):
+    """Every question that means "was she fed" keeps answering no,
+    which is what `CAT_FOOD` and `FEEDS` are split for.
+
+    **The log row is the exception, and it is deliberate.** The action
+    is chosen with `CAT_FOOD` rather than `FEEDS` - "is this a can" is
+    one of the two questions `world` says that set exists to answer -
+    so offering her the expired one is logged as a feed, because a
+    feed is what the player went and did. What must not follow is the
+    rest of it: her hunger untouched, so the next good can still
+    works, and nothing in the channel, because nothing was eaten.
+    """
+    db, *_ = house
+    await carry(db, ALICE, GUILD_A, "can_opener")
+    await carry(db, ALICE, GUILD_A, "cat_food_expired")
+    await carry(db, ALICE, GUILD_A, "cat_food_salmon")
+
+    await run(house, bot.use, "expired")
+
+    assert not any(
+        "fed the cat" in line for line in thread(house, "Entryway").posted
+    )
+
+    await run(house, bot.use, "salmon")
+
+    rows = await logged(db, database.FEED)
+    assert rows[-1].outcome == database.SUCCESS
+    assert any(
+        "fed the cat" in line for line in thread(house, "Entryway").posted
+    )
+
+
+async def test_the_expired_can_still_needs_the_opener(house):
+    """And nothing else. It is the one can that does not require the
+    bowl, so its refusal is free to name what is missing - every other
+    flavor has one string covering two different problems."""
+    db, *_ = house
+    await carry(db, ALICE, GUILD_A, "cat_food_expired")
+    before = await db.get_relationship(ALICE, GUILD_A)
+
+    await run(house, bot.use, "expired")
+
+    assert await db.get_relationship(ALICE, GUILD_A) == before
+    assert await database.carried_of(ALICE, GUILD_A, "cat_food_expired") == 1
+
+
+async def test_the_expired_can_does_not_count_toward_her_twenty_five(house):
+    """*Bowl Half Empty* guards on `FEEDS`, so the one can she will not
+    eat cannot be farmed toward it.
+
+    Worth asserting precisely because the log row above says `feed`:
+    the count is off `thing_uses` rather than the log, and a reader
+    checking the log would conclude this was already safe.
+    """
+    db, *_ = house
+    for _ in range(triggers.BOWL_HALF_EMPTY_FEEDS + 1):
+        await db.record_use(ALICE, GUILD_A, "cat_food_expired")
+    await a_day_later(db)
+    await carry(db, ALICE, GUILD_A, "can_opener")
+    await carry(db, ALICE, GUILD_A, "cat_food_expired")
+
+    await run(house, bot.use, "expired")
+
+    assert "bowl_half_empty" not in await db.player_achievements_of(
+        GUILD_A, ALICE
     )
 
 
