@@ -618,7 +618,70 @@ async def test_a_takeable_requirement_still_has_to_be_carried(house):
 
     reply = replies(await run(house, bot.use, "tuna", room="KI"))
 
-    assert "looking for a pull-tab" in reply
+    # The log is the durable half. The copy is asserted too, because
+    # this room has no bowl either and the point of the assertion is
+    # *which* refusal arrives: short of both, the player hears about
+    # the lid, because `requires` names the opener first.
+    assert (await logged(db, database.FEED))[-1].reason == database.NO_OPENER
+    assert "going to want a tool" in reply
+
+
+BOWL_LINE = "pour it on the floor"
+
+
+@pytest.mark.parametrize("flavour", sorted(world.FEEDS))
+async def test_a_room_with_no_bowl_says_so_in_one_shared_line(house, flavour):
+    """The half of the refusal that is about the room rather than the
+    can, so it reads the same whichever can is in your hand.
+
+    The Kitchen has the opener on its hook and no bowl, which is the
+    case that used to read as though the player had neither.
+    """
+    db, *_ = house
+    await db.update_current_room(ALICE, GUILD_A, "KI")
+    await carry(db, ALICE, GUILD_A, "can_opener")
+    await carry(db, ALICE, GUILD_A, flavour)
+
+    reply = replies(
+        await run(house, bot.use, flavour.removeprefix("cat_food_"), room="KI")
+    )
+
+    assert BOWL_LINE in reply
+    assert (await logged(db, database.FEED))[-1].reason == database.NO_BOWL
+
+
+@pytest.mark.parametrize("flavour", sorted(world.FEEDS - {"cat_food_salmon"}))
+async def test_and_the_lid_is_the_can_s_own(house, flavour):
+    """The other half. Standing over the bowl with no opener, every
+    flavor says something different, because the lid is where the
+    writing is - and none of them mentions the bowl, which is right
+    there.
+
+    The salmon is excluded because it has a ring on the lid and needs
+    no opener: there is no way to reach this refusal for it.
+    """
+    db, *_ = house
+    await carry(db, ALICE, GUILD_A, flavour)
+
+    reply = replies(await run(house, bot.use, flavour.removeprefix("cat_food_")))
+
+    assert BOWL_LINE not in reply
+    assert "bowl" not in reply.lower()
+    assert (await logged(db, database.FEED))[-1].reason == database.NO_OPENER
+
+
+async def test_the_salmon_needs_no_opener_and_hears_the_shared_line(house):
+    """It requires the bowl and nothing else, so the only way to refuse
+    it is the room - and the line it used to carry for that, written
+    for one can, is the shared line now."""
+    db, *_ = house
+    await db.update_current_room(ALICE, GUILD_A, "KI")
+    await carry(db, ALICE, GUILD_A, "cat_food_salmon")
+
+    reply = replies(await run(house, bot.use, "salmon", room="KI"))
+
+    assert BOWL_LINE in reply
+    assert (await logged(db, database.FEED))[-1].reason == database.NO_BOWL
 
 
 # --------------------------------------------------------------------------

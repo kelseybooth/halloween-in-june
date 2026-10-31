@@ -1201,7 +1201,14 @@ async def test_a_can_cannot_be_opened_yet(real_house):
 
     reply = (await use(thing="tuna", guild=guild)).reply
 
-    assert "pull-tab" in reply
+    # The tuna's refusal was the shared "looking for a pull-tab" line
+    # until the bowl got one of its own on 31 October. Each can's
+    # `use_fail` is about its own lid now, and **saying nothing about the
+    # bowl is the assertion**: this player is standing in the dining
+    # room, where there is no bowl either, and still has to hear about
+    # the lid first.
+    assert "want a tool" in reply
+    assert "bowl" not in reply.lower()
     assert await db.carried_of(ALICE, GUILD_A, "cat_food_tuna") == 1
 
 
