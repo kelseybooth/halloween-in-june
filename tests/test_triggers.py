@@ -674,7 +674,6 @@ BLOCKED = [
     # make - one that goes to the players who laid a plank and announces
     # once.
     "board_meeting",
-    "hive_five",
     "bin_looking_for_you",
     # *Bowl Half Empty* left this list in drop 10, when feeding arrived
     # and gave it something to count - the same way the two toy ones
@@ -765,10 +764,14 @@ def test_what_can_actually_be_earned():
     the blocked list, *Board Meeting* among them - it had never been
     registered at all, and this count said so. It is seen now, and
     subtracted again.
+
+    **Forty-one with the ladder**, which is *Hive Five* leaving the
+    blocked list one release after joining it: there is a nest over the
+    road, and now something that reaches it.
     """
     earnable = achievements.registered_ids() - set(BLOCKED) - set(BY_HAND)
 
-    assert len(earnable) == 40
+    assert len(earnable) == 41
 
 
 # --------------------------------------------------------------------------

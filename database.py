@@ -155,6 +155,33 @@ WRONG_STATE = "wrong_state"
 # game from ninety laid by thirty.
 STAIRS_UPPER_REACHED = "stairs_upper"
 
+# A ladder taken off a player who had been holding it for a day without
+# running anything. A system row rather than theirs: nobody did this,
+# and the player it happened to was not there. `detail` carries the
+# room it was set down in, which is the question the sweep raises -
+# whether forgotten ladders pile up somewhere nobody looks.
+#
+# The climb itself is not here. Every climb is already that player's
+# `use` row, and its `detail` says which room, whether they had carried
+# the ladder there, whether the cat took it and whether a piece of nest
+# fell - four facts about one event, in the one row that records it.
+LADDER_ABANDONED = "ladder_abandoned"
+
+# The two the ladder adds to the refusal vocabulary.
+#
+# `ARMS_FULL` is a player carrying the ladder, and deliberately not
+# `FULL_HANDS`, which already means "you hold as many of this as you
+# may". They read the same in English and answer opposite questions: one
+# is about the thing being reached for, the other about what is already
+# on your shoulder, and a tuner asking why a verb stopped working needs
+# to know which.
+#
+# `GUARDED` is the cat sitting on top of it. A refusal with a clock on
+# it rather than a condition anybody can fix, so it is worth being able
+# to count separately from every other no.
+ARMS_FULL = "arms_full"
+GUARDED = "guarded"
+
 # One row per restock placement. `detail` says what landed where and how
 # much of it is now there, which answers both of the questions the
 # scatter raises: whether the spice box fills and drains at a rate
@@ -449,12 +476,62 @@ class User(Base):
     toy_plays_today: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default=text("0")
     )
+
+    # When this player last finished any slash command on this server.
+    #
+    # **Written for the one thing in the game that can be hoarded.**
+    # There is a single ladder, anyone can carry it, and the last
+    # eighteen planks of the staircase need it - so a player who picks
+    # it up and stops playing stalls the repair for everybody. After a
+    # day of that the ladder is set down where they stand.
+    #
+    # Derivable from `interaction_log`, and deliberately not derived.
+    # That log is for tuning and nothing in the game reads it to decide
+    # anything, with one documented exception already; a second would
+    # make the rule not a rule.
+    #
+    # **Null on every row that existed before this shipped**, and null
+    # means no evidence rather than idle forever. Nothing is taken off
+    # a player the game has never watched run a command.
+    last_command_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
+
+
+class ThingLock(Base):
+    """A thing nobody on this server may touch until a moment passes.
+
+    One row per (server, thing), rewritten each time the lock is taken.
+    **Per thing and not per player**, which is the ladder's whole
+    point: the cat is sitting on top of it, so she is in everybody's
+    way at once.
+
+    A table rather than a server state, because every other state in
+    the game is permanent - something became true and stays true - and
+    this one is a stopwatch. A table rather than a config row, because
+    `server_config` keeps an audit window per change and a five-minute
+    lock taken a dozen times an evening is not an admin decision
+    anybody wants a history of.
+
+    Expired rows are left where they are. Nothing reads a lock except
+    by asking whether it is still running, so a stale row is already
+    the right answer and a sweep to delete it would be work for its
+    own sake.
+    """
+
+    __tablename__ = "thing_locks"
+
+    guild_id: Mapped[int] = mapped_column(
+        BigInteger, primary_key=True, autoincrement=False
+    )
+    thing_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    locked_until: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
 class InteractionLog(Base):
@@ -1393,6 +1470,7 @@ _LATER_COLUMNS: list[tuple[str, str, str]] = [
     ("users", "toy_plays_date", "DATE"),
     ("users", "toy_plays_today", "INTEGER NOT NULL DEFAULT 0"),
     ("room_contents", "placed_at", "TIMESTAMP"),
+    ("users", "last_command_at", "TIMESTAMP"),
     # Drop 2 renamed `restocks.container` to `destination` and added
     # `max_present`. A rename is two steps for a live database: the new
     # column is added here, and the old one is left orphaned and
@@ -2636,6 +2714,109 @@ async def take_from_source(
     if source_id is not None:
         await record_use(user_id, guild_id, source_id)
     log.info("User %s drew %s from a source in guild %s", user_id, thing_id, guild_id)
+
+
+async def lock_thing(guild_id: int, thing_id: str, until: datetime) -> None:
+    """Nobody on this server may take or use this thing until `until`.
+
+    Overwrites rather than extends. Two players in a row who both get
+    the cat on the way up give her five minutes from the second one,
+    which is what a cat sitting on a ladder would do.
+    """
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    async with session_factory() as session:
+        await session.execute(
+            insert(ThingLock)
+            .values(guild_id=guild_id, thing_id=thing_id, locked_until=until)
+            .on_conflict_do_update(
+                index_elements=[ThingLock.guild_id, ThingLock.thing_id],
+                set_={"locked_until": until},
+            )
+        )
+        await session.commit()
+    log.info("Thing %s is locked until %s in guild %s", thing_id, until, guild_id)
+
+
+async def thing_is_locked(guild_id: int, thing_id: str) -> bool:
+    """Whether a lock on this thing is still running.
+
+    Read against this server's clock rather than the system one, so a
+    QA server running the clock forward walks out of the lock the same
+    way it walks out of a cooldown.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        until = await session.scalar(
+            select(ThingLock.locked_until).where(
+                ThingLock.guild_id == guild_id, ThingLock.thing_id == thing_id
+            )
+        )
+    return until is not None and until > await server_now(guild_id)
+
+
+async def stamp_command(user_id: int, guild_id: int) -> None:
+    """Note that this player just finished a command on this server.
+
+    Written after every slash command, which is as often as anything in
+    the game is written - so it is one UPDATE on a row that already
+    exists, with no insert and no read first. A player with no row has
+    run no command, which is true by construction: the row is created
+    on the way into anything that counts.
+    """
+    now = await server_now(guild_id)
+    session_factory = _require_session()
+    async with session_factory() as session:
+        await session.execute(
+            update(User)
+            .where(User.id == user_id, User.guild_id == guild_id)
+            .values(last_command_at=now)
+        )
+        await session.commit()
+
+
+async def idle_carriers(
+    guild_id: int, thing_id: str, since: datetime
+) -> list[tuple[int, str]]:
+    """(player, room) for everybody holding this and quiet since `since`.
+
+    **A null stamp is not idleness.** Every row that existed before
+    `last_command_at` shipped has one, and so does anybody whose only
+    commands predate it. The cost is that a player who picked the
+    ladder up before the deploy keeps it until they next run anything;
+    the alternative is taking things off players the game has never
+    watched.
+
+    The `is_not(None)` beside the comparison does not enforce that, and
+    is kept anyway. SQL compares NULL to nothing, so `last_command_at <
+    since` already excludes a null - which a mutation run proved by
+    deleting the filter and changing no behaviour at all. It stays as
+    the intent written down, for whoever moves this comparison into
+    Python or reaches for a `coalesce`.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(PlayerInventory.user_id, PlayerGameState.current_room)
+            .join(
+                User,
+                (User.id == PlayerInventory.user_id)
+                & (User.guild_id == PlayerInventory.guild_id),
+            )
+            .join(
+                PlayerGameState,
+                (PlayerGameState.user_id == PlayerInventory.user_id)
+                & (PlayerGameState.guild_id == PlayerInventory.guild_id),
+            )
+            .where(
+                PlayerInventory.guild_id == guild_id,
+                PlayerInventory.thing_id == thing_id,
+                PlayerInventory.count > 0,
+                User.last_command_at.is_not(None),
+                User.last_command_at < since,
+            )
+        )
+        return [(row[0], row[1]) for row in rows]
 
 
 async def take_from_room(

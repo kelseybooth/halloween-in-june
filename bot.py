@@ -522,6 +522,7 @@ class CatBot(commands.Bot):
         keep_threads_alive.start()
         restock_sweep.start()
         thread_sweep.start()
+        ladder_sweep.start()
 
         # Nothing is a global command any more. Which commands exist is a
         # per-server question now - two servers can sit on different drops
@@ -893,6 +894,93 @@ async def _announce_arrival(guild) -> None:
 
 @restock_sweep.before_loop
 async def _before_restock() -> None:
+    await bot.wait_until_ready()
+
+
+# **Hourly, for a once-a-day condition.** The cutoff is twenty-four
+# hours of silence, so the question only changes slowly and a tick an
+# hour means a forgotten ladder is set down within an hour of becoming
+# forgotten. A tick a minute would ask the same question sixty times
+# for every answer.
+LADDER_SWEEP_MINUTES = 60
+
+
+@tasks.loop(minutes=LADDER_SWEEP_MINUTES)
+async def ladder_sweep() -> None:
+    """Set down any ladder whose carrier has not been seen for a day.
+
+    **The only sweep that takes something off a player**, which is why
+    it exists for one object and not as a rule about carrying. Every
+    other thing a player holds is theirs, or inexhaustible, or both;
+    the ladder is one object that the last eighteen planks of a shared
+    staircase cannot be laid without.
+
+    It is also rare by construction. Climbing the ladder sets it down,
+    so this only ever reaches somebody who picked it up and stopped
+    playing *without using it* - which is the case the design asked
+    about and the only one that stalls the repair.
+    """
+    guild_ids = [guild.id for guild in bot.guilds]
+    if not guild_ids:
+        return
+
+    try:
+        moved = await world.set_down_forgotten_ladders(guild_ids)
+    except SQLAlchemyError:
+        log.exception("Ladder sweep failed")
+        return
+
+    for guild_id, user_id, room_id in moved:
+        await _announce_exhaustion(guild_id, user_id, room_id)
+
+
+async def _announce_exhaustion(guild_id: int, user_id: int, room_id: str) -> None:
+    """Tell the room a ladder has just been put down in it.
+
+    Posted where the ladder landed, which is where its carrier was
+    standing - not where they picked it up. The line names them, so the
+    next person along knows who to go and find rather than only that a
+    ladder has appeared.
+
+    Cosmetic, like every other public line. The ladder is already on
+    the floor by the time this runs, so a channel that will not take the
+    sentence must not undo the move.
+    """
+    guild = bot.get_guild(guild_id)
+    if guild is None:
+        return
+    try:
+        who = guild.get_member(user_id)
+        line = await phrasing.default_say(
+            "ladder.exhausted.public",
+            player=who.display_name if who else "Somebody",
+        )
+        if not line:
+            return
+        channel = await _game_channel(guild)
+        if channel is None:
+            return
+        if room_id == content.CHANNEL_ROOM:
+            # The road is the channel itself and has no thread of its
+            # own, which every other room-addressed line in the game
+            # also has to handle.
+            await _post_quietly(channel, line)
+            return
+        name = await resolve.room_name(room_id)
+        thread = await house_utils.get_thread_for_room(channel, name)
+        if thread is not None:
+            await _post_quietly(thread, line)
+    except (discord.HTTPException, SQLAlchemyError):
+        log.warning(
+            "Could not say a ladder was set down in %s of guild %s",
+            room_id,
+            guild_id,
+            exc_info=True,
+        )
+
+
+@ladder_sweep.before_loop
+async def _before_ladder_sweep() -> None:
     await bot.wait_until_ready()
 
 
@@ -1734,6 +1822,17 @@ async def pet(interaction: discord.Interaction) -> None:
         _, refusal = await _place_to_act_in(interaction, "pet", key="wrong_place.pet")
         if refusal:
             await interaction.followup.send(refusal, ephemeral=True)
+            return
+
+        # **The simplest of the three arms-full checks**, because `/pet`
+        # reaches for nothing: there is no thing to make an exception
+        # for, so a player carrying the ladder cannot pet the cat and
+        # that is the whole rule. Nothing is recorded - a refused pet is
+        # not a pet, and the cat has not been touched.
+        full = await _arms_full(guild_id, user.id)
+        if full:
+            await interaction.followup.send(full, ephemeral=True)
+            await _turned_away(interaction, telemetry.PET, telemetry.ARMS_FULL)
             return
 
         drop = await telemetry.drop_of(guild_id)
@@ -2697,6 +2796,42 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
             )
             return
 
+        swatted = await _the_cat_has_it(guild_id, "use_fail", found.name)
+        if swatted:
+            await interaction.followup.send(swatted, ephemeral=True)
+            await _turned_away(
+                interaction,
+                telemetry.USE,
+                telemetry.GUARDED,
+                thing_id=found.thing_id,
+            )
+            return
+
+        # **Three exceptions, and each of them is a thing you do while
+        # holding a ladder.** Climbing it, which is what it is for;
+        # laying a plank in the top steps, which is the only reason to
+        # have fetched it; and walking through a door, because `/go`
+        # works with your arms full and a player who could leave a room
+        # one way but not the other would be reading a bug.
+        #
+        # Feeding is not among them, and that is the design's call
+        # rather than an oversight: a can of cat food is a `/use`, so
+        # the ladder goes down before the cat gets fed.
+        if (
+            found.thing_id not in (world.LADDER, world.LUMBER)
+            and row.type != "exit"
+        ):
+            full = await _arms_full(guild_id, user.id)
+            if full:
+                await interaction.followup.send(full, ephemeral=True)
+                await _turned_away(
+                    interaction,
+                    telemetry.USE,
+                    telemetry.ARMS_FULL,
+                    thing_id=found.thing_id,
+                )
+                return
+
         if found.thing_id in await _exits_not_earned(guild_id, user.id):
             # Before the requirements gate and before the branch on type,
             # because it is the one refusal that says the thing is not
@@ -2779,7 +2914,18 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
             # not she plays and whether or not they were holding it.
             await hints.did(guild_id, user.id, hints.DID_USE_TOY)
 
-        if row.takeable and found.where is not reach.Where.CARRIED:
+        # **`to_hand_in_room` is the exception, per thing**, the same
+        # column `reach.missing_requirements` reads and for the same
+        # reason: a thing whose own row says so is furniture where it
+        # stands. The ladder is the one that sets it. Propped against
+        # the staircase it is a ladder anybody can climb, and a rule
+        # that made them pick it up first would have `/use ladder`
+        # refuse the ladder they are standing next to.
+        if (
+            row.takeable
+            and not row.to_hand_in_room
+            and found.where is not reach.Where.CARRIED
+        ):
             # **The rung rides the refusal rather than following it as a
             # second ephemeral message.** One command, one answer - two
             # bubbles for one `/use` read as two separate things having
@@ -2947,6 +3093,45 @@ async def _container_detail(guild_id: int, room_id: str, thing_id: str) -> str |
     return f"container={row.contained_in} left={left}"
 
 
+async def _arms_full(guild_id: int, user_id: int) -> str | None:
+    """The line for a player trying to do something with the ladder up.
+
+    One ladder, one line, and it covers `/pet`, `/take` and most of
+    `/use`: you cannot do that while you are carrying this. What is
+    still allowed is in the three call sites rather than listed here,
+    because each of them knows a different amount about what is being
+    reached for - `/pet` knows there is no thing at all, and `/use` has
+    to resolve one before it can tell a plank from a can of salmon.
+
+    None when their arms are free, which is every player in the game
+    until somebody picks the ladder up.
+    """
+    if not await database.carried_of(user_id, guild_id, world.LADDER):
+        return None
+    return await phrasing.default_say("carrying.ladder")
+
+
+async def _the_cat_has_it(guild_id: int, column: str, name: str) -> str | None:
+    """The swat, for the five minutes after she gets to the top first.
+
+    Read by id and state together rather than through the state
+    resolution, because a timed lock is not a state: nothing holds
+    `guarded` and nothing sets it, so `_state_refusal` walking a
+    player's states would never reach the two rows the writers wrote
+    for it.
+
+    `column` because the two rows say different things. Reaching for
+    the ladder gets a paw on the back of the hand; putting a foot on
+    the bottom rung gets one on the top of the head.
+    """
+    if not await world.ladder_is_guarded(guild_id):
+        return None
+    written = await resolve.thing_text_in_state(
+        guild_id, world.LADDER, column, world.GUARDED
+    )
+    return phrasing.fill(written, name=name) if written else None
+
+
 async def _plank_detail(guild_id: int, user_id: int) -> str:
     """What a plank row carries besides its outcome.
 
@@ -3042,7 +3227,7 @@ async def _finish_use(interaction, state, found) -> None:
     user, guild_id = interaction.user, interaction.guild_id
 
     held = await states.in_force(guild_id, user.id)
-    current = states.in_priority_order(held) if held else resolve.DEFAULT_STATE
+    current = states.in_priority_order(held, state.current_room)
     if not await phrasing.say(guild_id, found.thing_id, "use", state=current):
         refusal = await phrasing.say(
             guild_id, found.thing_id, "use_fail", state=current, name=found.name
@@ -3112,6 +3297,8 @@ async def _finish_use(interaction, state, found) -> None:
         detail=(
             await _plank_detail(guild_id, user.id)
             if found.thing_id == world.LUMBER
+            else _climb_detail(state.current_room, effect)
+            if found.thing_id == world.LADDER
             else None
         ),
     )
@@ -3120,7 +3307,15 @@ async def _finish_use(interaction, state, found) -> None:
     # The text is resolved *after* the effect, so a use that changes a state
     # can be described by the state it produced rather than the one it left.
     held = await states.in_force(guild_id, user.id)
-    current = states.in_priority_order(held) if held else resolve.DEFAULT_STATE
+    # **The room is in the order now, and the effect may put a state in
+    # front of it.** The room is where the ladder's six climbs live;
+    # the effect's state is the one line a use decides for itself,
+    # which is the cat getting to the top first. Read after the effect,
+    # like the rest of this - a use that changes something is described
+    # by what it produced.
+    current = states.in_priority_order(held, state.current_room)
+    if effect is not None and effect.text_state:
+        current = (effect.text_state, *current)
 
     reply = await _a_use_line(
         guild_id, found, current,
@@ -3156,6 +3351,11 @@ async def _finish_use(interaction, state, found) -> None:
             user_id=user.id,
             thing_id=found.thing_id,
             room_id=state.current_room,
+            # What the use did that its thing id and its room cannot
+            # say. *Hive Five* is the one that needs it: a climb on the
+            # road knocks a piece off the nest and a climb the cat won
+            # does not, and both are `on_use` of the ladder in `CH`.
+            extra=dict(effect.extra) if effect else {},
         ),
         interaction=interaction,
         announce=False,
@@ -3241,6 +3441,16 @@ async def _finish_use(interaction, state, found) -> None:
                 reply,
                 None if carried else await hints.after(guild_id, user.id, nudge),
             )
+    elif found.thing_id == world.LADDER:
+        # **Public and private both, the bed's arrangement.** The
+        # private line is the climb - six of them, one per room, and on
+        # one roll in ten the cat's instead - and it is written to the
+        # person who went up. The public line only exists for that
+        # roll: everything else about a climb is a view only the
+        # climber had, where the cat beating them to the top is a thing
+        # the room watched happen.
+        if effect is not None and effect.extra.get(world.CAT_CLIMB):
+            await _announce_ladder_cat(interaction)
     elif found.thing_id == world.HOUSE_KEY:
         # The road watches somebody unlock the front door, which is the
         # single most consequential thing anybody does at drop 10: every
@@ -3804,6 +4014,48 @@ async def _announce_bed_fluff(interaction) -> None:
         return
     line = await phrasing.default_say(
         "bed_fluff.public", player=interaction.user.display_name
+    )
+    if line:
+        await _post_quietly(channel, line)
+
+
+def _climb_detail(room_id: str, effect) -> str:
+    """What a climb's log row carries besides the room.
+
+    Three yes-or-nos, and each answers a question the ladder's design
+    asks out loud. `carried` is whether they fetched it or climbed one
+    somebody left standing, which is what decides whether one ladder is
+    enough for a server. `cat` is the ten percent, measured rather than
+    assumed. `nest` is whether a piece fell, which with `cat` says how
+    often the roll is spending a climb somebody made for the nest.
+
+    One string, like the plank's: `detail` is the column the log keeps
+    for whatever an action needs, and a column per question is how a
+    wide table happens.
+    """
+    facts = effect.extra if effect is not None else {}
+
+    def flag(key: str) -> str:
+        return "yes" if facts.get(key) else "no"
+
+    return (
+        f"room={room_id} carried={flag(world.CARRIED)} "
+        f"cat={flag(world.CAT_CLIMB)} nest={flag(world.NEST_PIECE)}"
+    )
+
+
+async def _announce_ladder_cat(interaction) -> None:
+    """The room watches the cat get to the top first.
+
+    Cosmetic, like every other public line: she is already up there and
+    the lock is already written, so a channel that will not take the
+    sentence must not turn a climb that happened into a failed command.
+    """
+    channel = interaction.channel
+    if channel is None or not hasattr(channel, "send"):
+        return
+    line = await phrasing.default_say(
+        "ladder.cat.public", player=interaction.user.display_name
     )
     if line:
         await _post_quietly(channel, line)
@@ -5554,6 +5806,27 @@ async def _cannot_take(
             telemetry.NOT_TAKEABLE,
         )
 
+    # **Below the thing's own refusal, and that is the interesting
+    # choice here.** A player with the ladder up who types `/take
+    # stove` is told the stove weighs as much as a small car, not that
+    # their arms are full - because the second answer implies the first
+    # is not the problem, and it would be the only reason given for a
+    # thing nobody can ever pick up.
+    #
+    # **The cat before your own arms**, between these two. She is
+    # sitting on the ladder, which is a fact about what is being
+    # reached for; full arms are a fact about the player. Nobody can
+    # hit both - the ladder she is guarding is standing in a room, so
+    # nobody is carrying it - and the order is written down anyway, for
+    # the day something else gets a lock.
+    swatted = await _the_cat_has_it(guild_id, "take_fail", found.name)
+    if swatted:
+        return swatted, telemetry.GUARDED
+
+    full = await _arms_full(guild_id, user_id)
+    if full:
+        return full, telemetry.ARMS_FULL
+
     # The cap applies to what the player ends up holding, which for a source is
     # the thing it yields rather than the source itself.
     taken = found.yields or found.thing_id
@@ -6756,6 +7029,19 @@ async def on_app_command_completion(
     """
     if interaction.guild_id is None:
         return
+    try:
+        # **Where "this player is still playing" is written down.** The
+        # ladder is the only thing in the game one player can keep from
+        # everybody else, so the sweep that sets a forgotten one down
+        # needs to know when its carrier was last here - and any
+        # command at all is the honest answer, the same width and for
+        # the same reason as *Familiar* above it.
+        #
+        # Swallowed separately from the hook below, so a stamp that
+        # fails costs a day's idleness rather than an achievement.
+        await database.stamp_command(interaction.user.id, interaction.guild_id)
+    except SQLAlchemyError:
+        log.exception("Could not stamp a command in guild %s", interaction.guild_id)
     try:
         await _fire(
             achievements.Context(
