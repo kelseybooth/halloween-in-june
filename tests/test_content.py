@@ -54,7 +54,14 @@ def test_the_shipped_content_parses():
     # Then the ladder's four: the ladder itself, the piece of wasp nest
     # it reaches, and a cat bowl each for the Courtyard and the upstairs
     # hallway, so she has somewhere to be fed on three floors.
-    assert len(c.things) == 169
+    #
+    # **The ground floor is a net one fewer.** It deletes two - the
+    # kitchen back stairs, both ends - and adds one, the ivy down from
+    # the bedroom window. The rest of drop 30's content is rows that
+    # already existed changing: the soft blocks became board books, the
+    # nursery window became the bedroom window, and the courtyard ivy
+    # became an exit.
+    assert len(c.things) == 168
     # Five out with `/enter`: its three lines, `#welcome`, and the
     # tutorial, which it was the only thing that posted. Five in: the two
     # wrong-place replies, `/go`'s own refusal, and the two hints that
@@ -71,8 +78,18 @@ def test_the_shipped_content_parses():
     # twelve rows. Then the ladder's three: the refusal for anything a
     # player cannot do with their arms full, and its two public lines -
     # the cat beating them to the top, and the carry ending in a dropped
-    # ladder.
-    assert len(c.defaults) == 131
+    # ladder. Then the trash can's sixteen, which are the whole of
+    # throwing a thing away, fishing it back out and taking the bag to
+    # the curb - shared lines rather than the can's own, because
+    # anything that goes in reads them. The ivy's refusal to a player
+    # with their arms full rode along with them.
+    #
+    # And four that are not house strings at all: the board books'
+    # extra `use` lines, under `use.board_books.N`. They are the first
+    # of that shape, and they live here for the reason the toys'
+    # refusals do - a pool is a set of rows, and `thing_text` has one
+    # row per state.
+    assert len(c.defaults) == 151
     assert len(c.drops) == 9      # 0 to 3 built; 10 to 50 named ahead of their content
     assert len(c.restocks) == 4  # the toy channel row joined them
 
@@ -95,6 +112,59 @@ def test_every_source_is_findable():
         p for p in content.validate(content.load_files()) if "named nowhere" in p
     ]
     assert problems == []
+
+
+def _with_two_fragments(names_it_in):
+    """A room written in two sentences, and a source named in one of them.
+
+    The Entryway is the only room in the game written this way, eight
+    fragments at one state, and every source in it happens to be
+    contained - so the bug below was invisible in the shipped files and
+    has to be built to be seen.
+    """
+    from test_loader import a_thing, a_world
+    from content import TextRow
+
+    world_ = a_world(
+        a_thing("odd_crate", type="source", yields="odd_widget", room_id="EN"),
+        a_thing("odd_widget", room_id=None, quantity=0),
+    )
+    world_.room_text = [
+        TextRow(
+            entity_id="EN",
+            state="default",
+            since_drop=1,
+            fragment=i,
+            text={"look": "An odd crate stands here." if i == names_it_in else "A hall."},
+        )
+        for i in (0, 1)
+    ] + [r for r in world_.room_text if r.entity_id != "EN"]
+    return world_
+
+
+def test_a_source_named_in_an_early_fragment_is_found():
+    """**The bug this fixed.** The check kept one string per (room, state)
+    and assigned into it, so a room written in pieces was checked against
+    its last piece alone - and a source named in any earlier sentence
+    read as named nowhere.
+    """
+    problems = content.validate(_with_two_fragments(names_it_in=0))
+
+    assert not any("odd_crate" in p for p in problems)
+
+
+def test_a_source_named_in_no_fragment_is_still_caught():
+    """The other direction, which is the whole point of the check. Joining
+    the fragments must not join them into something that matches
+    anything."""
+    world_ = _with_two_fragments(names_it_in=0)
+    for row in world_.room_text:
+        if row.entity_id == "EN":
+            row.text["look"] = "A hall."
+
+    problems = content.validate(world_)
+
+    assert any("odd_crate" in p and "named nowhere" in p for p in problems)
 
 
 def test_there_are_twenty_two_exits_and_they_match_the_rooms(shipped):

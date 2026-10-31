@@ -2981,6 +2981,49 @@ async def _turned_away(interaction, action: str, reason: str, **fields) -> None:
     )
 
 
+async def _a_use_line(guild_id: int, found, current, **tokens) -> str:
+    """What a successful `/use` says, drawn from the thing's whole pool.
+
+    One line for nearly everything, which is the thing's own `use` row.
+    A thing the writers gave extra lines has them in the defaults as
+    `use.<id>.N`, and the pool is the row **plus** those: the row stays
+    the canonical line rather than being demoted to one of five, and a
+    thing with no extras goes through here unchanged.
+
+    **Joined rather than replaced, and that is the difference from the
+    toys.** A toy's refusals are a pool and nothing else, so the pool is
+    the only place to look. A thing's `use` row is already written, read
+    by state, and in one case fills in `{n}` and `{total}` - so the
+    extras are an addition to it and the state resolution still decides
+    which row they are added to.
+
+    A thing whose `use` row is blank gets no rotation at all. That is
+    not a special case to preserve: a blank `use` with a `use_fail`
+    beside it is how a writer says the thing refuses, and `_finish_use`
+    has already turned the use down before this is reached. What is left
+    for the fallback is the scenery noun with nothing written for it,
+    which has no extras either.
+
+    **Chosen unfilled, then filled once.** `phrasing.say` would have
+    looked the row up and filled it in one call, which would have meant
+    filling the row, picking, and then filling the winner a second time.
+    `fill` substitutes by regex rather than by `str.format`, so the
+    second pass is harmless for every name anybody has - and it would
+    rewrite the one display name that is itself a token, `{player}`
+    standing in a line that had already had a `{player}` put into it.
+    One pass has no such name to find.
+    """
+    written = await resolve.thing_text(guild_id, found.thing_id, "use", current)
+    extras = await phrasing.defaults_matching(
+        f"{content.EXTRA_USE_PREFIX}{found.thing_id}."
+    )
+    if written and extras:
+        written = random.choice([written, *extras])
+    if not written:
+        written = await resolve.default_text("use.default")
+    return phrasing.fill(written, **tokens)
+
+
 async def _finish_use(interaction, state, found) -> None:
     """Record the use, apply anything it changes, and say what happened.
 
@@ -3079,10 +3122,9 @@ async def _finish_use(interaction, state, found) -> None:
     held = await states.in_force(guild_id, user.id)
     current = states.in_priority_order(held) if held else resolve.DEFAULT_STATE
 
-    reply = await phrasing.say(
-        guild_id, found.thing_id, "use", state=current,
-        fallback="use.default", name=found.name,
-        player=user.display_name, **tokens,
+    reply = await _a_use_line(
+        guild_id, found, current,
+        name=found.name, player=user.display_name, **tokens,
     )
     # The use path already has the numbers in `tokens`, so it needs the
     # break and not the lookup.

@@ -62,7 +62,16 @@ NO_GAME = None
 # that was supposed to catch it has been rewritten to actually do so -
 # see `test_the_ceiling_is_not_below_the_commands`, which asks the one
 # other file that records which drops exist.
-LAST_PLAYABLE_DROP = 20
+#
+# **Drop 30 raises it ahead of its own mechanics, on purpose.** The
+# ground floor's content is written, checked and sitting in the files,
+# and the ladder, the trash can and the top steps are three PRs behind
+# it. Holding the ceiling at 20 until all four landed would have meant
+# nobody could read four new rooms for a week. So this moves first, and
+# what a server on 30 finds is content that works and three mechanics
+# that are not there yet: the ladder climbs with its default line, the
+# trash can holds nothing, and the last eighteen planks still refuse.
+LAST_PLAYABLE_DROP = 30
 
 
 class UnknownDrop(Exception):

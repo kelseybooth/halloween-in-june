@@ -32,6 +32,7 @@ import content as content_module
 import content_loader
 import database
 import hints
+import reach
 import resolve
 import states
 import triggers
@@ -823,3 +824,68 @@ async def test_the_house_is_walkable_whether_or_not_it_is_in_the_prose(road):
     await bot.go.callback(interaction, "house")
 
     assert (await db.get_game_state(ALICE, GUILD_A)).current_room == "EN"
+# --------------------------------------------------------------------------
+# Three bowls, one requirement
+#
+# Every cat food's `requires` names `cat_bowl`, which is the Entryway's
+# bowl and nothing else. Drop 30 puts one in the Courtyard and drop 40
+# one in the Upstairs Hallway, and a player standing beside either of
+# them with a can was told to go and find a bowl.
+# --------------------------------------------------------------------------
+
+
+async def test_the_courtyard_bowl_feeds_her_too(house):
+    """The payoff, as a player gets it: a can, a bowl, and no trip back
+    to the hall."""
+    db, *_ = house
+    await take_a_can(house)
+    await db.update_current_room(ALICE, GUILD_A, "CO")
+
+    reply = replies(await feed(house, room="CO"))
+
+    assert "hook a finger through the ring" in reply
+
+
+async def test_the_upstairs_bowl_does_as_well(house):
+    """Drop 40's, asserted now because the rule is one rule and the row
+    is already in the files. A bowl that works downstairs and not up is
+    the bug this would be."""
+    db, *_ = house
+    await take_a_can(house)
+    await db.update_current_room(ALICE, GUILD_A, "UH")
+
+    reply = replies(await feed(house, room="UH"))
+
+    assert "hook a finger through the ring" in reply
+
+
+async def test_the_rule_is_the_name_and_not_the_id(house):
+    """Asked of `reach` directly, because that is where it lives and
+    because the three rooms above would pass for other reasons.
+
+    The name, deliberately, and not the aliases: aliases overlap across
+    unrelated things - the sideboard and the changing table both answer
+    to "table" - and a requirement met by a near-synonym is a gate
+    opening on a thing nobody meant.
+    """
+    assert await reach.missing_requirements(GUILD_A, ALICE, "CO", ["cat_bowl"]) == []
+    assert await reach.missing_requirements(GUILD_A, ALICE, "UH", ["cat_bowl"]) == []
+    assert await reach.missing_requirements(GUILD_A, ALICE, "EN", ["cat_bowl"]) == []
+
+
+async def test_a_room_with_no_bowl_in_it_still_says_so(house):
+    """The half of the widening that could have gone wrong quietly. A
+    requirement satisfied from anywhere is not a requirement, and the
+    Kitchen is the room a player is most likely to assume has a bowl."""
+    assert await reach.missing_requirements(GUILD_A, ALICE, "KI", ["cat_bowl"]) == [
+        "cat_bowl"
+    ]
+
+
+async def test_nothing_else_was_widened_with_it(house):
+    """The can opener is in the Kitchen and is still the can opener. Three
+    things share a name in this house and they are three of the same
+    object; a widening that reached further than that would show here."""
+    assert await reach.missing_requirements(GUILD_A, ALICE, "CO", ["can_opener"]) == [
+        "can_opener"
+    ]

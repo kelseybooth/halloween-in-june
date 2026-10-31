@@ -464,10 +464,30 @@ async def missing_requirements(
     does not hold does not: it is not in the room as far as they can
     tell, and a requirement met by something invisible is a gate with no
     visible way through it.
+
+    **A requirement is met by any thing of the same name.** Every cat
+    food's `requires` names `cat_bowl`, which is the Entryway's bowl and
+    nothing else - so drop 30's courtyard bowl and drop 40's hallway
+    bowl are bowls a player can see, stand beside, and not feed the cat
+    at. Written as a rule about the id, the fix would be a cell edit per
+    can per bowl forever; written as a rule about the name, it is the
+    thing the writers already said when they called all three "cat
+    bowl".
+
+    Deliberately the name and not the aliases. Aliases overlap across
+    unrelated things - the sideboard and the changing table both answer
+    to "table" - and a requirement met by a near-synonym is a gate that
+    opens on a thing nobody meant. Three things share a name here and
+    they are three of the same object.
     """
     if not thing_ids:
         return []
     held_states = await states.in_force(guild_id, user_id)
+    same_named = await _things_sharing_a_name(thing_ids)
+    # Every candidate, asked about as one set. The answer is folded back
+    # onto the cell's own ids at the end, because the caller's refusal
+    # text is keyed on what the cell asked for.
+    wanted = sorted({w for group in same_named.values() for w in group})
     session_factory = database._require_session()
     async with session_factory() as session:
         carried = {
@@ -476,7 +496,7 @@ async def missing_requirements(
                 select(database.PlayerInventory.thing_id).where(
                     database.PlayerInventory.user_id == user_id,
                     database.PlayerInventory.guild_id == guild_id,
-                    database.PlayerInventory.thing_id.in_(thing_ids),
+                    database.PlayerInventory.thing_id.in_(wanted),
                     database.PlayerInventory.count > 0,
                 )
             )
@@ -487,7 +507,7 @@ async def missing_requirements(
                 select(
                     database.ThingType.thing_id, database.ThingType.present_when
                 ).where(
-                    database.ThingType.thing_id.in_(thing_ids),
+                    database.ThingType.thing_id.in_(wanted),
                     or_(
                         database.ThingType.takeable.is_(False),
                         database.ThingType.to_hand_in_room.is_(True),
@@ -504,7 +524,7 @@ async def missing_requirements(
             thing_id
             for thing_id, in await session.execute(
                 select(database.ThingType.thing_id).where(
-                    database.ThingType.thing_id.in_(thing_ids),
+                    database.ThingType.thing_id.in_(wanted),
                     database.ThingType.to_hand_in_room.is_(True),
                 )
             )
@@ -523,7 +543,42 @@ async def missing_requirements(
             }
             standing = (standing - opted_in) | here
     to_hand = carried | standing
-    return [thing_id for thing_id in thing_ids if thing_id not in to_hand]
+    return [
+        thing_id
+        for thing_id in thing_ids
+        if not (same_named[thing_id] & to_hand)
+    ]
+
+
+async def _things_sharing_a_name(thing_ids: list[str]) -> dict[str, set[str]]:
+    """Each required id, mapped to every id with the same name.
+
+    Always includes the id itself, even when the row has gone missing -
+    a `requires` naming a thing the files no longer carry has to stay
+    unsatisfiable rather than become satisfied by the empty set.
+    """
+    session_factory = database._require_session()
+    async with session_factory() as session:
+        names = dict(
+            (row[0], row[1])
+            for row in await session.execute(
+                select(database.ThingType.thing_id, database.ThingType.name).where(
+                    database.ThingType.thing_id.in_(thing_ids)
+                )
+            )
+        )
+        shared: dict[str, set[str]] = {}
+        if names:
+            for thing_id, name in await session.execute(
+                select(database.ThingType.thing_id, database.ThingType.name).where(
+                    database.ThingType.name.in_(set(names.values()))
+                )
+            ):
+                shared.setdefault(name, set()).add(thing_id)
+    return {
+        thing_id: shared.get(names.get(thing_id, ""), set()) | {thing_id}
+        for thing_id in thing_ids
+    }
 
 
 async def find(

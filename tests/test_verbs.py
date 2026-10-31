@@ -1080,7 +1080,10 @@ async def test_the_secret_routes_gained_nothing(real_house):
 async def test_the_stairs_are_not_doors(real_house):
     parsed = content_module.load_files()
 
-    for key in ("EH", "HE", "KH", "HK"):
+    # **Two, not four.** The kitchen back stairs were deleted on 30
+    # October, which leaves the grand staircase as the only way between
+    # the floors - so `KH` and `HK` are not rows to check any more.
+    for key in ("EH", "HE"):
         names = {n.lower() for n in parsed.things_by_id[key].names}
         assert "door" not in names and "doorway" not in names, key
 
@@ -1130,11 +1133,17 @@ async def test_using_one_you_are_not_holding_says_so(real_house):
 
 async def test_a_world_changing_use_still_fires_before_it_is_consumed(real_house):
     """Graphite unjams the drawer *and* is used up. The order matters: the
-    effect is applied, then the powder is gone."""
+    effect is applied, then the powder is gone.
+
+    Fetched from the Bedroom since 30 October. The tin moved there with
+    the window it is really for - the sash the powder unsticks is the
+    bedroom's, not the nursery's - and the drawer it also unjams is up
+    the hall either way.
+    """
     import states
 
     db, guild = real_house
-    await enter_properly(db, room="NU")
+    await enter_properly(db, room="BE")
     await take(thing="graphite")
     await db.update_current_room(ALICE, GUILD_A, "UH")
 
