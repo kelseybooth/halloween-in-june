@@ -21,6 +21,7 @@ import logging
 
 from sqlalchemy import select
 
+import content
 import database
 
 log = logging.getLogger(__name__)
@@ -91,7 +92,9 @@ STATE_PRIORITY = (
 )
 
 
-def in_priority_order(held: "set[str] | frozenset[str]") -> tuple[str, ...]:
+def in_priority_order(
+    held: "set[str] | frozenset[str]", room_id: str | None = None
+) -> tuple[str, ...]:
     """The states this player holds, most specific first.
 
     Handed to the resolvers whole rather than collapsed to one, because
@@ -99,11 +102,26 @@ def in_priority_order(held: "set[str] | frozenset[str]") -> tuple[str, ...]:
     falls through to `default`. Passing one state meant an entity with
     text for a *different* held state fell back to `default` and the
     writers' row was never read.
+
+    **The room wins over all of them, when the caller knows it.** A
+    state says what has become true of the house and a room says where
+    this player is standing, and the one entity written both ways is
+    the ladder - six climbs, one per room, and nothing about the
+    staircase or the front door changes what you can see from the top
+    of it. If a thing ever wants a line for a state *and* a room at
+    once, this is the line to argue with.
+
+    Callers that have no room pass none and get exactly what they got
+    before. `/go` is one: an exit stands in one room by definition, so
+    asking which room the player is in answers nothing.
     """
     ranked = {state: index for index, state in enumerate(STATE_PRIORITY)}
-    return tuple(
+    ordered = tuple(
         sorted(held, key=lambda state: (ranked.get(state, len(ranked)), state))
     )
+    if room_id is None:
+        return ordered
+    return (f"{content.ROOM_STATE_PREFIX}{room_id}", *ordered)
 
 
 def required_things(requires: str | None) -> list[str]:

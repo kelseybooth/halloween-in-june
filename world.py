@@ -183,6 +183,46 @@ STAIRS_REPAIRED = "stairs_repaired"
 STAIRS_UPPER = "stairs_upper"
 WITHIN_REACH = 0.8
 
+# The ladder. One per server, carried anywhere by anybody, and the only
+# way to reach the top fifth of the staircase.
+#
+# **Its `yields` is a label, not a behaviour.** `wasp_nest_piece` is
+# written in the ladder's `yields` cell so the loader counts the piece
+# as a thing players can obtain - without it the piece is content with
+# quantity zero and no way in, which the checker calls unreachable. The
+# engine must not read it as a yield: a climb produces a piece on the
+# road and nowhere else, and `/take ladder` produces a ladder.
+LADDER = "ladder"
+NEST_PIECE = "wasp_nest_piece"
+
+# Where the wasp nest is: over the road, which is the channel.
+ROAD = content_module.CHANNEL_ROOM
+
+# How often she gets to the top first, in percent, and how long she
+# keeps it afterwards. Play, with the claws tucked in - no relationship
+# points either way, which is why nothing here touches the meter.
+CAT_TAKES_IT_PERCENT = 10
+GUARDED_MINUTES = 5
+
+# How long a carrier may go quiet before the ladder is set down where
+# they stand. It only ever happens to somebody who picked it up and
+# stopped playing *without climbing it*, because every climb sets it
+# down - and the cost of that is the last eighteen planks stalling for
+# the whole server.
+IDLE_HOURS = 24
+
+# The ladder's two rows that are not about a room. Neither is a state
+# in the `states` sense: nothing holds them and nothing sets them. They
+# are conditions of one object, read by id and state together.
+CAT_CLIMB = "cat"
+GUARDED = "guarded"
+
+# The third thing a climb reports, beside those two. Not a text row -
+# no line changes because the ladder was on your shoulder - but the log
+# wants it, because "was it carried" is how often anybody fetches the
+# ladder rather than climbing one somebody else left standing.
+CARRIED = "carried"
+
 # The jammed drawer: graphite, and only in the hallway it is jammed in.
 GRAPHITE = "graphite_powder"
 DRAWER_ROOM = "UH"
@@ -384,6 +424,16 @@ class Effect:
     # for afterwards: by the time the handler could ask, the flag is
     # already written and the answer is always yes.
     first_feed: bool = False
+    # The state to read this thing's line from, when the use itself
+    # decided which line it was. Everything else keys its text on where
+    # the player is standing and what the house has become; the ladder
+    # keys one line on a coin toss, and the toss happens here.
+    text_state: str | None = None
+    # Whatever a predicate needs to know about this use that the thing
+    # id and the room cannot say. *Hive Five* is the case: a climb on
+    # the road knocks a piece off the nest and a climb the cat won does
+    # not, and both are `on_use` of the ladder in the road.
+    extra: dict = field(default_factory=dict)
 
     @property
     def changed_the_world(self) -> bool:
@@ -460,6 +510,9 @@ async def after_use(
     if thing_id == GRAPHITE and room_id == DRAWER_ROOM:
         return await _unjam_the_drawer(guild_id, user_id)
 
+    if thing_id == LADDER:
+        return await _climb_the_ladder(guild_id, user_id, room_id)
+
     if thing_id == CAT_BED:
         return await _fluff_the_bed(guild_id, user_id)
 
@@ -470,6 +523,99 @@ async def after_use(
         return await _unlock_the_front_door(guild_id)
 
     return None
+
+
+async def _climb_the_ladder(
+    guild_id: int, user_id: int, room_id: str, rng=None
+) -> Effect:
+    """Climb it, which always ends with it standing in the room.
+
+    Three things happen here and the order matters.
+
+    **It is set down first, whatever else follows.** Climbing a ladder
+    you are carrying means putting it down and going up it, so a
+    carried ladder leaves the bag on every climb including the one the
+    cat wins. That is also the whole reason the idle sweep below is
+    rare: a player who uses the ladder at all has already let go of it.
+
+    **Then the cat gets her roll**, one climb in ten. She replaces the
+    room's line rather than adding to it - the player never gets to the
+    top - which is why no nest piece falls on a climb she takes, and
+    why the line comes back as a state for the handler to read rather
+    than as text. Nothing touches the relationship meter: the swat is
+    play with the claws in, and the design is explicit that it pays
+    nothing either way.
+
+    **Then the road, and only the road.** Every other climb is for the
+    view. The nest hangs over the channel and never runs out, so a
+    piece lands on the floor there for anybody to pick up - the cat
+    bed's pattern, and for the cat bed's reason: it goes into the room
+    rather than the bag, where the next person along can have it
+    instead.
+
+    **What it reports.** Three facts go back in `extra` - whether the
+    ladder was being carried, whether the cat took it, and whether a
+    piece of nest fell - because all three are questions about one
+    `/use` of one thing, and the handler writes them into that use's
+    own log row. A second row per climb would be two records of one
+    event, which is how a count ends up doubled.
+    """
+    carried = await database.drop_into_room(user_id, guild_id, room_id, LADDER)
+    facts = {CARRIED: carried, CAT_CLIMB: False, NEST_PIECE: False}
+
+    if (rng or random).randint(1, 100) <= CAT_TAKES_IT_PERCENT:
+        until = await database.server_now(guild_id) + timedelta(
+            minutes=GUARDED_MINUTES
+        )
+        await database.lock_thing(guild_id, LADDER, until)
+        return Effect(text_state=CAT_CLIMB, extra={**facts, CAT_CLIMB: True})
+
+    if room_id != ROAD:
+        return Effect(extra=facts)
+
+    await database.place_in_room(guild_id, ROAD, NEST_PIECE, 1)
+    return Effect(extra={**facts, NEST_PIECE: True})
+
+
+async def ladder_is_guarded(guild_id: int) -> bool:
+    """Whether the cat is still sitting on it.
+
+    Asked by `/take` and `/use` before either does anything, and
+    answered out of the lock rather than out of the content: a timed
+    lock is not a state, so there is no row for `_state_refusal` to
+    find and the two refusals the writers wrote for `guarded` have to
+    be fetched by name.
+    """
+    return await database.thing_is_locked(guild_id, LADDER)
+
+
+async def set_down_forgotten_ladders(
+    guild_ids: "list[int]",
+) -> list[tuple[int, int, str]]:
+    """Take the ladder off anybody who has been holding it for a day.
+
+    Returns (guild, player, room) for each one actually set down, so the
+    caller can say so in the room it landed in. Only rows that moved
+    are reported: two sweeps overlapping would otherwise announce the
+    same ladder twice, and the move is what decides, not the query.
+
+    **The only thing in the game that can be hoarded**, which is the
+    whole justification for a sweep. Everything else a player carries
+    is theirs or inexhaustible; the ladder is one object the last
+    eighteen planks of a shared staircase need.
+    """
+    moved = []
+    for guild_id in guild_ids:
+        quiet_since = await database.server_now(guild_id) - timedelta(hours=IDLE_HOURS)
+        for user_id, room_id in await database.idle_carriers(
+            guild_id, LADDER, quiet_since
+        ):
+            if await database.drop_into_room(user_id, guild_id, room_id, LADDER):
+                await telemetry.system(
+                    guild_id, telemetry.LADDER_ABANDONED, detail=f"room={room_id}"
+                )
+                moved.append((guild_id, user_id, room_id))
+    return moved
 
 
 async def dislodge_from_bed(guild_id: int, user_id: int, rng=None) -> str | None:

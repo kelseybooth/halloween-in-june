@@ -70,6 +70,10 @@ PASTA_POT = "pasta_pot"
 NACHO_CHIPS = "nacho_chips"
 FROZEN_BURRITO = "frozen_burrito"
 GRAPHITE = "graphite_powder"
+# A piece of the wasp nest, knocked down by climbing the ladder on the
+# road. The id is the key the climb reports under, which is why this
+# names a thing the predicate never looks up.
+NEST_PIECE = "wasp_nest_piece"
 # The oak tree in the Courtyard is an exit, not an object - using it moves the
 # player into the Secret Library, which is why this listens on `on_move`.
 TREE = "CS"
@@ -264,6 +268,26 @@ def _on_thing(targets: set[str]):
         return context.thing_id in targets
 
     return predicate
+
+
+async def hive_five(context: Context) -> bool:
+    """A climb that knocked a piece off the wasp nest.
+
+    **Read off what the climb reported, not off the thing and the
+    room.** Every climb on the road is `on_use` of the ladder in `CH`,
+    and only some of them drop a piece: one in ten the cat gets to the
+    top first and the climber never reaches the nest. The handler
+    passes what actually happened, so this asks that.
+
+    Picking a piece up is not this. It is `on_take` and this listens on
+    `on_use`, which is the distinction the file asks for in words -
+    somebody else's piece off the floor of the road is scavenging, not
+    a climb.
+
+    Awarded once by `_award`, so the predicate does not count. Every
+    later climb that drops a piece passes this and creates nothing.
+    """
+    return bool(context.extra.get(NEST_PIECE))
 
 
 def _on_date(matches, targets: set[str], *, source_only: bool = False):
@@ -886,7 +910,7 @@ def register_all() -> None:
     # the wiring check and leaving them at 99 would have hidden four
     # rooms from the playtest.
     add("board_meeting", "on_use", _blocked("the contributor-only group award"))
-    add("hive_five", "on_use", _blocked("the ladder"))
+    add("hive_five", "on_use", hive_five)
     add(
         "bin_looking_for_you",
         "on_command",

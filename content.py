@@ -186,6 +186,19 @@ CARRIABLE_TYPES = {"object", "toy"}
 # A room_id every server has, used by things that exist everywhere (the Alexa).
 EVERYWHERE = "ALL"
 
+# **A state that names the room the player is standing in**, written
+# `in:CO`. Every other state is something that has become *true* - the
+# staircase is repaired, this player unjammed the drawer - and this one
+# is something that is merely *so*, which is why it is a prefix and not
+# a name in `SERVER_STATES` or `PLAYER_STATES`: there is one per room
+# and nothing sets or clears any of them.
+#
+# The ladder is what it is for. It is one object that can be carried
+# anywhere, and climbing it shows a different thing in each of six
+# rooms - which is six `use` lines for one thing, keyed on the only
+# thing that distinguishes them.
+ROOM_STATE_PREFIX = "in:"
+
 # Where a thing's extra `use` lines live, if it has any. `use.<id>.N`,
 # joined to the thing's own `use` row rather than replacing it - so the
 # board books' five lines are the one in `thing_text` plus four here,
@@ -892,6 +905,7 @@ def validate(content: Content) -> list[str]:
     problems += _check_cooldowns(content)
     problems += _check_toy_refusals(content)
     problems += _check_extra_use_lines(content)
+    problems += _check_room_states(content)
     return problems
 
 
@@ -1753,6 +1767,34 @@ def _check_toy_refusals(content: Content) -> list[str]:
             f"default {key} is a play refusal for '{owner}', which is not a "
             "toy; the pool is matched by prefix, so nothing would ever read "
             "it and nothing would say so"
+        )
+    return problems
+
+
+def _check_room_states(content: Content) -> list[str]:
+    """A row written for `in:XX` has to name a room that exists.
+
+    The same silent failure as the two checks either side of this one.
+    A state nothing holds is not an error at runtime - `_best` walks
+    past a state no row matches and falls to `default` - so `in:CH` with
+    the room misspelled reads as the ladder's generic climb, in every
+    room, forever, and nothing anywhere says so.
+
+    Both text files, because a room could be written this way too even
+    though none is today.
+    """
+    rooms = {room.room_id for room in content.rooms}
+    problems = []
+    for row in (*content.thing_text, *content.room_text):
+        if not row.state.startswith(ROOM_STATE_PREFIX):
+            continue
+        named = row.state[len(ROOM_STATE_PREFIX) :]
+        if named in rooms:
+            continue
+        problems.append(
+            f"{row.entity_id} has text for state {row.state!r}, which names no "
+            "room; nothing would ever hold it, so the row would never be read "
+            "and nothing would say so"
         )
     return problems
 
