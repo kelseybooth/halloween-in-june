@@ -8,7 +8,7 @@ charcuterie_board	public	Charcuterie Board	Collected all five flavors of cat foo
 found_the_specs	public	Found the Specs	Found David's reading glasses in the desk.	40	30				
 somethings_cooking	public	Something's Cooking	Cooked something chocolatey and delicious.	30	40				
 unsticking_the_situation	public	Unsticking the Situation	Finally got David that graphite powder he wanted.	99	50				Blocked: cat crossing is post-launch
-catproof_the_house	public	Catproof the House	Rescued five baby bottles from cat chaos.	30	60				
+catproof_the_house	public	Catproof the House	Rescued five baby bottles from cat chaos.	25	60				
 return_to_sender	public	Return to Sender	Sent five baby bottles back to Marcus.	99	70				Blocked: cat crossing is post-launch
 it_takes_a_village	public	It Takes a Village	Sent five bottles back sanitized.	99	80				Blocked: cat crossing is post-launch
 gourd_job	public	Gourd Job	Carved a pumpkin in the courtyard.	40	90				
