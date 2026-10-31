@@ -498,12 +498,17 @@ async def test_looking_at_a_source_shows_the_source(house):
 
 
 async def test_every_name_for_a_source_shows_the_source(house):
-    """`freezer`, `fridge` and `aunt sue` all resolve to the burrito, so all
-    three used to answer with the burrito's description."""
+    """`freezer`, `fridge` and `foil` all resolve to the burrito, so all
+    three answer with the burrito's description.
+
+    It was `aunt sue` rather than `foil` until 30 October. She is still in
+    the label the freezer's description quotes; she is just not a word you
+    can type at it any more.
+    """
     await content_loader.load_content(content_module.load_files())
     await database.update_current_room(ALICE, GUILD_A, "KI")
 
-    for word in ("freezer", "fridge", "aunt sue", "burritos"):
+    for word in ("freezer", "fridge", "foil", "burritos"):
         reply = (await look(thing=word)).reply
         assert "packed solid with foil bricks" in reply, word
 

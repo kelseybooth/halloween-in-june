@@ -444,11 +444,16 @@ async def test_a_thing_can_be_carried_to_another_room_and_left_there(house):
 
 
 async def test_taking_the_nachos_from_the_kitchen(house):
+    """**Typed as `nachos`, answered as tortilla chips.** The bag was
+    renamed on 30 October and the old word was kept as an alias for
+    exactly this reason, so the two halves are asserted apart: what a
+    playtester types still works, and what comes back is the new name.
+    """
     await content_loader.load_content(content_module.load_files())
     await database.update_current_room(ALICE, GUILD_A, "KI")
 
     interaction = await take(thing="nachos")
-    assert "nacho" in (await bag()).popitem()[0].lower()
+    assert "tortilla chips" in (await bag()).popitem()[0].lower()
     assert heard(interaction)
 
 

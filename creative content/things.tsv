@@ -20,10 +20,10 @@ stove	cast-iron stove	stove|range|oven|burner	fixture	KI	1	no	yes	0		herbs|dark_
 sink	kitchen sink	sink|basin|tap|faucet	fixture	KI	1	no	yes	0										30	18				
 coffee_maker	Keurig	keurig|coffee maker|coffee machine|coffee|pods|pod|k-cup|k-cups|mug	fixture	KI	1	no	yes	0										30	19				
 trash_can	trash can	trash can|bin|rubbish bin|garbage|trash bin|trash|garbage bin|garbage can|trash bag|garbage bag	fixture	KI	1	no	yes	0										30	20			no	
-pasta_pot	pasta pot	pasta pot|stockpot|big pot	fixture	KI	1	no	yes	0		pasta								30	21				
+pasta_pot	pasta pot	pasta pot|stockpot|big pot|pot	fixture	KI	1	no	yes	0		pasta								30	21				
 chip_box	box of tortilla chips	case of chips|chip case|chips|tortilla chips|nachos|case of tortilla chips|chip box|box|bulk box|bulk box of tortilla chips	source	KI	1	no	yes	0						nacho_chips		pantry		30	22				
-nacho_chips	nacho chips	nacho chips|chips|nachos|tortilla chips	object		0	yes	yes	1										30	22	yes			
-burritos	freezer of burritos	burritos|freezer|fridge|fridge-freezer|breakfast burritos|aunt sue	source	KI	1	no	yes	0						frozen_burrito				30	23				
+nacho_chips	tortilla chips	tortilla chips|nacho chips|chips|nachos|tortilla	object		0	yes	yes	1										30	22	yes			
+burritos	freezer of burritos	burritos|freezer|fridge|fridge-freezer|breakfast burritos|foil	source	KI	1	no	yes	0						frozen_burrito				30	23				
 frozen_burrito	frozen burrito	burrito|frozen burrito|foil brick|breakfast burrito	object		0	yes	yes	1										30	24	yes			
 cat_food_chicken	chicken cat food	chicken cat food|chicken|cat food	object		0	yes	yes	1		can_opener|cat_bowl								30	24	yes			
 cat_food_salmon	salmon cat food	salmon cat food|salmon|cat food	object		0	yes	yes	1		cat_bowl								10	25	yes			
@@ -63,7 +63,7 @@ faded_portraits	faded portraits	portraits|paintings|photographs|pictures	fixture
 halloween_box	Halloween box	halloween box|moving box|box	fixture	BE	1	no	yes	0										40	56				
 carving_tools	carving tools	carving tools|tools|carving kit	object		0	yes	no	0	1									40	57				
 can_opener	can opener	can opener|opener|tin opener	object		0	yes	yes	0	1									30	0				
-can_opener_hook	hook of can openers	can opener|openers|hook|tin opener	source	KI	1	no	yes	0						can_opener		pantry		30	0				
+can_opener_hook	hook of can openers	can opener|can openers|openers|hook|tin opener|tin openers	source	KI	1	no	yes	0						can_opener		pantry		30	0				
 costume	costume	costume|cape|vampire cape|witch hat	object		0	yes	yes	1										40	58				
 cookie_cutters	pumpkin cookie cutters	cookie cutters|cutters	fixture	BE	1	no	yes	0										40	59				
 spider_web	fake spider web	spider web|web|cobweb	fixture	BE	1	no	yes	0										40	60				
