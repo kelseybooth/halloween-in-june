@@ -181,12 +181,14 @@ async def test_a_thing_with_a_refusal_and_no_success_refuses(house):
     # describe and its refusal is about the missing bowl rather than the
     # missing opener.
     #
-    # **`cat_food_expired` stays, and is the one can that belongs here.**
-    # She will not eat it - it is in `CAT_FOOD` and not in `FEEDS` - and
-    # the player never gets the lid up. Whether she should get to take one
-    # breath of it and walk away, which is what `world` says she does, is
-    # a question for the writers rather than something this test should
-    # settle by listing it.
+    # **And the expired can left too, later the same day.** It was the
+    # one can left here, on the reading that the player never gets the
+    # lid up at all. The writers answered the other way: she gets to take
+    # one breath of it and walk away, which is what `world` always said
+    # she did, so the can has a success now and it costs
+    # `DISGUST_POINTS`. **No can is in this set any more** - every one of
+    # them has something to describe, four of them good and one of them
+    # a mistake.
     #
     # The bowl joined in its place, and for the original reason rather
     # than a new one: there is nothing to do with an empty bowl, so the
@@ -225,7 +227,6 @@ async def test_a_thing_with_a_refusal_and_no_success_refuses(house):
     # set the way the salmon did.
     assert shaped == {
         "eunoia", "EH", "LS", "SL", "house", "ivy", "BC",
-        "cat_food_expired",
         "cat_bowl", "cat_bowl_courtyard", "cat_bowl_hallway",
         "branches", "leaves", "fence", "wasp_nest",
         "stand", "shelves", "firewood_bin", "coin_slot",

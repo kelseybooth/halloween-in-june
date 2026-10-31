@@ -146,6 +146,17 @@ HUNGER_WINDOW = timedelta(hours=8)
 # four constants out of code is not a thing to do halfway.
 FEED_POINTS = 10
 
+# What the expired can costs, and it is meant to sting: seven and a half
+# good feeds, or five of them and a fluffed bed. She is not refusing a
+# meal here, she is being handed something that has gone off by somebody
+# who had four good cans to choose from.
+#
+# **The only negative delta in the game.** `adjust_relationship` was
+# built for one - floored at `RELATIONSHIP_MIN` and uncapped, because a
+# grudge bottoms out and affection has 250 to climb to - and nothing had
+# ever passed it one until now.
+DISGUST_POINTS = -75
+
 # Her bowl, which every flavor requires. It is a fixture in the
 # Entryway, so the requirement is met from the room rather than from
 # the bag - see `database.requirements_met`.
@@ -564,6 +575,9 @@ async def after_use(
     if thing_id in FEEDS:
         return await _feed_the_cat(guild_id, user_id)
 
+    if thing_id == CAT_FOOD_EXPIRED:
+        return await _offer_her_the_expired_can(guild_id, user_id)
+
     if thing_id == HOUSE_KEY:
         return await _unlock_the_front_door(guild_id)
 
@@ -955,6 +969,24 @@ async def _fluff_the_bed(guild_id: int, user_id: int) -> Effect:
     """
     score = await database.adjust_relationship(user_id, guild_id, BED_FLUFF)
     return Effect(relationship=score, delta=BED_FLUFF)
+
+
+async def _offer_her_the_expired_can(guild_id: int, user_id: int) -> Effect:
+    """She takes one breath of it and walks away, and remembers.
+
+    **Not a feed, and the split is the whole point.** The expired can is
+    in `CAT_FOOD` and not in `FEEDS`, so every question that means "was
+    she fed" still answers no: her hunger is untouched, the timer is not
+    stamped, no room opens, nothing is earned and nothing is posted to
+    the channel. What it does is cost - `DISGUST_POINTS`, which is the
+    only negative delta in the game.
+
+    Nothing is consumed here either; `consumed_on_use` takes the can in
+    `_finish_use`, the same as every other use. The can is gone and she
+    is further away than she was, which is the trade the writers chose.
+    """
+    score = await database.adjust_relationship(user_id, guild_id, DISGUST_POINTS)
+    return Effect(relationship=score, delta=DISGUST_POINTS)
 
 
 async def _feed_the_cat(guild_id: int, user_id: int) -> Effect:
