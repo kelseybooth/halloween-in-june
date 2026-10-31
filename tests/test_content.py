@@ -419,6 +419,135 @@ def test_pointing_that_row_at_another_class_strands_the_toys(shipped):
 
 
 # --------------------------------------------------------------------------
+# Splitting a release in half
+#
+# Three checks that ask about *when* rather than about whether, which is a
+# question nothing asked while a room, its contents and their prose were
+# always typed with the same drop number on them. All three were written
+# against a worked split and each one is handed the row left behind.
+# --------------------------------------------------------------------------
+
+
+def test_a_thing_that_arrives_before_its_text_is_caught(shipped):
+    """The stove moved forward and its sentence left at 30."""
+    broken = replace_thing(shipped, "stove", since_drop=20)
+    assert problems_matching(broken, 'would read as "You see cast-iron stove."')
+
+
+def test_and_the_checker_had_nothing_to_say_about_it_before(shipped):
+    """The miss this check exists for, asserted rather than described.
+
+    `_check_text_coverage` asks whether a default row exists and never
+    which drop it is for, so the stove above loads clean, passes every
+    other check, and degrades only in the room - where the reply is a
+    sentence with the thing's name in it and none of the writers'.
+    """
+    broken = replace_thing(shipped, "stove", since_drop=20)
+    assert not problems_matching(broken, "no text row")
+    assert not problems_matching(broken, "no default look text")
+    assert len(problems_matching(broken, "until then")) == 1
+
+
+def test_a_state_row_written_for_a_later_drop_is_fine(shipped):
+    """The lumber: default at 20, `stairs_upper` at 30, thing at 20.
+
+    Asked of the default row alone and for a reason - a state row cannot
+    arrive before the state it describes can be reached, and the
+    fallback only ever stands in for the default.
+    """
+    assert {r.since_drop for r in shipped.thing_text if r.entity_id == "lumber"} == {20, 30}
+    assert thing(shipped, "lumber").since_drop == 20
+    assert not problems_matching(shipped, "until then")
+
+
+def test_a_source_that_arrives_before_its_yield_is_caught(shipped):
+    """The sideboard cupboard at 30 handing out a can written for 40."""
+    broken = replace_thing(shipped, "cat_food_tuna", since_drop=40)
+    assert problems_matching(
+        broken, "source cat_food_stash_sideboard arrives at drop 30 and hands out"
+    )
+
+
+def test_and_that_can_was_obtainable_as_far_as_anything_asked(shipped):
+    """Why the check is needed: the yield is roomless, so the existing
+    question about it - does anything produce it - is answered yes
+    whenever the source arrives, and nothing asks when."""
+    broken = replace_thing(shipped, "cat_food_tuna", since_drop=40)
+    assert thing(shipped, "cat_food_tuna").room_id in (None, "")
+    assert not problems_matching(broken, "could ever obtain it")
+
+
+def test_a_yield_parked_at_never_is_not_a_problem(shipped):
+    """The pasta pot has been doing this since drop 30 shipped.
+
+    A source written ahead of its object on purpose is a parked row, and
+    `_check_drop_references` is the check that knows the difference - a
+    row may say NEVER and only NEVER.
+    """
+    assert thing(shipped, "pasta").since_drop == content.NEVER
+    assert not problems_matching(shipped, "which waits for drop")
+
+
+def test_a_room_that_opens_before_the_door_into_it_is_caught(shipped):
+    """Both ends of the arch pushed to 40 with the Dining Room at 30.
+
+    The Dining Room, the Kitchen behind it and the Courtyard behind that
+    become an island: three rooms with prose, threads, and no way in.
+    """
+    broken = copy.deepcopy(shipped)
+    broken.things = [
+        replace(t, since_drop=40) if t.thing_id in {"ED", "DE"} else t
+        for t in broken.things
+    ]
+    problems = problems_matching(broken, "at drop 30, room")
+
+    assert [p.split()[4] for p in problems] == ["CO", "DI", "KI"]
+    assert "cannot be reached from CH through the exits that have arrived" in problems[0]
+
+
+def test_and_the_finished_house_check_walks_right_past_it(shipped):
+    """The miss, again asserted. `_check_reachable_rooms` builds one
+    graph out of every exit in the files whatever drop it arrives at, so
+    a door that comes ten drops late is a door as far as it can tell."""
+    broken = copy.deepcopy(shipped)
+    broken.things = [
+        replace(t, since_drop=40) if t.thing_id in {"ED", "DE"} else t
+        for t in broken.things
+    ]
+    assert not problems_matching(broken, "cannot be reached from EN")
+
+
+def test_the_walk_starts_on_the_road_and_not_in_the_house(shipped):
+    """The trap this check would have fallen into, kept failing-closed.
+
+    The channel is the one room players are in before they walk
+    anywhere, and it is not `open_at_launch` - the Entryway is. Starting
+    there asks whether the road can be reached from inside a house that
+    does not exist for another nine drops, and the shipped files would
+    report drops 1 to 9 as broken.
+    """
+    assert content.CHANNEL_ROOM == "CH"
+    assert not any(r.room_id == "CH" and r.open_at_launch for r in shipped.rooms)
+    assert not problems_matching(shipped, "has arrived but cannot be reached")
+
+
+def test_cutting_the_road_into_the_house_is_caught_at_every_drop_after(shipped):
+    """And the other direction: the Entryway and the two exits that reach
+    it all arrive at drop 10, which is the pairing this check wants. Take
+    the pair away and every drop from 10 on has a foyer nobody can get to,
+    reported once per drop - because a room stranded for five drops is
+    five Tuesdays, not one problem."""
+    broken = copy.deepcopy(shipped)
+    broken.things = [t for t in broken.things if t.thing_id not in {"house", "front_door"}]
+    broken.thing_text = [
+        r for r in broken.thing_text if r.entity_id not in {"house", "front_door"}
+    ]
+    problems = problems_matching(broken, "room EN has arrived but cannot be reached")
+
+    assert len(problems) == len({d.drop_id for d in shipped.drops if d.drop_id >= 10})
+
+
+# --------------------------------------------------------------------------
 # Malformed files
 # --------------------------------------------------------------------------
 

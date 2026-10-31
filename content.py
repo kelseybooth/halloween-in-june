@@ -879,9 +879,12 @@ def validate(content: Content) -> list[str]:
     problems += _check_containers(content, things)
     problems += _check_aliases(content)
     problems += _check_text_coverage(content, rooms, things)
+    problems += _check_nothing_arrives_before_its_prose(content)
     problems += _check_exits(content, rooms)
     problems += _check_reachable_rooms(content, rooms)
+    problems += _check_rooms_are_reachable_at_every_drop(content)
     problems += _check_obtainable_things(content, things)
+    problems += _check_sources_arrive_with_their_yields(content, things)
     problems += _check_states(content, things)
     problems += _check_drops(content)
     problems += _check_drop_references(content)
@@ -1104,6 +1107,48 @@ def _check_text_coverage(
     return problems
 
 
+def _check_nothing_arrives_before_its_prose(content: Content) -> list[str]:
+    """Nothing may arrive a drop before the sentence that describes it.
+
+    `_check_text_coverage` above asks whether a default row exists. It
+    has never asked which drop that row is written for, because for most
+    of this game's life the two numbers were typed at the same time by
+    the same person. Splitting a release apart is what separates them: a
+    thing moved forward with its text left behind passes every check,
+    loads clean, and then degrades in the room - `_look_at` falls back
+    to `You see {name}.`, so the writers' sentence is replaced by the
+    thing's own name and nothing anywhere says so.
+
+    **Asked of the default row only.** A state row written for a later
+    drop is ordinary content - the lumber's `stairs_repaired` text
+    cannot arrive before the state can be reached - and the default row
+    is the one the fallback stands in for.
+    """
+    written: dict[str, int] = {}
+    for row in content.thing_text:
+        if row.state != "default" or "look" not in row.text:
+            continue
+        earliest = written.get(row.entity_id)
+        if earliest is None or row.since_drop < earliest:
+            written[row.entity_id] = row.since_drop
+
+    problems = []
+    for thing in content.things:
+        earliest = written.get(thing.thing_id)
+        if thing.since_drop == NEVER or earliest is None:
+            # Parked, or with no default row at all - which
+            # `_check_text_coverage` has already said.
+            continue
+        if thing.since_drop >= earliest:
+            continue
+        problems.append(
+            f"thing {thing.thing_id} arrives at drop {thing.since_drop} but its "
+            f"look text waits for drop {earliest}; it would read as "
+            f'"You see {thing.name}." until then'
+        )
+    return problems
+
+
 def _check_exits(content: Content, rooms: dict[str, Room]) -> list[str]:
     """Exits need somewhere to go, and the spec says every one is bidirectional."""
     problems = []
@@ -1170,6 +1215,60 @@ def _check_reachable_rooms(content: Content, rooms: dict[str, Room]) -> list[str
     ]
 
 
+def _check_rooms_are_reachable_at_every_drop(content: Content) -> list[str]:
+    """And reachable on the day it opens, not only once the house is finished.
+
+    The check above builds one graph out of every exit in the files and
+    walks it once. That is the right question about the finished house
+    and no question at all about a Tuesday in October: a room that opens
+    a drop before the only door into it is reachable in that graph and
+    stranded in play. Its prose resolves, its thread exists, `/go` finds
+    no way in, and the room is a thread nobody can walk into.
+
+    **A room arrives with its description**, so arrival is read off
+    `room_text` exactly as `resolve.arrived_rooms` reads it - and with
+    the same `since_drop in arrived` rather than `<=`, so a row waiting
+    on a drop nobody has written stays waiting here too.
+
+    **The walk starts at the road, not at the first `open_at_launch`
+    room.** Players stand in the channel from drop 0, before its own
+    first fragment and long before the Entryway's, so starting from the
+    Entryway asks whether the road can be reached from inside a house
+    that does not exist yet - and reports drops 0 to 3 as broken. Every
+    caller of `arrived_rooms` adds the channel for the same reason.
+    """
+    here_at: dict[str, set[int]] = {}
+    for row in content.room_text:
+        here_at.setdefault(row.entity_id, set()).add(row.since_drop)
+
+    problems = []
+    for drop in sorted(d.drop_id for d in content.drops):
+        arrived = {d.drop_id for d in content.drops if d.drop_id <= drop}
+        here = {room for room, drops in here_at.items() if drops & arrived}
+        here.add(CHANNEL_ROOM)
+
+        adjacency: dict[str, set[str]] = {room: set() for room in here}
+        for exit_ in content.things:
+            if not exit_.is_exit or exit_.since_drop not in arrived:
+                continue
+            if exit_.room_id in adjacency and exit_.destination_room_id in here:
+                adjacency[exit_.room_id].add(exit_.destination_room_id)
+
+        seen, queue = {CHANNEL_ROOM}, [CHANNEL_ROOM]
+        while queue:
+            for destination in adjacency.get(queue.pop(), ()):
+                if destination not in seen:
+                    seen.add(destination)
+                    queue.append(destination)
+
+        problems += [
+            f"at drop {drop}, room {room} has arrived but cannot be reached "
+            f"from {CHANNEL_ROOM} through the exits that have arrived"
+            for room in sorted(here - seen)
+        ]
+    return problems
+
+
 # A fourth way a roomless thing comes into being, and the only one the
 # files cannot show: code puts it there. One member, and it should stay
 # small - every id in here is a thing whose existence a reader of the
@@ -1207,6 +1306,41 @@ def _check_obtainable_things(content: Content, things: dict[str, Thing]) -> list
             f"thing {thing.thing_id} is in no room and nothing yields or transforms "
             "into it, so no player could ever obtain it"
         )
+    return problems
+
+
+def _check_sources_arrive_with_their_yields(
+    content: Content, things: dict[str, Thing]
+) -> list[str]:
+    """A source may not arrive before the object it hands out.
+
+    `reach` files a source under what it yields - the stash under the
+    sofa and the can in your bag are one candidate, which is what stops
+    the "chicken or chicken?" prompt - and it applies the visibility
+    filter to the *source's* id. So a source that arrives first hands
+    the player a thing from a drop the server has not reached, named and
+    described out of rows nobody has unlocked.
+
+    Nothing else asks. The yield is usually roomless, which is exactly
+    the case `_check_obtainable_things` is satisfied by: something
+    produces it, and that check does not care when.
+    """
+    problems = []
+    for thing in content.things:
+        if not thing.yields or thing.since_drop == NEVER:
+            continue
+        produced = things.get(thing.yields)
+        if produced is None or produced.since_drop == NEVER:
+            # Dangling is `_check_references`' question, and a yield
+            # parked at NEVER is a source written ahead of its object on
+            # purpose - which the pasta pot has been since drop 30.
+            continue
+        if produced.since_drop > thing.since_drop:
+            problems.append(
+                f"source {thing.thing_id} arrives at drop {thing.since_drop} and "
+                f"hands out {thing.yields}, which waits for drop "
+                f"{produced.since_drop}"
+            )
     return problems
 
 
