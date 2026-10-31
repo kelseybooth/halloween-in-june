@@ -37,6 +37,9 @@ import resolve
 import states
 import triggers
 import world
+# An inventory row written straight in, so a test need not walk the
+# house for a can it is not testing the taking of.
+from test_world import carry
 
 
 ROOM_SERVICE = "room_service"
@@ -352,6 +355,36 @@ async def test_the_gate_counts_even_when_the_player_already_holds_it(house):
     assert await resolve.gate_reveals_more(
         GUILD_A, "EN", content_module.FED_THE_CAT, unlocked=held
     )
+
+
+@pytest.mark.parametrize("flavour", sorted(world.FEEDS))
+async def test_every_flavour_can_actually_be_fed_to_her(house, flavour):
+    """**Parametrised over `world.FEEDS` rather than written out**, so a
+    flavour added to the set is covered the day it is added.
+
+    This file fed the salmon everywhere, and the salmon was the only one
+    that worked. Salmon is drop 10 and has a pull ring, so it needs no
+    opener and its `use_fail` is about the bowl; the three flavours added
+    after it all need the opener, and each was given a refusal and never
+    a success. A `use_fail` with no `use` beside it is how the content
+    says *this never works at all* - `_state_refusal` reads it that way
+    for the crumbled staircase and for the expired can - so the tuna,
+    the chicken and the gourmet were refused outright, in every room,
+    holding everything, for as long as they had been in the files.
+
+    Asserted on the log and the bag rather than on the copy: a refused
+    feed writes `use/refused/wrong_state` and keeps the can, and a feed
+    that happens writes `feed/success` and eats it.
+    """
+    db, *_ = house
+    await carry(db, ALICE, GUILD_A, "can_opener")
+    await carry(db, ALICE, GUILD_A, flavour)
+
+    await run(house, bot.use, flavour.removeprefix("cat_food_"))
+
+    rows = await logged(db, database.FEED)
+    assert rows[-1].outcome == database.SUCCESS
+    assert await database.carried_of(ALICE, GUILD_A, flavour) == 0
 
 
 async def test_the_expired_can_is_not_a_feed(house):
