@@ -142,7 +142,13 @@ async def test_using_her_hands_the_player_the_right_verb(house):
 async def test_a_thing_with_a_refusal_and_no_success_refuses(house):
     """The rule that makes the line above land. Four of these are exits,
     which refuse through their own gates, and eight are the channel
-    scenery that playtesters tried `/use` on."""
+    scenery that playtesters tried `/use` on.
+
+    **A thing in this set cannot be used at all**, which is the thing to
+    keep in mind when a row joins it. The list is the point: every member
+    is here because there is nothing to succeed at, and a member that has
+    a success nobody wrote is a bug this test will otherwise certify.
+    """
     parsed = content_module.load_files()
     text = {
         (r.entity_id, r.state): r.text for r in parsed.thing_text
@@ -154,13 +160,33 @@ async def test_a_thing_with_a_refusal_and_no_success_refuses(house):
         and not text.get((t.thing_id, "default"), {}).get("use")
     }
 
-    # The cat, the four gated exits, and four of the five cans - whose
-    # `use` text already read as a failed attempt ("looking for a
-    # pull-tab") and moved to `use_fail` when feeding came to need a can
-    # opener. **The salmon left this set in drop 10**, which is the whole
-    # of why drop 10 can be won: it is the one flavor with a ring on the
-    # lid, so it has a success to describe and its refusal is now about
-    # the missing bowl rather than the missing opener.
+    # The cat, the four gated exits, and one of the five cans.
+    #
+    # **Three cans left this set on 31 October, and this test had them
+    # listed as deliberate.** The note here used to read "four of the five
+    # cans", on the grounds that their `use` text already read as a failed
+    # attempt ("looking for a pull-tab") and so moved to `use_fail` when
+    # feeding came to need an opener. That much was right. What nobody
+    # wrote was the success to put in its place - and a refusal with no
+    # success is this test's own definition of a thing that never works,
+    # so the tuna, the chicken and the gourmet could not be fed to her in
+    # any room, holding anything, for as long as they had been in the
+    # files. The sentence that gives it away is the one that follows: the
+    # salmon leaving this set is "the whole of why drop 10 can be won".
+    # The same was always true of the other three, and a playtester found
+    # it by using the gourmet in the Entryway.
+    #
+    # The salmon left in drop 10, and for the reason it always had: it is
+    # the one flavor with a ring on the lid, so it has a success to
+    # describe and its refusal is about the missing bowl rather than the
+    # missing opener.
+    #
+    # **`cat_food_expired` stays, and is the one can that belongs here.**
+    # She will not eat it - it is in `CAT_FOOD` and not in `FEEDS` - and
+    # the player never gets the lid up. Whether she should get to take one
+    # breath of it and walk away, which is what `world` says she does, is
+    # a question for the writers rather than something this test should
+    # settle by listing it.
     #
     # The bowl joined in its place, and for the original reason rather
     # than a new one: there is nothing to do with an empty bowl, so the
@@ -199,8 +225,7 @@ async def test_a_thing_with_a_refusal_and_no_success_refuses(house):
     # set the way the salmon did.
     assert shaped == {
         "eunoia", "EH", "LS", "SL", "house", "ivy", "BC",
-        "cat_food_chicken", "cat_food_tuna",
-        "cat_food_expired", "cat_food_gourmet",
+        "cat_food_expired",
         "cat_bowl", "cat_bowl_courtyard", "cat_bowl_hallway",
         "branches", "leaves", "fence", "wasp_nest",
         "stand", "shelves", "firewood_bin", "coin_slot",
