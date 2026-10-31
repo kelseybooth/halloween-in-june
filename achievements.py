@@ -63,6 +63,12 @@ HOOKS = (
     "on_relationship_change",
     "on_reaction",
     "on_message",
+    # A player looking around the room they are standing in - not at a
+    # thing in it, which has no hook and wants none. It exists for *Bin
+    # Looking for You*, which asks about the first time somebody reads
+    # the Kitchen: walking in prints nothing, so that first `/look` is
+    # the moment they see the trash can.
+    "on_look",
     "on_midnight",
     "on_cross",
     # Every slash command, after it has run. The widest hook there is,
@@ -98,6 +104,12 @@ class Context:
     thing_id: str | None = None
     # The source a take resolved against, None when it came off the floor.
     source_id: str | None = None
+    # The container a take came out of, "" for the open floor. The same
+    # kind of fact as `source_id` and shaped by the same argument: a
+    # spice jar out of the shipping box is a delivery being unpacked and
+    # the identical jar out of the bin is going through the trash, and
+    # the thing id cannot tell them apart.
+    container_id: str | None = None
     room_id: str | None = None
     # Passed in rather than read from the clock, so a date-gated achievement
     # can be tested at both edges of its window without faking a timezone.

@@ -167,6 +167,19 @@ STAIRS_UPPER_REACHED = "stairs_upper"
 # fell - four facts about one event, in the one row that records it.
 LADDER_ABANDONED = "ladder_abandoned"
 
+# Something thrown in the trash. A player's row, with `thing_id` and a
+# `detail` carrying how many went in and how many they kept - the two
+# halves of the question the menu asks, which is whether anybody uses
+# "Some" or whether everybody throws the lot.
+THREW_AWAY = "threw_away"
+
+# The bag going out to the curb. One row for the whole emptying rather
+# than one per thing, because it is one action: `detail` says what was
+# deleted and where each one-of-a-kind thing was put back, which is the
+# only record anywhere of where it went. A player's row, not a system
+# one - somebody took the trash out.
+TRASH_EMPTIED = "trash_emptied"
+
 # The two the ladder adds to the refusal vocabulary.
 #
 # `ARMS_FULL` is a player carrying the ladder, and deliberately not
@@ -2854,6 +2867,132 @@ async def take_from_room(
     return True
 
 
+async def carried_droppable(
+    user_id: int, guild_id: int
+) -> list[tuple[str, str, int]]:
+    """(thing_id, name, count) for everything in the bag that can be put down.
+
+    `droppable` rather than `takeable`, because the question is whether
+    this can leave the player's hands. Three things in the game cannot -
+    the skeleton key, the carving tools and the ghost's bedsheet - and
+    the menu that reads this must not offer them: an option a player can
+    pick and that then refuses is worse than an option that was never
+    there.
+
+    Ordered the way a room's contents are, so the menu reads in the same
+    order as everything else the game lists.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(ThingType.thing_id, ThingType.name, PlayerInventory.count)
+            .join(ThingType, ThingType.thing_id == PlayerInventory.thing_id)
+            .where(
+                PlayerInventory.user_id == user_id,
+                PlayerInventory.guild_id == guild_id,
+                PlayerInventory.count > 0,
+                ThingType.droppable.is_(True),
+            )
+            .order_by(ThingType.sort_order, ThingType.name)
+        )
+        return [(row[0], row[1], row[2]) for row in rows]
+
+
+async def put_into_container(
+    user_id: int,
+    guild_id: int,
+    room_id: str,
+    container_id: str,
+    thing_id: str,
+    amount: int,
+) -> int:
+    """Move up to `amount` out of the bag and into a container in the room.
+
+    Returns how many actually moved, which is what the reply counts.
+    **Clamped by the decrement rather than by a read**, the same rule as
+    every other move here: the UPDATE is conditional on the count still
+    being at least what is being taken, so a player who throws six jars
+    away twice in two tabs does not put twelve in the bin.
+
+    One write per call rather than `amount` writes of one. The whole
+    point of the menu's "All" is that a bag of sixteen spice jars goes
+    in at once.
+    """
+    if amount < 1:
+        return 0
+    session_factory = _require_session()
+    insert = _upsert_statement()
+
+    async with session_factory() as session:
+        moved = await session.execute(
+            update(PlayerInventory)
+            .where(
+                PlayerInventory.guild_id == guild_id,
+                PlayerInventory.user_id == user_id,
+                PlayerInventory.thing_id == thing_id,
+                PlayerInventory.count >= amount,
+            )
+            .values(count=PlayerInventory.count - amount)
+        )
+        if not moved.rowcount:
+            await session.rollback()
+            return 0
+
+        await session.execute(
+            _add_to_room(insert, guild_id, room_id, container_id, thing_id, amount)
+        )
+        await session.commit()
+
+    log.info(
+        "User %s put %d %s into %s in guild %s",
+        user_id,
+        amount,
+        thing_id,
+        container_id,
+        guild_id,
+    )
+    return amount
+
+
+async def empty_container(
+    guild_id: int, room_id: str, container_id: str
+) -> list[tuple[str, int]]:
+    """Take everything out of a container and report what was in it.
+
+    Returns (thing_id, count) pairs and leaves the container empty. The
+    caller decides what becomes of each - the trash can deletes what the
+    house can make more of and puts the rest back somewhere else - which
+    is why this hands the list over rather than deciding anything.
+
+    Rows are deleted rather than zeroed. A zero row means "this server
+    has seen this thing", which the loader reads to decide whether to
+    place it again; a bag of rubbish going out to the curb should leave
+    nothing behind that changes what the next boot does.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = (
+            await session.execute(
+                select(RoomContents.thing_id, RoomContents.count).where(
+                    RoomContents.guild_id == guild_id,
+                    RoomContents.room_id == room_id,
+                    RoomContents.container_id == container_id,
+                    RoomContents.count > 0,
+                )
+            )
+        ).all()
+        if rows:
+            await session.execute(
+                delete(RoomContents).where(
+                    RoomContents.guild_id == guild_id,
+                    RoomContents.room_id == room_id,
+                    RoomContents.container_id == container_id,
+                )
+            )
+            await session.commit()
+    return [(row[0], row[1]) for row in rows]
+
+
 async def drop_into_room(user_id: int, guild_id: int, room_id: str, thing_id: str) -> bool:
     """Move one copy out of the bag and into the room, loose.
 
@@ -4239,20 +4378,100 @@ async def clear_unreachable_room_contents(
     return result.rowcount or 0
 
 
-async def place_in_room(guild_id: int, room_id: str, thing_id: str, amount: int) -> None:
-    """Put something loose on a room's floor, from outside the scheduler.
+async def place_in_room(
+    guild_id: int,
+    room_id: str,
+    thing_id: str,
+    amount: int,
+    container_id: str = LOOSE_IN_ROOM,
+) -> None:
+    """Put something in a room, loose or inside something, from outside
+    the scheduler.
 
-    The bed stash uses it. Deliberately not routed through the restock
-    path: the cap governs the scheduler, and a thing the game hands a
-    player directly is not the scheduler's to tidy away.
+    The bed stash uses it, and so does the trash going out to the curb.
+    Deliberately not routed through the restock path: the cap governs
+    the scheduler, and a thing the game hands a player directly is not
+    the scheduler's to tidy away.
     """
     session_factory = _require_session()
     insert = _upsert_statement()
     async with session_factory() as session:
         await session.execute(
-            _add_to_room(insert, guild_id, room_id, LOOSE_IN_ROOM, thing_id, amount)
+            _add_to_room(insert, guild_id, room_id, container_id, thing_id, amount)
         )
         await session.commit()
+
+
+async def things_the_house_makes() -> set[str]:
+    """Every thing_id named as something the content can produce again.
+
+    Three columns in one answer, because the caller's question is one
+    question. `yields` is what sources hand out - and what the ladder's
+    label names, which is the case that makes this `yields` from any
+    thing rather than from sources only. `transforms_to` is what
+    something becomes. `restocks.thing_id` is what the scheduler
+    places, and comes back raw: a `type:` row is left as it was written,
+    because expanding it needs to know what that prefix means and this
+    layer does not.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        yielded = await session.execute(
+            select(ThingType.yields).where(ThingType.yields.is_not(None))
+        )
+        transformed = await session.execute(
+            select(ThingType.transforms_to).where(ThingType.transforms_to.is_not(None))
+        )
+        restocked = await session.execute(select(Restock.thing_id))
+    return {
+        row[0]
+        for rows in (yielded, transformed, restocked)
+        for row in rows
+        if row[0]
+    }
+
+
+async def thing_ids_of_type(kind: str) -> set[str]:
+    """Every thing of one type, whatever drop it belongs to.
+
+    Unfiltered by drop on purpose, unlike `stock_of_type`: the caller
+    asking this wants to know what the content *is*, not what has
+    arrived. A toy whose drop lands in a fortnight is still a toy the
+    scheduler will place.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(ThingType.thing_id).where(ThingType.type == kind)
+        )
+    return {row[0] for row in rows}
+
+
+async def containers_in_rooms() -> list[tuple[str, str, bool, int]]:
+    """(thing_id, room_id, scatter_target, since_drop) for every container.
+
+    A container is anything another thing names in its `contained_in` -
+    there is no column saying so, which is what makes it a query rather
+    than a filter. Twelve of them today.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        named = (
+            await session.execute(
+                select(ThingType.contained_in)
+                .distinct()
+                .where(ThingType.contained_in.is_not(None))
+            )
+        ).scalars().all()
+        rows = await session.execute(
+            select(
+                ThingType.thing_id,
+                ThingType.room_id,
+                ThingType.scatter_target,
+                ThingType.since_drop,
+            ).where(ThingType.thing_id.in_(set(named)))
+        )
+    return [(row[0], row[1], row[2], row[3]) for row in rows]
 
 
 async def count_of_type(guild_id: int, room_id: str, kind: str) -> int:

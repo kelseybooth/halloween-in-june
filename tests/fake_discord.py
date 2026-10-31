@@ -309,6 +309,15 @@ class FakeResponse:
     async def send_message(self, content=None, **kwargs):
         self._interaction.sent.append((content, kwargs))
 
+    async def send_modal(self, modal):
+        """What a button click answers with when it wants a typed answer.
+
+        Recorded rather than rendered. A test drives the modal by
+        setting its input and awaiting `on_submit`, which is what
+        Discord does once the player presses Submit.
+        """
+        self._interaction.modals.append(modal)
+
     async def edit_message(self, **kwargs):
         """What a button click answers with: the same message, changed.
 
@@ -337,7 +346,15 @@ class FakeInteraction:
     """
 
     def __init__(
-        self, user_id, guild_id, *, guild=None, channel=None, roles=(), command=None
+        self,
+        user_id,
+        guild_id,
+        *,
+        guild=None,
+        channel=None,
+        roles=(),
+        command=None,
+        message=None,
     ):
         self.user = SimpleNamespace(
             id=user_id,
@@ -364,6 +381,14 @@ class FakeInteraction:
         self.withdrawn = False
         # What a component callback edited this message into, in order.
         self.edited: list[dict] = []
+        # The message a component is attached to. None for a slash
+        # command, set by Discord for a button, a select and a modal
+        # submitted from one - which is the difference between a
+        # handler replacing what the player is looking at and answering
+        # underneath it.
+        self.message = message
+        # Modals a component callback opened, in order.
+        self.modals: list = []
 
     async def delete_original_response(self) -> None:
         """Take back the ephemeral "thinking" message.

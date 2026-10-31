@@ -56,6 +56,8 @@ from database import (  # noqa: F401 - the vocabulary, re-exported for call site
     SYSTEM,
     TAKE,
     THREAD_REMOVED,
+    THREW_AWAY,
+    TRASH_EMPTIED,
     UNKNOWN,
     UNKNOWN_NOUN,
     UNLOCK,
