@@ -3013,6 +3013,29 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
             )
             return
 
+        # **The ladder before the clock**, which is drop 20's rule about
+        # the state refusal applied to the thing that replaced it. In
+        # `stairs_upper` the lumber used to have a refusal and no
+        # success, so `_state_refusal` above turned the use down and
+        # turned it down first; drop 30 gives that state a success line,
+        # so the refusal has to be asked here instead - and in the same
+        # position, because a player who already laid a plank today must
+        # be told about the steps rather than about their muscles.
+        if found.thing_id == world.LUMBER and await world.needs_the_ladder(
+            guild_id, user.id, state.current_room
+        ):
+            await interaction.followup.send(
+                await _no_ladder_refusal(guild_id, found.name), ephemeral=True
+            )
+            await _turned_away(
+                interaction,
+                telemetry.USE,
+                telemetry.REQUIRES_MISSING,
+                thing_id=found.thing_id,
+                detail=world.LADDER,
+            )
+            return
+
         if row.use_cooldown_daily:
             await _use_once_a_day(interaction, state, found, row)
             return
@@ -3457,6 +3480,26 @@ def _trash_detail(run) -> str:
     return f"deleted=[{gone}] put_back=[{kept}]"
 
 
+async def _no_ladder_refusal(guild_id: int, name: str) -> str:
+    """The top steps, out of reach without something to stand on.
+
+    Read out of the lumber's own `stairs_upper` row rather than through
+    the state resolution, for the reason `thing_text_in_state` exists:
+    that state has a refusal *and* a success now - the refusal written
+    for drop 20, the success written for drop 30 with the ladder in it -
+    and the ordinary read would walk past the one wanted here.
+
+    One line for both drops, which the writers approved as such: at
+    drop 20 it means the ladder does not exist yet and at drop 30 it
+    means nobody has brought it, and "too high to fix without something
+    to stand on" is true either way.
+    """
+    written = await resolve.thing_text_in_state(
+        guild_id, world.LUMBER, "use_fail", world.STAIRS_UPPER
+    )
+    return phrasing.fill(written, name=name) if written else ""
+
+
 async def _arms_full(guild_id: int, user_id: int) -> str | None:
     """The line for a player trying to do something with the ladder up.
 
@@ -3701,7 +3744,11 @@ async def _finish_use(interaction, state, found) -> None:
     except SQLAlchemyError:
         log.exception("Could not mark the nouns in %s's use text", found.thing_id)
     if effect and effect.announce:
-        reply = f"{reply}\n\n{effect.announce}" if reply else effect.announce
+        # Filled here because only Discord knows the display name, and
+        # the one announcement in the game that has a `{player}` in it
+        # is the last plank's.
+        announced = phrasing.fill(effect.announce, player=user.display_name)
+        reply = f"{reply}\n\n{announced}" if reply else announced
 
     # Awarded before the rail reads anything, announced after the reply
     # goes out. A tester who used the cat bed was told *Fluffed to
@@ -3720,6 +3767,12 @@ async def _finish_use(interaction, state, found) -> None:
             # road knocks a piece off the nest and a climb the cat won
             # does not, and both are `on_use` of the ladder in `CH`.
             extra=dict(effect.extra) if effect else {},
+            # And who the award is for, when it is not the player who
+            # earned it. The last plank is the only one: *Board
+            # Meeting* goes to everybody who laid a plank, announced
+            # once, and the list only exists on the use that finished
+            # the staircase.
+            recipients=effect.recipients if effect else None,
         ),
         interaction=interaction,
         announce=False,

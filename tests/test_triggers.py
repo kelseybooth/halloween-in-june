@@ -693,9 +693,10 @@ BLOCKED = [
     # once.
     #
     # *Trash Panda* and *Bin Looking for You* left again with the trash
-    # can, which leaves *Board Meeting* on its own: the staircase
-    # release is the last one that owes anything here.
-    "board_meeting",
+    # can, and *Board Meeting* with the last plank, so drop 30's own
+    # mechanics owe this list nothing: everything above waits on cat
+    # crossing, the ghosts, the doorbell or the letter.
+    #
     # *Using Your Noodle* arrived the same day the trash can's two left,
     # and it is the one deliberate step backwards on this list: the pasta
     # pot now requires pasta, which is parked at 99, so "put a pot on"
@@ -800,8 +801,7 @@ def test_what_can_actually_be_earned():
     had been waiting rather than rows that are new. *Trash Panda* has
     been written since Release 1 and blocked on a bin that held
     nothing; *Bin Looking for You* was written for drop 30 and blocked
-    on a flag nothing kept. One release owes this list anything now,
-    and it is the staircase's.
+    on a flag nothing kept.
 
     **Still forty-three after the dining room**, by one in and one out.
     In: *Clean Plate Club*, earnable on arrival because the trigger it
@@ -810,10 +810,15 @@ def test_what_can_actually_be_earned():
     requiring pasta that nobody can hold yet. The two cancel, so this
     number is the one place that change does not show; both halves are
     in `BLOCKED`'s comments instead.
+
+    **Forty-four with the last plank**, which is *Board Meeting* and the
+    end of drop 30's debt to the blocked list. It had been parked at 99
+    since drop 20 for want of an award shape: a group row that goes to
+    the people who did the work rather than to the server.
     """
     earnable = achievements.registered_ids() - set(BLOCKED) - set(BY_HAND)
 
-    assert len(earnable) == 43
+    assert len(earnable) == 44
 
 
 # --------------------------------------------------------------------------

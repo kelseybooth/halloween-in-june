@@ -25,6 +25,7 @@ from datetime import timedelta
 
 import content as content_module
 import database
+import reach
 import telemetry
 import resolve
 import states
@@ -182,6 +183,32 @@ STAIRS_REPAIRED = "stairs_repaired"
 # never reaching it at all.
 STAIRS_UPPER = "stairs_upper"
 WITHIN_REACH = 0.8
+
+# What the room reads when the last plank goes in. A key rather than a
+# sentence: the line is the writers' and lives in `defaults.tsv`, which
+# is where every other public line in the game lives.
+STAIRS_REPAIRED_LINE = "stairs.repaired.public"
+
+
+async def needs_the_ladder(guild_id: int, user_id: int, room_id: str) -> bool:
+    """Whether the top steps are out of reach for this player right now.
+
+    Two conditions, and both are about the world rather than the player:
+    the repair has reached the last fifth, and the ladder is not at
+    hand. "At hand" is `reach`'s word and means carried *or* standing in
+    the room, which the ladder opts into with `to_hand_in_room` - so a
+    ladder leaning against the staircase counts for everybody in the
+    Entryway and nobody has to pick it up first.
+
+    False below `stairs_upper`, where the steps are reachable from the
+    floor and the ladder is beside the point. That is most of the
+    repair: seventy-two of the default ninety.
+    """
+    if STAIRS_UPPER not in await states.in_force(guild_id, user_id):
+        return False
+    return bool(
+        await reach.missing_requirements(guild_id, user_id, room_id, [LADDER])
+    )
 
 # The ladder. One per server, carried anywhere by anybody, and the only
 # way to reach the top fifth of the staircase.
@@ -446,6 +473,11 @@ class Effect:
     # the road knocks a piece off the nest and a climb the cat won does
     # not, and both are `on_use` of the ladder in the road.
     extra: dict = field(default_factory=dict)
+    # Who an award this use produced should go to, when it is not the
+    # player who made it. The last plank is the only one: *Board
+    # Meeting* goes to everybody who laid a plank, which is a list only
+    # this layer can produce.
+    recipients: tuple[int, ...] | None = None
 
     @property
     def changed_the_world(self) -> bool:
@@ -517,7 +549,7 @@ async def after_use(
 ) -> Effect | None:
     """Apply whatever a successful use changes. None for ordinary things."""
     if thing_id == LUMBER:
-        return await _place_a_plank(guild_id)
+        return await _place_a_plank(guild_id, user_id, room_id)
 
     if thing_id == GRAPHITE and room_id == DRAWER_ROOM:
         return await _unjam_the_drawer(guild_id, user_id)
@@ -963,7 +995,7 @@ async def _unlock_the_front_door(guild_id: int) -> Effect:
     return Effect(public=False)
 
 
-async def _place_a_plank(guild_id: int) -> Effect:
+async def _place_a_plank(guild_id: int, user_id: int, room_id: str) -> Effect:
     """Count the plank, and open the staircase if that was the last one.
 
     The reply carries {n} and {total} either way, so a player always knows
@@ -971,18 +1003,43 @@ async def _place_a_plank(guild_id: int) -> Effect:
 
     This is the game's only public `/use`: the staircase is collective, and the
     others in the room need to see it happen rather than hear about it later.
+
+    **A carried ladder is set down here**, which is the other half of
+    the rule that every climb sets it down. A player who fetched the
+    ladder to the Entryway has both hands on a hammer the moment the
+    plank goes in, and leaving it on their shoulder would mean the next
+    person had to find them rather than find it. Once it is standing
+    there it stays, so the last eighteen planks can be laid back to back
+    by different people without anybody carrying anything.
+
+    Unconditional on the state: the ladder is only ever at hand up here
+    because somebody brought it for the top steps, and a plank laid
+    lower down by somebody holding it should put it down just the same.
     """
+    carried_the_ladder = await database.drop_into_room(
+        user_id, guild_id, room_id, LADDER
+    )
     opened = await check_staircase(guild_id)
     placed, required = await planks(guild_id)
 
     return Effect(
         tokens={"n": placed, "total": required},
         public=True,
+        # **The writers' line, not the engine's.** This was a string
+        # typed into this function, and `stairs.repaired.public` sat in
+        # the deck unread - which is the shipping box's failure in
+        # another costume. The `{player}` in it is filled by the handler,
+        # because only Discord knows the display name.
         announce=(
-            "The staircase is finished. It holds."
-            if opened
-            else None
+            await resolve.default_text(STAIRS_REPAIRED_LINE) if opened else None
         ),
+        # Everybody who ever laid one, which is what *Board Meeting*
+        # goes to - and only on the plank that finished the job, so the
+        # award fires once however many planks follow a lowered target.
+        recipients=(
+            tuple(await database.users_of(guild_id, LUMBER)) if opened else None
+        ),
+        extra={LADDER: carried_the_ladder},
     )
 
 
