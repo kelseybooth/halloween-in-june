@@ -665,6 +665,17 @@ BLOCKED = [
     "ghostbuster",
     "signed_sealed_delivered",
     "forwarding_address",
+    # Three more on 30 October, when the ground floor's content shipped
+    # ahead of three of its mechanics. *Board Meeting* is the one worth
+    # noticing: it was never registered at all, because `NEVER` buys a
+    # row the right to be unwired and it sat at 99 for exactly that
+    # reason. Moving it to 30 spent that, so it is here instead, which
+    # is the honest place for a row whose award the engine cannot yet
+    # make - one that goes to the players who laid a plank and announces
+    # once.
+    "board_meeting",
+    "hive_five",
+    "bin_looking_for_you",
     # *Bowl Half Empty* left this list in drop 10, when feeding arrived
     # and gave it something to count - the same way the two toy ones
     # left it in drop 2.
@@ -742,13 +753,18 @@ def test_what_can_actually_be_earned():
 
     Forty-one with drop 20's *Are You David?*, the fourth score
     threshold. *Bug Catcher* is registered like the rest and is not one
-    of them, because no play produces it; *Board Meeting* is not
-    registered at all, which is the one case this count does not see.
+    of them, because no play produces it.
 
     **Forty on 30 October**, when *Trash Panda* joined the blocked. It
     was never earnable - parked at drop 99 and gated on a day it could
     not reach - but it counted here, because a date is a condition and
     this subtraction only knows about the ones that say no outright.
+
+    **Still forty after the ground floor**, which added four rows a
+    server can reach and no new way to earn one. Three went straight to
+    the blocked list, *Board Meeting* among them - it had never been
+    registered at all, and this count said so. It is seen now, and
+    subtracted again.
     """
     earnable = achievements.registered_ids() - set(BLOCKED) - set(BY_HAND)
 

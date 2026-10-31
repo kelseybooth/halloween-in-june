@@ -231,17 +231,40 @@ async def test_lumber_disappears_once_the_staircase_is_done(house):
 FED = frozenset({content_module.FED_THE_CAT})
 
 
-async def test_the_room_descriptions_swap(house):
-    """Both the Entryway and the Upstairs Hallway have a stairs_repaired row."""
+async def test_the_room_description_swaps(house):
+    """The Entryway reads differently once the staircase holds.
+
+    **The Upstairs Hallway used to be asserted here too, and cannot
+    be.** It had two descriptions because the back stairs let a player
+    stand up there before the repair and see a ruin from above. The
+    back stairs were deleted on 30 October, so the only way up is the
+    repaired staircase, so nobody can be in that hallway and *not*
+    hold `stairs_repaired` - and the row describing the ruin was text
+    no player could ever have read. The writers cut it, which leaves
+    one description and nothing to swap.
+    """
     before_en = await resolve.room_look(GUILD_A, "EN", unlocked=FED)
-    before_uh = await resolve.room_look(GUILD_A, "UH")
 
     await states.set_server_state(GUILD_A, "stairs_repaired")
 
     assert (
         await resolve.room_look(GUILD_A, "EN", "stairs_repaired", FED) != before_en
     )
-    assert await resolve.room_look(GUILD_A, "UH", "stairs_repaired") != before_uh
+
+
+async def test_the_hallway_reads_the_same_either_way(house):
+    """The other half of that cut, asserted rather than assumed.
+
+    One row for the hallway means a player who somehow arrives without
+    `stairs_repaired` still reads the hallway as itself, through the
+    `default` fallback, instead of "You see a room."
+    """
+    await states.set_server_state(GUILD_A, "stairs_repaired")
+
+    assert await resolve.room_look(GUILD_A, "UH", "stairs_repaired") == (
+        await resolve.room_look(GUILD_A, "UH")
+    )
+    assert "patched steps" in await resolve.room_look(GUILD_A, "UH")
 
 
 async def test_a_room_with_no_row_for_your_state_reads_its_default(house):

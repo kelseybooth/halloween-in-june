@@ -222,7 +222,11 @@ async def test_the_content_is_still_loaded(two_games):
     # reset. It passed anyway: both this and the trash can's window in
     # `test_triggers` only fail when the run does not happen to put
     # them behind a test that leaves a different registry behind.
-    assert len(await resolve.achievements(GUILD_A)) == 40
+    # Four more arrived with the ground floor, and only two of them
+    # are new rows: *Bin Looking for You* and *Hive Five* were written
+    # for drop 30, and *Trash Panda* and *Board Meeting* came down off
+    # 99 to join them.
+    assert len(await resolve.achievements(GUILD_A)) == 44
 
 
 async def test_the_art_is_kept_by_default(two_games):

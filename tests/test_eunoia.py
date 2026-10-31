@@ -180,8 +180,17 @@ async def test_a_thing_with_a_refusal_and_no_success_refuses(house):
     # and the same sentence about there being nothing to do with an
     # empty bowl. This is the test catching exactly what it is for -
     # two rows of this shape arriving - and finding them deliberate.
+    #
+    # **And the two ivies arrived the same way the bowls did, while
+    # `HE` left.** The courtyard ivy became an exit to the bedroom and
+    # the bedroom gained one back, and both are refused until the
+    # window opens at drop 40 - a refusal with nowhere to go, which is
+    # the exits' own reason. `HE` is out because deleting the back
+    # stairs left the repaired staircase as the only way down, so its
+    # unrepaired row went with them and the row that remains is a
+    # success.
     assert shaped == {
-        "eunoia", "EH", "HE", "LS", "SL", "house",
+        "eunoia", "EH", "LS", "SL", "house", "ivy", "BC",
         "cat_food_chicken", "cat_food_tuna",
         "cat_food_expired", "cat_food_gourmet",
         "cat_bowl", "cat_bowl_courtyard", "cat_bowl_hallway",

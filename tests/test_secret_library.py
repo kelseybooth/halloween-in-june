@@ -454,7 +454,12 @@ def test_the_four_secret_exits_and_the_two_doors_override_the_move_lines():
         if row.text.get("move_depart") or row.text.get("move_arrive")
     }
 
-    assert overridden == {"CS", "LS", "SL", "SC", "front_door", "house"}
+    # The two ivies joined on 30 October, and for the same reason as
+    # the rest: a climb in or out of a bedroom window is not "{player}
+    # goes through the ivy", so the writers wrote the line themselves.
+    assert overridden == {
+        "CS", "LS", "SL", "SC", "front_door", "house", "ivy", "BC",
+    }
 
 
 def test_the_override_lines_use_the_token_that_already_exists():

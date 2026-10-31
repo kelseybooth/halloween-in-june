@@ -878,3 +878,17 @@ def register_all() -> None:
     add("breaking_into_the_halloween_candy", "on_use", _used(CANDY))
     add("curbside_pickup", "on_use", _on_date(on_tuesday, {TRASH_CAN}))
     add("not_so_picky_eater", "on_use", not_so_picky_eater)
+    # **Three rows that moved to drop 30 and need a trigger for it.**
+    # `NEVER` is what buys a row the right to be unwired, and all three
+    # have just given that up: the content for drop 30 ships ahead of
+    # three of its mechanics, so the rows are real, dated, and waiting.
+    # Blocked says so out loud, where leaving them out would have failed
+    # the wiring check and leaving them at 99 would have hidden four
+    # rooms from the playtest.
+    add("board_meeting", "on_use", _blocked("the contributor-only group award"))
+    add("hive_five", "on_use", _blocked("the ladder"))
+    add(
+        "bin_looking_for_you",
+        "on_command",
+        _blocked("the first-look-at-the-Kitchen flag"),
+    )

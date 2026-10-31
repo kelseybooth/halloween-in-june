@@ -186,6 +186,15 @@ CARRIABLE_TYPES = {"object", "toy"}
 # A room_id every server has, used by things that exist everywhere (the Alexa).
 EVERYWHERE = "ALL"
 
+# Where a thing's extra `use` lines live, if it has any. `use.<id>.N`,
+# joined to the thing's own `use` row rather than replacing it - so the
+# board books' five lines are the one in `thing_text` plus four here,
+# and a thing with none of these keeps reading exactly as it did.
+#
+# The same prefix-match shape as the toy refusals below, and the same
+# silent failure, which is why it gets the same check.
+EXTRA_USE_PREFIX = "use."
+
 # Where a toy's rotating play refusals live. Two prefixes in one family:
 # this plus `any.` is every line any toy can draw, and this plus a
 # `thing_id` is one toy's own. The generic twelve are numbered under
@@ -882,6 +891,7 @@ def validate(content: Content) -> list[str]:
     problems += _check_consumables(content)
     problems += _check_cooldowns(content)
     problems += _check_toy_refusals(content)
+    problems += _check_extra_use_lines(content)
     return problems
 
 
@@ -1391,10 +1401,23 @@ def _check_sources_are_named_in_prose(content: Content, rooms: dict[str, Room]) 
     free-standing one in its room's `look`, in either case for the same state.
     Either the source's own name, one of its aliases, or the name of the thing it
     yields will do - "a bowl of candy" reveals the candy bowl.
+
+    **A room is all of its fragments, not its last one.** This kept one
+    string per (room, state) and assigned into it, so the Entryway - the
+    only room written in pieces, eight of them at the same state - was
+    checked against fragment 7 alone and the salmon stash behind the
+    coat rack was named in a fragment nobody read. It passed because the
+    stash is contained and asks a thing's prose instead; a free-standing
+    source named in any fragment but the last would have failed for
+    being in the wrong sentence. Joined, the way `thing_prose` below
+    already joins a thing's rows.
     """
     room_look: dict[tuple[str, str], str] = {}
     for row in content.room_text:
-        room_look[(row.entity_id, row.state)] = row.text.get("look", "").lower()
+        key = (row.entity_id, row.state)
+        room_look[key] = " ".join(
+            (room_look.get(key, ""), row.text.get("look", ""))
+        ).lower()
 
     thing_prose: dict[tuple[str, str], str] = {}
     for row in content.thing_text:
@@ -1730,6 +1753,38 @@ def _check_toy_refusals(content: Content) -> list[str]:
             f"default {key} is a play refusal for '{owner}', which is not a "
             "toy; the pool is matched by prefix, so nothing would ever read "
             "it and nothing would say so"
+        )
+    return problems
+
+
+def _check_extra_use_lines(content: Content) -> list[str]:
+    """An extra `use` line has to belong to a thing that exists.
+
+    `use.<thing_id>.N` is read by prefix, so a typo in the id is not an
+    error at runtime: the thing falls back to its own single `use` row,
+    the player reads a perfectly good line, and the extras are never
+    seen. The same failure the shipping box's four refusals had, caught
+    the same way.
+
+    `use.default` is the house's own fallback and owns no thing, which
+    is why only keys with a numbered tail are examined - that tail is
+    what makes a key one of a thing's rotating lines rather than a
+    house string that happens to start with the same four characters.
+    """
+    ids = {thing.thing_id for thing in content.things}
+    problems = []
+    for key in sorted(content.defaults):
+        if not key.startswith(EXTRA_USE_PREFIX):
+            continue
+        parts = key[len(EXTRA_USE_PREFIX) :].split(".")
+        if len(parts) != 2 or not parts[1].isdigit():
+            continue
+        if parts[0] in ids:
+            continue
+        problems.append(
+            f"default {key} is an extra use line for '{parts[0]}', which is "
+            "not a thing; the pool is matched by prefix, so nothing would "
+            "ever read it and nothing would say so"
         )
     return problems
 
