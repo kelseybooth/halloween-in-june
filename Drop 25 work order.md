@@ -76,10 +76,20 @@ should. It comes from the Living Room sofa and the Bedroom, so it stays at
 | `KC`, `CK` — the back door, both ends | the Courtyard. This is the whole point of the split |
 | `EL`, `LE` — the wide doorway | the Living Room |
 | `somethings_cooking` | the stove arrives at 25; two of its three ingredients are the Courtyard's herbs and the Living Room's chocolate |
-| `catproof_the_house` | five baby bottles, and the bottles scatter at 30 |
 | `green_thumb` | the herb garden |
 | `hive_five`, `board_meeting` | the road's wasp nest and the Entryway's staircase |
-| `used_baby_bottle`, `sanitized_baby_bottle` | the scatter again. The sink arrives at 25 with nothing to wash until 30 |
+
+**The bottles came back out of this table on 31 October.** They were
+listed here, with `catproof_the_house`, on the reasoning that the Kitchen
+sink arrives at 25 with nothing to wash until the scatter starts at 30 -
+and the answer was to move the scatter instead. `used_baby_bottle`,
+`sanitized_baby_bottle`, their text rows and the `restocks.tsv` row that
+makes them exist at all are at 25, so the sink has work from the day the
+arch opens, and `catproof_the_house` follows them because its trigger is
+only *hold five at once, clean or dirty* - nothing in it waits on the cat,
+whatever the name and the artwork suggest. Three files, because a roomless
+thing with `quantity = 0` arrives and never appears unless its restock row
+moves with it.
 
 **Three fixtures arrive at 25 with nothing to do, and all three read
 correctly.** Checked, because this was the one place I expected to have to

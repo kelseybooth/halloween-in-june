@@ -43,8 +43,8 @@ dark_chocolate	dark chocolate	chocolate|dark chocolate|bar	object		0	yes	yes	1		
 elena_journal	research journal	research journal|elena's journal|journal	fixture	LI	1	no	yes	0								fireplace		30	38				
 david_legal_pad	legal pad	legal pad|pad|david's notes	fixture	LI	1	no	yes	0										30	39				
 copper_wire	twisted copper wire	copper wire|wire|copper	object		0	yes	yes	1										50	40				
-used_baby_bottle	used baby bottle	used bottle|bottle|baby bottle|dirty bottle	object		0	yes	yes	1				sanitized_baby_bottle	KI					30	41				
-sanitized_baby_bottle	sanitized baby bottle	clean bottle|sanitized bottle|sterilized bottle	object		0	yes	yes	1										30	42				
+used_baby_bottle	used baby bottle	used bottle|bottle|baby bottle|dirty bottle	object		0	yes	yes	1				sanitized_baby_bottle	KI					25	41				
+sanitized_baby_bottle	sanitized baby bottle	clean bottle|sanitized bottle|sterilized bottle	object		0	yes	yes	1										25	42				
 dirty_diaper	dirty diaper	diaper|dirty diaper|nappy|dirty nappy	object		0	yes	yes	1										3	43				
 scorch_circle	scorch circle	scorch circle|scorch marks|burn|circle	fixture	SE	1	no	yes	0										50	43				
 ritual_diagram	ritual diagram	ritual diagram|diagram|drawing	fixture	SE	1	no	yes	0								library_shelves		50	44				
