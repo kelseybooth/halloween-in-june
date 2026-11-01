@@ -217,9 +217,9 @@ async def test_taking_the_ivy_does_not_give_the_climb_away(ground_floor):
     the exit branch said `take_fail.exit` and nothing else, so "you
     can't put an exit in your bag" told a player the ivy was a way up
     before they had found it - the one place in the game where the
-    house default gives away more than the written line. Twenty of the
-    twenty-two exits had already been written their own, and none of
-    them had ever been read out.
+    house default gives away more than the written line. All twenty-two
+    exits had already been written their own, and not one of them had
+    ever been read out.
 
     Read off the file rather than typed, so a copy edit to the ivy is
     not also a test change.
@@ -236,7 +236,7 @@ async def test_taking_the_ivy_does_not_give_the_climb_away(ground_floor):
 
 
 async def test_and_a_doorway_is_a_doorway_and_not_an_exit(ground_floor):
-    """The same branch, on the twenty rows that are not the ivy: the
+    """The same branch, on the twenty-one rows that are not the ivy: the
     writers call it a doorway, and only the engine ever called it an
     exit. Here so a later revert shows up as two failures rather than
     one that reads as being about the ivy."""
