@@ -6285,8 +6285,18 @@ async def _cannot_take(
         )
 
     if row.type == "exit":
+        # **The exit's own line first, the house default behind it.** Every
+        # other refusal in this table lets a row speak for itself, and an
+        # exit is the one kind of thing where the default gives the game
+        # away: "you can't put an exit in your bag" tells a player that
+        # the ivy is a way up before they have found it. The fallback is
+        # still picked off `type` rather than an id list, the way
+        # `_no_carrying` is.
         return (
-            await phrasing.default_say("take_fail.exit", name=found.name),
+            await phrasing.say(
+                guild_id, found.thing_id, "take_fail",
+                fallback="take_fail.exit", name=found.name,
+            ),
             telemetry.NOT_TAKEABLE,
         )
 
