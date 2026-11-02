@@ -3198,7 +3198,13 @@ async def which_of_these_used(
 
 
 async def record_room_deed(
-    user_id: int, guild_id: int, action: str, thing_id: str, room_id: str
+    user_id: int,
+    guild_id: int,
+    action: str,
+    thing_id: str,
+    room_id: str,
+    *,
+    when: datetime | None = None,
 ) -> None:
     """Note that this player has done this, to this, in this room.
 
@@ -3207,10 +3213,16 @@ async def record_room_deed(
     changes nothing and `first_at` stays the first one. `DO NOTHING`
     rather than a read-then-write, so two commands in the same second
     cannot race each other into an integrity error.
+
+    **`when` is for the backfill and nothing else.** A deed recovered
+    from the log happened when the log says it did, not when it was
+    recovered, and a table where every historical row is stamped with
+    one afternoon is a table that cannot answer when anything happened.
+    Every live caller leaves it alone and gets the server clock.
     """
     session_factory = _require_session()
     insert = _upsert_statement()
-    now = await server_now(guild_id)
+    now = when if when is not None else await server_now(guild_id)
 
     async with session_factory() as session:
         await session.execute(
