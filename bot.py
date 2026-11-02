@@ -522,7 +522,7 @@ class CatBot(commands.Bot):
         keep_threads_alive.start()
         restock_sweep.start()
         thread_sweep.start()
-        ladder_sweep.start()
+        idle_sweep.start()
 
         # Nothing is a global command any more. Which commands exist is a
         # per-server question now - two servers can sit on different drops
@@ -902,47 +902,59 @@ async def _before_restock() -> None:
 # hour means a forgotten ladder is set down within an hour of becoming
 # forgotten. A tick a minute would ask the same question sixty times
 # for every answer.
-LADDER_SWEEP_MINUTES = 60
+IDLE_SWEEP_MINUTES = 60
 
 
-@tasks.loop(minutes=LADDER_SWEEP_MINUTES)
-async def ladder_sweep() -> None:
-    """Set down any ladder whose carrier has not been seen for a day.
+@tasks.loop(minutes=IDLE_SWEEP_MINUTES)
+async def idle_sweep() -> None:
+    """Set down anything one-of-a-kind whose carrier has gone quiet.
 
     **The only sweep that takes something off a player**, which is why
-    it exists for one object and not as a rule about carrying. Every
-    other thing a player holds is theirs, or inexhaustible, or both;
-    the ladder is one object that the last eighteen planks of a shared
-    staircase cannot be laid without.
+    it covers two named things rather than being a rule about
+    carrying. Everything else a player holds is theirs, or
+    inexhaustible, or both, and nobody is stalled by a forgotten
+    burrito; `world.SET_DOWN_WHEN_IDLE` says which two and why.
 
-    It is also rare by construction. Climbing the ladder sets it down,
-    so this only ever reaches somebody who picked it up and stopped
-    playing *without using it* - which is the case the design asked
-    about and the only one that stalls the repair.
+    It was the ladder's alone until the watering can became takeable,
+    and the two are not equally rare. Climbing sets the ladder down,
+    so it only ever reaches somebody who picked one up and stopped
+    playing without using it. Watering does not set the can down, so
+    the can reaches this the ordinary way: somebody carried it off and
+    went to bed.
     """
     guild_ids = [guild.id for guild in bot.guilds]
     if not guild_ids:
         return
 
     try:
-        moved = await world.set_down_forgotten_ladders(guild_ids)
+        moved = await world.set_down_forgotten_things(guild_ids)
     except SQLAlchemyError:
-        log.exception("Ladder sweep failed")
+        log.exception("Idle sweep failed")
         return
 
-    for guild_id, user_id, room_id in moved:
-        await _announce_exhaustion(guild_id, user_id, room_id)
+    for guild_id, user_id, room_id, thing_id in moved:
+        await _announce_exhaustion(guild_id, user_id, room_id, thing_id)
 
 
-async def _announce_exhaustion(guild_id: int, user_id: int, room_id: str) -> None:
-    """Tell the room a ladder has just been put down in it.
+async def _announce_exhaustion(
+    guild_id: int, user_id: int, room_id: str, thing_id: str
+) -> None:
+    """Tell the room something has just been put down in it.
 
-    Posted where the ladder landed, which is where its carrier was
+    Posted where the thing landed, which is where its carrier was
     standing - not where they picked it up. The line names them, so the
     next person along knows who to go and find rather than only that a
     ladder has appeared.
 
-    Cosmetic, like every other public line. The ladder is already on
+    **The thing's own line first, the house's behind it.** The ladder
+    has words of its own - it is dropped "out of exhaustion", which is
+    a joke about its weight and no joke at all about a watering can -
+    so `<thing_id>.exhausted.public` wins where a writer has written
+    one and `exhausted.public` fills in `{name}` for everything else.
+    The same shape as every other refusal in the game, arrived at here
+    the day the sweep stopped being about one object.
+
+    Cosmetic, like every other public line. The thing is already on
     the floor by the time this runs, so a channel that will not take the
     sentence must not undo the move.
     """
@@ -951,9 +963,15 @@ async def _announce_exhaustion(guild_id: int, user_id: int, room_id: str) -> Non
         return
     try:
         who = guild.get_member(user_id)
+        row = await phrasing.thing_row(thing_id)
         line = await phrasing.default_say(
-            "ladder.exhausted.public",
+            f"{thing_id}.exhausted.public",
             player=who.display_name if who else "Somebody",
+            name=row.name if row else thing_id,
+        ) or await phrasing.default_say(
+            "exhausted.public",
+            player=who.display_name if who else "Somebody",
+            name=row.name if row else thing_id,
         )
         if not line:
             return
@@ -972,15 +990,15 @@ async def _announce_exhaustion(guild_id: int, user_id: int, room_id: str) -> Non
             await _post_quietly(thread, line)
     except (discord.HTTPException, SQLAlchemyError):
         log.warning(
-            "Could not say a ladder was set down in %s of guild %s",
+            "Could not say a thing was set down in %s of guild %s",
             room_id,
             guild_id,
             exc_info=True,
         )
 
 
-@ladder_sweep.before_loop
-async def _before_ladder_sweep() -> None:
+@idle_sweep.before_loop
+async def _before_idle_sweep() -> None:
     await bot.wait_until_ready()
 
 
@@ -1829,10 +1847,18 @@ async def pet(interaction: discord.Interaction) -> None:
         # for, so a player carrying the ladder cannot pet the cat and
         # that is the whole rule. Nothing is recorded - a refused pet is
         # not a pet, and the cat has not been touched.
-        full = await _arms_full(guild_id, user.id)
-        if full:
-            await interaction.followup.send(full, ephemeral=True)
-            await _turned_away(interaction, telemetry.PET, telemetry.ARMS_FULL)
+        in_the_way = await _hands_full(guild_id, user.id)
+        if in_the_way is not None:
+            holding, key = in_the_way
+            await interaction.followup.send(
+                await phrasing.default_say(key), ephemeral=True
+            )
+            await _turned_away(
+                interaction,
+                telemetry.PET,
+                telemetry.ARMS_FULL,
+                detail=f"holding={holding}",
+            )
             return
 
         drop = await telemetry.drop_of(guild_id)
@@ -2713,14 +2739,32 @@ CAT_INTERACTIONS = frozenset({world.CAT_BED}) | world.CAT_FOOD
 async def use(interaction: discord.Interaction, thing: str) -> None:
     """Use something: an exit, a transform, something on a cooldown, or anything else.
 
-    Four branches, taken in order. The reply is always private - a use is a
-    small private moment, and making every one public would bury the thread.
-    Movement is the exception in that it *also* posts in both rooms, because
-    the people standing there need to see someone leave.
+    Four branches, taken in order.
 
-    What is deliberately absent is the two uses that change the world. Placing
-    a plank counts toward nothing yet and graphite unjams nothing; both are
-    Phase 2c.5, along with the public reply that placing a plank earns.
+    **The reply is private unless the use is the room's business.** A use is
+    a small private moment and making every one public would bury the
+    thread, so the public line is opt-in through `Effect.public` and three
+    kinds of use take it: laying a plank, because the staircase is
+    collective work; playing with the cat, because that is the thread's
+    whole life; and the rattle, whose only joke is being overheard.
+    Movement is public in a different way again - it posts in both rooms as
+    well as replying, because the people standing there need to see
+    somebody leave.
+
+    **A full hand gets in the way before any of that.** Carrying the ladder
+    or a full watering can refuses every use but the thing itself, a plank
+    for the ladder, and any exit; `_hands_full` and `STILL_ALLOWED` are the
+    rule and the exceptions.
+
+    **This said "the reply is always private" until 3 November**, and had
+    said it for two releases after it stopped being true - the plank's
+    public line shipped with the staircase and the rattle's with the
+    Courtyard. It is corrected here because somebody went looking for
+    whether public use lines existed, found this paragraph, believed it and
+    wrote it down: a comment describing a plan rather than the code under it
+    costs more than no comment at all. The paragraph it replaces also said
+    graphite unjams nothing and a plank counts toward nothing, and both of
+    those had shipped too.
     """
     if interaction.guild is None:
         await interaction.response.send_message(
@@ -2838,6 +2882,9 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
                     telemetry.USE,
                     telemetry.ARMS_FULL,
                     thing_id=found.thing_id,
+                    # Which thing is in the way, because two can be
+                    # now and the refusal reads the same either way.
+                    detail=f"holding={holding}",
                 )
                 return
 
@@ -3545,10 +3592,10 @@ async def _hands_full(guild_id: int, user_id: int) -> tuple[str, str] | None:
     than a release, which is why the level is read here on every call
     rather than cached anywhere.
 
-    Returns the thing and its defaults key, not just the line, because
-    `/use` has to know *which* thing is in the way before it can decide
-    what is still allowed. `/pet` and `/take` want only the line, and
-    `_arms_full` below is the thin reading of this for them.
+    Returns the thing and its defaults key rather than the line, because
+    all three callers need the thing: `/use` to decide what is still
+    allowed, and all of them to log which of the two was in the way -
+    the refusal reads the same whichever it was.
 
     None when their arms are free, which is every player in the game
     until somebody picks one of the two up.
@@ -3559,18 +3606,6 @@ async def _hands_full(guild_id: int, user_id: int) -> tuple[str, str] | None:
         if await world.can_level(guild_id) == world.CAN_FULL:
             return world.WATERING_CAN, "carrying.watering_can"
     return None
-
-
-async def _arms_full(guild_id: int, user_id: int) -> str | None:
-    """Just the line, for the two verbs that reach for nothing.
-
-    `/pet` has no thing at all and `/take` has one that nothing is ever
-    exempt for, so neither needs to know which thing is in the way.
-    """
-    full = await _hands_full(guild_id, user_id)
-    if full is None:
-        return None
-    return await phrasing.default_say(full[1])
 
 
 async def _the_cat_has_it(guild_id: int, column: str, name: str) -> str | None:
@@ -3761,6 +3796,8 @@ async def _finish_use(interaction, state, found) -> None:
             if found.thing_id == world.LUMBER
             else _climb_detail(state.current_room, effect)
             if found.thing_id == world.LADDER
+            else _can_detail(state.current_room, effect)
+            if found.thing_id == world.WATERING_CAN
             else None
         ),
     )
@@ -4499,6 +4536,40 @@ async def _announce_bed_fluff(interaction) -> None:
     )
     if line:
         await _post_quietly(channel, line)
+
+
+def _can_detail(room_id: str, effect) -> str:
+    """What a use of the watering can carries: where, and the water.
+
+    One string with the level on both sides of the use, because every
+    question the design asks about the can is about a change: how
+    often anybody fills it, whether the Kitchen trip gets made, how
+    often somebody tips an empty can over the herbs and needs the
+    hint. A level before and a level after answers all three; either
+    one alone answers none of them.
+
+    A use that moved nothing says so by repeating itself -
+    `level=empty->empty` is the tip, the already-full fill and the
+    room with nothing to water, told apart by the room and by what
+    the level is.
+    """
+    facts = effect.extra if effect is not None else {}
+    was = facts.get("was", "?")
+    now = facts.get("now", was)
+    return f"room={room_id} level={was}->{now}"
+
+
+async def _moved_detail(guild_id: int, room_id: str, thing_id: str) -> str | None:
+    """What a take or a drop of this thing carries, if anything.
+
+    The can carries its level, because "was it full when they put it
+    down" is most of what the hands rule is tuned on. Everything else
+    carries what it always did, which for all but the spice jars is
+    nothing at all.
+    """
+    if thing_id == world.WATERING_CAN:
+        return f"level={await world.can_level(guild_id)}"
+    return await _container_detail(guild_id, room_id, thing_id)
 
 
 def _climb_detail(room_id: str, effect) -> str:
@@ -6174,10 +6245,14 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
 
         refusal = await _cannot_take(guild_id, user.id, found, row)
         if refusal:
-            line, reason = refusal
+            line, reason, detail = refusal
             await interaction.followup.send(line, ephemeral=True)
             await _turned_away(
-                interaction, telemetry.TAKE, reason, thing_id=found.thing_id
+                interaction,
+                telemetry.TAKE,
+                reason,
+                thing_id=found.thing_id,
+                detail=detail,
             )
             return
 
@@ -6208,7 +6283,7 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
             user.id,
             telemetry.TAKE,
             thing_id=taken,
-            detail=await _container_detail(guild_id, state.current_room, taken),
+            detail=await _moved_detail(guild_id, state.current_room, taken),
         )
 
         taken_row = await phrasing.thing_row(taken)
@@ -6350,6 +6425,7 @@ async def _cannot_take(
         return (
             await phrasing.default_say("take_fail.absent", name=found.name),
             telemetry.ABSENT,
+            None,
         )
 
     if row.type == "exit":
@@ -6366,6 +6442,7 @@ async def _cannot_take(
                 fallback="take_fail.exit", name=found.name,
             ),
             telemetry.NOT_TAKEABLE,
+            None,
         )
 
     # A source is never takeable itself; what matters is whether its yield is.
@@ -6376,6 +6453,7 @@ async def _cannot_take(
                 fallback=_no_carrying(row), name=found.name,
             ),
             telemetry.NOT_TAKEABLE,
+            None,
         )
 
     # **Below the thing's own refusal, and that is the interesting
@@ -6393,11 +6471,16 @@ async def _cannot_take(
     # the day something else gets a lock.
     swatted = await _the_cat_has_it(guild_id, "take_fail", found.name)
     if swatted:
-        return swatted, telemetry.GUARDED
+        return swatted, telemetry.GUARDED, None
 
-    full = await _arms_full(guild_id, user_id)
-    if full:
-        return full, telemetry.ARMS_FULL
+    in_the_way = await _hands_full(guild_id, user_id)
+    if in_the_way is not None:
+        holding, key = in_the_way
+        return (
+            await phrasing.default_say(key),
+            telemetry.ARMS_FULL,
+            f"holding={holding}",
+        )
 
     # The cap applies to what the player ends up holding, which for a source is
     # the thing it yields rather than the source itself.
@@ -6422,6 +6505,7 @@ async def _cannot_take(
             fallback="take_fail.already_carried", name=capped.name,
         ),
         telemetry.FULL_HANDS,
+        None,
     )
 
 
@@ -6513,7 +6597,7 @@ async def drop(interaction: discord.Interaction, thing: str) -> None:
             user.id,
             telemetry.DROP,
             thing_id=found.thing_id,
-            detail=await _container_detail(
+            detail=await _moved_detail(
                 guild_id, state.current_room, found.thing_id
             ),
         )

@@ -680,7 +680,7 @@ async def test_a_day_of_silence_sets_the_ladder_down(house):
     await db.update_current_room(ALICE, GUILD_A, "KI")
     await quiet_for(db, 2)
 
-    await bot.ladder_sweep.coro()
+    await bot.idle_sweep.coro()
 
     assert await database.carried_of(ALICE, GUILD_A, world.LADDER) == 0
     assert "ladder" in await floor_of("KI")
@@ -695,7 +695,7 @@ async def test_and_says_so_where_it_landed(house):
     await db.update_current_room(ALICE, GUILD_A, "KI")
     await quiet_for(db, 2)
 
-    await bot.ladder_sweep.coro()
+    await bot.idle_sweep.coro()
 
     assert EXHAUSTED in posted(house, "KI")
 
@@ -705,7 +705,7 @@ async def test_somebody_still_playing_keeps_it(house):
     await carry_it(house)
     await quiet_for(db, 0)
 
-    await bot.ladder_sweep.coro()
+    await bot.idle_sweep.coro()
 
     assert await database.carried_of(ALICE, GUILD_A, world.LADDER) == 1
 
@@ -717,7 +717,7 @@ async def test_a_player_with_no_stamp_at_all_keeps_it(house):
     such a carrier keeps the ladder until they next do anything."""
     await carry_it(house)
 
-    await bot.ladder_sweep.coro()
+    await bot.idle_sweep.coro()
 
     assert await database.carried_of(ALICE, GUILD_A, world.LADDER) == 1
 
@@ -725,7 +725,7 @@ async def test_a_player_with_no_stamp_at_all_keeps_it(house):
 async def test_a_ladder_nobody_is_carrying_is_left_alone(house):
     """It is standing in the Courtyard where the loader put it, and the
     sweep is about shoulders rather than about floors."""
-    await bot.ladder_sweep.coro()
+    await bot.idle_sweep.coro()
 
     assert "ladder" in await floor_of("CO")
     assert EXHAUSTED not in posted(house, "CO")

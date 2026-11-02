@@ -395,26 +395,38 @@ async def _use_the_watering_can(
     """
     level = await can_level(guild_id)
 
+    # **The level on both sides of the use goes back in `extra`**, and
+    # it is reported from every branch including the four that move no
+    # water. The handler writes it into this use's log row, where the
+    # questions are all about change: how often the Kitchen trip gets
+    # made, and how often somebody tips an empty can over the herbs
+    # and needs telling why nothing happened.
+    def went(now: str) -> dict:
+        return {"was": level, "now": now}
+
     if room_id == HERB_GARDEN_ROOM:
         if level == CAN_EMPTY:
-            return Effect(say="watering_can.water.empty")
-        await database.set_thing_state(
-            guild_id, WATERING_CAN, POURS_DOWN_TO[level]
-        )
+            return Effect(say="watering_can.water.empty", extra=went(level))
+        poured_to = POURS_DOWN_TO[level]
+        await database.set_thing_state(guild_id, WATERING_CAN, poured_to)
         await database.record_room_deed(
             user_id, guild_id, telemetry.USE, WATERING_CAN, room_id
         )
-        return Effect(say=f"watering_can.water.{level}")
+        return Effect(
+            say=f"watering_can.water.{level}", extra=went(poured_to)
+        )
 
     if room_id == FAUCET_ROOM:
         if level == CAN_FULL:
-            return Effect(say="watering_can.fill.already_full")
+            return Effect(
+                say="watering_can.fill.already_full", extra=went(level)
+            )
         await database.set_thing_state(guild_id, WATERING_CAN, CAN_FULL)
-        return Effect(say="watering_can.fill")
+        return Effect(say="watering_can.fill", extra=went(CAN_FULL))
 
     if level == CAN_EMPTY:
-        return Effect(say="watering_can.elsewhere.empty")
-    return Effect(say="watering_can.elsewhere")
+        return Effect(say="watering_can.elsewhere.empty", extra=went(level))
+    return Effect(say="watering_can.elsewhere", extra=went(level))
 
 # How long after a key falls before the bed will give up another. The
 # spare exists because the first finder can go quiet - they take the key
@@ -787,33 +799,72 @@ async def ladder_is_guarded(guild_id: int) -> bool:
     return await database.thing_is_locked(guild_id, LADDER)
 
 
-async def set_down_forgotten_ladders(
+# What the sweep takes off a carrier who has gone quiet. **Both are
+# things the house has exactly one of and somebody else needs**, which
+# is the whole justification: everything else a player holds is theirs
+# or inexhaustible, and nobody is stalled by a forgotten burrito. The
+# ladder is one object the last eighteen planks of a shared staircase
+# cannot be laid without; the can is the only way the herbs get
+# watered.
+#
+# Not the same set as the two that fill both hands, although it is the
+# same two things today. That set is about what a player can do while
+# holding something; this one is about what the server loses when they
+# stop playing with it.
+SET_DOWN_WHEN_IDLE = (LADDER, WATERING_CAN)
+
+
+async def set_down_forgotten_things(
     guild_ids: "list[int]",
-) -> list[tuple[int, int, str]]:
-    """Take the ladder off anybody who has been holding it for a day.
+) -> list[tuple[int, int, str, str]]:
+    """Take a one-of-a-kind thing off anybody who has held it for a day.
 
-    Returns (guild, player, room) for each one actually set down, so the
-    caller can say so in the room it landed in. Only rows that moved
-    are reported: two sweeps overlapping would otherwise announce the
-    same ladder twice, and the move is what decides, not the query.
+    Returns (guild, player, room, thing) for each one actually set
+    down, so the caller can say so in the room it landed in and say it
+    in the thing's own words. Only rows that moved are reported: two
+    sweeps overlapping would otherwise announce the same ladder twice,
+    and the move is what decides, not the query.
 
-    **The only thing in the game that can be hoarded**, which is the
-    whole justification for a sweep. Everything else a player carries
-    is theirs or inexhaustible; the ladder is one object the last
-    eighteen planks of a shared staircase need.
+    **Rare by construction for the ladder and less so for the can.**
+    Climbing sets the ladder down, so the sweep only ever reaches
+    somebody who picked it up and stopped playing without using it.
+    Watering does not set the can down - the design is explicit that it
+    stays in your hands - so a carrier who wanders off with a half-full
+    can is an ordinary afternoon rather than an edge case.
     """
     moved = []
     for guild_id in guild_ids:
         quiet_since = await database.server_now(guild_id) - timedelta(hours=IDLE_HOURS)
-        for user_id, room_id in await database.idle_carriers(
-            guild_id, LADDER, quiet_since
-        ):
-            if await database.drop_into_room(user_id, guild_id, room_id, LADDER):
+        for thing_id in SET_DOWN_WHEN_IDLE:
+            for user_id, room_id in await database.idle_carriers(
+                guild_id, thing_id, quiet_since
+            ):
+                if not await database.drop_into_room(
+                    user_id, guild_id, room_id, thing_id
+                ):
+                    continue
                 await telemetry.system(
-                    guild_id, telemetry.LADDER_ABANDONED, detail=f"room={room_id}"
+                    guild_id,
+                    telemetry.ABANDONED,
+                    thing_id=thing_id,
+                    detail=await abandoned_detail(guild_id, thing_id, room_id),
                 )
-                moved.append((guild_id, user_id, room_id))
+                moved.append((guild_id, user_id, room_id, thing_id))
     return moved
+
+
+async def abandoned_detail(guild_id: int, thing_id: str, room_id: str) -> str:
+    """Where it was left, and for the can how much was in it.
+
+    The level is the half that cannot be recovered afterwards: the can
+    on the floor of the Nursery will have been filled and emptied
+    twenty times by the time anybody asks, and "where did people give
+    up carrying it, and were they carrying it full" is the question the
+    row exists for.
+    """
+    if thing_id != WATERING_CAN:
+        return f"room={room_id}"
+    return f"room={room_id} level={await can_level(guild_id)}"
 
 
 @dataclass

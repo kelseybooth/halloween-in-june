@@ -724,6 +724,55 @@ async def test_and_into_a_container_rather_than_onto_a_floor(kitchen):
     assert container and container != database.LOOSE_IN_ROOM
 
 
+async def test_the_watering_can_comes_back_with_its_water(kitchen):
+    """**One-of-a-kind, and nothing had to be written to make it so.**
+    The bin's only test is whether the house can make another, and the
+    can is in no restock - so it was already on the putting-back side of
+    that line the day it became takeable.
+
+    The level survives for the same reason it survives being dropped: it
+    belongs to the can rather than to the copy in anybody's bag, so
+    there is nothing in a trip to the curb for it to lose. Asserted
+    because "at the level it was" is in the work order, and a bin that
+    reset it would look exactly like a bin that worked.
+
+    **Half full and not full, which is not a convenience.** A full can
+    fills both hands, and `/use trash can` is a `/use` - so the lid
+    cannot be opened while holding one. The test below is that, pinned
+    rather than worked around.
+    """
+    db, *_ = kitchen
+    await database.set_thing_state(
+        GUILD_A, world.WATERING_CAN, world.CAN_PARTLY_FULL
+    )
+    await carry(db, "watering_can")
+    await throw_away(kitchen, "watering_can")
+
+    await run(kitchen, bot.take, "trash can")
+
+    assert "watering can" in await everywhere_but_the_can()
+    assert await world.can_level(GUILD_A) == world.CAN_PARTLY_FULL
+
+
+async def test_but_a_full_one_cannot_reach_the_bin_at_all(kitchen):
+    """Two rules meeting, and this is where they meet. The hands rule
+    blocks every `/use` but the thing itself and an exit, and the bin is
+    opened with `/use trash can` - so a player who wants to throw a full
+    watering can away has to water something or put it down first.
+
+    Not a special case anywhere in the code, and not a bug: it is what
+    "a full can takes both hands" means applied to a lid. Written down
+    here because it is the one acceptance test in the work order that
+    cannot be run as written."""
+    db, *_ = kitchen
+    await database.set_thing_state(GUILD_A, world.WATERING_CAN, world.CAN_FULL)
+    await carry(db, "watering_can")
+
+    reply = replies(await open_the_lid(kitchen))
+
+    assert "need a free hand" in reply
+
+
 async def test_never_back_into_the_trash_can(kitchen):
     db, *_ = kitchen
     await carry(db, "cat_collar")
