@@ -209,7 +209,13 @@ async def test_going_through_the_ivy_is_refused_the_same_way(ground_floor):
     assert await where(db) == "CO"
 
 
-async def test_taking_the_ivy_does_not_give_the_climb_away(ground_floor):
+@pytest.mark.parametrize(
+    "thing_id,word",
+    [("ivy", "ivy"), ("CS", "oak tree"), ("CK", "back door")],
+)
+async def test_an_exit_refuses_a_take_in_its_own_words(
+    ground_floor, thing_id, word
+):
     """And `/take`, which was the one verb that answered over the top
     of the writers.
 
@@ -217,33 +223,38 @@ async def test_taking_the_ivy_does_not_give_the_climb_away(ground_floor):
     the exit branch said `take_fail.exit` and nothing else, so "you
     can't put an exit in your bag" told a player the ivy was a way up
     before they had found it - the one place in the game where the
-    house default gives away more than the written line. All twenty-two
-    exits had already been written their own, and not one of them had
-    ever been read out.
+    house default gives away more than the written line. Every exit in
+    the table had one written and not one of them had ever been read
+    out.
 
-    Read off the file rather than typed, so a copy edit to the ivy is
-    not also a test change.
+    All three here are the same branch, and they are three because the
+    ivy is the one the bug was reported on, the oak is the other
+    exit a writer gave a joke of its own, and the back door is the
+    twenty rows that just say doorway - so a revert fails three times
+    rather than once in a way that reads as being about the ivy.
+
+    Expected text read off the file rather than typed, so a copy edit
+    is not also a test change.
     """
     written = next(
         r.text["take_fail"] for r in content_module.load_files().thing_text
-        if r.entity_id == "ivy" and r.state == "default"
+        if r.entity_id == thing_id and r.state == "default"
     )
 
-    reply = replies(await run(ground_floor, bot.take, "ivy", room="CO"))
+    reply = replies(await run(ground_floor, bot.take, word, room="CO"))
 
     assert reply == written
+    assert "in your bag" not in reply or "doorway" in reply
+
+
+async def test_and_the_ivy_still_never_says_the_word(ground_floor):
+    """The half of the report that was not about whose words they
+    were. Pinned apart from the line itself because this is the thing
+    the ivy must never do, whatever it is rewritten to say."""
+    reply = replies(await run(ground_floor, bot.take, "ivy", room="CO"))
+
     assert "exit" not in reply.lower()
-
-
-async def test_and_a_doorway_is_a_doorway_and_not_an_exit(ground_floor):
-    """The same branch, on the twenty-one rows that are not the ivy: the
-    writers call it a doorway, and only the engine ever called it an
-    exit. Here so a later revert shows up as two failures rather than
-    one that reads as being about the ivy."""
-    reply = replies(await run(ground_floor, bot.take, "back door", room="CO"))
-
-    assert "doorway in your bag" in reply
-    assert "exit in your bag" not in reply
+    assert "window" not in reply.lower()
 
 def test_neither_the_oak_nor_the_ivy_is_refused_by_code():
     """The point of the three tests above, stated once.
