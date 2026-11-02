@@ -2807,22 +2807,31 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
             )
             return
 
-        # **Three exceptions, and each of them is a thing you do while
-        # holding a ladder.** Climbing it, which is what it is for;
-        # laying a plank in the top steps, which is the only reason to
-        # have fetched it; and walking through a door, because `/go`
-        # works with your arms full and a player who could leave a room
-        # one way but not the other would be reading a bug.
+        # **The exceptions, and each of them is a thing you do while
+        # holding the thing.** Using it, which is what it is for - the
+        # ladder is climbed and the can is poured out; laying a plank,
+        # which for the ladder is the only reason to have fetched it;
+        # and walking through a door, because `/go` works with your arms
+        # full and a player who could leave a room one way but not the
+        # other would be reading a bug.
         #
-        # Feeding is not among them, and that is the design's call
-        # rather than an oversight: a can of cat food is a `/use`, so
-        # the ladder goes down before the cat gets fed.
-        if (
-            found.thing_id not in (world.LADDER, world.LUMBER)
-            and row.type != "exit"
-        ):
-            full = await _arms_full(guild_id, user.id)
-            if full:
+        # The exit case is decided here, before anything is read, so a
+        # doorway never costs a lookup. Which of the rest are allowed
+        # depends on *which* thing is in the way, and that is
+        # `STILL_ALLOWED`: a plank goes through for the ladder and not
+        # for the can.
+        #
+        # Feeding is not among them for either, and that is the design's
+        # call rather than an oversight: a can of cat food is a `/use`,
+        # so what you are holding goes down before the cat gets fed.
+        in_the_way = (
+            None if row.type == "exit"
+            else await _hands_full(guild_id, user.id)
+        )
+        if in_the_way is not None:
+            holding, key = in_the_way
+            if found.thing_id not in STILL_ALLOWED[holding]:
+                full = await phrasing.default_say(key)
                 await interaction.followup.send(full, ephemeral=True)
                 await _turned_away(
                     interaction,
@@ -3513,22 +3522,55 @@ async def _no_ladder_refusal(guild_id: int, name: str) -> str:
     return phrasing.fill(written, name=name) if written else ""
 
 
-async def _arms_full(guild_id: int, user_id: int) -> str | None:
-    """The line for a player trying to do something with the ladder up.
+# What a player may still do with each two-handed thing in their arms,
+# besides putting it down. The ladder lets a plank through because
+# placing one is what the ladder is *for*; the can does not, because
+# nailing a board with a full watering can in the other hand is the
+# thing the rule is about. Exits are let through for both, in the call
+# site rather than here - a doorway is not a thing being reached for.
+STILL_ALLOWED = {
+    world.LADDER: (world.LADDER, world.LUMBER),
+    world.WATERING_CAN: (world.WATERING_CAN,),
+}
 
-    One ladder, one line, and it covers `/pet`, `/take` and most of
-    `/use`: you cannot do that while you are carrying this. What is
-    still allowed is in the three call sites rather than listed here,
-    because each of them knows a different amount about what is being
-    reached for - `/pet` knows there is no thing at all, and `/use` has
-    to resolve one before it can tell a plank from a can of salmon.
+
+async def _hands_full(guild_id: int, user_id: int) -> tuple[str, str] | None:
+    """What is filling this player's hands, and the line that says so.
+
+    **Two things can now, and they fill them differently.** The ladder
+    fills them whenever it is carried, which is the whole of its rule.
+    The watering can fills them only at `full`: half a can is a can
+    being carried about, and the block lifts the moment somebody waters
+    with it or sets it down - the first of those is a transition rather
+    than a release, which is why the level is read here on every call
+    rather than cached anywhere.
+
+    Returns the thing and its defaults key, not just the line, because
+    `/use` has to know *which* thing is in the way before it can decide
+    what is still allowed. `/pet` and `/take` want only the line, and
+    `_arms_full` below is the thin reading of this for them.
 
     None when their arms are free, which is every player in the game
-    until somebody picks the ladder up.
+    until somebody picks one of the two up.
     """
-    if not await database.carried_of(user_id, guild_id, world.LADDER):
+    if await database.carried_of(user_id, guild_id, world.LADDER):
+        return world.LADDER, "carrying.ladder"
+    if await database.carried_of(user_id, guild_id, world.WATERING_CAN):
+        if await world.can_level(guild_id) == world.CAN_FULL:
+            return world.WATERING_CAN, "carrying.watering_can"
+    return None
+
+
+async def _arms_full(guild_id: int, user_id: int) -> str | None:
+    """Just the line, for the two verbs that reach for nothing.
+
+    `/pet` has no thing at all and `/take` has one that nothing is ever
+    exempt for, so neither needs to know which thing is in the way.
+    """
+    full = await _hands_full(guild_id, user_id)
+    if full is None:
         return None
-    return await phrasing.default_say("carrying.ladder")
+    return await phrasing.default_say(full[1])
 
 
 async def _the_cat_has_it(guild_id: int, column: str, name: str) -> str | None:
@@ -3737,10 +3779,20 @@ async def _finish_use(interaction, state, found) -> None:
     if effect is not None and effect.text_state:
         current = (effect.text_state, *current)
 
-    reply = await _a_use_line(
-        guild_id, found, current,
-        name=found.name, player=user.display_name, **tokens,
-    )
+    if effect is not None and effect.say:
+        # **The use chose its own line, out of the defaults.** The watering
+        # can is the only one: watering, filling and finding nothing to
+        # water are three answers to one verb, and which one it is depends
+        # on the room and the level together - a pair `thing_text` has no
+        # way to be keyed on. Everything else is described by its own row.
+        reply = await phrasing.default_say(
+            effect.say, name=found.name, player=user.display_name, **tokens
+        )
+    else:
+        reply = await _a_use_line(
+            guild_id, found, current,
+            name=found.name, player=user.display_name, **tokens,
+        )
     # The use path already has the numbers in `tokens`, so it needs the
     # break and not the lookup.
     if "n" in tokens and "total" in tokens:

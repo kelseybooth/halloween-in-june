@@ -131,7 +131,7 @@ stairs.repaired.public	{player} hammers in the last plank. The grand staircase i
 carrying.ladder	You try, but can't figure out how while you're carrying this ladder.
 ladder.cat.public	{player} starts up the ladder, and the cat gets to the top first.
 ladder.exhausted.public	{player} drops the heavy wooden ladder out of exhaustion.
-carrying.ladder.ivy	Not with a ladder. You'd need a third hand, and possibly a fourth.
+carrying.exit	Not with a {name} in your hands. You'd need a third one, and possibly a fourth.
 trash.menu	You step on the pedal and the lid swings up. What are you throwing away?
 trash.how_many	You're carrying {count}. How many go in?
 trash.number.title	Throw away: {name}
@@ -152,3 +152,13 @@ use.board_books.1	You open Little Blue Truck and start reading aloud. You get as
 use.board_books.2	You open The Very Hungry Caterpillar. The holes in the pages have been widened by small fingers, and one by something with sharper teeth. You read the first page and put it back.
 use.board_books.3	You pick up Brown Bear, Brown Bear, What Do You See? and read the first page out loud. The rhythm settles into your head and stays there for the rest of the afternoon.
 use.board_books.4	You find Guess How Much I Love You at the bottom of the stack and read the first page before you have to stop and put it down for a minute.
+watering_can.water.default	You tip the inch of rainwater over the herbs, and that's all of it. They accept it graciously.
+watering_can.water.full	You give the herbs a long, even shower. They did not need it, and accept it graciously. The can feels lighter.
+watering_can.water.partly_full	You water the herbs until the can runs dry. They accept it graciously, as always.
+watering_can.water.empty	You tip the can over the herbs. One drop comes out. It needs filling first.
+watering_can.fill	You hold the can under the faucet and let it fill all the way to the brim. It's suddenly very heavy.
+watering_can.fill.already_full	It's already full to the brim. Any more and you'd be watering the kitchen floor.
+watering_can.elsewhere	You look around for something that needs watering. Nothing in here does.
+watering_can.elsewhere.empty	It's empty.
+carrying.watering_can	You'd need a free hand, which you don't have with this full watering can.
+exhausted.public	{player} gets tired and sets the {name} down.

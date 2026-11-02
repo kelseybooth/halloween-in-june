@@ -521,8 +521,8 @@ async def test_the_shipped_content_loads(two_servers):
     assert report.content_rows["restocks"] == 4  # the toy channel row joined them
 
 
-async def test_the_shipped_content_places_six_things_per_server(two_servers):
-    """Six physical copies across six things.
+async def test_the_shipped_content_places_seven_things_per_server(two_servers):
+    """Seven physical copies across seven things.
 
     The work order said six. The gourmet can became a source on 27 September so
     that every player could earn the five-flavour achievement rather than only
@@ -552,13 +552,18 @@ async def test_the_shipped_content_places_six_things_per_server(two_servers):
     a player can pick up and shake. It is placed inside the picnic
     blanket rather than loose, which is `test_placement_respects_
     containment` below and not this count.
+
+    **The watering can made it seven the same day**, and it is the
+    third Courtyard fixture in a row to become stock. It came back
+    from 99 rather than from being scenery: parked while its levels
+    were designed, and takeable now that they exist.
     """
     parsed = content_module.load_files()
     await content_loader.load_content(parsed)
 
     placed = await contents(two_servers, GUILD_A)
-    assert len(placed) == 6
-    assert sum(row[3] for row in placed) == 6
+    assert len(placed) == 7
+    assert sum(row[3] for row in placed) == 7
 
 
 async def test_placement_respects_containment(two_servers):

@@ -33,11 +33,11 @@ cat_food_gourmet	gourmet wet cat food	gourmet|gourmet cat food|good cat food|can
 herb_garden	herb garden	herb garden|herb bed|garden|lavender|sage|rosemary|herbs	source	CO	1	no	yes	0						herbs				30	29				
 herbs	herbs	herbs|sprigs|cut herbs|herb	object		0	yes	yes	1										30	30	yes			
 pumpkins	pumpkins	pumpkins|pumpkin	fixture	CO	6	no	yes	0										30	31				
-watering_can	watering can	watering can|can|watering	fixture	CO	1	no	yes	0										99	32				
+watering_can	watering can	watering can|can|watering	object	CO	1	yes	yes	0	1									30	32				yes
 stone_circle	stone circle	stone circle|stones|circle|chalk|diagram|chalk diagram	fixture	CO	1	no	yes	0										30	33				
 sunhat	baby's sunhat	sunhat|hat|baby hat	fixture	CO	1	no	yes	0										30	34				
 rattle	wooden rattle	rattle|wooden rattle	object	CO	1	yes	yes	1								picnic_blanket		30	35				
-picnic_blanket	picnic blanket	blanket|picnic blanket|rug	fixture	CO	1	no	yes	0										30	36			no	
+picnic_blanket	picnic blanket	blanket|picnic blanket|rug	fixture	CO	1	no	yes	0										30	36				
 chocolate_book	hollowed-out book	hollow book|hollowed book|hollowed-out book|dimensional theory book|chocolate stash	source	LI	1	no	yes	0						dark_chocolate		bookshelves		30	37				
 dark_chocolate	dark chocolate	chocolate|dark chocolate|bar	object		0	yes	yes	1										30	37	yes			
 elena_journal	research journal	research journal|elena's journal|journal	fixture	LI	1	no	yes	0								fireplace		30	38				

@@ -63,7 +63,6 @@ COSTUME = "costume"
 CANDY = "candy"
 PUMPKINS = "pumpkins"
 CARVING_TOOLS = "carving_tools"
-WATERING_CAN = "watering_can"
 HERB_GARDEN = "herb_garden"
 HERBS = "herbs"
 KEURIG = "coffee_maker"
@@ -391,7 +390,9 @@ def _on_date(matches, targets: set[str], *, source_only: bool = False):
 # that needs to remember anything between commands.
 # --------------------------------------------------------------------------
 
-GREEN_THUMB_PARTS = (WATERING_CAN, PUMPKINS, HERB_GARDEN)
+# Two of the three parts are a `thing_uses` row and nothing more. The
+# watering is not, since 2 November: see `green_thumb` below.
+GREEN_THUMB_PARTS = (PUMPKINS, HERB_GARDEN)
 
 # Aunt Sue's, and the only thing in the house anybody would carry to
 # ten rooms on purpose.
@@ -407,12 +408,20 @@ async def green_thumb(context: Context) -> bool:
     replaced it with the thing the deck wanted all along - three jobs a
     gardener does, in whatever order a player gets to them.
 
-    **Three `thing_uses` rows, which is the whole of the state.** Using
-    the watering can and carving a pumpkin each stamp one through
-    `record_use`; drawing herbs stamps one for the **herb garden**,
-    because `take_from_source` is the only path that yields herbs from
-    it and the garden's row carries no other meaning. Nothing new is
-    stored and nothing is counted - twenty waterings are still one part.
+    **Two `thing_uses` rows and one deed.** Carving a pumpkin stamps a
+    use; drawing herbs stamps one for the **herb garden**, because
+    `take_from_source` is the only path that yields herbs from it and
+    the garden's row carries no other meaning. Nothing is counted -
+    twenty carvings are still one part.
+
+    **The watering used to be a third such row and could not stay
+    one.** The can has levels now, and `/use watering can` is three
+    different actions depending on where you are standing: a fill in
+    the Kitchen, a tip of an empty can over the herbs, and an actual
+    watering all stamp `thing_uses` identically, and only the last is
+    gardening. So the pour writes a `room_deeds` row of its own -
+    `world._use_the_watering_can` does it, on the one branch that moved
+    water - and this asks for that deed in the Courtyard.
 
     **The source is what separates gardening from scavenging**, and it
     does it by what gets written rather than by a test here: herbs
@@ -431,7 +440,12 @@ async def green_thumb(context: Context) -> bool:
     done = await database.which_of_these_used(
         context.user_id, context.guild_id, GREEN_THUMB_PARTS
     )
-    return len(done) == len(GREEN_THUMB_PARTS)
+    if len(done) != len(GREEN_THUMB_PARTS):
+        return False
+    watered = await database.rooms_where(
+        context.user_id, context.guild_id, telemetry.USE, world.WATERING_CAN
+    )
+    return world.HERB_GARDEN_ROOM in watered
 
 
 # ------------------------------------------------------------------------

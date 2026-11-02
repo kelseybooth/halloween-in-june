@@ -160,7 +160,10 @@ def test_every_thing_a_trigger_names_exists_in_the_content():
         triggers.CANDY,
         triggers.PUMPKINS,
         triggers.CARVING_TOOLS,
-        triggers.WATERING_CAN,
+        # Named through `world` since the can got levels: the predicate
+        # reads a deed for it rather than a `thing_uses` row, and the id
+        # went where the levels live.
+        world.WATERING_CAN,
         triggers.HERB_GARDEN,
         triggers.HERBS,
         triggers.KEURIG,
@@ -452,8 +455,17 @@ CARVED = "pumpkins"
 PICKED = "herb_garden"
 
 
-async def water(who=ALICE):
-    await database.record_use(who, GUILD_A, WATERED)
+async def water(who=ALICE, room_id="CO"):
+    """**A deed, not a `thing_uses` row, since the can got levels.**
+
+    `/use watering can` is three actions now - fill it in the Kitchen,
+    tip an empty one over the herbs, water with a full one - and all
+    three stamp `thing_uses` identically. Only the pour writes the deed,
+    so the deed is what this helper writes.
+    """
+    await database.record_room_deed(
+        who, GUILD_A, telemetry.USE, WATERED, room_id
+    )
 
 
 async def carve(who=ALICE):
@@ -471,6 +483,19 @@ async def test_green_thumb_takes_all_three(playing):
     await carve()
 
     assert "green_thumb" in await earned(a_context("on_use", thing_id=CARVED))
+
+
+async def test_a_fill_is_not_a_watering(playing):
+    """The distinction the deed exists for. Filling the can in the
+    Kitchen is a successful `/use` of the watering can, and it is not
+    gardening - under the old reading it completed the part."""
+    await water(room_id="KI")
+    await pick()
+    await carve()
+
+    assert "green_thumb" not in await earned(
+        a_context("on_use", thing_id=CARVED)
+    )
 
 
 @pytest.mark.parametrize("missing", ["watering", "picking", "carving"])
