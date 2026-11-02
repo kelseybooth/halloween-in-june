@@ -6465,6 +6465,15 @@ async def drop(interaction: discord.Interaction, thing: str) -> None:
                 guild_id, state.current_room, found.thing_id
             ),
         )
+        # **Here and not in the trash, which is the distinction**
+        # *Burrito Trail* turns on: putting something in the bin is
+        # `threw_away` and goes out with the bag, and the cat carrying
+        # one off is nobody's drop at all. Only this path is a player
+        # leaving a thing in a room, which is what the trail is made of.
+        await database.record_room_deed(
+            user.id, guild_id, telemetry.DROP, found.thing_id,
+            state.current_room,
+        )
 
         # Retires `hint.drop_something`. Recorded here rather than
         # inferred from an empty bag, because putting one of three

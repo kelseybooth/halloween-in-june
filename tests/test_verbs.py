@@ -364,6 +364,23 @@ async def test_dropping_puts_it_back_in_the_room(house):
     assert "spoon" in heard(interaction)
 
 
+async def test_dropping_writes_down_which_room(house):
+    """What *Burrito Trail* is made of, asserted on the verb rather
+    than on the burrito: every `/drop` writes the deed, so the next
+    "left one in every room" achievement is a content change.
+
+    **`/drop` and not the bin.** Throwing something away is
+    `threw_away` and goes out with the bag, and the cat carrying one
+    off is nobody's drop - neither reaches this write, which is the
+    distinction the trail turns on."""
+    await content_loader.load_content(a_house(a_thing("spoon", name="spoon")))
+    await take()
+
+    await drop()
+
+    assert await database.rooms_where(ALICE, GUILD_A, "drop", "spoon") == {"EN"}
+
+
 async def test_dropping_is_announced_in_the_room(house):
     """Putting something down is the half of carrying the room most
     needs to see: it is how a thing becomes available to anybody else."""

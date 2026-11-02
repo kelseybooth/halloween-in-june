@@ -230,7 +230,8 @@ async def test_the_content_is_still_loaded(two_games):
     # *Clean Plate Club*, a new drop 30 row. Out: *Using Your Noodle*,
     # which went to 99 when the pasta pot started requiring pasta, so it
     # has not arrived for a guild on the ground floor any more.
-    assert len(await resolve.achievements(GUILD_A)) == 44
+    # Forty-six on 2 November, with the two drop 50 trails.
+    assert len(await resolve.achievements(GUILD_A)) == 46
 
 
 async def test_the_art_is_kept_by_default(two_games):

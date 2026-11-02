@@ -44,7 +44,7 @@ import triggers
 import world
 
 
-THIS_DROP = 30
+THIS_DROP = 31
 
 # A third player, who turns up and never lifts a hammer. Local, the way
 # every other file that wants one keeps theirs.

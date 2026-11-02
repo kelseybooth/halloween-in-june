@@ -71,7 +71,7 @@ NO_GAME = None
 # what a server on 30 finds is content that works and three mechanics
 # that are not there yet: the ladder climbs with its default line, the
 # trash can holds nothing, and the last eighteen planks still refuse.
-LAST_PLAYABLE_DROP = 30
+LAST_PLAYABLE_DROP = 31
 
 
 class UnknownDrop(Exception):

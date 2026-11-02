@@ -26,7 +26,6 @@ from datetime import timedelta
 import content as content_module
 import database
 import reach
-import telemetry
 import resolve
 import states
 import telemetry
@@ -638,7 +637,20 @@ async def _climb_the_ladder(
             minutes=GUARDED_MINUTES
         )
         await database.lock_thing(guild_id, LADDER, until)
+        # **No deed for a climb she took.** The design is explicit that
+        # cat climbs do not count toward *Rung by Rung*, and this is the
+        # only branch that knows one happened - the handler sees a
+        # successful use either way. Returning before the write rather
+        # than writing and filtering later, so the table never holds a
+        # row the achievement has to remember to ignore.
         return Effect(text_state=CAT_CLIMB, extra={**facts, CAT_CLIMB: True})
+
+    # Every climb that reached the top, in whatever room. *Rung by Rung*
+    # counts rooms rather than climbs, so the tenth climb of one room is
+    # the same deed as the first.
+    await database.record_room_deed(
+        user_id, guild_id, telemetry.USE, LADDER, room_id
+    )
 
     if room_id != ROAD:
         return Effect(extra=facts)
