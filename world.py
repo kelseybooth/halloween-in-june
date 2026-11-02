@@ -319,6 +319,102 @@ HOUSE_UNLOCKED = "house_unlocked"
 HOUSE_KEY = "house_key"
 HOUSE_FROM_DROP = 10
 
+
+# --------------------------------------------------------------------------
+# The watering can
+#
+# **Four levels, and they belong to the can.** Two people cannot
+# disagree about how much water is in one can, so the level is stored
+# per server against the thing - see `database.ThingState`, which
+# explains why it is not a `server_states` row. `default` is the inch of
+# rainwater it starts with and the only level it never returns to.
+#
+# **The room decides the verb.** The same `/use watering can` waters in
+# the Courtyard, fills in the Kitchen, and does nothing anywhere else -
+# which is why the line comes out of the defaults rather than out of the
+# can's own `use` row: it is keyed on the room and the level together,
+# and `thing_text` can be keyed on one or the other.
+# --------------------------------------------------------------------------
+
+WATERING_CAN = "watering_can"
+HERB_GARDEN_ROOM = "CO"
+FAUCET_ROOM = "KI"
+
+# The levels, most water first, which is also the order they are poured
+# down through.
+CAN_FULL = "full"
+CAN_PARTLY_FULL = "partly_full"
+CAN_RAINWATER = "default"
+CAN_EMPTY = "empty"
+CAN_LEVELS = (CAN_FULL, CAN_PARTLY_FULL, CAN_RAINWATER, CAN_EMPTY)
+
+# What one watering costs. The inch of rainwater and a half-full can are
+# both good for exactly one go; a full can is good for two.
+POURS_DOWN_TO = {
+    CAN_FULL: CAN_PARTLY_FULL,
+    CAN_PARTLY_FULL: CAN_EMPTY,
+    CAN_RAINWATER: CAN_EMPTY,
+}
+
+
+async def can_level(guild_id: int) -> str:
+    """How much water is in the can, which starts as the rainwater.
+
+    The starting level is here rather than in the table because a can
+    nobody has touched has no row - and `default` is the name of the
+    `thing_text` row the resolution would read anyway, so an untouched
+    can and a can explicitly set back to rainwater read the same.
+    """
+    return await database.thing_state(guild_id, WATERING_CAN) or CAN_RAINWATER
+
+
+async def _use_the_watering_can(
+    guild_id: int, user_id: int, room_id: str
+) -> Effect:
+    """Water, fill, or look around for something that needs watering.
+
+    **Three rooms' worth of behaviour out of one verb**, and the level
+    moves in only two of them. Watering in the Courtyard pours the can
+    down a level; filling in the Kitchen takes it straight to full from
+    wherever it was. Everywhere else the can is just a can being
+    carried about, and saying so without changing anything is the whole
+    of that branch.
+
+    **The empty can still has something to say in all three.** Tipping
+    it over the herbs gets one drop, which is the hint; holding it in
+    the Living Room gets "It's empty", which is shorter than the line
+    about looking around because a player holding an empty can already
+    knows what is wrong.
+
+    **Only a pour counts as gardening.** *Green Thumb* asks whether
+    somebody watered the herbs, and a fill is not watering and tipping
+    an empty can is not either - so the deed is written here, on the
+    branch that moved water, rather than inferred afterwards from a
+    `thing_uses` row that every use of the can stamps alike.
+    """
+    level = await can_level(guild_id)
+
+    if room_id == HERB_GARDEN_ROOM:
+        if level == CAN_EMPTY:
+            return Effect(say="watering_can.water.empty")
+        await database.set_thing_state(
+            guild_id, WATERING_CAN, POURS_DOWN_TO[level]
+        )
+        await database.record_room_deed(
+            user_id, guild_id, telemetry.USE, WATERING_CAN, room_id
+        )
+        return Effect(say=f"watering_can.water.{level}")
+
+    if room_id == FAUCET_ROOM:
+        if level == CAN_FULL:
+            return Effect(say="watering_can.fill.already_full")
+        await database.set_thing_state(guild_id, WATERING_CAN, CAN_FULL)
+        return Effect(say="watering_can.fill")
+
+    if level == CAN_EMPTY:
+        return Effect(say="watering_can.elsewhere.empty")
+    return Effect(say="watering_can.elsewhere")
+
 # How long after a key falls before the bed will give up another. The
 # spare exists because the first finder can go quiet - they take the key
 # and never come back, and without this the server is locked out of the
@@ -497,6 +593,15 @@ class Effect:
     # Meeting* goes to everybody who laid a plank, which is a list only
     # this layer can produce.
     recipients: tuple[int, ...] | None = None
+    # A key in `defaults.tsv` to say instead of the thing's own `use`
+    # row. **The watering can is the only one, and it needs this
+    # because its line depends on two things at once.** Every other
+    # use is described by one axis - the thing, or the thing in a
+    # state, or the thing in a room - and `thing_text` can be keyed on
+    # any one of those. Watering depends on the room *and* the level,
+    # and a row keyed on both would need a state called `in:CO|full`
+    # that the resolution has no way to match.
+    say: str | None = None
 
     @property
     def changed_the_world(self) -> bool:
@@ -587,6 +692,9 @@ async def after_use(
 
     if thing_id == CAT_FOOD_EXPIRED:
         return await _offer_her_the_expired_can(guild_id, user_id)
+
+    if thing_id == WATERING_CAN:
+        return await _use_the_watering_can(guild_id, user_id, room_id)
 
     if thing_id == HOUSE_KEY:
         return await _unlock_the_front_door(guild_id)

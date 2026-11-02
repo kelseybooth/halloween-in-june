@@ -104,7 +104,12 @@ def test_the_shipped_content_parses():
     # whatever can is in your hand, so the bowl's refusal is one
     # shared line and each can's own `use_fail` went back to being
     # about its own lid.
-    assert len(c.defaults) == 153
+    #
+    # Ten more on 2 November, all the watering can's: four levels of
+    # watering, two of filling, two for a room with nothing in it to
+    # water, the refusal for a hand that is holding it, and the line
+    # the room sees when somebody who went quiet sets a thing down.
+    assert len(c.defaults) == 163
     # Ten since 31 October: the ground floor arrives in two halves, and
     # 25 sits below the ceiling rather than above it, which is why
     # nothing else in the suite noticed.

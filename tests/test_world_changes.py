@@ -417,6 +417,10 @@ async def test_everything_capped_is_capped_at_one(house):
         # The brass key, so a spare always goes to somebody new - which
         # is the whole of what a spare is for.
         "house_key": 1,
+        # The watering can, for the ladder's reason: there is one, and
+        # the cap is what the second player to reach for it hears
+        # instead of watching the first hold a spare.
+        "watering_can": 1,
     }
 
 

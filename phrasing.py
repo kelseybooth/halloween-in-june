@@ -86,11 +86,39 @@ async def say(
     `fallback` is a key in defaults.tsv. Returning an empty string when neither
     exists is deliberate: the caller decides whether silence is acceptable, and
     for most verbs it is not.
+
+    **A thing with a state of its own has it read first.** The watering can
+    is the only one: its level is a fact about the can rather than about the
+    player or the house, so it cannot ride in on `states.in_force` with the
+    rest. Putting it here rather than at the call sites is what lets the
+    can's `look`, `take` and `drop` be four rows in `thing_text` instead of
+    four branches in three handlers - and it costs one indexed read, on one
+    thing, and nothing at all for everything else in the house.
     """
+    state = await _with_its_own_state(guild_id, thing_id, state)
     written = await resolve.thing_text(guild_id, thing_id, column, state)
     if not written and fallback:
         written = await resolve.default_text(fallback)
     return fill(written, **tokens)
+
+
+async def _with_its_own_state(
+    guild_id: int, thing_id: str, state: "str | Sequence[str]"
+) -> "str | Sequence[str]":
+    """The state order with the thing's own state in front of it.
+
+    Unchanged for everything that has none, which is everything but the
+    watering can - and unchanged too for a can nobody has touched, whose
+    starting level is the `default` row the resolution would have read
+    anyway.
+    """
+    if thing_id not in database.THINGS_WITH_STATE:
+        return state
+    mine = await database.thing_state(guild_id, thing_id)
+    if mine is None:
+        return state
+    rest = (state,) if isinstance(state, str) else tuple(state)
+    return (mine, *rest)
 
 
 async def default_say(key: str, **tokens) -> str:

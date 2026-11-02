@@ -1081,6 +1081,37 @@ class PlayerState(Base):
     )
 
 
+class ThingState(Base):
+    """What one thing has become, on one server, for everybody.
+
+    **Not a `server_states` row, and the reason is that table's own
+    contract.** A state there is "something that has become true" -
+    permanent and idempotent, with no way to clear one, because the
+    staircase does not un-repair. The watering can's level goes
+    backwards all day: full, poured down to partly full, emptied,
+    filled again. Giving `server_states` a delete path would hand it to
+    the three permanent states that are built on not having one, and a
+    server holding `wc_full` and `wc_empty` at the same time is
+    representable there and meaningless.
+
+    So: one row per (server, thing), holding the one state that thing is
+    in. Shared by every player, like the thing itself - two people
+    cannot disagree about how much water is in one can.
+
+    **Read through `phrasing.say`**, which puts a thing's own state in
+    front of the player's when the thing has one. That is what lets the
+    can's `look`, `take` and `drop` be four rows in `thing_text` rather
+    than four branches in the handlers.
+    """
+
+    __tablename__ = "thing_states"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    thing_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    state: Mapped[str] = mapped_column(String(64), nullable=False)
+    set_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
 class ServerState(Base):
     """A state the whole server shares. Only stairs_repaired today.
 
@@ -3268,6 +3299,57 @@ async def rooms_where(
             )
         )
     return {row[0] for row in rows}
+
+
+# Things that carry a state of their own, which `phrasing.say` reads in
+# front of the player's. Named here rather than in `world` because the
+# table is here and `phrasing` must not import `world`; a thing in this
+# set costs one indexed read per line of its text, so it is a set rather
+# than a lookup on every thing in the house.
+THINGS_WITH_STATE = frozenset({"watering_can"})
+
+
+async def thing_state(guild_id: int, thing_id: str) -> str | None:
+    """What this thing has become on this server, or None if nothing.
+
+    None rather than a default, because only the caller knows what the
+    starting level of a watering can is - and a thing that has never
+    been touched has no row rather than a row saying so.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        return await session.scalar(
+            select(ThingState.state).where(
+                ThingState.guild_id == guild_id,
+                ThingState.thing_id == thing_id,
+            )
+        )
+
+
+async def set_thing_state(guild_id: int, thing_id: str, state: str) -> None:
+    """Move a thing into a state, overwriting whatever it was in.
+
+    Overwriting is the whole difference from `set_server_state`: this is
+    a level, not an achievement, and it is as likely to go down as up.
+    """
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    now = await server_now(guild_id)
+    async with session_factory() as session:
+        await session.execute(
+            insert(ThingState)
+            .values(
+                guild_id=guild_id,
+                thing_id=thing_id,
+                state=state,
+                set_at=now,
+            )
+            .on_conflict_do_update(
+                index_elements=[ThingState.guild_id, ThingState.thing_id],
+                set_={"state": state, "set_at": now},
+            )
+        )
+        await session.commit()
 
 
 async def last_used_any(
