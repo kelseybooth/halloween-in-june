@@ -233,6 +233,14 @@ async def needs_the_ladder(guild_id: int, user_id: int, room_id: str) -> bool:
 LADDER = "ladder"
 NEST_PIECE = "wasp_nest_piece"
 
+# **The one use whose whole point is being overheard.** Shaking a
+# rattle in an empty garden is a joke for the room; told privately it
+# is a joke with no audience. It changes nothing in the world - the
+# effect carries no tokens, no state and no score - so it is here
+# rather than in a branch of its own further down, and `public` is the
+# only thing it says.
+RATTLE = "rattle"
+
 # Where the wasp nest is: over the road, which is the channel.
 ROAD = content_module.CHANNEL_ROOM
 
@@ -571,6 +579,9 @@ async def after_use(
 
     if thing_id == CAT_BED:
         return await _fluff_the_bed(guild_id, user_id)
+
+    if thing_id == RATTLE:
+        return Effect(public=True)
 
     if thing_id in FEEDS:
         return await _feed_the_cat(guild_id, user_id)
