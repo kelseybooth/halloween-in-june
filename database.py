@@ -2904,6 +2904,48 @@ async def idle_carriers(
         return [(row[0], row[1]) for row in rows]
 
 
+async def active_others_in_room(
+    guild_id: int, room_id: str, since: datetime, *, except_user: int
+) -> int:
+    """How many players other than this one are in this room and awake.
+
+    The other side of `idle_carriers`: that one wants everybody who has
+    gone quiet, this one wants everybody who has not. Both read
+    `last_command_at` rather than the log, for the reason written on
+    that column - the log is for tuning, and the game decides nothing
+    from it.
+
+    **A null stamp is not presence.** Same rule as the sweep, read the
+    other way round: a player the game has never watched run a command
+    is not counted as an audience, so a server that upgraded mid-game
+    does not hand out the achievement to a room full of rows nobody has
+    seen move. The cost is that somebody standing right there goes
+    uncounted until their next command, which is a turn away.
+
+    `current_room` is where they are now rather than where they were,
+    which is the right question here and the wrong one for anything
+    historical - a point worth keeping in mind before this is reused.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        return await session.scalar(
+            select(func.count())
+            .select_from(PlayerGameState)
+            .join(
+                User,
+                (User.id == PlayerGameState.user_id)
+                & (User.guild_id == PlayerGameState.guild_id),
+            )
+            .where(
+                PlayerGameState.guild_id == guild_id,
+                PlayerGameState.current_room == room_id,
+                PlayerGameState.user_id != except_user,
+                User.last_command_at.is_not(None),
+                User.last_command_at >= since,
+            )
+        ) or 0
+
+
 async def take_from_room(
     user_id: int, guild_id: int, room_id: str, container_id: str, thing_id: str
 ) -> bool:
@@ -4089,6 +4131,15 @@ CONFIG_KEYS: dict[str, tuple[int, str]] = {
     "toys_present": (
         2,
         "How many cat toys the channel is kept topped up to.",
+    ),
+    # **Three is the beta number, not a placeholder.** It is a config
+    # value because a quiet server has to be able to reach the
+    # achievement at all, not because nobody has decided - see the
+    # rattle achievements decision note.
+    "captive_audience_size": (
+        3,
+        "How many other players have to be awake in the room for a rattle "
+        "to earn Captive Audience.",
     ),
     # All three are here rather than in code because they are the
     # drop's balance, and the whole argument for the config history is

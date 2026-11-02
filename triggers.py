@@ -70,6 +70,14 @@ TRASH_CAN = "trash_can"
 PASTA_POT = "pasta_pot"
 NACHO_CHIPS = "nacho_chips"
 PLATES = "plates"
+RATTLE = "rattle"
+
+# How recently somebody has to have run a command to count as an
+# audience. Not a config value, unlike how many of them there are: the
+# number of players a small server can muster is a fact about that
+# server, and ten minutes is a fact about how long somebody stays in a
+# room after typing something.
+AUDIENCE_MINUTES = 10
 FROZEN_BURRITO = "frozen_burrito"
 GRAPHITE = "graphite_powder"
 # A piece of the wasp nest, knocked down by climbing the ladder on the
@@ -312,6 +320,44 @@ async def trash_panda(context: Context) -> bool:
     asks whose.
     """
     return context.container_id == TRASH_CAN
+
+
+async def captive_audience(context: Context) -> bool:
+    """A rattle played in a room with other people awake in it.
+
+    **The audience is counted, not the noise.** Noise Complaint was the
+    other way round - count what the room has seen lately - and it was
+    dropped because the only record of that is `interaction_log`, which
+    the game does not read to decide anything. This asks who is standing
+    here instead, which is live state and nobody's history.
+
+    Awake means they have run some command in the last
+    `AUDIENCE_MINUTES`, off `last_command_at` for the same reason the
+    ladder sweep reads it: a player's current room says where they are
+    and nothing about whether anyone is at the keyboard.
+
+    **Nobody can earn it alone**, which is the whole point of it, so the
+    rattler is excluded from their own audience rather than subtracted
+    afterwards - a count that included them would hand it out one short
+    on a server configured down to one.
+    """
+    if context.thing_id != RATTLE or context.room_id is None:
+        return False
+    if context.user_id is None:
+        return False
+    wanted = await database.get_setting(context.guild_id, "captive_audience_size")
+    # **`server_now` rather than `context.when`.** `last_command_at` is
+    # stamped from the server's clock, which a QA offset moves, and a
+    # window built from the wall clock would be comparing two different
+    # times. `context.now` still wins when a test supplies one.
+    now = context.now or await database.server_now(context.guild_id)
+    audience = await database.active_others_in_room(
+        context.guild_id,
+        context.room_id,
+        now - timedelta(minutes=AUDIENCE_MINUTES),
+        except_user=context.user_id,
+    )
+    return audience >= wanted
 
 
 async def bin_looking_for_you(context: Context) -> bool:
@@ -1058,6 +1104,10 @@ def register_all() -> None:
     # player taste it, so the achievement needs no condition beyond having
     # used them: `/use plate` and `/use plates` both resolve to this thing.
     add("clean_plate_club", "on_use", _on_thing({PLATES}))
+    # The one achievement in the file that depends on other people being
+    # in the room at the time, which is why it is a predicate of its own
+    # rather than a thing id and a count.
+    add("captive_audience", "on_use", captive_audience)
     add("getting_into_the_spirit", "on_use", _blocked("the ghost system"))
     add("ghostbuster", "on_use", _blocked("the ghost system"))
     add("breaking_into_the_halloween_candy", "on_use", _used(CANDY))

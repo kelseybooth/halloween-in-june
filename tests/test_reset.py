@@ -231,7 +231,9 @@ async def test_the_content_is_still_loaded(two_games):
     # which went to 99 when the pasta pot started requiring pasta, so it
     # has not arrived for a guild on the ground floor any more.
     # Forty-six on 2 November, with the two drop 50 trails.
-    assert len(await resolve.achievements(GUILD_A)) == 46
+    # Forty-seven with *Captive Audience*, a drop 30 row, so it has
+    # arrived for a guild this fixture loads at the last drop.
+    assert len(await resolve.achievements(GUILD_A)) == 47
 
 
 async def test_the_art_is_kept_by_default(two_games):

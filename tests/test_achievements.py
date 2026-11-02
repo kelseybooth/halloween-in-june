@@ -83,8 +83,11 @@ def test_the_shipped_file_parses():
     # the use and nothing more.
     # Fifty-five on 2 November: *Rung by Rung* and *Burrito Trail*,
     # the two drop 50 trails.
-    assert len(parsed.achievements) == 55
-    assert len(parsed.achievement_ids) == 55
+    # Then *Captive Audience*, the same day: a rattle played with other
+    # people awake in the room. It is one of the two the rattle work
+    # order asked for; the other, *Accompanist*, waits for drop 40.
+    assert len(parsed.achievements) == 56
+    assert len(parsed.achievement_ids) == 56
 
 
 def test_the_shipped_file_validates():
@@ -203,7 +206,7 @@ async def test_the_rows_reach_the_database(db):
 async def test_the_whole_shipped_file_loads(db):
     await content_loader.load_content(content_module.load_files())
 
-    assert await row_count(db, "achievements") == 55
+    assert await row_count(db, "achievements") == 56
 
 
 async def test_a_reload_replaces_the_rows(db):
