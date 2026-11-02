@@ -44,11 +44,12 @@ import content_loader
 import database
 import resolve
 import states
+import telemetry
 import triggers
 import world
 
 
-THIS_DROP = 30
+THIS_DROP = 31
 
 # Where a climb is written for, and a phrase out of each line that no
 # other room's says. Read off the files in the test below rather than
@@ -710,3 +711,43 @@ async def test_a_ladder_nobody_is_carrying_is_left_alone(house):
 
     assert "ladder" in await floor_of("CO")
     assert EXHAUSTED not in posted(house, "CO")
+
+
+# ------------------------------------------------------------------------
+# What a climb leaves behind
+#
+# *Rung by Rung* wants the ten places, and the only record of where a
+# climb happened used to be a string in the log. These two are the write
+# that replaced it; the achievement itself is `test_triggers`.
+# ------------------------------------------------------------------------
+
+
+async def test_a_climb_is_remembered_by_its_room(house):
+    """One deed per room, however many times it is climbed."""
+    db, *_ = house
+    await carry_it(house)
+
+    await climb(house, "CO")
+    await climb(house, "CO")
+
+    assert await db.rooms_where(
+        ALICE, GUILD_A, telemetry.USE, world.LADDER
+    ) == {"CO"}
+
+
+async def test_but_a_climb_she_takes_is_not(house, monkeypatch):
+    """**The design says cat climbs do not count, and this is where
+    that is decided.** She goes up and the player does not, so there is
+    nothing to have seen from the top - and the handler cannot tell the
+    difference, because a climb she takes is still a successful `/use`
+    with a line of its own. The branch returns before the write rather
+    than writing a row the predicate would have to filter."""
+    db, *_ = house
+    monkeypatch.setattr(world, "random", _AlwaysTheCat())
+    await carry_it(house)
+
+    await climb(house, "CO")
+
+    assert await db.rooms_where(
+        ALICE, GUILD_A, telemetry.USE, world.LADDER
+    ) == set()

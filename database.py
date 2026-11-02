@@ -1194,6 +1194,47 @@ class ThingUse(Base):
     use_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
+class RoomDeed(Base):
+    """One row per (player, action, thing, room) a player has done it in.
+
+    **The one thing `thing_uses` cannot answer.** That table knows what
+    a player has used and how often, and nothing at all about where -
+    which is enough for every achievement up to drop 50 and enough for
+    none of the two that arrive with it. *Rung by Rung* wants the ten
+    places a ladder has been climbed and *Burrito Trail* the ten a
+    burrito has been left, and both are the same question: which rooms,
+    per player, for one verb on one thing.
+
+    **Written for every drop and every climb, not only for those two
+    things.** The narrower version - a column on `thing_uses`, or a row
+    only when the thing is the ladder - saves nothing worth having: the
+    row is five short values, the write is on a path a player reaches a
+    few times a minute at worst, and a table that answers the general
+    question makes the next trail achievement a content change. Rows are
+    bounded by things times rooms times players and will not reach five
+    figures.
+
+    **Idempotent, and `first_at` says why.** Dropping a second burrito in
+    the Kitchen is not a second deed, and picking one back up does not
+    undo the first - the deed is that it happened, so the row is written
+    once and never updated. That is what lets a player walk the whole
+    trail with a single burrito, which the design asks for.
+    """
+
+    __tablename__ = "room_deeds"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    # The verb, as `telemetry` names it: "use", "drop". Part of the key
+    # because one thing can be both climbed and dropped, and a trail of
+    # drops is not a trail of uses.
+    action: Mapped[str] = mapped_column(String(32), primary_key=True)
+    thing_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    # The channel is a room here, as it is everywhere else: `CH`.
+    room_id: Mapped[str] = mapped_column(String(8), primary_key=True)
+    first_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
 class ServerRestock(Base):
     """Where a server has got to in one restock schedule.
 
@@ -3151,6 +3192,67 @@ async def which_of_these_used(
                 ThingUse.guild_id == guild_id,
                 ThingUse.user_id == user_id,
                 ThingUse.thing_id.in_(wanted),
+            )
+        )
+    return {row[0] for row in rows}
+
+
+async def record_room_deed(
+    user_id: int, guild_id: int, action: str, thing_id: str, room_id: str
+) -> None:
+    """Note that this player has done this, to this, in this room.
+
+    Written once and never updated, which is the whole of the rule: a
+    deed is that it happened, so a second burrito in the same room
+    changes nothing and `first_at` stays the first one. `DO NOTHING`
+    rather than a read-then-write, so two commands in the same second
+    cannot race each other into an integrity error.
+    """
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    now = await server_now(guild_id)
+
+    async with session_factory() as session:
+        await session.execute(
+            insert(RoomDeed)
+            .values(
+                guild_id=guild_id,
+                user_id=user_id,
+                action=action,
+                thing_id=thing_id,
+                room_id=room_id,
+                first_at=now,
+            )
+            .on_conflict_do_nothing(
+                index_elements=[
+                    RoomDeed.guild_id,
+                    RoomDeed.user_id,
+                    RoomDeed.action,
+                    RoomDeed.thing_id,
+                    RoomDeed.room_id,
+                ]
+            )
+        )
+        await session.commit()
+
+
+async def rooms_where(
+    user_id: int, guild_id: int, action: str, thing_id: str
+) -> set[str]:
+    """Every room this player has done that in, as room ids.
+
+    A set rather than a count, because both achievements that ask are
+    "in each of these places" and not "this many times" - and because a
+    count cannot tell ten rooms from one room ten times.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(RoomDeed.room_id).where(
+                RoomDeed.guild_id == guild_id,
+                RoomDeed.user_id == user_id,
+                RoomDeed.action == action,
+                RoomDeed.thing_id == thing_id,
             )
         )
     return {row[0] for row in rows}

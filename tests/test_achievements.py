@@ -81,8 +81,10 @@ def test_the_shipped_file_parses():
     # Then *Clean Plate Club*, from playtesting on 30 October: the plates'
     # use text has the player taste the dried food, so the achievement is
     # the use and nothing more.
-    assert len(parsed.achievements) == 53
-    assert len(parsed.achievement_ids) == 53
+    # Fifty-five on 2 November: *Rung by Rung* and *Burrito Trail*,
+    # the two drop 50 trails.
+    assert len(parsed.achievements) == 55
+    assert len(parsed.achievement_ids) == 55
 
 
 def test_the_shipped_file_validates():
@@ -201,7 +203,7 @@ async def test_the_rows_reach_the_database(db):
 async def test_the_whole_shipped_file_loads(db):
     await content_loader.load_content(content_module.load_files())
 
-    assert await row_count(db, "achievements") == 53
+    assert await row_count(db, "achievements") == 55
 
 
 async def test_a_reload_replaces_the_rows(db):

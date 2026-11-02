@@ -26,7 +26,9 @@ import craving
 import database
 import resolve
 import states
+import telemetry
 import triggers
+import world
 from achievements import Context
 
 PACIFIC = database.PACIFIC
@@ -815,10 +817,15 @@ def test_what_can_actually_be_earned():
     end of drop 30's debt to the blocked list. It had been parked at 99
     since drop 20 for want of an award shape: a group row that goes to
     the people who did the work rather than to the server.
+
+    **Forty-six with the two trails**, and neither is blocked for a
+    change: both read `room_deeds`, which is written by the climb and
+    the drop themselves, so the day the rows shipped was the day they
+    could be earned.
     """
     earnable = achievements.registered_ids() - set(BLOCKED) - set(BY_HAND)
 
-    assert len(earnable) == 44
+    assert len(earnable) == 46
 
 
 # --------------------------------------------------------------------------
@@ -1500,3 +1507,102 @@ async def test_neither_is_pinned_to_2026(playing):
         a_context("on_command", now=pacific(2031, 10, 31))
     )
 
+
+# ------------------------------------------------------------------------
+# The two trails: Rung by Rung and Burrito Trail
+#
+# Both are "one verb, in every room", and both read `room_deeds`. The
+# writes are tested where they happen - the climb in `test_the_ladder`,
+# the drop in `test_verbs` - so these are about the condition.
+#
+# The places are read off the house here too, for the reason the
+# predicate reads them: a list of ten room ids in a test is a second
+# copy of `rooms.tsv`, and a test holding a stale copy passes while the
+# game is wrong.
+# ------------------------------------------------------------------------
+
+
+async def every_place() -> list[str]:
+    return [room_id for room_id, _ in await resolve.all_rooms()]
+
+
+async def deeds(action, thing_id, rooms, who=ALICE) -> None:
+    for room_id in rooms:
+        await database.record_room_deed(who, GUILD_A, action, thing_id, room_id)
+
+
+async def test_the_house_has_ten_places_to_be_in(playing):
+    """Both trails are ten rooms long because the house is. Asserted
+    once, here, so the two below can say "every place" and mean it."""
+    places = await every_place()
+
+    assert len(places) == 10
+    assert "CH" in places
+
+
+async def test_rung_by_rung_wants_every_place(playing):
+    await deeds(telemetry.USE, world.LADDER, await every_place())
+
+    assert "rung_by_rung" in await earned(
+        a_context("on_use", thing_id=world.LADDER)
+    )
+
+
+async def test_rung_by_rung_takes_nothing_less(playing):
+    """Nine of the ten, which is the Secret Library missing - the one a
+    player has to carry the ladder into through a window or a
+    passage."""
+    places = [p for p in await every_place() if p != "SE"]
+    await deeds(telemetry.USE, world.LADDER, places)
+
+    assert "rung_by_rung" not in await earned(
+        a_context("on_use", thing_id=world.LADDER)
+    )
+
+
+async def test_burrito_trail_wants_every_place(playing):
+    await deeds(telemetry.DROP, triggers.FROZEN_BURRITO, await every_place())
+
+    assert "burrito_trail" in await earned(
+        a_context("on_drop", thing_id=triggers.FROZEN_BURRITO)
+    )
+
+
+async def test_burrito_trail_takes_nothing_less(playing):
+    places = [p for p in await every_place() if p != "NU"]
+    await deeds(telemetry.DROP, triggers.FROZEN_BURRITO, places)
+
+    assert "burrito_trail" not in await earned(
+        a_context("on_drop", thing_id=triggers.FROZEN_BURRITO)
+    )
+
+
+async def test_a_deed_is_not_undone_by_picking_it_back_up(playing):
+    """**Which is what lets one burrito walk the whole trail**, and the
+    reason the trail is a table of deeds rather than a count of what is
+    lying about. Written as the drop happening twice in one room and
+    once everywhere else: the row is written once, `first_at` keeps the
+    first, and nothing ever deletes it."""
+    places = await every_place()
+    await deeds(telemetry.DROP, triggers.FROZEN_BURRITO, places)
+    await deeds(telemetry.DROP, triggers.FROZEN_BURRITO, places)
+
+    assert await database.rooms_where(
+        ALICE, GUILD_A, telemetry.DROP, triggers.FROZEN_BURRITO
+    ) == set(places)
+
+
+async def test_neither_trail_counts_the_other_verb(playing):
+    """A burrito climbed and a ladder dropped. `action` is in the key
+    for this: the ladder is dropped in every room it is ever climbed
+    in, and a trail that counted either would be earned by accident on
+    the way to the other."""
+    places = await every_place()
+    await deeds(telemetry.DROP, world.LADDER, places)
+    await deeds(telemetry.USE, triggers.FROZEN_BURRITO, places)
+
+    got = await earned(a_context("on_use", thing_id=world.LADDER))
+    got |= await earned(a_context("on_drop", thing_id=triggers.FROZEN_BURRITO))
+
+    assert "rung_by_rung" not in got
+    assert "burrito_trail" not in got

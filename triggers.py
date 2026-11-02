@@ -38,7 +38,9 @@ import alexa
 import craving
 import database
 import phrasing
+import resolve
 import states
+import telemetry
 import world
 from achievements import Context
 
@@ -391,6 +393,10 @@ def _on_date(matches, targets: set[str], *, source_only: bool = False):
 
 GREEN_THUMB_PARTS = (WATERING_CAN, PUMPKINS, HERB_GARDEN)
 
+# Aunt Sue's, and the only thing in the house anybody would carry to
+# ten rooms on purpose.
+FROZEN_BURRITO = "frozen_burrito"
+
 
 async def green_thumb(context: Context) -> bool:
     """Watered, picked and carved. Any order, any days, no date.
@@ -426,6 +432,66 @@ async def green_thumb(context: Context) -> bool:
         context.user_id, context.guild_id, GREEN_THUMB_PARTS
     )
     return len(done) == len(GREEN_THUMB_PARTS)
+
+
+# ------------------------------------------------------------------------
+# The two trails: every room in the house, one verb each
+#
+# **The places are read off the house rather than listed here.** Both
+# designs say "each of the ten places" and name them, and the ten are
+# exactly the rows in `rooms.tsv` - the channel among them, because the
+# road is a room everywhere else in the engine too. A list in this file
+# would be a second copy of that table, and the copy is what goes
+# stale: the Secret Library was the tenth place to exist and would have
+# been the one somebody forgot.
+#
+# An eleventh room would make both harder for anybody who had not
+# finished, which is the trade. Players who have finished keep what
+# they earned - an award is a row, not a recomputation.
+# ------------------------------------------------------------------------
+
+
+async def _every_room(context: Context, action: str, thing_id: str) -> bool:
+    """Whether this player has done that, to that, everywhere.
+
+    `>=` rather than `==` on purpose: a deed in a room that has since
+    left `rooms.tsv` is still a deed, and an achievement that un-earned
+    itself because the house changed shape would be worse than one that
+    is briefly easy.
+    """
+    places = {room_id for room_id, _ in await resolve.all_rooms()}
+    if not places:
+        return False
+    done = await database.rooms_where(
+        context.user_id, context.guild_id, action, thing_id
+    )
+    return done >= places
+
+
+async def rung_by_rung(context: Context) -> bool:
+    """The ladder stood up and climbed in all ten places.
+
+    **Cat climbs are not climbs**, and that is settled before this runs:
+    `world._climb_the_ladder` returns without writing a deed on the one
+    climb in ten she takes, so there is no row here to filter out.
+
+    **The library is the hard one**, by design rather than by anything
+    in this file. The ladder has to be carried in through the oak window
+    or the cabinet passage, and there is one ladder on the server.
+    """
+    return await _every_room(context, telemetry.USE, world.LADDER)
+
+
+async def burrito_trail(context: Context) -> bool:
+    """One of Aunt Sue's burritos left in all ten places.
+
+    **One burrito is enough**, which is the point of recording the deed
+    rather than counting what is lying about: picking it back up does
+    not undo the drop, so the trail can be walked with the same foil
+    brick ten times. Throwing one in the bin is `threw_away` and never
+    reaches the deed table.
+    """
+    return await _every_room(context, telemetry.DROP, FROZEN_BURRITO)
 
 
 # --------------------------------------------------------------------------
@@ -961,6 +1027,13 @@ def register_all() -> None:
     # The one that shapes the signature: three parts across two hooks.
     add("green_thumb", ("on_use", "on_take"), green_thumb)
     add("nacho_average_ghost", "on_use", _on_thing({NACHO_CHIPS}))
+    # The two trails, drop 50. Both read `room_deeds`, which is written
+    # on every climb that reached the top and every `/drop` that put
+    # something down - so the hook is the verb and the predicate is the
+    # whole condition, with no early-out on the thing: a player finishes
+    # the trail with the drop that completes it and no other.
+    add("rung_by_rung", "on_use", rung_by_rung)
+    add("burrito_trail", "on_drop", burrito_trail)
     # Blocked on 30 October rather than retired. The pot requires `pasta`,
     # which is parked at 99, so there is no successful use of it to hook:
     # the row keeps its registration so the both-directions check stays
