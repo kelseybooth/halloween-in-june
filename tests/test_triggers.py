@@ -847,10 +847,16 @@ def test_what_can_actually_be_earned():
     change: both read `room_deeds`, which is written by the climb and
     the drop themselves, so the day the rows shipped was the day they
     could be earned.
+
+    **Forty-seven with Captive Audience**, which arrives earnable for
+    the same reason: everything it asks about - who is in the room, and
+    who has run a command lately - is live state that the game already
+    keeps. Noise Complaint was the one that would have arrived blocked,
+    and it is not being built.
     """
     earnable = achievements.registered_ids() - set(BLOCKED) - set(BY_HAND)
 
-    assert len(earnable) == 46
+    assert len(earnable) == 47
 
 
 # --------------------------------------------------------------------------
@@ -1338,6 +1344,112 @@ async def test_clean_plate_club_wants_the_plates_and_nothing_else(playing):
     own in the same sentence; using it is not licking a dirty plate."""
     assert "clean_plate_club" not in await earned(
         a_context("on_use", thing_id="high_chair", now=pacific(2026, 10, 30))
+    )
+
+
+# --------------------------------------------------------------------------
+# Captive Audience
+#
+# The only achievement that turns on other people being in the room at the
+# time, so these tests are the only ones here that have to build a crowd.
+# `an_audience_of` puts awake players in a room; awake means stamped, which
+# is what `last_command_at` records and what the predicate reads.
+# --------------------------------------------------------------------------
+
+
+async def an_audience_of(db, how_many: int, room_id: str, *, awake=True) -> list[int]:
+    """Players standing in a room, stamped as having just done something."""
+    watchers = []
+    for n in range(how_many):
+        who = 200000000000000000 + n
+        await db.ensure_user_exists(who, GUILD_A)
+        await db.start_game(who, GUILD_A, room_id, [room_id])
+        if awake:
+            await db.stamp_command(who, GUILD_A)
+        watchers.append(who)
+    return watchers
+
+
+async def test_captive_audience(playing):
+    await an_audience_of(playing, 3, "CO")
+    await database.update_current_room(ALICE, GUILD_A, "CO")
+
+    assert "captive_audience" in await earned(
+        a_context("on_use", thing_id="rattle", room_id="CO")
+    )
+
+
+async def test_two_is_not_an_audience(playing):
+    """The default is three, so this is the edge and not a spare case."""
+    await an_audience_of(playing, 2, "CO")
+    await database.update_current_room(ALICE, GUILD_A, "CO")
+
+    assert "captive_audience" not in await earned(
+        a_context("on_use", thing_id="rattle", room_id="CO")
+    )
+
+
+async def test_nobody_earns_it_alone(playing):
+    await database.update_current_room(ALICE, GUILD_A, "CO")
+
+    assert "captive_audience" not in await earned(
+        a_context("on_use", thing_id="rattle", room_id="CO")
+    )
+
+
+async def test_the_rattler_is_not_their_own_audience(playing):
+    """**With the bar at one**, which is the only setting where counting
+    yourself would pass unnoticed: a server tuned down to one player would
+    hand it to anybody rattling in an empty room."""
+    await database.set_config(GUILD_A, "captive_audience_size", "1")
+    await database.update_current_room(ALICE, GUILD_A, "CO")
+
+    assert "captive_audience" not in await earned(
+        a_context("on_use", thing_id="rattle", room_id="CO")
+    )
+
+
+async def test_an_audience_that_has_gone_quiet_does_not_count(playing):
+    """Three people in the room whose last command is well behind the
+    window. Standing somewhere is not being at the keyboard."""
+    await an_audience_of(playing, 3, "CO")
+    await database.update_current_room(ALICE, GUILD_A, "CO")
+
+    assert "captive_audience" not in await earned(
+        a_context(
+            "on_use", thing_id="rattle", room_id="CO", now=pacific(2027, 3, 9)
+        )
+    )
+
+
+async def test_an_audience_the_game_has_never_watched_does_not_count(playing):
+    """A null `last_command_at` is no evidence rather than presence - the
+    same rule the ladder sweep reads the other way round. Three rows that
+    have never run a command are not three people."""
+    await an_audience_of(playing, 3, "CO", awake=False)
+    await database.update_current_room(ALICE, GUILD_A, "CO")
+
+    assert "captive_audience" not in await earned(
+        a_context("on_use", thing_id="rattle", room_id="CO")
+    )
+
+
+async def test_an_audience_in_another_room_does_not_count(playing):
+    await an_audience_of(playing, 3, "LI")
+    await database.update_current_room(ALICE, GUILD_A, "CO")
+
+    assert "captive_audience" not in await earned(
+        a_context("on_use", thing_id="rattle", room_id="CO")
+    )
+
+
+async def test_a_crowd_watching_something_other_than_the_rattle(playing):
+    """The audience is the condition and the rattle is still the subject."""
+    await an_audience_of(playing, 3, "CO")
+    await database.update_current_room(ALICE, GUILD_A, "CO")
+
+    assert "captive_audience" not in await earned(
+        a_context("on_use", thing_id="watering_can", room_id="CO")
     )
 
 

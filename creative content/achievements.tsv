@@ -34,6 +34,7 @@ clean_plate_club	secret	Clean Plate Club	Licked a dirty plate. Nobody asked you 
 using_your_noodle	secret	Using Your Noodle	Put a pot on.	99	130				Parked at 99 on 30 October: the pot now requires pasta, which does not exist yet, so a successful use is unreachable until the pasta ships.
 getting_into_the_spirit	secret	Getting into the Spirit	Put on a ghost costume and haunted your friends.	99	140				Blocked: the ghost system is not built
 ghostbuster	secret	Ghostbuster	Guessed the day's ghost correctly.	99	150				Blocked: the ghost system is not built
+captive_audience	secret	Captive Audience	Gave a rattle performance to a live audience. Reviews are mixed.	30	155				Decided 2 November, renamed from Opening Act: a rattle played with at least captive_audience_size other active players in the room.
 breaking_into_the_halloween_candy	secret	Breaking into the Halloween Candy	Got into the Halloween candy. It was always going to happen.	25	160				
 curbside_pickup	secret	Curbside Pickup	Took the trash out on a Tuesday, like a responsible adult.	25	170				Earned on /take trash can (taking the bag out to the curb) on a Tuesday, Pacific time. Was /use trash can until 30 October
 hive_five	secret	Hive Five	That wasp nest played hard to get, but you got it anyway.	30	175				Earned on a player's first road climb that knocks a wasp_nest_piece down. A climb where the cat takes the ladder drops no piece and doesn't count, and picking up a piece someone else knocked down doesn't count either

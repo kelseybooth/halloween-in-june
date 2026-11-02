@@ -239,6 +239,7 @@ NEST_PIECE = "wasp_nest_piece"
 # rather than in a branch of its own further down, and `public` is the
 # only thing it says.
 RATTLE = "rattle"
+MUSIC_BOX = "music_box"
 
 # Where the wasp nest is: over the road, which is the channel.
 ROAD = content_module.CHANNEL_ROOM
@@ -684,7 +685,14 @@ async def after_use(
     if thing_id == CAT_BED:
         return await _fluff_the_bed(guild_id, user_id)
 
-    if thing_id == RATTLE:
+    # **The two things in the house that make a noise.** A use is
+    # private everywhere else, and these are named here rather than
+    # given a column in `things.tsv` on purpose: a per-thing flag would
+    # hand the writers the decision about how loud the game is one cell
+    # at a time, and two is not yet a class. The music box is also the
+    # condition *Accompanist* turns on, so a room that is not told it is
+    # playing cannot play along.
+    if thing_id in (RATTLE, MUSIC_BOX):
         return Effect(public=True)
 
     if thing_id in FEEDS:

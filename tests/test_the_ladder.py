@@ -288,18 +288,36 @@ async def test_every_climb_row_names_a_room_that_exists(house):
     A misspelled room is not an error at runtime - the resolver walks
     past a state nothing matches and falls to `default` - so a typo
     would serve the generic climb everywhere, forever, in silence.
+
+    **Asked of the ladder's own rows, which it was not until now.** It
+    collected every `in:` row in the file and compared the lot to
+    `CLIMBS`, which was only ever true by coincidence: the nachos and
+    the frozen burrito have had `in:KI` rows all along, and KI is a
+    climb room too, so they vanished into the set. The music box's
+    `in:NU` row is the first one in a room the ladder does not reach,
+    and it is what made the coincidence visible.
+
+    The second assertion is the one that was always general, so it
+    stays that way: every `in:` row in the file, whosever it is, has to
+    name a room that exists.
     """
     parsed = content_module.load_files()
     rooms = {room.room_id for room in parsed.rooms}
 
-    written = {
-        row.state[len(content_module.ROOM_STATE_PREFIX) :]
-        for row in parsed.thing_text
-        if row.state.startswith(content_module.ROOM_STATE_PREFIX)
-    }
+    def rooms_named_by(rows):
+        return {
+            row.state[len(content_module.ROOM_STATE_PREFIX) :]
+            for row in rows
+            if row.state.startswith(content_module.ROOM_STATE_PREFIX)
+        }
 
-    assert written == set(CLIMBS)
-    assert written <= rooms
+    climbs = rooms_named_by(
+        row for row in parsed.thing_text if row.entity_id == "ladder"
+    )
+    every = rooms_named_by(parsed.thing_text)
+
+    assert climbs == set(CLIMBS)
+    assert every <= rooms, sorted(every - rooms)
 
 
 # --------------------------------------------------------------------------

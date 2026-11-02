@@ -164,23 +164,33 @@ order was written:
   there and should be kept; what was there was "You give it a shake. The
   sound is far too cheerful for an empty garden."
 
-## Two things the content left behind
+## One thing the content left behind
 
 - **The rattle still has a `take_fail`**: "It stays in the grass, where
   its owner dropped it." The work order asked for its removal on the
   grounds that a takeable thing never shows it. The thing became
   takeable and the line stayed.
-- **Public use lines are not built, and the rattle's copy now assumes
-  them.** `bot.use` still replies privately — its docstring says so and
-  gives the reason, that a use is a small private moment and making
-  every one public would bury the thread. So a player who shakes the
-  rattle today is privately shown a sentence about themselves in the
-  third person. The copy is ready for a change the engine has not made.
 
-That second one is a prerequisite for Accompanist rather than a
-tidy-up: the trigger turns on one player noticing another player's music
-box, and the work order says as much — "the music box needs the new
-public line below, or nobody else in the room knows it's playing."
+### Correction, 2 November: public use lines were already built
+
+**This note said they were not, and that was wrong.** The claim was that
+`bot.use` still replies privately, that the rattle's copy had been
+written for a change the engine had not made, and that a player shaking
+it was privately shown a sentence about themselves in the third person.
+None of that is true. The rattle has posted to the room, and said
+nothing privately, since #136.
+
+The mechanism is `world.after_use` returning `Effect(public=True)`,
+which `_finish_use` routes to `_post_in_room` before dismissing the
+ephemeral reply. It is in `world.py`, not `bot.py`, which is why
+searching `bot.py` for the posting found nothing — and `bot.use`'s own
+docstring still says "the reply is always private", which read as
+confirmation. A stale comment and a search of the wrong file agreed with
+each other, which is not the same as being corroborated.
+
+So the music box needed one line beside the rattle rather than a change
+to `/use`, and the shape was already the one this note asks for: the two
+things named in code, no per-thing column.
 
 ### Public use lines are for these two things only
 
@@ -202,13 +212,25 @@ has become a class. Two is not a class.
 
 ## Build order
 
-1. **The two content leftovers above**, with the public-use-line change
-   for the rattle and the music box and nothing else. Small, and it
-   makes the rattle's existing copy true.
-2. **Captive Audience.** Nothing to plumb.
-3. **`thing_uses.last_used_room`.** One column, and the thing
+1. ~~**The two content leftovers above**, with the public-use-line
+   change for the rattle and the music box and nothing else.~~ **Done.**
+   The rattle's `take_fail` is gone and the music box is named beside
+   the rattle in `world.after_use`; its `default` line lost the baby
+   monitor sentence, which moved to an `in:NU` row where the monitor
+   is. Leaving it in both would have said it twice in the one room
+   where it is true.
+2. ~~**Captive Audience.**~~ **Done.** `captive_audience_size` defaults
+   to 3 in `CONFIG_KEYS`, `database.active_others_in_room` counts the
+   room off `last_command_at`, and the predicate excludes the rattler
+   from their own audience.
+3. **The rattle's idle drop.** Not built here on purpose. The
+   generalisation of the ladder sweep is in flight rather than in main,
+   and once it lands the rattle is one entry in
+   `world.SET_DOWN_WHEN_IDLE` plus a test. Building it before then
+   would mean writing the generalisation a second time.
+4. **`thing_uses.last_used_room`.** One column, and the thing
    Accompanist cannot be correct without.
-4. **Accompanist, with the Upstairs release.**
+5. **Accompanist, with the Upstairs release.**
 
-Steps 1 and 2 are drop 30 and can go now. Steps 3 and 4 wait on drop 40
-existing.
+Steps 4 and 5 wait on drop 40 existing. Step 3 waits on somebody else's
+branch, which is a better reason to wait than most.
