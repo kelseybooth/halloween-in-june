@@ -243,6 +243,33 @@ async def test_max_per_player_refuses_a_second_copy(house):
     assert interaction.was_private
 
 
+async def test_and_the_second_copy_is_refused_by_saying_so(house):
+    """Which line the cap gives, which the test above never asked.
+
+    It gave `take_fail.fixture` - "the skeleton key is not yours to
+    carry off" - to a player who had been allowed to carry one off a
+    moment earlier and was holding it. Both of the arguments
+    `_no_carrying` picks between are answers to whether a thing may be
+    had at all, and this player has already been told yes.
+
+    **Here rather than against a shipped thing**, because the thing
+    has to be one with nothing written in its own `take_fail` for the
+    default to be what answers - and of the eight capped things in the
+    house, the only one standing in a room is the ladder, which is
+    heavy enough that `_arms_full` answers first and the cap is never
+    reached.
+    """
+    await content_loader.load_content(
+        a_house(a_thing("key", name="skeleton key", quantity=2, max_per_player=1))
+    )
+
+    await take(thing="skeleton key")
+    reply = (await take(thing="skeleton key")).reply
+
+    assert reply == "You're already carrying the skeleton key."
+    assert "yours to carry off" not in reply
+
+
 async def test_the_cap_applies_to_what_a_source_yields(house):
     await content_loader.load_content(
         a_house(

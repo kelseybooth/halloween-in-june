@@ -30,6 +30,7 @@ import pytest
 from conftest import ALICE, GUILD_A
 from fake_discord import FakeChannel, FakeGuild, FakeInteraction, FakeMember
 from test_loader import a_thing, a_world
+from test_world import carry
 
 import achievements
 import bot
@@ -355,9 +356,14 @@ async def test_a_thing_with_no_extras_never_draws(ground_floor, monkeypatch):
     rng = _Records()
     monkeypatch.setattr(bot, "random", rng)
 
+    written = next(
+        r.text["use"] for r in content_module.load_files().thing_text
+        if r.entity_id == "picnic_blanket" and r.state == "default"
+    )
+
     reply = await read(ground_floor, thing="picnic blanket", room="CO")
 
-    assert "You smooth it flat" in reply
+    assert written in reply
     assert rng.pools == []
 # --------------------------------------------------------------------------
 # And the check that stops the next set of them going unread
@@ -398,3 +404,115 @@ def test_the_house_fallback_is_not_mistaken_for_one():
     problems = content_module.validate(world_)
 
     assert not any("use.default" in problem for problem in problems)
+
+
+# ------------------------------------------------------------------------
+# The courtyard, after a playtest
+#
+# Four things the reports asked for that are not copy edits. The
+# rattle stops being scenery, the cap stops borrowing the fixture's
+# refusal, and `take` starts reading the room the way `use` has since
+# the ladder.
+# ------------------------------------------------------------------------
+
+
+def posted(ground_floor, room_name) -> list[str]:
+    """Everything the room has been told, newest last."""
+    return list(thread(ground_floor, room_name).posted)
+
+
+async def test_the_rattle_comes_out_of_the_blanket(ground_floor):
+    """It was a fixture with a refusal, which is the house saying no.
+
+    It is one copy inside the blanket now, so it is also the first
+    thing in the Courtyard a player can pick up besides the ladder.
+
+    **Loaded again here, and that is not boilerplate.** This file's
+    fixture loads the content before anybody exists, and the loader
+    places stock into the guilds the `users` table has seen - so every
+    other test in this file runs in a house with no stock on the floor
+    at all, which is exactly what they want. A take needs the copy to
+    be there.
+    """
+    db, *_ = ground_floor
+    await content_loader.load_content(
+        content_module.load_files(), guild_ids=[GUILD_A]
+    )
+
+    await run(ground_floor, bot.take, "rattle", room="CO")
+
+    assert await db.carried_of(ALICE, GUILD_A, "rattle") == 1
+
+
+async def test_and_shaking_it_is_for_the_whole_room(ground_floor):
+    """The only `/use` in the game whose reply is public and nothing
+    else.
+
+    Every other one is private, because a use is a small private
+    moment; a rattle shaken in an empty garden is a joke, and a joke
+    told privately has no audience. Asserted both ways round - in the
+    thread, and *not* in the player's own reply - because `public`
+    routing that posted and also whispered would read as working.
+    """
+    db, *_ = ground_floor
+    await carry(db, ALICE, GUILD_A, "rattle")
+
+    interaction = await run(ground_floor, bot.use, "rattle", room="CO")
+
+    assert any(
+        "Rattle rattle!" in line for line in posted(ground_floor, "Courtyard")
+    )
+    assert "Rattle rattle!" not in replies(interaction)
+
+
+async def test_a_second_can_opener_is_refused_in_its_own_words(ground_floor):
+    """The cap read out `take_fail.fixture` - "the can opener is not
+    yours to carry off" - to a player who had just been handed one off
+    the hook and was holding it. Two things were wrong and both are
+    fixed here: the opener has a line of its own now, and the branch
+    no longer reaches for the one about ownership."""
+    await run(ground_floor, bot.take, "can opener", room="KI")
+
+    reply = replies(await run(ground_floor, bot.take, "can opener", room="KI"))
+
+    assert "Why would you need two?" in reply
+    assert "yours to carry off" not in reply
+
+
+async def test_the_burrito_is_taken_differently_off_the_floor(ground_floor):
+    """`in:XX` rows were built for the ladder's six climbs and were
+    only ever read on a `use`, so a writer who gave a thing a line for
+    one room got it when the thing was used and not when it was
+    picked up.
+
+    The freezer is the case that asked for it: a burrito comes out of
+    a stack in the Kitchen and off the floor everywhere else, and the
+    room is what tells those apart. Both halves here, because a change
+    that made every take read the Kitchen row would pass on the first
+    assertion alone.
+    """
+    await run(ground_floor, bot.take, "burrito", room="KI")
+    await run(ground_floor, bot.drop, "burrito", room="CO")
+    kitchen = posted(ground_floor, "Kitchen")
+
+    await run(ground_floor, bot.take, "burrito", room="CO")
+    off_the_floor = posted(ground_floor, "Courtyard")[-1]
+
+    assert any("works one loose from the stack" in line for line in kitchen)
+    assert "somebody abandoned here" in off_the_floor
+    assert "from the stack" not in off_the_floor
+
+
+async def test_the_chips_are_eaten_quietly_anywhere_else(ground_floor):
+    """The same rule on the verb it already worked for, worth a test of
+    its own only because the two lines are a pair: the one about the
+    sink names a thing the Courtyard does not have."""
+    db, *_ = ground_floor
+    await carry(db, ALICE, GUILD_A, "nacho_chips", 2)
+
+    kitchen = replies(await run(ground_floor, bot.use, "chips", room="KI"))
+    courtyard = replies(await run(ground_floor, bot.use, "chips", room="CO"))
+
+    assert "over the sink" in kitchen
+    assert "not very quietly" in courtyard
+    assert "sink" not in courtyard

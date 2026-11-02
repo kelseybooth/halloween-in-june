@@ -6174,10 +6174,26 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
                 "trash.take.public", player=user.display_name
             )
         else:
+            # **The room is in the order here now, as it has been on the
+            # use path since the ladder.** `in:XX` rows were built for the
+            # ladder's six climbs and were only ever read for `use`, so a
+            # writer who gave a thing a line for one room got it on a use
+            # and not on a take. The freezer is the case that asked: a
+            # burrito comes out of a stack in the Kitchen and off the
+            # floor everywhere else, and those are not the same sentence.
+            #
+            # **What it cannot tell** is a freezer take from a floor take
+            # inside the Kitchen - the room decides the line, not where
+            # the thing came from, so a burrito somebody dropped by the
+            # fridge still comes away with a crack. Known and left: the
+            # fix is a check on the source, and the case is rare.
+            in_order = states.in_priority_order(
+                await states.in_force(guild_id, user.id), state.current_room
+            )
             reply = (
                 await phrasing.say(
                     guild_id, taken, "take", fallback="take.default",
-                    name=name, player=user.display_name,
+                    state=in_order, name=name, player=user.display_name,
                 )
                 or f"{user.display_name} takes the {name}."
             )
@@ -6341,10 +6357,17 @@ async def _cannot_take(
     held = await database.carried_of(user_id, guild_id, taken)
     if held < capped.max_per_player:
         return None
+    # **Not `_no_carrying` here.** That picks between "the {name} is not
+    # yours to carry off" and the one about scale, and both are answers
+    # to "may I have this at all" - which this player has already been
+    # told yes to, and is holding the proof of. Every capped thing in the
+    # table is capped at one, so the honest default is the one that says
+    # so; four of the eight had no line of their own and were reading out
+    # the fixture refusal.
     return (
         await phrasing.say(
             guild_id, taken, "take_fail",
-            fallback=_no_carrying(capped), name=capped.name,
+            fallback="take_fail.already_carried", name=capped.name,
         ),
         telemetry.FULL_HANDS,
     )

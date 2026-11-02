@@ -521,8 +521,8 @@ async def test_the_shipped_content_loads(two_servers):
     assert report.content_rows["restocks"] == 4  # the toy channel row joined them
 
 
-async def test_the_shipped_content_places_five_things_per_server(two_servers):
-    """Five physical copies across five things.
+async def test_the_shipped_content_places_six_things_per_server(two_servers):
+    """Six physical copies across six things.
 
     The work order said six. The gourmet can became a source on 27 September so
     that every player could earn the five-flavour achievement rather than only
@@ -546,13 +546,19 @@ async def test_the_shipped_content_places_five_things_per_server(two_servers):
     to be added to this set rather than taken out of it: one copy, in
     the Courtyard, `takeable` and finite, so it is stock and the loader
     places it. It is where the set came back to five.
+
+    **The rattle made it six on 2 November**, the same way and in the
+    same room: it was a fixture with a refusal, and it is now one copy
+    a player can pick up and shake. It is placed inside the picnic
+    blanket rather than loose, which is `test_placement_respects_
+    containment` below and not this count.
     """
     parsed = content_module.load_files()
     await content_loader.load_content(parsed)
 
     placed = await contents(two_servers, GUILD_A)
-    assert len(placed) == 5
-    assert sum(row[3] for row in placed) == 5
+    assert len(placed) == 6
+    assert sum(row[3] for row in placed) == 6
 
 
 async def test_placement_respects_containment(two_servers):

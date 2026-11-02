@@ -725,13 +725,18 @@ async def test_drop_fires_on_drop(playing, halloween):
 
 
 async def test_use_fires_on_use(playing, halloween):
+    """**The stone circle rather than the watering can**, which this
+    read until 2 November. Any Courtyard thing with a `use` and no
+    `requires` does; the can was parked at 99 while its own mechanics
+    are designed, and a hook test standing on a thing that is not in
+    the house is a hook test about nothing."""
     seen = []
     achievements.register("green_thumb", "on_use", watching("on_use", seen))
 
     interaction = FakeInteraction(ALICE, GUILD_A, guild=halloween)
-    await bot.use.callback(interaction, "watering can")
+    await bot.use.callback(interaction, "stone circle")
 
-    assert [(c.thing_id, c.room_id) for c in seen] == [("watering_can", "CO")]
+    assert [(c.thing_id, c.room_id) for c in seen] == [("stone_circle", "CO")]
 
 
 async def test_a_refused_use_does_not_fire_the_hook(playing, halloween):
