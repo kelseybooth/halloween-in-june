@@ -34,6 +34,10 @@ Config `captive_audience_size`, default 3 — renamed from the work
 order's `opening_act_audience` with the achievement, because
 `captive_audience_audience` is not a key anybody should have to type.
 
+**Three is the beta number, decided 2 November.** It is a config value
+so a quiet server can lower it, but the shipped default is not a
+placeholder waiting on play data.
+
 **Nothing new is needed to build it.** `achievements.Context` already
 carries `room_id` and `on_use` already fills it from
 `state.current_room`, so the predicate reads the room it is given.
@@ -178,13 +182,29 @@ tidy-up: the trigger turns on one player noticing another player's music
 box, and the work order says as much — "the music box needs the new
 public line below, or nobody else in the room knows it's playing."
 
+### Public use lines are for these two things only
+
+**Decided 2 November.** The rattle and the music box post their `use`
+line to the room. Nothing else does, and there is no per-thing column
+for it — the two are named in the code.
+
+`bot.use`'s docstring argues the general case and the argument still
+holds: *"a use is a small private moment, and making every one public
+would bury the thread."* A property on every row would be an invitation
+to turn the thread into a feed one tsv cell at a time, and the writers
+would be the ones deciding how noisy the game is while reading one row.
+Two things that are literally noises are a small, legible exception.
+
+If a third thing ever wants it, that is the moment to ask whether this
+has become a class. Two is not a class.
+
 ---
 
 ## Build order
 
 1. **The two content leftovers above**, with the public-use-line change
-   for the rattle and the music box. Small, and it makes the rattle's
-   existing copy true.
+   for the rattle and the music box and nothing else. Small, and it
+   makes the rattle's existing copy true.
 2. **Captive Audience.** Nothing to plumb.
 3. **`thing_uses.last_used_room`.** One column, and the thing
    Accompanist cannot be correct without.
