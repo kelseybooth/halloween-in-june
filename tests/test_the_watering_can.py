@@ -21,9 +21,11 @@ ladder does, and the block lifts two ways rather than the ladder's one:
 put it down, or water with it until it is no longer full.
 """
 
+from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
+from sqlalchemy import select, update
 
 from conftest import ALICE, BOB, GUILD_A
 from fake_discord import FakeChannel, FakeGuild, FakeInteraction, FakeMember
@@ -499,3 +501,213 @@ async def test_a_half_full_can_never_filled_them(courtyard):
 
     assert await db.carried_of(ALICE, GUILD_A, world.WATERING_CAN) == 1
     assert BOTH_HANDS not in reply
+
+
+# --------------------------------------------------------------------------
+# Forgotten, and put down where they stood
+#
+# The ladder's sweep, which now covers both one-of-a-kind things. The
+# two are not equally rare: climbing sets the ladder down, so only
+# somebody who fetched one and stopped playing ever meets it, while
+# watering leaves the can in your hands - so a carrier who wanders off
+# with it is an ordinary afternoon.
+# --------------------------------------------------------------------------
+
+
+async def quiet_for(db, days, who=ALICE):
+    """Backdate this player's last command by whole days."""
+    now = await database.server_now(GUILD_A)
+    async with db._require_session()() as session:
+        await session.execute(
+            update(database.User)
+            .where(database.User.id == who, database.User.guild_id == GUILD_A)
+            .values(last_command_at=now - timedelta(days=days))
+        )
+        await session.commit()
+
+
+async def floor_of(room) -> dict:
+    return dict(await database.loose_here(GUILD_A, room))
+
+
+async def test_a_day_of_silence_sets_the_can_down(courtyard):
+    db, *_ = courtyard
+    await fetched(courtyard)
+    await db.update_current_room(ALICE, GUILD_A, "LI")
+    await quiet_for(db, 2)
+
+    await bot.idle_sweep.coro()
+
+    assert await db.carried_of(ALICE, GUILD_A, world.WATERING_CAN) == 0
+    assert "watering can" in await floor_of("LI")
+
+
+async def test_and_it_still_has_whatever_was_in_it(courtyard):
+    """Nothing spills. The level belongs to the can and the sweep moves
+    the can, so there is nothing for it to do about the water - which is
+    worth an assertion because a sweep that reset the level would look
+    exactly like a sweep that worked."""
+    db, *_ = courtyard
+    await carrying_a_full_can(courtyard)
+    await quiet_for(db, 2)
+
+    await bot.idle_sweep.coro()
+
+    assert await level() == world.CAN_FULL
+
+
+async def test_and_the_room_is_told_in_the_house_s_words(courtyard):
+    """**The generalised line, which is what the can needed.** The ladder
+    is dropped "out of exhaustion", a joke about its weight and no joke
+    at all about a watering can - so the ladder keeps
+    `ladder.exhausted.public` and everything else gets
+    `exhausted.public` with its own name filled in."""
+    db, *_ = courtyard
+    await fetched(courtyard)
+    await db.update_current_room(ALICE, GUILD_A, "LI")
+    await quiet_for(db, 2)
+
+    await bot.idle_sweep.coro()
+
+    said = "\u0020".join(thread(courtyard, "LI").posted)
+    assert "gets tired and sets the watering can down" in said
+
+
+async def test_somebody_still_playing_keeps_it(courtyard):
+    db, *_ = courtyard
+    await fetched(courtyard)
+    await quiet_for(db, 0)
+
+    await bot.idle_sweep.coro()
+
+    assert await db.carried_of(ALICE, GUILD_A, world.WATERING_CAN) == 1
+
+
+# --------------------------------------------------------------------------
+# What the log says about the water
+#
+# The work order asks for the level on every row the can appears in, and
+# the reason is that every question about it is a question about change:
+# whether the Kitchen trip gets made, how often somebody tips an empty
+# can over the herbs and needs telling why. A level before and a level
+# after answers those; either alone answers neither.
+# --------------------------------------------------------------------------
+
+
+async def last_row(action, *, actor=database.PLAYER):
+    """The newest log row for one action, as (thing, reason, detail)."""
+    async with database._require_session()() as session:
+        got = await session.execute(
+            select(
+                database.InteractionLog.thing_id,
+                database.InteractionLog.reason,
+                database.InteractionLog.detail,
+            )
+            .where(
+                database.InteractionLog.action == action,
+                database.InteractionLog.actor == actor,
+            )
+            .order_by(database.InteractionLog.id.desc())
+        )
+        return got.first()
+
+
+async def test_a_fill_logs_the_level_it_came_from(courtyard):
+    await fetched(courtyard)
+
+    await used(courtyard, "KI")
+
+    _, _, detail = await last_row(telemetry.USE)
+    assert detail == "room=KI level=default->full"
+
+
+async def test_a_watering_logs_both_sides_of_it(courtyard):
+    await carrying_a_full_can(courtyard)
+
+    await used(courtyard, "CO")
+
+    _, _, detail = await last_row(telemetry.USE)
+    assert detail == "room=CO level=full->partly_full"
+
+
+async def test_and_an_empty_tip_logs_itself_going_nowhere(courtyard):
+    """Which is the row that matters most of the four that move nothing:
+    a player tipping an empty can over the herbs has misread something,
+    and how often it happens is how well the hint reads."""
+    await database.set_thing_state(GUILD_A, world.WATERING_CAN, world.CAN_EMPTY)
+
+    await used(courtyard, "CO")
+
+    _, _, detail = await last_row(telemetry.USE)
+    assert detail == "room=CO level=empty->empty"
+
+
+async def test_a_take_logs_the_level(courtyard):
+    await database.set_thing_state(GUILD_A, world.WATERING_CAN, world.CAN_PARTLY_FULL)
+
+    await fetched(courtyard)
+
+    _, _, detail = await last_row(telemetry.TAKE)
+    assert detail == "level=partly_full"
+
+
+async def test_and_so_does_a_drop(courtyard):
+    """"Was it full when they put it down" is most of what the hands
+    rule gets tuned on."""
+    await carrying_a_full_can(courtyard)
+
+    await run(courtyard, bot.drop, "watering can", room="KI")
+
+    _, _, detail = await last_row(telemetry.DROP)
+    assert detail == "level=full"
+
+
+@pytest.mark.parametrize(
+    "action,verb,arg",
+    [
+        ("pet", "pet", None),
+        ("take", "take", "rattle"),
+        ("use", "use", "salmon"),
+    ],
+)
+async def test_a_refusal_says_which_thing_filled_the_hands(
+    courtyard, action, verb, arg
+):
+    """Two things can fill them now, and the refusal reads the same
+    either way - so without this the row cannot say whether the can or
+    the ladder is the one players keep bouncing off.
+
+    **All three verbs, and the third is why `_cannot_take` returns a
+    detail at all.** `/pet` and `/use` had the holder in scope already;
+    the take path reached its refusal through a table that returned a
+    line and a reason and nothing else, so it had to start carrying a
+    third thing. A mutation emptying that detail passed the whole suite
+    while only `/pet` was covered here.
+    """
+    db, *_ = courtyard
+    await carry(db, ALICE, GUILD_A, "cat_food_salmon")
+    await carrying_a_full_can(courtyard)
+
+    await run(courtyard, getattr(bot, verb), arg, room="CO")
+
+    _, reason, detail = await last_row(getattr(telemetry, action.upper()))
+    assert reason == telemetry.ARMS_FULL
+    assert detail == "holding=watering_can"
+
+
+async def test_and_the_sweep_says_where_and_how_much(courtyard):
+    """A system row rather than a player's. The level is the half that
+    cannot be recovered afterwards: the can on the Nursery floor will
+    have been filled and emptied twenty times before anybody asks."""
+    db, *_ = courtyard
+    await carrying_a_full_can(courtyard)
+    await db.update_current_room(ALICE, GUILD_A, "LI")
+    await quiet_for(db, 2)
+
+    await bot.idle_sweep.coro()
+
+    thing_id, _, detail = await last_row(
+        telemetry.ABANDONED, actor=database.SYSTEM
+    )
+    assert thing_id == world.WATERING_CAN
+    assert detail == "room=LI level=full"

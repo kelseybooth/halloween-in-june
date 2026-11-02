@@ -32,7 +32,7 @@ from database import (  # noqa: F401 - the vocabulary, re-exported for call site
     GUARDED,
     HINT,
     KEY_DROPPED,
-    LADDER_ABANDONED,
+    ABANDONED,
     LOOK,
     MOVE,
     NOT_AN_EXIT,

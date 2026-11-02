@@ -165,7 +165,13 @@ STAIRS_UPPER_REACHED = "stairs_upper"
 # `use` row, and its `detail` says which room, whether they had carried
 # the ladder there, whether the cat took it and whether a piece of nest
 # fell - four facts about one event, in the one row that records it.
-LADDER_ABANDONED = "ladder_abandoned"
+# **`ladder_abandoned` until the watering can joined the sweep**, and
+# renamed rather than kept because the column is read to group rows:
+# an action called `ladder_abandoned` on a row whose `thing_id` is the
+# watering can is a sentence the table contradicts. Nothing was lost
+# in the rename - the sweep had never fired on any server, so no row
+# has ever carried either value.
+ABANDONED = "abandoned"
 
 # Something thrown in the trash. A player's row, with `thing_id` and a
 # `detail` carrying how many went in and how many they kept - the two
