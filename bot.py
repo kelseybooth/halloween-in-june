@@ -2746,10 +2746,15 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
     thread, so the public line is opt-in through `Effect.public` and three
     kinds of use take it: laying a plank, because the staircase is
     collective work; playing with the cat, because that is the thread's
-    whole life; and the rattle, whose only joke is being overheard.
-    Movement is public in a different way again - it posts in both rooms as
-    well as replying, because the people standing there need to see
-    somebody leave.
+    whole life; and the rattle and the music box, whose only joke is being
+    overheard. Movement is public in a different way again - it posts in
+    both rooms as well as replying, because the people standing there need
+    to see somebody leave.
+
+    Which things those are is named in `world.after_use` and nowhere else.
+    There is deliberately no column for it: two noisy toys are a list, and
+    a `use_public` cell on every row in the house would invite a third one
+    that nobody thought about.
 
     **A full hand gets in the way before any of that.** Carrying the ladder
     or a full watering can refuses every use but the thing itself, a plank
