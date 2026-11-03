@@ -103,15 +103,15 @@ async def test_every_swing_is_a_plank(house):
     engine is asked directly and no clock is involved.
     """
     for _ in range(3):
-        await database.record_use(ALICE, GUILD_A, "lumber")
+        await database.record_use(ALICE, GUILD_A, "lumber", room_id=None)
 
     placed, _ = await world.planks(GUILD_A)
     assert placed == 3
 
 
 async def test_two_players_one_plank_each_is_two(house):
-    await database.record_use(ALICE, GUILD_A, "lumber")
-    await database.record_use(BOB, GUILD_A, "lumber")
+    await database.record_use(ALICE, GUILD_A, "lumber", room_id=None)
+    await database.record_use(BOB, GUILD_A, "lumber", room_id=None)
 
     placed, _ = await world.planks(GUILD_A)
     assert placed == 2
@@ -175,12 +175,12 @@ async def test_the_upper_state_is_set_on_the_way(house):
     the job."""
     await database.set_setting(GUILD_A, world.PLANKS_SETTING, 5)
     for _ in range(3):
-        await database.record_use(ALICE, GUILD_A, "lumber")
+        await database.record_use(ALICE, GUILD_A, "lumber", room_id=None)
 
     await world.check_staircase(GUILD_A)
     assert not await states.has(GUILD_A, ALICE, "stairs_upper")
 
-    await database.record_use(ALICE, GUILD_A, "lumber")
+    await database.record_use(ALICE, GUILD_A, "lumber", room_id=None)
     await world.check_staircase(GUILD_A)
 
     assert await states.has(GUILD_A, ALICE, "stairs_upper")

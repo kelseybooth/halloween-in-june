@@ -3786,7 +3786,9 @@ async def _finish_use(interaction, state, found) -> None:
             )
             return
 
-    await database.record_use(user.id, guild_id, found.thing_id)
+    await database.record_use(
+        user.id, guild_id, found.thing_id, room_id=state.current_room
+    )
 
     effect = await world.after_use(guild_id, user.id, found.thing_id, state.current_room)
     # Every use that is not an exit or a toy arrives here, including
@@ -4383,7 +4385,9 @@ async def _play_with_toy(interaction, state, found) -> None:
     # actually rolled at is one less, and naming the column for what it
     # holds is cheaper than an off-by-one nobody notices for a month.
     if succeeded:
-        await database.record_use(user.id, guild_id, found.thing_id)
+        await database.record_use(
+            user.id, guild_id, found.thing_id, room_id=state.current_room
+        )
         # **Every play logged with what it actually paid, zeros
         # included.** A play at the tail of the curve is worth zero,
         # and that is known rather than unknown - null is reserved for
@@ -5164,7 +5168,13 @@ async def _use_exit(interaction, state, found, row) -> None:
             )
         else:
             await database.update_current_room(user.id, guild_id, destination)
-        await database.record_use(user.id, guild_id, found.thing_id)
+        # `origin`, not `destination`: the door was used in the room the
+        # player was standing in when they typed it. They have already
+        # been moved by the line above, so the departure room has to come
+        # from the snapshot rather than from their current position.
+        await database.record_use(
+            user.id, guild_id, found.thing_id, room_id=origin
+        )
         # The rail never recommends what the player has already done, so
         # each of drop 10's two doors retires the hint that points at it. A
         # player who found either on their own is never told about it.

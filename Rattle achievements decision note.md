@@ -71,6 +71,14 @@ and would move in the release that built the next drop. It moved on
 upstairs. The Nursery is reachable, so the drop is no longer what holds
 this back - the missing column below is the only thing left.
 
+**And the column shipped with it, so Accompanist is built.** Both are
+in the same change, which is the shape this note argued for without
+quite saying: a column with nothing reading it is a migration a
+reviewer has to take on trust, and the achievement is what makes it
+checkable. `thing_uses.last_used_room` is nullable and outside the
+key, written by `record_use` beside `last_used_at`, and the two are
+read together by `database.somebody_else_just_used`.
+
 **It also needs one column that does not exist.** "In the same room"
 has no source today:
 
@@ -237,9 +245,20 @@ has become a class. Two is not a class.
    now the only thing between every other player and an achievement.
    Waiting for #143 was right: building it earlier would have meant
    writing the generalisation a second time.
-4. **`thing_uses.last_used_room`.** One column, and the thing
-   Accompanist cannot be correct without.
-5. **Accompanist, with the Upstairs release.**
+4. ~~**`thing_uses.last_used_room`.** One column, and the thing
+   Accompanist cannot be correct without.~~ **Done**, and in the same
+   change as step 5 rather than ahead of it. Nullable, outside the key,
+   written by `record_use` from the room the use happened in - the
+   departure room for a door, and null for a source draw, which is the
+   only caller that has no room to give.
+5. ~~**Accompanist, with the Upstairs release.**~~ **Done.** The
+   release came on 2 November: `LAST_PLAYABLE_DROP` moved to 40 in
+   #146, so the Nursery and its music box are reachable. The predicate
+   listens on the rattle rather than the box, so the achievement goes
+   to whoever is keeping time rather than to whoever wound it up.
 
-Steps 4 and 5 wait on drop 40 existing. Step 3 waits on somebody else's
-branch, which is a better reason to wait than most.
+All five are done. The two the note turned down are still turned down,
+and *Noise Complaint* still needs the room on `interaction_log` and a
+rewrite as "other players' recorded actions in the room" before it is
+worth building - `last_used_room` does nothing for it, being one room
+per player per thing rather than a history of a place.

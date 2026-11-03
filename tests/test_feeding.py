@@ -491,7 +491,7 @@ async def test_the_expired_can_does_not_count_toward_her_twenty_five(house):
     """
     db, *_ = house
     for _ in range(triggers.BOWL_HALF_EMPTY_FEEDS + 1):
-        await db.record_use(ALICE, GUILD_A, "cat_food_expired")
+        await db.record_use(ALICE, GUILD_A, "cat_food_expired", room_id=None)
     await a_day_later(db)
     await carry(db, ALICE, GUILD_A, "can_opener")
     await carry(db, ALICE, GUILD_A, "cat_food_expired")
@@ -562,7 +562,7 @@ async def test_a_refused_feed_still_counts_as_turning_up(house):
     test would pass without the refusal doing anything.
     """
     db, *_ = house
-    await db.record_use(ALICE, GUILD_A, "cat_food_salmon")
+    await db.record_use(ALICE, GUILD_A, "cat_food_salmon", room_id=None)
     await take_a_can(house)
     assert await stamped(db) is None
 
@@ -779,7 +779,7 @@ async def test_bowl_half_empty_counts_every_flavor(house):
     on a server that had already been played."""
     db, *_ = house
     for _ in range(triggers.BOWL_HALF_EMPTY_FEEDS - 1):
-        await db.record_use(ALICE, GUILD_A, "cat_food_chicken")
+        await db.record_use(ALICE, GUILD_A, "cat_food_chicken", room_id=None)
     # Those rows stamped her last meal as well as counting it, so she is
     # not hungry until the clock moves.
     await a_day_later(db)
@@ -793,7 +793,7 @@ async def test_bowl_half_empty_counts_every_flavor(house):
 async def test_and_not_before(house):
     db, *_ = house
     for _ in range(5):
-        await db.record_use(ALICE, GUILD_A, "cat_food_chicken")
+        await db.record_use(ALICE, GUILD_A, "cat_food_chicken", room_id=None)
     await a_day_later(db)
     await take_a_can(house)
 

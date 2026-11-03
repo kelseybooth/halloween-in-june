@@ -1208,12 +1208,32 @@ class ConfigHistory(Base):
 class ThingUse(Base):
     """One row per (player, thing): when they last used it, and how often.
 
-    Three jobs in one table. `last_used_at` answers the 48-hour lumber
+    Four jobs in one table. `last_used_at` answers the 48-hour lumber
     cooldown and the bed's 24; counting distinct rows for a thing answers
     "{n} of {total} repairs done", which the staircase needs by distinct
     player; and `use_count` answers "do this N times" achievements - ten
     frozen burritos, and now twenty-five toy plays, where the rows count
     *which* toys and the sum counts *how many* plays.
+
+    The fourth job is `last_used_room`, and `RoomDeed` below says a
+    column here "saves nothing worth having" - which was right about
+    the question it was asked and is not this question. A trail wants
+    *which rooms, ever*: many rooms per player, each written once,
+    never updated, which is exactly `room_deeds` and cannot be a single
+    column. *Accompanist* wants *which room, last*: one room,
+    overwritten every use, read against `last_used_at` sixty seconds
+    later. `room_deeds` cannot answer it at any price, because it is
+    deliberately idempotent - a player who played the music box in the
+    Nursery last week has a `first_at` of last week however many times
+    they play it tonight. The two coexist because they answer different
+    questions, and neither is the cheap version of the other.
+
+    **Outside the key, and nullable.** `use_count` and the staircase's
+    distinct-player count both depend on one row per (player, thing),
+    so a room in the key would quietly split them into one row per
+    place. Null means "used, room unrecorded" - which today is only a
+    source draw, where there is no room the draw happened *in* that the
+    yield did not also happen in.
 
     A `miss_streak` column lived here briefly, for the toy's play ramp.
     It was the wrong home and nothing ever wrote it: 3b settles that the
@@ -1229,18 +1249,25 @@ class ThingUse(Base):
     thing_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     last_used_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     use_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # The room the most recent use happened in, as every other room
+    # column spells it: `CH` for the channel. For an exit this is the
+    # room departed from, not the one arrived in - the use happened
+    # where the player was standing when they typed it.
+    last_used_room: Mapped[str | None] = mapped_column(String(8), nullable=True)
 
 
 class RoomDeed(Base):
     """One row per (player, action, thing, room) a player has done it in.
 
     **The one thing `thing_uses` cannot answer.** That table knows what
-    a player has used and how often, and nothing at all about where -
-    which is enough for every achievement up to drop 50 and enough for
-    none of the two that arrive with it. *Rung by Rung* wants the ten
-    places a ladder has been climbed and *Burrito Trail* the ten a
-    burrito has been left, and both are the same question: which rooms,
-    per player, for one verb on one thing.
+    a player has used, how often, and - since `last_used_room` arrived
+    on 2 November - the single room the *latest* use happened in. What
+    it cannot keep is **every** room, which is the question here: *Rung
+    by Rung* wants the ten places a ladder has been climbed and *Burrito
+    Trail* the ten a burrito has been left, and both are the same
+    question: which rooms, per player, for one verb on one thing. One
+    column holds the most recent of those ten and forgets the other
+    nine, whatever it is called.
 
     **Written for every drop and every climb, not only for those two
     things.** The narrower version - a column on `thing_uses`, or a row
@@ -1562,6 +1589,7 @@ _LATER_COLUMNS: list[tuple[str, str, str]] = [
     ("users", "toy_plays_today", "INTEGER NOT NULL DEFAULT 0"),
     ("room_contents", "placed_at", "TIMESTAMP"),
     ("users", "last_command_at", "TIMESTAMP"),
+    ("thing_uses", "last_used_room", "TEXT"),
     # Drop 2 renamed `restocks.container` to `destination` and added
     # `max_present`. A rename is two steps for a live database: the new
     # column is added here, and the old one is left orphaned and
@@ -2803,7 +2831,12 @@ async def take_from_source(
         await session.execute(_add_to_inventory(insert, user_id, guild_id, thing_id, 1))
         await session.commit()
     if source_id is not None:
-        await record_use(user_id, guild_id, source_id)
+        # **No room, and not an oversight.** A draw is not a use that
+        # happened somewhere - the player is reaching into a source that
+        # is in the room with them, and the row exists to say "this
+        # player has drawn from this source", which is the whole of what
+        # *Green Thumb* asks. Nothing reads a source's room.
+        await record_use(user_id, guild_id, source_id, room_id=None)
     log.info("User %s drew %s from a source in guild %s", user_id, thing_id, guild_id)
 
 
@@ -2950,6 +2983,55 @@ async def active_others_in_room(
                 User.last_command_at >= since,
             )
         ) or 0
+
+
+async def somebody_else_just_used(
+    guild_id: int, thing_id: str, room_id: str, since: datetime, *, except_user: int
+) -> bool:
+    """Has another player used this thing in this room since `since`?
+
+    *Accompanist* asks it of the music box, from the rattle's own
+    `on_use`. Reads the pair of columns written together by `record_use`
+    - the stamp and the room of the same use - which is why they must
+    never be allowed to describe two different events; see that
+    function.
+
+    **A null room never matches, and `is_not(None)` is what makes that
+    true.** It reads like belt and braces - a null compared to a room is
+    not true in SQL whatever we write - and it is load-bearing in the
+    other direction: SQLAlchemy compiles `== None` to `IS NULL`, so a
+    caller passing `room_id=None` would otherwise be asking "who used
+    this in no recorded room" and matching every roomless use there is.
+    A question about one room, answered about all of them. The predicate
+    refuses a null room before it reaches here, so this is for the next
+    caller rather than the current one.
+
+    **One row per player, so recency is exact and history is gone.**
+    `thing_uses` keeps only the latest use, which is the right shape
+    here - a player who played the music box an hour ago and again just
+    now should count once, and does. It also means this cannot be asked
+    about anything but the most recent use, which is all a 60-second
+    window wants.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        found = await session.scalar(
+            select(func.count())
+            .select_from(ThingUse)
+            .where(
+                ThingUse.guild_id == guild_id,
+                ThingUse.thing_id == thing_id,
+                ThingUse.user_id != except_user,
+                ThingUse.last_used_room.is_not(None),
+                ThingUse.last_used_room == room_id,
+                ThingUse.last_used_at >= since,
+            )
+        )
+        # A count rather than selecting the row: `scalar` on a `user_id`
+        # returns the id, and a player whose id is falsy would read as
+        # nobody. No Discord id is 0, which is exactly the kind of thing
+        # that stays true until a test picks its own numbers.
+        return bool(found)
 
 
 async def take_from_room(
@@ -3202,16 +3284,35 @@ class UseRecord(NamedTuple):
     use_count: int
 
 
-async def record_use(user_id: int, guild_id: int, thing_id: str) -> UseRecord:
+async def record_use(
+    user_id: int, guild_id: int, thing_id: str, *, room_id: str | None
+) -> UseRecord:
     """Stamp a use, and report what the row said *before* it.
 
-    One row, three jobs. `last_used_at` answers the cooldown, counting distinct
-    rows answers "how many players have placed a plank", and `use_count` answers
-    "do this N times". The previous timestamp is returned because the cooldown
-    needs the value from before this use overwrote it.
+    One row, four jobs. `last_used_at` answers the cooldown, counting distinct
+    rows answers "how many players have placed a plank", `use_count` answers
+    "do this N times", and `last_used_room` answers where the last one happened.
+    The previous timestamp is returned because the cooldown needs the value from
+    before this use overwrote it.
 
     2b added the use_count column and wired nothing to it; this is the only
     place that increments, so it cannot be double-counted.
+
+    **`room_id` is keyword-only and has no default on purpose.** Three of
+    the four callers have a room in hand and the fourth deliberately has
+    none, and a default of `None` would let a new caller pick the wrong
+    one of those by saying nothing at all - which is a silent null in a
+    column an achievement reads, not an error anybody would see.
+
+    **A null room overwrites a real one rather than leaving it.** The
+    tempting version coalesces, keeping the last room anybody recorded,
+    and it breaks the only thing the column is for: `last_used_at` and
+    `last_used_room` have to describe *the same use*, because every
+    reader tests them together. Coalescing makes the pair "when the last
+    use was" and "where some earlier use was", so a roomless use would
+    refresh the clock while leaving a stale room behind it - which is a
+    match for a performance that never happened there. Writing the null
+    keeps the two columns one fact.
     """
     session_factory = _require_session()
     insert = _upsert_statement()
@@ -3236,10 +3337,15 @@ async def record_use(user_id: int, guild_id: int, thing_id: str) -> UseRecord:
                 thing_id=thing_id,
                 last_used_at=now,
                 use_count=1,
+                last_used_room=room_id,
             )
             .on_conflict_do_update(
                 index_elements=[ThingUse.guild_id, ThingUse.user_id, ThingUse.thing_id],
-                set_={"last_used_at": now, "use_count": ThingUse.use_count + 1},
+                set_={
+                    "last_used_at": now,
+                    "use_count": ThingUse.use_count + 1,
+                    "last_used_room": room_id,
+                },
             )
         )
         await session.commit()

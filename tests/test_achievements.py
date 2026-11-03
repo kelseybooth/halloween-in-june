@@ -85,9 +85,15 @@ def test_the_shipped_file_parses():
     # the two drop 50 trails.
     # Then *Captive Audience*, the same day: a rattle played with other
     # people awake in the room. It is one of the two the rattle work
-    # order asked for; the other, *Accompanist*, waits for drop 40.
-    assert len(parsed.achievements) == 56
-    assert len(parsed.achievement_ids) == 56
+    # order asked for.
+    # Fifty-seven with the other one. *Accompanist* was waiting for drop
+    # 40 and drop 40 arrived the same day, when the ceiling moved so beta
+    # could reach the upstairs - the music box is in the Nursery, so the
+    # release that made the room reachable is the one that made the
+    # achievement earnable.
+    assert len(parsed.achievements) == 57
+    # The ids are a set, so this pair is also the file's duplicate check.
+    assert len(parsed.achievement_ids) == 57
 
 
 def test_the_shipped_file_validates():
@@ -206,7 +212,7 @@ async def test_the_rows_reach_the_database(db):
 async def test_the_whole_shipped_file_loads(db):
     await content_loader.load_content(content_module.load_files())
 
-    assert await row_count(db, "achievements") == 56
+    assert await row_count(db, "achievements") == 57
 
 
 async def test_a_reload_replaces_the_rows(db):

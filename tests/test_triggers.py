@@ -469,7 +469,7 @@ async def water(who=ALICE, room_id="CO"):
 
 
 async def carve(who=ALICE):
-    await database.record_use(who, GUILD_A, CARVED)
+    await database.record_use(who, GUILD_A, CARVED, room_id=None)
 
 
 async def pick(who=ALICE):
@@ -853,10 +853,18 @@ def test_what_can_actually_be_earned():
     who has run a command lately - is live state that the game already
     keeps. Noise Complaint was the one that would have arrived blocked,
     and it is not being built.
+
+    **Forty-eight with Accompanist**, and it is the first one in a
+    while that arrives earnable only because a column shipped with it.
+    It asks where somebody else's last use happened, which nothing
+    recorded until `thing_uses.last_used_room` did; the decision note
+    had it parked behind drop 40 as well, and the ceiling moved to 40
+    on 2 November. Had the column been left for later this would have
+    gone to `BLOCKED` and this number would not have moved.
     """
     earnable = achievements.registered_ids() - set(BLOCKED) - set(BY_HAND)
 
-    assert len(earnable) == 47
+    assert len(earnable) == 48
 
 
 # --------------------------------------------------------------------------
@@ -912,7 +920,7 @@ async def test_out_on_a_limb_is_not_any_other_exit(playing):
 
 async def test_not_so_picky_eater_needs_ten(playing):
     for n in range(1, 11):
-        await database.record_use(ALICE, GUILD_A, "frozen_burrito")
+        await database.record_use(ALICE, GUILD_A, "frozen_burrito", room_id=None)
         got = await earned(a_context("on_use", thing_id="frozen_burrito"))
         if n < 10:
             assert "not_so_picky_eater" not in got, n
@@ -921,7 +929,7 @@ async def test_not_so_picky_eater_needs_ten(playing):
 
 async def test_not_so_picky_eater_counts_only_burritos(playing):
     for _ in range(10):
-        await database.record_use(ALICE, GUILD_A, "candy")
+        await database.record_use(ALICE, GUILD_A, "candy", room_id=None)
 
     assert "not_so_picky_eater" not in await earned(
         a_context("on_use", thing_id="frozen_burrito")
@@ -1450,6 +1458,144 @@ async def test_a_crowd_watching_something_other_than_the_rattle(playing):
 
     assert "captive_audience" not in await earned(
         a_context("on_use", thing_id="watering_can", room_id="CO")
+    )
+
+
+# --------------------------------------------------------------------------
+# Accompanist
+#
+# The other one that needs a second player, and the only one that needs a
+# second player's *past*: somebody else has to have used the music box in
+# this room in the last minute. `played_the_music_box` writes that use and
+# hands back the stamp it landed on, so these tests build their windows off
+# the row rather than off a wall clock the row was never compared to.
+# --------------------------------------------------------------------------
+
+
+async def played_the_music_box(db, who: int, room_id: str | None) -> datetime:
+    """Another player's music box use, and when the row says it happened."""
+    await db.ensure_user_exists(who, GUILD_A)
+    await db.record_use(who, GUILD_A, "music_box", room_id=room_id)
+    stamped = await db.last_used(who, GUILD_A, "music_box")
+    assert stamped is not None
+    return stamped
+
+
+async def test_accompanist(playing):
+    when = await played_the_music_box(playing, BOB, "NU")
+
+    assert "accompanist" in await earned(
+        a_context(
+            "on_use",
+            thing_id="rattle",
+            room_id="NU",
+            now=when + timedelta(seconds=30),
+        )
+    )
+
+
+async def test_a_music_box_two_minutes_ago_is_not_accompaniment(playing):
+    """Outside `ACCOMPANIST_SECONDS`. The row is still the most recent use
+    of the box, which is what makes this the interesting failure: the
+    window is the only thing saying no."""
+    when = await played_the_music_box(playing, BOB, "NU")
+
+    assert "accompanist" not in await earned(
+        a_context(
+            "on_use",
+            thing_id="rattle",
+            room_id="NU",
+            now=when + timedelta(seconds=120),
+        )
+    )
+
+
+async def test_accompanying_yourself_is_not_accompaniment(playing):
+    """Alice winds the box and shakes the rattle. One player doing both is
+    the case `except_user` exists for, and it is not a crowd of one."""
+    when = await played_the_music_box(playing, ALICE, "NU")
+
+    assert "accompanist" not in await earned(
+        a_context(
+            "on_use",
+            thing_id="rattle",
+            room_id="NU",
+            now=when + timedelta(seconds=30),
+        )
+    )
+
+
+async def test_a_music_box_in_another_room_is_not_accompaniment(playing):
+    """The reason the column exists. Bob played the box in the Nursery and
+    Alice is rattling in the Courtyard, inside the window - so the time
+    alone would say yes and only the room says no."""
+    when = await played_the_music_box(playing, BOB, "NU")
+
+    assert "accompanist" not in await earned(
+        a_context(
+            "on_use",
+            thing_id="rattle",
+            room_id="CO",
+            now=when + timedelta(seconds=30),
+        )
+    )
+
+
+async def test_a_use_recorded_with_no_room_is_not_accompaniment(playing):
+    """A null room is "unrecorded", not "wherever you are". Nothing writes
+    a roomless music box today - a source draw is the only null and the box
+    is not a source - so this guards the column's meaning rather than a
+    path, and it is cheap to keep honest."""
+    when = await played_the_music_box(playing, BOB, None)
+
+    assert "accompanist" not in await earned(
+        a_context(
+            "on_use",
+            thing_id="rattle",
+            room_id="NU",
+            now=when + timedelta(seconds=30),
+        )
+    )
+
+
+async def test_asking_about_nowhere_does_not_match_everywhere(playing):
+    """The query, not the predicate, because the predicate refuses a null
+    room before it gets this far and this is about the helper's own
+    contract.
+
+    **`== None` is `IS NULL` in SQLAlchemy.** Without the `is_not(None)`
+    clause, asking "who used the box in room None" compiles to "who used
+    the box in no recorded room" and matches every roomless use there is -
+    a question about one room silently answered about all of them. The
+    predicate cannot reach it today; the helper is public and the next
+    caller may not guard first.
+    """
+    await played_the_music_box(playing, BOB, None)
+
+    assert not await playing.somebody_else_just_used(
+        GUILD_A,
+        "music_box",
+        None,
+        await playing.server_now(GUILD_A) - timedelta(seconds=60),
+        except_user=ALICE,
+    )
+
+
+async def test_the_music_box_does_not_earn_it_for_the_player_winding_it(playing):
+    """It listens on the rattle. Bob rattled a moment ago and Alice is now
+    using the box, which is the same pair of events in the other order and
+    is not somebody keeping time."""
+    await playing.ensure_user_exists(BOB, GUILD_A)
+    await playing.record_use(BOB, GUILD_A, "rattle", room_id="NU")
+    when = await playing.last_used(BOB, GUILD_A, "rattle")
+
+    assert "accompanist" not in await earned(
+        a_context(
+            "on_use",
+            thing_id="music_box",
+            room_id="NU",
+            now=when + timedelta(seconds=30),
+        )
     )
 
 

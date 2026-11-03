@@ -109,9 +109,14 @@ async def test_room_contents_records_which_container(db):
 
 
 async def test_thing_uses_records_a_count_as_well_as_a_time(db):
-    """Three jobs: the cooldown, distinct-player plank counting, and N-times
-    achievements. The count is what makes the third one answerable."""
-    assert {"last_used_at", "use_count"} <= await columns_of(db, "thing_uses")
+    """Four jobs: the cooldown, distinct-player plank counting, N-times
+    achievements, and where the last one happened. The count is what makes
+    the third answerable and `last_used_room` the fourth - *Accompanist*
+    asks whether somebody else played the music box *here*, and a time
+    with no place cannot say."""
+    assert {"last_used_at", "use_count", "last_used_room"} <= await columns_of(
+        db, "thing_uses"
+    )
 
 
 async def test_the_interaction_log_can_answer_the_questions_it_exists_for(db):
