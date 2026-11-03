@@ -3050,6 +3050,63 @@ async def things_with_an_idle_clock() -> dict[str, int]:
         return {row[0]: row[1] for row in rows}
 
 
+async def start_the_clock_on_unstamped_carries(
+    guild_id: int, thing_ids: "list[str]", now: datetime
+) -> list[tuple[int, str]]:
+    """Stamp `taken_at` on every carried row of these that has none.
+
+    **The repair for a null stamp, which used to mean exempt forever.**
+    `taken_at` is written when a thing is taken, so a row that predates
+    the column - or one from a take the deploy straddled - has nothing
+    in it, and `carriers_who_stopped_using` compares the cutoff against
+    NULL and gets no row back every hour for the rest of time. That is
+    the right answer for one tick and the wrong one permanently: the
+    sweep genuinely does not know when the thing was picked up, but it
+    does know the thing is in a hand now, and six hours from now it
+    will know that it has been for six hours.
+
+    So the clock starts rather than the thing being taken. The stamp is
+    `now`, which is the earliest moment the sweep can vouch for, and
+    `now` is never earlier than a cutoff derived from it - so a row
+    stamped on this tick cannot also be swept on it. The carrier keeps
+    the thing for one full timer and loses it on the ordinary rule
+    afterwards, which is the same deal everybody who took it normally
+    got.
+
+    **Guarded on the stamp being null, and that guard is the whole
+    mechanic.** Rewriting a stamp that already exists would restart the
+    clock every hour and nothing would ever be idle enough to sweep -
+    the feature would read as working and quietly never fire, which is
+    the failure it was written to end.
+
+    Only things on their own clock are offered here, because
+    `taken_at` is the only column their rule reads. The ladder's rule
+    measures the player through `users.last_command_at`, which every
+    command writes, so its null case heals itself the next time
+    somebody types anything and wants no repair.
+
+    Returns (player, thing) per row stamped, for the caller to log.
+    """
+    if not thing_ids:
+        return []
+    session_factory = _require_session()
+    async with session_factory() as session:
+        stamped = await session.execute(
+            update(PlayerInventory)
+            .where(
+                PlayerInventory.guild_id == guild_id,
+                PlayerInventory.thing_id.in_(sorted(set(thing_ids))),
+                PlayerInventory.count > 0,
+                PlayerInventory.taken_at.is_(None),
+            )
+            .values(taken_at=now)
+            .returning(PlayerInventory.user_id, PlayerInventory.thing_id)
+        )
+        rows = [(row[0], row[1]) for row in stamped]
+        await session.commit()
+    return rows
+
+
 async def carriers_who_stopped_using(
     guild_id: int, thing_id: str, cutoff: datetime
 ) -> list[tuple[int, str]]:
@@ -3071,9 +3128,18 @@ async def carriers_who_stopped_using(
     two predicates rather than one neither agrees on.
 
     **A null `taken_at` is not idleness**, the same rule and the same
-    reason as `idle_carriers`: every inventory row that predates the
-    column has one, and taking a thing off a player the game never
-    timed is worse than letting them keep it until they next pick it up.
+    reason as `idle_carriers`: taking a thing off a player the game
+    never timed is worse than letting them keep it a while longer.
+
+    **"A while" is now a timer rather than for ever.** This read used to
+    be the whole story on a null stamp, and the whole story was that the
+    row never matched again: `taken_at` is written on take and nothing
+    else wrote it, so a row that predated the column, or one from a take
+    a deploy straddled, sat in a hand uncollectable. On the beta server
+    that was both things with their own clock at once, and the rule had
+    never fired in production. `start_the_clock_on_unstamped_carries`
+    runs first now and gives such a row a stamp of `now`, so this query
+    still declines it on that tick and collects it a timer later.
 
     And the `is_not(None)` does not enforce that either, exactly as the
     one above it does not. SQL compares NULL to nothing, so

@@ -776,32 +776,146 @@ async def test_putting_it_down_and_picking_it_up_restarts_the_clock(courtyard):
     assert await db.carried_of(ALICE, GUILD_A, world.WATERING_CAN) == 1
 
 
-async def test_a_can_the_game_never_timed_stays_put(courtyard):
-    """A null `taken_at` is not idleness.
-
-    Every inventory row that predates the column has one, and the sweep
-    is explicit that it would rather leave a thing with a player it has
-    never timed than take it off them on no evidence. Worth a test
-    because the alternative - `NULL < cutoff` being false in SQL - is
-    true by accident rather than by the code saying so, and a later
-    `coalesce` would quietly reverse it.
-    """
-    db, *_ = courtyard
-    await fetched(courtyard)
+async def untimed(db, who=ALICE, thing=None):
+    """Blank the stamp, the way a take before the column did."""
+    thing = thing or world.WATERING_CAN
     async with db._require_session()() as session:
         await session.execute(
             update(database.PlayerInventory)
             .where(
-                database.PlayerInventory.user_id == ALICE,
-                database.PlayerInventory.thing_id == world.WATERING_CAN,
+                database.PlayerInventory.user_id == who,
+                database.PlayerInventory.guild_id == GUILD_A,
+                database.PlayerInventory.thing_id == thing,
             )
             .values(taken_at=None)
         )
         await session.commit()
 
+
+async def stamp_of(db, who=ALICE, thing=None):
+    thing = thing or world.WATERING_CAN
+    async with db._require_session()() as session:
+        return await session.scalar(
+            select(database.PlayerInventory.taken_at).where(
+                database.PlayerInventory.user_id == who,
+                database.PlayerInventory.guild_id == GUILD_A,
+                database.PlayerInventory.thing_id == thing,
+            )
+        )
+
+
+async def test_a_can_the_game_never_timed_is_not_taken_on_the_spot(courtyard):
+    """A null `taken_at` is still not idleness.
+
+    The sweep would rather leave a thing with a player it has never
+    timed than take it off them on no evidence, and that half is
+    unchanged. Worth keeping a test on because the mechanism - `NULL <
+    cutoff` being false in SQL - is true by accident rather than by the
+    code saying so, and a later `coalesce` would quietly reverse it.
+    """
+    db, *_ = courtyard
+    await fetched(courtyard)
+    await untimed(db)
+
     await bot.idle_sweep.coro()
 
     assert await db.carried_of(ALICE, GUILD_A, world.WATERING_CAN) == 1
+
+
+async def test_but_the_sweep_starts_its_clock_instead_of_shrugging(courtyard):
+    """**The half that changed on 3 November.**
+
+    Not taking it was the whole behaviour, and the whole behaviour meant
+    the row was exempt for ever rather than for a while: nothing but a
+    take writes `taken_at`, so a can in this state was uncollectable
+    until its carrier happened to put it down. The sweep now stamps it
+    with the one time it can vouch for - now - and the ordinary rule
+    takes over from there.
+    """
+    db, *_ = courtyard
+    await fetched(courtyard)
+    await untimed(db)
+    assert await stamp_of(db) is None
+
+    # Bracketed rather than compared to one reading of the clock: the
+    # suite does not freeze time, so `server_now` called twice returns
+    # two different microseconds and an equality here would be flaky.
+    before = await database.server_now(GUILD_A)
+    await bot.idle_sweep.coro()
+    after = await database.server_now(GUILD_A)
+
+    assert before <= await stamp_of(db) <= after
+
+
+async def test_and_then_it_goes_a_timer_later_like_anything_else(courtyard):
+    """One full timer from the stamp, not from whenever it was taken.
+
+    Which is the generous reading on purpose: the sweep does not know
+    when this can was picked up, so it starts counting rather than
+    guessing, and the carrier gets the same deal as somebody who took it
+    normally a moment ago.
+
+    **The clock moves here, not the stamp**, and that is the only way
+    this test can fail. `unused_for` backdates `taken_at` directly - it
+    would write the very value the sweep is supposed to have written, so
+    the second half would pass whether or not the first half did
+    anything. Shifting the server's day forward instead leaves the stamp
+    alone and makes it old, which asks the question the test is for. A
+    day rather than seven hours because the offset is in whole days;
+    anything over six works.
+    """
+    db, *_ = courtyard
+    await fetched(courtyard)
+    await untimed(db)
+    await db.update_current_room(ALICE, GUILD_A, "LI")
+
+    await bot.idle_sweep.coro()
+    assert await db.carried_of(ALICE, GUILD_A, world.WATERING_CAN) == 1
+
+    await db.set_setting(GUILD_A, database.CLOCK_KEY, 1)
+    await bot.idle_sweep.coro()
+
+    assert await db.carried_of(ALICE, GUILD_A, world.WATERING_CAN) == 0
+    assert "watering can" in await floor_of("LI")
+
+
+async def test_the_stamp_is_written_once_and_not_every_hour(courtyard):
+    """**The guard that keeps the repair from eating the rule.**
+
+    A sweep that stamped every carried row rather than only the null
+    ones would restart the clock an hour before it could ever run out,
+    so nothing would be idle enough to take and the feature would read
+    as working while never firing again - which is the exact failure it
+    was written to end. Seven hours of carrying, then a sweep, and the
+    stamp has to still say seven hours ago.
+    """
+    db, *_ = courtyard
+    await fetched(courtyard)
+    await unused_for(db, 7)
+    before = await stamp_of(db)
+
+    await bot.idle_sweep.coro()
+
+    assert await stamp_of(db) == before
+
+
+async def test_nothing_without_a_clock_of_its_own_is_stamped(courtyard):
+    """The repair is scoped to the rule that needs it.
+
+    `taken_at` is read by the `idle_drop_hours` rule and by nothing
+    else, so a thing with no such column has no use for a stamp and the
+    sweep leaves its rows alone. The ladder is the other sweep's
+    business and measures the player, not the thing.
+    """
+    db, *_ = courtyard
+    await fetched(courtyard)
+    # `carry` inserts the row without a stamp, which is the state this
+    # is about - no need to blank anything afterwards.
+    await carry(db, ALICE, GUILD_A, "candle_stub")
+
+    await bot.idle_sweep.coro()
+
+    assert await stamp_of(db, thing="candle_stub") is None
 
 
 async def test_and_it_still_has_whatever_was_in_it(courtyard):
