@@ -2873,6 +2873,15 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
         # Feeding is not among them for either, and that is the design's
         # call rather than an oversight: a can of cat food is a `/use`,
         # so what you are holding goes down before the cat gets fed.
+        #
+        # **Every exit, including the ones that are climbs.** The ivy and
+        # the oak are `/use`d like a doorway and are refused like one -
+        # which is to say not at all - so somebody goes up the ivy with a
+        # full watering can in one hand. Asked and decided on 3 November:
+        # allowed for now. `carrying.exit` in the defaults is the line for
+        # the day that changes, written with a `{name}` so it serves
+        # either thing, and read by nothing until then. It is not dead
+        # copy; it is a decision waiting.
         in_the_way = (
             None if row.type == "exit"
             else await _hands_full(guild_id, user.id)

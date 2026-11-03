@@ -47,7 +47,7 @@ that player inside the window — which the existing
 `(guild_id, user_id, action, created_at)` index covers. No schema
 change, no new table, no backfill.
 
-Drop 30 is reachable: `LAST_PLAYABLE_DROP` is 31.
+Drop 30 is reachable: `LAST_PLAYABLE_DROP` is 40.
 
 ### Accompanist
 
@@ -63,11 +63,13 @@ Drop 30 is reachable: `LAST_PLAYABLE_DROP` is 31.
 **Trigger:** a `/use rattle` within 60 seconds of a different player's
 successful `/use music box` in the same room.
 
-**It waits on drop 40, and that is a release rather than a constant.**
-The music box is an `object` in `NU`, and the Nursery arrives with
-Upstairs. `LAST_PLAYABLE_DROP` is 31, and the comment above it is
-explicit that the ceiling moves in the release that builds the next
-drop. So Accompanist ships with Upstairs, not before it.
+**The release it was waiting for has happened.** This paragraph said
+Accompanist waits on drop 40 because the music box is an `object` in
+`NU` and the Nursery arrives with Upstairs, and that the ceiling was 31
+and would move in the release that built the next drop. It moved on
+2 November: `LAST_PLAYABLE_DROP` is 40, raised so beta can reach the
+upstairs. The Nursery is reachable, so the drop is no longer what holds
+this back - the missing column below is the only thing left.
 
 **It also needs one column that does not exist.** "In the same room"
 has no source today:

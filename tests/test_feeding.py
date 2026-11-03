@@ -232,12 +232,27 @@ async def test_feeding_her_works_in_the_entryway(house):
 
 
 async def test_a_feed_is_worth_ten(house):
+    """**Ten, written out, not `world.FEED_POINTS`.** The constant on both
+    sides made this a tautology: it asserted that the number the code
+    uses is the number the code uses, and mutating `FEED_POINTS` to 1 or
+    to 100 passed it along with the whole suite.
+
+    The expired can's penalty was written the same way and was caught the
+    same way, one mutation later - see `test_the_expired_can_costs_her
+    _trust`, which carries the same note. A number the writers chose has
+    to be written down somewhere a mutation cannot move it.
+
+    The sign is worth its own line for the reason the penalty's is: a
+    feed that paid nothing would look like a feed that worked.
+    """
     db, *_ = house
+    before = await db.get_relationship(ALICE, GUILD_A)
     await take_a_can(house)
 
     await feed(house)
 
-    assert await db.get_relationship(ALICE, GUILD_A) == world.FEED_POINTS
+    assert await db.get_relationship(ALICE, GUILD_A) == before + 10
+    assert world.FEED_POINTS > 0
 
 
 async def test_the_room_sees_it(house):
