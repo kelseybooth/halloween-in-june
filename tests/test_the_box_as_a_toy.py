@@ -280,6 +280,18 @@ async def test_it_is_reachable_anyway(entryway):
     assert "packing slip" in said
 
 
+async def test_and_a_playtester_can_call_it_a_cardboard_box(entryway):
+    """**The plainest description of the thing, and it did not answer to
+    it.** The box already took five names - `box`, `parcel`, `package`,
+    `amazon box`, `delivery box` - and not the one that says what it is
+    made of. Added because somebody playing typed it and got nothing,
+    which is the only evidence an alias list can really be built from.
+    """
+    said = replies(await run(entryway, bot.look, "cardboard box"))
+
+    assert "packing slip" in said
+
+
 async def test_looking_at_it_never_says_to_pick_it_up(entryway):
     """The rung is live - there is a feather wand in the channel - and it
     is still not shown, for two reasons at once: it would send a player

@@ -2820,9 +2820,22 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
 
     Which things those are is named in `world.after_use` and
     `world._use_the_watering_can`, and nowhere else.
-    There is deliberately no column for it: two noisy toys are a list, and
-    a `use_public` cell on every row in the house would invite a third one
-    that nobody thought about.
+
+    There is deliberately no column for it. A few ids named in code are
+    something a reader can follow back to the function that decides them,
+    and the thing that makes a public line correct is not the flag anyway -
+    it is the voice, which has to name who acted rather than calling the
+    whole room "you". `content.PUBLIC_USE_THINGS` and
+    `content.PUBLIC_USE_DEFAULTS` are the check that holds them to that,
+    and they are lists for the same reason.
+
+    **This said "two noisy toys are a list", and warned that a column would
+    invite "a third one that nobody thought about".** The third one was the
+    watering can, and it arrived four lines above this sentence on
+    3 November without anybody thinking about this one - the same mistake
+    as the paragraph below, in the same docstring, made on the day that
+    paragraph was written up. What goes stale here is the counting: the
+    sentence now says why the list is a list instead of how long it is.
 
     **A full hand gets in the way before any of that.** Carrying the ladder
     or a full watering can refuses every use but the thing itself, a plank
