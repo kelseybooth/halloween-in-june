@@ -223,11 +223,18 @@ has become a class. Two is not a class.
    to 3 in `CONFIG_KEYS`, `database.active_others_in_room` counts the
    room off `last_command_at`, and the predicate excludes the rattler
    from their own audience.
-3. **The rattle's idle drop.** Not built here on purpose. The
-   generalisation of the ladder sweep is in flight rather than in main,
-   and once it lands the rattle is one entry in
-   `world.SET_DOWN_WHEN_IDLE` plus a test. Building it before then
-   would mean writing the generalisation a second time.
+3. ~~**The rattle's idle drop.**~~ **Done**, once #143 landed the
+   generalised sweep: the rattle is an entry in
+   `world.SET_DOWN_WHEN_IDLE` and nothing else, and the generalised
+   `exhausted.public` fills in `{name}` to produce the line the work
+   order asked for without anybody writing it twice.
+
+   **It had to earn the tuple.** That set is for things the house has
+   one of *and somebody else needs*, which a forgotten rattle was not
+   until Captive Audience shipped - a rattle nobody is playing with is
+   now the only thing between every other player and an achievement.
+   Waiting for #143 was right: building it earlier would have meant
+   writing the generalisation a second time.
 4. **`thing_uses.last_used_room`.** One column, and the thing
    Accompanist cannot be correct without.
 5. **Accompanist, with the Upstairs release.**

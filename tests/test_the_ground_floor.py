@@ -25,7 +25,11 @@ more than one line to it, which is the toys' trick applied to a thing
 that is not a toy.
 """
 
+from datetime import timedelta
+from types import SimpleNamespace
+
 import pytest
+from sqlalchemy import update
 
 from conftest import ALICE, GUILD_A
 from fake_discord import FakeChannel, FakeGuild, FakeInteraction, FakeMember
@@ -445,14 +449,17 @@ async def test_the_rattle_comes_out_of_the_blanket(ground_floor):
 
 
 async def test_and_shaking_it_is_for_the_whole_room(ground_floor):
-    """The only `/use` in the game whose reply is public and nothing
-    else.
+    """One of the two `/use` lines in the game that are public and
+    nothing else.
 
-    Every other one is private, because a use is a small private
-    moment; a rattle shaken in an empty garden is a joke, and a joke
-    told privately has no audience. Asserted both ways round - in the
-    thread, and *not* in the player's own reply - because `public`
-    routing that posted and also whispered would read as working.
+    It was the only one until the music box joined it on 2 November,
+    for *Accompanist*: a room that is not told the box is playing
+    cannot play along with it. Every other use is private, because a
+    use is a small private moment; a rattle shaken in an empty garden
+    is a joke, and a joke told privately has no audience. Asserted both
+    ways round - in the thread, and *not* in the player's own reply -
+    because `public` routing that posted and also whispered would read
+    as working.
     """
     db, *_ = ground_floor
     await carry(db, ALICE, GUILD_A, "rattle")
@@ -463,6 +470,111 @@ async def test_and_shaking_it_is_for_the_whole_room(ground_floor):
         "Rattle rattle!" in line for line in posted(ground_floor, "Courtyard")
     )
     assert "Rattle rattle!" not in replies(interaction)
+
+
+# ------------------------------------------------------------------------
+# A rattle nobody is playing with
+#
+# The sweep that sets down a forgotten one-of-a-kind thing covers the
+# rattle since *Captive Audience* gave other players a reason to want it.
+# `quiet_for` is local rather than imported from the watering can's file:
+# the helper is about a player going quiet and has nothing to do with the
+# can, and this file now needs it too.
+# ------------------------------------------------------------------------
+
+
+async def quiet_for(db, days, who=ALICE):
+    """Backdate this player's last command by whole days."""
+    now = await database.server_now(GUILD_A)
+    async with db._require_session()() as session:
+        await session.execute(
+            update(database.User)
+            .where(database.User.id == who, database.User.guild_id == GUILD_A)
+            .values(last_command_at=now - timedelta(days=days))
+        )
+        await session.commit()
+
+
+def the_sweep_can_see_the_server(monkeypatch, ground_floor):
+    """Give the background task a guild to walk.
+
+    This file's fixture does not patch `bot.bot`, and has had no reason
+    to: every other test here arrives through an interaction that
+    carries its own guild. A looping task has no interaction and asks
+    the client which servers it is in, so without this the sweep walks
+    an empty list and passes by doing nothing - which looks exactly
+    like a rattle the rule does not cover.
+    """
+    _, guild, _, _ = ground_floor
+    monkeypatch.setattr(
+        bot,
+        "bot",
+        SimpleNamespace(
+            guilds=[guild],
+            get_guild=lambda gid: guild if gid == GUILD_A else None,
+        ),
+    )
+
+
+async def test_a_day_of_silence_sets_the_rattle_down(ground_floor, monkeypatch):
+    """**Taken properly rather than conjured into her hands**, because the
+    sweep moves a copy and a copy has to exist. Which is why the content
+    is loaded again with the guild named, the way the take test above
+    explains: this file's fixture loads before anybody exists, so the
+    loader places nothing.
+    """
+    db, *_ = ground_floor
+    the_sweep_can_see_the_server(monkeypatch, ground_floor)
+    await content_loader.load_content(
+        content_module.load_files(), guild_ids=[GUILD_A]
+    )
+    await run(ground_floor, bot.take, "rattle", room="CO")
+    await db.update_current_room(ALICE, GUILD_A, "LI")
+    await quiet_for(db, 2)
+
+    await bot.idle_sweep.coro()
+
+    assert await db.carried_of(ALICE, GUILD_A, "rattle") == 0
+    assert "wooden rattle" in dict(await database.loose_here(GUILD_A, "LI"))
+
+
+async def test_and_the_room_is_told_in_the_house_s_own_words(ground_floor, monkeypatch):
+    """No copy of its own, which is the point of the generalised line.
+
+    The ladder is dropped "out of exhaustion", a joke about its weight;
+    the rattle gets `exhausted.public` with its name filled in, and the
+    sentence that comes out is the one the work order asked for without
+    anybody writing it a second time.
+    """
+    db, *_ = ground_floor
+    the_sweep_can_see_the_server(monkeypatch, ground_floor)
+    await content_loader.load_content(
+        content_module.load_files(), guild_ids=[GUILD_A]
+    )
+    await run(ground_floor, bot.take, "rattle", room="CO")
+    await db.update_current_room(ALICE, GUILD_A, "LI")
+    await quiet_for(db, 2)
+
+    await bot.idle_sweep.coro()
+
+    said = " ".join(posted(ground_floor, "Living Room"))
+    assert "gets tired and sets the wooden rattle down" in said
+
+
+async def test_somebody_still_playing_keeps_the_rattle(ground_floor, monkeypatch):
+    """The other half, and the one that fails if the sweep ever stops
+    reading the clock: a rattle taken a moment ago stays in the hand."""
+    db, *_ = ground_floor
+    the_sweep_can_see_the_server(monkeypatch, ground_floor)
+    await content_loader.load_content(
+        content_module.load_files(), guild_ids=[GUILD_A]
+    )
+    await run(ground_floor, bot.take, "rattle", room="CO")
+    await quiet_for(db, 0)
+
+    await bot.idle_sweep.coro()
+
+    assert await db.carried_of(ALICE, GUILD_A, "rattle") == 1
 
 
 async def test_a_second_can_opener_is_refused_in_its_own_words(ground_floor):

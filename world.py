@@ -807,11 +807,21 @@ async def ladder_is_guarded(guild_id: int) -> bool:
 # cannot be laid without; the can is the only way the herbs get
 # watered.
 #
-# Not the same set as the two that fill both hands, although it is the
-# same two things today. That set is about what a player can do while
-# holding something; this one is about what the server loses when they
-# stop playing with it.
-SET_DOWN_WHEN_IDLE = (LADDER, WATERING_CAN)
+# Not the same set as the two that fill both hands, although it was the
+# same two things to begin with. That set is about what a player can do
+# while holding something; this one is about what the server loses when
+# they stop playing with it.
+#
+# **The rattle joined on 2 November, and only just started to qualify.**
+# There has been one of it since it stopped being scenery, but a
+# forgotten rattle cost nobody anything - it was a burrito by the test
+# above, one of a kind and needed by no one. *Captive Audience* is what
+# changed that: the achievement wants a rattle played to a room with
+# people in it, so a rattle in a pocket somebody has stopped opening is
+# now the one thing standing between every other player and an
+# achievement. The justification is the same as the other two's; it is
+# the house that moved, not the rule.
+SET_DOWN_WHEN_IDLE = (LADDER, WATERING_CAN, RATTLE)
 
 
 async def set_down_forgotten_things(
