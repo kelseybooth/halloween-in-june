@@ -312,6 +312,18 @@ class Thing:
     # so a player laying a plank beside it should not have to pick it up
     # first. Nothing sets it until the ladder arrives in drop 30.
     to_hand_in_room: bool = False
+    # **How many hours this may sit unused in a player's hands before
+    # the sweep takes it off them.** Blank for almost everything, which
+    # is the point: a clock of its own only makes sense for a thing the
+    # house has exactly one of and somebody else needs. Six for the
+    # watering can and the rattle.
+    #
+    # Not the ladder's rule, and the difference is which idleness is
+    # being measured. The ladder goes on a carrier who has stopped
+    # playing at all; this goes on a carrier who is still playing and
+    # has stopped using the thing. See `world.SET_DOWN_WHEN_IDLE` for
+    # why both exist.
+    idle_drop_hours: int | None = None
 
     @property
     def is_exit(self) -> bool:
@@ -725,6 +737,7 @@ def load_files(directory: Path | None = None) -> Content:
                 use_cooldown_daily=_bool(row.get("use_cooldown_daily")),
                 scatter_target=_bool(row.get("scatter_target"), default=True),
                 to_hand_in_room=_bool(row.get("to_hand_in_room")),
+                idle_drop_hours=_int(row.get("idle_drop_hours")),
                 cross_weight=_int(row.get("cross_weight"), default=0) or 0,
                 max_per_player=_int(row.get("max_per_player")),
                 requires=_text(row.get("requires")),
@@ -912,6 +925,7 @@ def validate(content: Content) -> list[str]:
     problems += _check_art(content)
     problems += _check_consumables(content)
     problems += _check_cooldowns(content)
+    problems += _check_idle_drop_hours(content)
     problems += _check_toy_refusals(content)
     problems += _check_extra_use_lines(content)
     problems += _check_room_states(content)
@@ -1987,6 +2001,40 @@ def _check_cooldowns(content: Content) -> list[str]:
         for thing in content.things
         if thing.use_cooldown_daily and thing.use_cooldown_hours
     ]
+
+
+def _check_idle_drop_hours(content: Content) -> list[str]:
+    """A clock on something nobody can pick up measures nothing.
+
+    `idle_drop_hours` is how long a carried thing may go unused before
+    the sweep sets it down, so a row that is not takeable can never
+    start the clock and can never trip it. Nothing would raise: the
+    sweep looks for carriers, finds none, and the cell sits there
+    looking like a rule.
+
+    Zero is refused for the same reason from the other side. A timer of
+    no hours would take a thing out of a player's hands in the same
+    breath they picked it up, which is not a setting anybody wants and
+    is what a blank cell is for.
+    """
+    problems = []
+    for thing in content.things:
+        if thing.idle_drop_hours is None:
+            continue
+        if not thing.takeable:
+            problems.append(
+                f"thing {thing.thing_id} has idle_drop_hours but is not "
+                "takeable; nobody can carry it, so the clock can never "
+                "start - leave the cell blank"
+            )
+        if thing.idle_drop_hours < 1:
+            problems.append(
+                f"thing {thing.thing_id} has idle_drop_hours="
+                f"{thing.idle_drop_hours}; a timer of under an hour would "
+                "empty a player's hands as they filled them - blank means "
+                "no timer"
+            )
+    return problems
 
 
 def _check_quests(content: Content) -> list[str]:

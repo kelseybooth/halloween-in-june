@@ -4,7 +4,7 @@ Nov 2, 2026 · @Qaruse
 
 Four secret achievements for the wooden rattle, plus the public lines they need and an idle drop for the rattle. **Noise Complaint and Accompanist are the ones we want.** Opening Act and Back Where It Belongs are included as simpler fallbacks, in case either of the first two is much harder to build.
 
-**Depends on:** use lines that post to the room instead of privately, the idle drop and its default line from the Watering can work order, and the achievements engine.
+**Depends on:** use lines that post to the room instead of privately, the 6-hour idle drop, its idle\_drop\_hours column and its two lines from the Watering can work order, and the achievements engine.
 
 ## The achievements
 
@@ -83,6 +83,8 @@ Make both numbers config values, `noise_complaint_lines` (default 8) and `noise_
 
 **`achievements.tsv`:** the four rows above.
 
+**`things.tsv`, `rattle`:** set the new `idle_drop_hours` column to 6.
+
 ## Code changes
 
 1. **The rattle and the music box answer in public.** A successful `/use rattle` or `/use music box` posts the thing's `use` line to the room's thread, with `{player}` filled in, instead of replying privately. There's no separate private line for either.
@@ -90,7 +92,7 @@ Make both numbers config values, `noise_complaint_lines` (default 8) and `noise_
 3. **Accompanist.** On `/use rattle`, check for a successful `/use music box` by another player in the same room in the last 60 seconds.
 4. **Opening Act (fallback).** On `/use rattle`, count the other players whose current room is this one and who ran a command in the last 10 minutes. Award at `opening_act_audience` or more.
 5. **Back Where It Belongs (fallback).** On `/use rattle`, award if the room is the Nursery.
-6. **An idle drop for the rattle.** If the rattle is in a player's inventory and they run no command for 24 hours, move it to their current location's Also here list and post the default `exhausted.public` there: "{player} gets tired and sets the wooden rattle down." Same rule as the ladder and the watering can.
+6. **A 6-hour idle drop for the rattle.** The same rule as the watering can: the clock starts when a player takes the rattle and restarts every time they use it. After `idle_drop_hours` (6) unused in their inventory, move it to their current location's Also here list and post `idle_drop.public` there. On their next command, send `idle_drop.private` once. Both keys are defined in the watering can work order.
 7. **Confirm the latest playable drop reaches 40.** Accompanist and Back Where It Belongs wait for drop 40, so the engine's cap on the highest reachable drop must be at least 40 when they ship, or `/advance-game` and `/qa-drop` stop short. Every work order carries this step.
 
 ## Logging
@@ -107,4 +109,4 @@ Make both numbers config values, `noise_complaint_lines` (default 8) and `noise_
 - **Accompanist:** one tester plays the music box and a second rattles within a minute in the same room: earned. After 60 seconds, or in another room, or by the same tester: not earned.
 - **Opening Act:** with 3 other testers active in the room, a rattle earns it. With 2, it doesn't.
 - **Back Where It Belongs:** a rattle in the Nursery earns it. Anywhere else doesn't.
-- A tester carrying the rattle who goes quiet for 24 hours (shortened on QA) drops it where they stand, and the room sees "{player} gets tired and sets the wooden rattle down."
+- A tester who carries the rattle for 6 hours without using it (shortened on QA), while still running other commands, drops it where they stand. The room sees "{player} absent-mindedly sets the wooden rattle down and wanders off." On their next command the tester is told which room it's in. Rattling before then restarts the clock.

@@ -506,11 +506,18 @@ async def test_a_half_full_can_never_filled_them(courtyard):
 # --------------------------------------------------------------------------
 # Forgotten, and put down where they stood
 #
-# The ladder's sweep, which now covers both one-of-a-kind things. The
-# two are not equally rare: climbing sets the ladder down, so only
-# somebody who fetched one and stopped playing ever meets it, while
-# watering leaves the can in your hands - so a carrier who wanders off
-# with it is an ordinary afternoon.
+# **The can came off the ladder's clock on 2 November and onto its
+# own.** The ladder's rule asks whether the *player* has gone quiet -
+# twenty-four hours with no command - and that was always a poor fit
+# here. Climbing sets the ladder down, so a carrier who has not used
+# one is about to; watering does not set the can down, so somebody can
+# play hard all afternoon with it in their hand while the herbs stay
+# dry and nobody else can reach it.
+#
+# So six hours since the can was last *used*, out of `idle_drop_hours`
+# in `things.tsv`, and it fires whether or not its carrier is busy.
+# `test_a_busy_player_loses_it_anyway` is the one that would have
+# failed under the old rule and is the whole reason for the new one.
 # --------------------------------------------------------------------------
 
 
@@ -526,20 +533,153 @@ async def quiet_for(db, days, who=ALICE):
         await session.commit()
 
 
+async def unused_for(db, hours, who=ALICE, thing=None):
+    """Backdate both halves of the can's own clock.
+
+    Two stamps, because the sweep takes the later of them: `taken_at`
+    on the inventory row for when it reached these hands, and
+    `last_used_at` in `thing_uses` for the last time it was tipped over
+    anything. Backdating one and not the other tests nothing - the
+    other one is still `now` and still holds the can.
+
+    The `thing_uses` update is a no-op for a can that has only been
+    picked up, which is correct and is why it is not asserted on:
+    `take_from_room` writes no use row, so a fetched-and-never-used can
+    runs on `taken_at` alone.
+    """
+    thing = thing or world.WATERING_CAN
+    then = await database.server_now(GUILD_A) - timedelta(hours=hours)
+    async with db._require_session()() as session:
+        await session.execute(
+            update(database.PlayerInventory)
+            .where(
+                database.PlayerInventory.user_id == who,
+                database.PlayerInventory.guild_id == GUILD_A,
+                database.PlayerInventory.thing_id == thing,
+            )
+            .values(taken_at=then)
+        )
+        await session.execute(
+            update(database.ThingUse)
+            .where(
+                database.ThingUse.user_id == who,
+                database.ThingUse.guild_id == GUILD_A,
+                database.ThingUse.thing_id == thing,
+            )
+            .values(last_used_at=then)
+        )
+        await session.commit()
+
+
 async def floor_of(room) -> dict:
     return dict(await database.loose_here(GUILD_A, room))
 
 
-async def test_a_day_of_silence_sets_the_can_down(courtyard):
+async def test_six_hours_unused_sets_the_can_down(courtyard):
     db, *_ = courtyard
     await fetched(courtyard)
     await db.update_current_room(ALICE, GUILD_A, "LI")
-    await quiet_for(db, 2)
+    await unused_for(db, 7)
 
     await bot.idle_sweep.coro()
 
     assert await db.carried_of(ALICE, GUILD_A, world.WATERING_CAN) == 0
     assert "watering can" in await floor_of("LI")
+
+
+async def test_but_five_hours_is_not_enough(courtyard):
+    """The number is six and the sweep reads it from the file. A rule
+    that fired on any gap at all would pass the test above and take the
+    can off somebody who put it down for lunch."""
+    db, *_ = courtyard
+    await fetched(courtyard)
+    await unused_for(db, 5)
+
+    await bot.idle_sweep.coro()
+
+    assert await db.carried_of(ALICE, GUILD_A, world.WATERING_CAN) == 1
+
+
+async def test_a_busy_player_loses_it_anyway(courtyard):
+    """**The test the whole rule exists for.**
+
+    This player ran a command a second ago, so the ladder's clock says
+    they are here and playing and the old sweep left them alone. The
+    herbs do not care: the can has been in their hand unused for seven
+    hours either way, and it is the only one in the house.
+    """
+    db, *_ = courtyard
+    await fetched(courtyard)
+    await unused_for(db, 7)
+    await quiet_for(db, 0)
+
+    await bot.idle_sweep.coro()
+
+    assert await db.carried_of(ALICE, GUILD_A, world.WATERING_CAN) == 0
+
+
+async def test_and_using_it_restarts_the_clock(courtyard):
+    """Seven hours of carrying, then one watering, and it is theirs
+    again. `last_used_at` is the later stamp, so a player who is using
+    the can keeps it however long they have had it."""
+    db, *_ = courtyard
+    await fetched(courtyard)
+    await unused_for(db, 7)
+
+    await used(courtyard, "CO")
+    await bot.idle_sweep.coro()
+
+    assert await db.carried_of(ALICE, GUILD_A, world.WATERING_CAN) == 1
+
+
+async def test_putting_it_down_and_picking_it_up_restarts_the_clock(courtyard):
+    """**The `on_conflict` half of the inventory upsert.**
+
+    A player who has carried the can for seven hours, sets it down and
+    immediately picks it up again has a fresh can in their hands as far
+    as the sweep is concerned. The row already exists at that point, so
+    the stamp has to be written on the conflict branch as well as on
+    the insert - and a version that only wrote it on insert would pass
+    every other test in this section, because every one of them takes a
+    can the player has never held before.
+    """
+    db, *_ = courtyard
+    await fetched(courtyard)
+    await unused_for(db, 7)
+
+    await run(courtyard, bot.drop, "watering can", room="CO")
+    await fetched(courtyard)
+    await bot.idle_sweep.coro()
+
+    assert await db.carried_of(ALICE, GUILD_A, world.WATERING_CAN) == 1
+
+
+async def test_a_can_the_game_never_timed_stays_put(courtyard):
+    """A null `taken_at` is not idleness.
+
+    Every inventory row that predates the column has one, and the sweep
+    is explicit that it would rather leave a thing with a player it has
+    never timed than take it off them on no evidence. Worth a test
+    because the alternative - `NULL < cutoff` being false in SQL - is
+    true by accident rather than by the code saying so, and a later
+    `coalesce` would quietly reverse it.
+    """
+    db, *_ = courtyard
+    await fetched(courtyard)
+    async with db._require_session()() as session:
+        await session.execute(
+            update(database.PlayerInventory)
+            .where(
+                database.PlayerInventory.user_id == ALICE,
+                database.PlayerInventory.thing_id == world.WATERING_CAN,
+            )
+            .values(taken_at=None)
+        )
+        await session.commit()
+
+    await bot.idle_sweep.coro()
+
+    assert await db.carried_of(ALICE, GUILD_A, world.WATERING_CAN) == 1
 
 
 async def test_and_it_still_has_whatever_was_in_it(courtyard):
@@ -549,38 +689,69 @@ async def test_and_it_still_has_whatever_was_in_it(courtyard):
     exactly like a sweep that worked."""
     db, *_ = courtyard
     await carrying_a_full_can(courtyard)
-    await quiet_for(db, 2)
+    await unused_for(db, 7)
 
     await bot.idle_sweep.coro()
 
     assert await level() == world.CAN_FULL
 
 
-async def test_and_the_room_is_told_in_the_house_s_words(courtyard):
-    """**The generalised line, which is what the can needed.** The ladder
-    is dropped "out of exhaustion", a joke about its weight and no joke
-    at all about a watering can - so the ladder keeps
-    `ladder.exhausted.public` and everything else gets
-    `exhausted.public` with its own name filled in."""
+async def test_and_the_room_is_told_it_was_absent_minded(courtyard):
+    """**Not "gets tired", which is the other clock's sentence.**
+
+    `exhausted.public` is for a carrier who has gone quiet, and reads
+    true of somebody who went to bed holding a ladder. This player has
+    been busy all afternoon and simply stopped using the can, so the
+    room gets `idle_drop.public` and the word is "absent-mindedly".
+    Telling them they got tired would be the sweep describing a day
+    nobody had.
+    """
     db, *_ = courtyard
     await fetched(courtyard)
     await db.update_current_room(ALICE, GUILD_A, "LI")
-    await quiet_for(db, 2)
+    await unused_for(db, 7)
 
     await bot.idle_sweep.coro()
 
     said = "\u0020".join(thread(courtyard, "LI").posted)
-    assert "gets tired and sets the watering can down" in said
+    assert "absent-mindedly sets the watering can down" in said
+    assert "gets tired" not in said
 
 
-async def test_somebody_still_playing_keeps_it(courtyard):
+async def test_and_the_carrier_is_told_where_on_their_next_command(courtyard):
+    """**The half the room cannot deliver.** The public line goes where
+    the can landed, which is no use to the person who left it there -
+    they were not looking. So the sweep leaves word, and the next
+    command they run says which room."""
     db, *_ = courtyard
     await fetched(courtyard)
-    await quiet_for(db, 0)
-
+    await db.update_current_room(ALICE, GUILD_A, "LI")
+    await unused_for(db, 7)
     await bot.idle_sweep.coro()
 
-    assert await db.carried_of(ALICE, GUILD_A, world.WATERING_CAN) == 1
+    interaction = await run(courtyard, bot.look, room="LI")
+    await bot.on_app_command_completion(interaction, bot.look)
+
+    assert "watering can" in replies(interaction)
+    assert "Living Room" in replies(interaction)
+
+
+async def test_but_only_once(courtyard):
+    """The row is deleted as it is read, so the second command is quiet.
+    A notice that repeated would follow somebody around for the rest of
+    the evening."""
+    db, *_ = courtyard
+    await fetched(courtyard)
+    await unused_for(db, 7)
+    await bot.idle_sweep.coro()
+    first = await run(courtyard, bot.look, room="CO")
+    await bot.on_app_command_completion(first, bot.look)
+
+    second = await run(courtyard, bot.look, room="CO")
+    await bot.on_app_command_completion(second, bot.look)
+
+    assert "You realize" in replies(first)
+    assert "You realize" not in replies(second)
 
 
 # --------------------------------------------------------------------------
@@ -702,7 +873,7 @@ async def test_and_the_sweep_says_where_and_how_much(courtyard):
     db, *_ = courtyard
     await carrying_a_full_can(courtyard)
     await db.update_current_room(ALICE, GUILD_A, "LI")
-    await quiet_for(db, 2)
+    await unused_for(db, 7)
 
     await bot.idle_sweep.coro()
 
@@ -710,4 +881,4 @@ async def test_and_the_sweep_says_where_and_how_much(courtyard):
         telemetry.ABANDONED, actor=database.SYSTEM
     )
     assert thing_id == world.WATERING_CAN
-    assert detail == "room=LI level=full"
+    assert detail == "room=LI level=full rule=unused"

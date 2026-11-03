@@ -722,6 +722,41 @@ async def test_a_player_with_no_stamp_at_all_keeps_it(house):
     assert await database.carried_of(ALICE, GUILD_A, world.LADDER) == 1
 
 
+async def test_the_ladder_is_not_on_the_things_own_clock(house):
+    """**The other side of the split, and the one that pins it.**
+
+    The can and the rattle went onto `idle_drop_hours` on 2 November -
+    six hours unused, whether or not their carrier is busy - and the
+    ladder deliberately did not. Climbing sets it down, so somebody
+    holding one who has not climbed is on their way to the stairs, and
+    taking it off them mid-errand would be the sweep interrupting the
+    job it exists to protect.
+
+    Seven hours carried, never used, player active a second ago. Under
+    the thing's clock that is gone; under the ladder's it is theirs.
+    Adding `ladder` to the column, or dropping the `SET_DOWN_WHEN_IDLE`
+    guard that skips things with their own clock, fails here.
+    """
+    db, *_ = house
+    await carry_it(house)
+    await quiet_for(db, 0)
+    then = await database.server_now(GUILD_A) - timedelta(hours=7)
+    async with db._require_session()() as session:
+        await session.execute(
+            update(database.PlayerInventory)
+            .where(
+                database.PlayerInventory.user_id == ALICE,
+                database.PlayerInventory.thing_id == world.LADDER,
+            )
+            .values(taken_at=then)
+        )
+        await session.commit()
+
+    await bot.idle_sweep.coro()
+
+    assert await database.carried_of(ALICE, GUILD_A, world.LADDER) == 1
+
+
 async def test_a_ladder_nobody_is_carrying_is_left_alone(house):
     """It is standing in the Courtyard where the loader put it, and the
     sweep is about shoulders rather than about floors."""
