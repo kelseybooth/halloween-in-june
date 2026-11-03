@@ -552,6 +552,36 @@ async def test_the_ceiling_reaches_the_toys(started):
     assert {"feather_wand", "crinkle_ball"} <= visible
 
 
+async def test_the_ceiling_reaches_the_upstairs(started):
+    """**The one the two guards above go quiet for.**
+
+    `test_the_ceiling_is_not_below_the_commands` reads the command
+    table, and drops 20 to 50 add rooms and no verbs, so it says
+    nothing about any of them. The walk above it asks only for drop
+    10's house. That left the ceiling free to sit anywhere from 20 to
+    50 with nothing failing - which is the exact drift that shipped
+    twice before.
+
+    So this names four things that exist only in drop 40, one per
+    room it opens plus the bowl that makes the Hallway worth standing
+    in. Lowering the ceiling back below 40 fails here, and so does a
+    release that raises it to 40 before the rooms are in the files.
+
+    It does not test the way *up*. The staircase is a server state and
+    ninety planks, and is deliberately not the ceiling's business -
+    `test_the_ladder` and the staircase's own tests own that.
+    """
+    await start(started)
+    for _ in range(resolve.LAST_PLAYABLE_DROP):
+        await advance(started)
+
+    visible = await resolve.visible_thing_ids(GUILD_A)
+
+    assert {
+        "crowbar", "music_box", "baby_monitor", "cat_bowl_hallway",
+    } <= visible
+
+
 async def test_advancing_past_the_built_drops_still_refuses(started):
     """The ceiling is still a ceiling. Drop 10 is the house and is built;
     drop 20 is the rest of the Entryway and is not."""

@@ -71,7 +71,19 @@ NO_GAME = None
 # what a server on 30 finds is content that works and three mechanics
 # that are not there yet: the ladder climbs with its default line, the
 # trash can holds nothing, and the last eighteen planks still refuse.
-LAST_PLAYABLE_DROP = 31
+#
+# **Drop 40 raises it so beta can reach the upstairs, and the
+# staircase is what still holds the line.** The ceiling is not the
+# gate on the Upstairs Hallway: `EH` has no `requires` and no
+# `present_when`, and the Hallway is `open_at_launch`, so what refuses
+# a player with whole steps missing is the `stairs_repaired` state and
+# ninety planks. Moving the ceiling to 40 makes drop 40's content
+# arrive; climbing to it is still the collective repair, or a test
+# server lowering `staircase_planks`. Checked before this moved: the
+# drawer unjams, the music box plays, the five stashes yield and all
+# six of drop 40's public achievements have their triggers - 40 is
+# built, not promised.
+LAST_PLAYABLE_DROP = 40
 
 
 class UnknownDrop(Exception):
