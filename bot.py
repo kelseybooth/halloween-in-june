@@ -907,20 +907,23 @@ IDLE_SWEEP_MINUTES = 60
 
 @tasks.loop(minutes=IDLE_SWEEP_MINUTES)
 async def idle_sweep() -> None:
-    """Set down anything one-of-a-kind whose carrier has gone quiet.
+    """Set down anything one-of-a-kind that its carrier has forgotten.
 
     **The only sweep that takes something off a player**, which is why
-    it covers two named things rather than being a rule about
-    carrying. Everything else a player holds is theirs, or
-    inexhaustible, or both, and nobody is stalled by a forgotten
-    burrito; `world.SET_DOWN_WHEN_IDLE` says which two and why.
+    it is three named things rather than a rule about carrying.
+    Everything else a player holds is theirs, or inexhaustible, or
+    both, and nobody is stalled by a forgotten burrito.
 
-    It was the ladder's alone until the watering can became takeable,
-    and the two are not equally rare. Climbing sets the ladder down,
-    so it only ever reaches somebody who picked one up and stopped
-    playing without using it. Watering does not set the can down, so
-    the can reaches this the ordinary way: somebody carried it off and
-    went to bed.
+    **Two clocks since 2 November, and the hourly tick serves both.**
+    The ladder goes to a carrier who has run no command for a day; the
+    can and the rattle go to a carrier who is still playing and has not
+    used the thing for six hours. `world.SET_DOWN_WHEN_IDLE` argues
+    which is which, and `world.set_down_forgotten_things` runs them.
+
+    An hour of granularity on a six-hour timer means a rattle can sit
+    for up to seven, which is the right trade: the number is a nudge
+    towards putting things back, not a deadline anybody is counting
+    down.
     """
     guild_ids = [guild.id for guild in bot.guilds]
     if not guild_ids:
@@ -932,13 +935,57 @@ async def idle_sweep() -> None:
         log.exception("Idle sweep failed")
         return
 
-    for guild_id, user_id, room_id, thing_id in moved:
-        await _announce_exhaustion(guild_id, user_id, room_id, thing_id)
+    for set_down in moved:
+        await _announce_exhaustion(set_down)
 
 
-async def _announce_exhaustion(
-    guild_id: int, user_id: int, room_id: str, thing_id: str
-) -> None:
+async def _mention_idle_drops(interaction: discord.Interaction) -> None:
+    """Tell a player, once, about anything the sweep took off them.
+
+    **The other half of the sweep, and the half it owes the carrier.**
+    The public line goes to the room where the thing landed, which is
+    exactly right for everybody standing in it and no use at all to the
+    person who left it there - they were, by definition, not looking.
+    Without this they come back to a game that has quietly emptied one
+    hand and said nothing, and the rattle is wherever they last stood,
+    which they may well not remember.
+
+    Runs off the completion hook rather than out of any one command,
+    because the news does not belong to a verb: the player should hear
+    it on their next anything, including `/stats`.
+
+    **Read-and-deleted before it is sent, which can lose the line.** The
+    alternative is to send first and delete after, and that duplicates
+    it every time two commands finish together - both read the row, both
+    say it, both delete it. A duplicate is a bug every busy player sees
+    and a lost line is a cosmetic failure on a Discord error, which is
+    the same trade `_announce_exhaustion` already makes out loud.
+
+    Plural because it can be: a player who put down the can and the
+    rattle and then went away loses both to one sweep, and gets one
+    sentence each in a stable order.
+    """
+    if interaction.guild_id is None:
+        return
+    notices = await database.take_idle_drop_notices(
+        interaction.guild_id, interaction.user.id
+    )
+    for thing_id, room_id in notices:
+        row = await phrasing.thing_row(thing_id)
+        line = await phrasing.default_say(
+            f"{thing_id}.idle_drop.private",
+            name=row.name if row else thing_id,
+            room=await resolve.room_name(room_id),
+        ) or await phrasing.default_say(
+            "idle_drop.private",
+            name=row.name if row else thing_id,
+            room=await resolve.room_name(room_id),
+        )
+        if line:
+            await interaction.followup.send(line, ephemeral=True)
+
+
+async def _announce_exhaustion(set_down: world.SetDown) -> None:
     """Tell the room something has just been put down in it.
 
     Posted where the thing landed, which is where its carrier was
@@ -949,30 +996,39 @@ async def _announce_exhaustion(
     **The thing's own line first, the house's behind it.** The ladder
     has words of its own - it is dropped "out of exhaustion", which is
     a joke about its weight and no joke at all about a watering can -
-    so `<thing_id>.exhausted.public` wins where a writer has written
-    one and `exhausted.public` fills in `{name}` for everything else.
-    The same shape as every other refusal in the game, arrived at here
-    the day the sweep stopped being about one object.
+    so `<thing_id>.<key>` wins where a writer has written one and the
+    bare key fills in `{name}` for everything else. The same shape as
+    every other refusal in the game, arrived at here the day the sweep
+    stopped being about one object.
+
+    **Two keys, because the two clocks are two different sentences.**
+    A carrier who has gone quiet got tired: `exhausted.public`. A
+    carrier who is still playing and has not touched the thing for six
+    hours did not get tired, they forgot - `idle_drop.public`, and
+    "absent-mindedly" is the whole difference. Telling a player who has
+    been busy all afternoon that they got tired would be the sweep
+    describing a day nobody had.
 
     Cosmetic, like every other public line. The thing is already on
     the floor by the time this runs, so a channel that will not take the
     sentence must not undo the move.
     """
+    guild_id, user_id = set_down.guild_id, set_down.user_id
+    room_id, thing_id = set_down.room_id, set_down.thing_id
     guild = bot.get_guild(guild_id)
     if guild is None:
         return
     try:
         who = guild.get_member(user_id)
         row = await phrasing.thing_row(thing_id)
+        key = "idle_drop.public" if set_down.unused else "exhausted.public"
+        tokens = {
+            "player": who.display_name if who else "Somebody",
+            "name": row.name if row else thing_id,
+        }
         line = await phrasing.default_say(
-            f"{thing_id}.exhausted.public",
-            player=who.display_name if who else "Somebody",
-            name=row.name if row else thing_id,
-        ) or await phrasing.default_say(
-            "exhausted.public",
-            player=who.display_name if who else "Somebody",
-            name=row.name if row else thing_id,
-        )
+            f"{thing_id}.{key}", **tokens
+        ) or await phrasing.default_say(key, **tokens)
         if not line:
             return
         channel = await _game_channel(guild)
@@ -7728,6 +7784,14 @@ async def on_app_command_completion(
         await database.stamp_command(interaction.user.id, interaction.guild_id)
     except SQLAlchemyError:
         log.exception("Could not stamp a command in guild %s", interaction.guild_id)
+    try:
+        await _mention_idle_drops(interaction)
+    except (discord.HTTPException, SQLAlchemyError):
+        log.warning(
+            "Could not mention an idle drop in guild %s",
+            interaction.guild_id,
+            exc_info=True,
+        )
     try:
         await _fire(
             achievements.Context(

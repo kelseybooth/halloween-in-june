@@ -109,7 +109,14 @@ def test_the_shipped_content_parses():
     # watering, two of filling, two for a room with nothing in it to
     # water, the refusal for a hand that is holding it, and the line
     # the room sees when somebody who went quiet sets a thing down.
-    assert len(c.defaults) == 163
+    #
+    # And two more the same day, the second idle rule's: a thing goes
+    # down absent-mindedly rather than out of tiredness when its
+    # carrier is still playing and has just stopped using it, and the
+    # carrier is told where on their next command. Separate keys from
+    # `exhausted.public` because the two clocks describe two different
+    # afternoons - see `world.SET_DOWN_WHEN_IDLE`.
+    assert len(c.defaults) == 165
     # Ten since 31 October: the ground floor arrives in two halves, and
     # 25 sits below the ceiling rather than above it, which is why
     # nothing else in the suite noticed.
@@ -893,6 +900,47 @@ def test_two_exits_in_a_room_may_share_a_word():
     assert "doorway" in entryway["EL"].aliases
     assert "doorway" in entryway["ED"].aliases
     assert content.validate(parsed) == []
+
+
+def test_an_idle_clock_on_something_nobody_can_pick_up_is_an_error(shipped):
+    """A timer on a fixture measures nothing and says nothing.
+
+    `idle_drop_hours` is how long a *carried* thing may go unused, so a
+    row that is not takeable can never start the clock. Nothing raises:
+    the sweep asks who is carrying the oak tree, gets nobody, and the
+    cell sits in the file looking like a rule somebody wrote.
+    """
+    broken = replace_thing(shipped, "pumpkins", idle_drop_hours=6)
+
+    assert problems_matching(broken, "idle_drop_hours but is not takeable")
+
+
+def test_and_a_timer_of_no_hours_is_too(shipped):
+    """Zero would empty a hand in the same breath it filled it, which is
+    not a setting anybody wants - and is what a blank cell already says
+    properly."""
+    broken = replace_thing(shipped, "rattle", idle_drop_hours=0)
+
+    assert problems_matching(broken, "idle_drop_hours=0")
+
+
+def test_the_two_things_on_their_own_clock_are_the_two_we_meant(shipped):
+    """**Read off the file rather than typed here**, so this is a check
+    on the content and not a copy of it.
+
+    The column is the whole mechanism for the second idle rule, and a
+    stray `6` on a third row would quietly start taking something off
+    players with nothing announcing it. Both members are one-of-a-kind
+    things somebody else needs, which is the test
+    `world.SET_DOWN_WHEN_IDLE` applies to its own members.
+    """
+    on_a_clock = {
+        t.thing_id: t.idle_drop_hours
+        for t in shipped.things
+        if t.idle_drop_hours is not None
+    }
+
+    assert on_a_clock == {"watering_can": 6, "rattle": 6}
 
 
 def test_an_exit_sharing_a_word_with_an_object_is_still_an_error():
