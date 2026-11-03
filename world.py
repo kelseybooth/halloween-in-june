@@ -907,12 +907,45 @@ async def set_down_forgotten_things(guild_ids: "list[int]") -> list[SetDown]:
     The guard means the second rule never asks about something the
     first one has dealt with, and it documents that a thing belongs to
     one clock. Nothing is in both lists today.
+
+    **It starts clocks as well as reading them, since 3 November.** A
+    carried row whose `taken_at` is null was exempt from the second rule
+    for ever rather than for a while, which on the beta server meant the
+    only two things with their own clock were both frozen in one pair of
+    hands and the rule had never fired once in production. The sweep now
+    stamps what it finds unstamped and judges it on the next tick; see
+    `database.start_the_clock_on_unstamped_carries`.
     """
     moved: list[SetDown] = []
     on_their_own_clock = await database.things_with_an_idle_clock()
 
     for guild_id in guild_ids:
         now = await database.server_now(guild_id)
+
+        # **Start the clock before reading it.** A carried row with no
+        # `taken_at` is invisible to the rule below for ever, because the
+        # cutoff is compared against NULL and matches nothing - so the
+        # sweep stamps what it finds unstamped and leaves the thing where
+        # it is. The stamp is `now`, which is never below a cutoff
+        # derived from `now`, so nothing is stamped and swept in one
+        # tick: the carrier gets one full timer, then the ordinary rule.
+        #
+        # One query per guild rather than one per thing, and ahead of
+        # both rules so the order reads "repair the evidence, then judge
+        # it" - though only the second rule has evidence to repair. The
+        # ladder's measures the player through `last_command_at`, which
+        # every command writes, so its null case mends itself the next
+        # time anybody types anything.
+        for carrier, untimed in await database.start_the_clock_on_unstamped_carries(
+            guild_id, list(on_their_own_clock), now
+        ):
+            log.info(
+                "Idle clock started on %s held by user %s in guild %s: the "
+                "row had no taken_at, so it was never going to be swept",
+                untimed,
+                carrier,
+                guild_id,
+            )
 
         quiet_since = now - timedelta(hours=IDLE_HOURS)
         for thing_id in SET_DOWN_WHEN_IDLE:
