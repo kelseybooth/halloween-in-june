@@ -160,7 +160,7 @@ async def floor_planks(hall, count=UPPER_AT):
     of clock here.
     """
     for _ in range(count):
-        await database.record_use(ALICE, GUILD_A, world.LUMBER)
+        await database.record_use(ALICE, GUILD_A, world.LUMBER, room_id=None)
     await world.check_staircase(GUILD_A)
 
 
@@ -266,7 +266,7 @@ async def test_the_ladder_is_asked_about_before_the_clock(hall):
     wait, and telling them the wrong one sends them away for a day."""
     await floor_planks(hall)
     await plank(hall, who=BOB)  # refused, so nothing is on cooldown
-    await database.record_use(BOB, GUILD_A, world.LUMBER)
+    await database.record_use(BOB, GUILD_A, world.LUMBER, room_id=None)
 
     refusal = await plank(hall, who=BOB)
 

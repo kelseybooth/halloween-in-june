@@ -143,7 +143,7 @@ async def test_lowering_the_plank_target_finishes_a_stalled_staircase(server):
     import states
     import world
 
-    await database.record_use(ALICE, GUILD_A, "lumber")
+    await database.record_use(ALICE, GUILD_A, "lumber", room_id=None)
     assert not await states.has(GUILD_A, ALICE, world.STAIRS_REPAIRED)
 
     interaction = await configure("staircase_planks", 1)
@@ -157,7 +157,7 @@ async def test_raising_the_target_does_not_unrepair_it(server):
     import states
     import world
 
-    await database.record_use(ALICE, GUILD_A, "lumber")
+    await database.record_use(ALICE, GUILD_A, "lumber", room_id=None)
     await configure("staircase_planks", 1)
     await configure("staircase_planks", 50)
 

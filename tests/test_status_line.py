@@ -244,7 +244,7 @@ async def test_a_server_with_no_game_is_not_hungry_either(server):
 async def test_feeding_her_settles_it_for_eight_hours(server):
     db, *_ = server
     await feeding_time(db)
-    await db.record_use(ALICE, GUILD_A, "cat_food_salmon")
+    await db.record_use(ALICE, GUILD_A, "cat_food_salmon", room_id=None)
 
     assert not await bot._is_hungry(GUILD_A, ALICE)
 
@@ -252,7 +252,7 @@ async def test_feeding_her_settles_it_for_eight_hours(server):
 async def test_and_she_is_hungry_again_afterwards(server):
     db, *_ = server
     await feeding_time(db)
-    await db.record_use(ALICE, GUILD_A, "cat_food_salmon")
+    await db.record_use(ALICE, GUILD_A, "cat_food_salmon", room_id=None)
 
     await db.set_setting(GUILD_A, database.CLOCK_KEY, 1)
 
@@ -264,7 +264,7 @@ async def test_any_can_counts(server):
     over the rows rather than a column on the player."""
     db, *_ = server
     await feeding_time(db)
-    await db.record_use(ALICE, GUILD_A, "cat_food_gourmet")
+    await db.record_use(ALICE, GUILD_A, "cat_food_gourmet", room_id=None)
 
     assert not await bot._is_hungry(GUILD_A, ALICE)
 
@@ -272,7 +272,7 @@ async def test_any_can_counts(server):
 async def test_using_something_that_is_not_food_does_not_feed_her(server):
     db, *_ = server
     await feeding_time(db)
-    await db.record_use(ALICE, GUILD_A, world.CAT_BED)
+    await db.record_use(ALICE, GUILD_A, world.CAT_BED, room_id=None)
 
     assert await bot._is_hungry(GUILD_A, ALICE)
 
@@ -281,7 +281,7 @@ async def test_hunger_is_per_player(server):
     db, *_ = server
     await feeding_time(db)
     await db.ensure_user_exists(BOB, GUILD_A)
-    await db.record_use(ALICE, GUILD_A, "cat_food_tuna")
+    await db.record_use(ALICE, GUILD_A, "cat_food_tuna", room_id=None)
 
     assert not await bot._is_hungry(GUILD_A, ALICE)
     assert await bot._is_hungry(GUILD_A, BOB)

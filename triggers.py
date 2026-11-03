@@ -71,6 +71,7 @@ PASTA_POT = "pasta_pot"
 NACHO_CHIPS = "nacho_chips"
 PLATES = "plates"
 RATTLE = "rattle"
+MUSIC_BOX = "music_box"
 
 # How recently somebody has to have run a command to count as an
 # audience. Not a config value, unlike how many of them there are: the
@@ -78,6 +79,13 @@ RATTLE = "rattle"
 # server, and ten minutes is a fact about how long somebody stays in a
 # room after typing something.
 AUDIENCE_MINUTES = 10
+
+# How long after somebody else's music box a rattle still counts as
+# keeping time with it. Not a config value for the same reason
+# `AUDIENCE_MINUTES` is not: how many players a server can muster varies
+# and what counts as playing *along* does not. A minute is already
+# generous for a thing the spec describes as accompaniment.
+ACCOMPANIST_SECONDS = 60
 FROZEN_BURRITO = "frozen_burrito"
 GRAPHITE = "graphite_powder"
 # A piece of the wasp nest, knocked down by climbing the ladder on the
@@ -358,6 +366,43 @@ async def captive_audience(context: Context) -> bool:
         except_user=context.user_id,
     )
     return audience >= wanted
+
+
+async def accompanist(context: Context) -> bool:
+    """A rattle shaken within a minute of somebody else's music box.
+
+    **It listens on the rattle, not the music box.** Either would be a
+    legible reading of "kept time while it played", and only this one is
+    earnable by the person who did it: the rattler is the accompanist,
+    and firing on the music box would hand the achievement to whoever
+    wound it up for having been played *at*. It also means a room where
+    one player winds the box and three shake rattles earns three, which
+    is the right answer.
+
+    **`last_used_room` is read, not `current_room`.** The other player
+    may have wandered off between the two uses, and a check on where
+    they are now would miss a performance that happened or invent one
+    that did not. The pair of columns `record_use` writes together say
+    where that use was, which is the question.
+
+    Sixty seconds is `ACCOMPANIST_SECONDS`, measured off the server
+    clock for the same reason *Captive Audience* measures its ten
+    minutes there: `last_used_at` is stamped from `server_now`, a QA
+    offset moves it, and a window built from the wall clock would be
+    comparing two different times.
+    """
+    if context.thing_id != RATTLE or context.room_id is None:
+        return False
+    if context.user_id is None:
+        return False
+    now = context.now or await database.server_now(context.guild_id)
+    return await database.somebody_else_just_used(
+        context.guild_id,
+        MUSIC_BOX,
+        context.room_id,
+        now - timedelta(seconds=ACCOMPANIST_SECONDS),
+        except_user=context.user_id,
+    )
 
 
 async def bin_looking_for_you(context: Context) -> bool:
@@ -1104,10 +1149,18 @@ def register_all() -> None:
     # player taste it, so the achievement needs no condition beyond having
     # used them: `/use plate` and `/use plates` both resolve to this thing.
     add("clean_plate_club", "on_use", _on_thing({PLATES}))
-    # The one achievement in the file that depends on other people being
-    # in the room at the time, which is why it is a predicate of its own
-    # rather than a thing id and a count.
+    # These depend on other people, which is why each is a predicate of
+    # its own rather than a thing id and a count. They ask different
+    # things of them: *Captive Audience* wants an audience present and
+    # awake, *Accompanist* wants one of them to have played the music box
+    # here in the last minute. Both listen on the rattle.
+    #
+    # Deliberately not "the two that depend on other people", which is
+    # what this said first. A sentence counting the cases is falsified by
+    # the next one, and the person adding it is the one person who will
+    # not grep for a sentence saying how many there are.
     add("captive_audience", "on_use", captive_audience)
+    add("accompanist", "on_use", accompanist)
     add("getting_into_the_spirit", "on_use", _blocked("the ghost system"))
     add("ghostbuster", "on_use", _blocked("the ghost system"))
     add("breaking_into_the_halloween_candy", "on_use", _used(CANDY))

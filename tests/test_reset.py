@@ -52,7 +52,7 @@ async def play(db, guild_id):
     await db.start_game(ALICE, guild_id, "EN", await resolve.rooms_open_at_launch())
     await db.increment_pet_count(ALICE, guild_id)
     await db.take_from_source(ALICE, guild_id, "herbs")
-    await db.record_use(ALICE, guild_id, "herbs")
+    await db.record_use(ALICE, guild_id, "herbs", room_id=None)
     await states.set_player_state(guild_id, ALICE, "library_found")
     await states.set_server_state(guild_id, "stairs_repaired")
     await db.award_player_achievement(guild_id, ALICE, "gourd_job")
@@ -233,7 +233,12 @@ async def test_the_content_is_still_loaded(two_games):
     # Forty-six on 2 November, with the two drop 50 trails.
     # Forty-seven with *Captive Audience*, a drop 30 row, so it has
     # arrived for a guild this fixture loads at the last drop.
-    assert len(await resolve.achievements(GUILD_A)) == 47
+    # Forty-eight with *Accompanist*, which is a drop 40 row and so is
+    # the first one here that depends on the ceiling having moved to 40.
+    # A guild at the last drop reaches it; one held below 40 would not,
+    # which is the only reason this number and `test_triggers`'s
+    # earnable count are not the same kind of number.
+    assert len(await resolve.achievements(GUILD_A)) == 48
 
 
 async def test_the_art_is_kept_by_default(two_games):

@@ -244,7 +244,7 @@ async def test_a_transform_is_one_way(house):
 
 
 async def test_a_first_use_reports_no_previous_time(house):
-    record = await database.record_use(ALICE, GUILD_A, "lumber")
+    record = await database.record_use(ALICE, GUILD_A, "lumber", room_id=None)
 
     assert record.last_used_at is None
     assert record.use_count == 1
@@ -252,40 +252,40 @@ async def test_a_first_use_reports_no_previous_time(house):
 
 async def test_a_second_use_reports_the_first_ones_time(house):
     """The cooldown needs the value from before this use overwrote it."""
-    first = await database.record_use(ALICE, GUILD_A, "lumber")
+    first = await database.record_use(ALICE, GUILD_A, "lumber", room_id=None)
     assert first.last_used_at is None
 
-    second = await database.record_use(ALICE, GUILD_A, "lumber")
+    second = await database.record_use(ALICE, GUILD_A, "lumber", room_id=None)
     assert second.last_used_at is not None
     assert second.use_count == 2
 
 
 async def test_use_count_increments_exactly_once_per_use(house):
     for expected in range(1, 11):
-        assert (await database.record_use(ALICE, GUILD_A, "burrito")).use_count == expected
+        assert (await database.record_use(ALICE, GUILD_A, "burrito", room_id=None)).use_count == expected
 
 
 async def test_uses_are_counted_per_thing(house):
-    await database.record_use(ALICE, GUILD_A, "lumber")
-    assert (await database.record_use(ALICE, GUILD_A, "burrito")).use_count == 1
+    await database.record_use(ALICE, GUILD_A, "lumber", room_id=None)
+    assert (await database.record_use(ALICE, GUILD_A, "burrito", room_id=None)).use_count == 1
 
 
 async def test_uses_are_counted_per_player(house):
-    await database.record_use(ALICE, GUILD_A, "lumber")
-    assert (await database.record_use(BOB, GUILD_A, "lumber")).use_count == 1
+    await database.record_use(ALICE, GUILD_A, "lumber", room_id=None)
+    assert (await database.record_use(BOB, GUILD_A, "lumber", room_id=None)).use_count == 1
 
 
 async def test_uses_are_counted_per_server(db):
     await db.ensure_user_exists(ALICE, GUILD_A)
     await db.ensure_user_exists(ALICE, GUILD_B)
-    await database.record_use(ALICE, GUILD_A, "lumber")
+    await database.record_use(ALICE, GUILD_A, "lumber", room_id=None)
 
-    assert (await database.record_use(ALICE, GUILD_B, "lumber")).use_count == 1
+    assert (await database.record_use(ALICE, GUILD_B, "lumber", room_id=None)).use_count == 1
 
 
 async def test_last_used_can_be_read_without_recording_a_use(house):
     assert await database.last_used(ALICE, GUILD_A, "lumber") is None
-    await database.record_use(ALICE, GUILD_A, "lumber")
+    await database.record_use(ALICE, GUILD_A, "lumber", room_id=None)
 
     stamped = await database.last_used(ALICE, GUILD_A, "lumber")
     assert stamped is not None
@@ -299,16 +299,16 @@ async def test_last_used_can_be_read_without_recording_a_use(house):
 
 async def test_the_staircase_counts_players_not_uses(house):
     """Somebody using lumber twice still contributes one plank."""
-    await database.record_use(ALICE, GUILD_A, "lumber")
-    await database.record_use(ALICE, GUILD_A, "lumber")
-    await database.record_use(ALICE, GUILD_A, "lumber")
+    await database.record_use(ALICE, GUILD_A, "lumber", room_id=None)
+    await database.record_use(ALICE, GUILD_A, "lumber", room_id=None)
+    await database.record_use(ALICE, GUILD_A, "lumber", room_id=None)
 
     assert await database.distinct_users_of(GUILD_A, "lumber") == 1
 
 
 async def test_each_new_player_adds_one(house):
-    await database.record_use(ALICE, GUILD_A, "lumber")
-    await database.record_use(BOB, GUILD_A, "lumber")
+    await database.record_use(ALICE, GUILD_A, "lumber", room_id=None)
+    await database.record_use(BOB, GUILD_A, "lumber", room_id=None)
 
     assert await database.distinct_users_of(GUILD_A, "lumber") == 2
 
@@ -316,7 +316,7 @@ async def test_each_new_player_adds_one(house):
 async def test_the_count_is_per_server(db):
     await db.ensure_user_exists(ALICE, GUILD_A)
     await db.ensure_user_exists(ALICE, GUILD_B)
-    await database.record_use(ALICE, GUILD_A, "lumber")
+    await database.record_use(ALICE, GUILD_A, "lumber", room_id=None)
 
     assert await database.distinct_users_of(GUILD_B, "lumber") == 0
 
