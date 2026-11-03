@@ -943,6 +943,85 @@ def test_the_two_things_on_their_own_clock_are_the_two_we_meant(shipped):
     assert on_a_clock == {"watering_can": 6, "rattle": 6}
 
 
+@pytest.mark.parametrize("thing_id", ["lumber", "rattle", "music_box"])
+def test_a_public_use_in_the_second_person_is_an_error(thing_id):
+    """**All three, because for two releases only the plank was checked.**
+
+    The rattle and the music box joined the public set in
+    `world.after_use` and nobody added them to `PUBLIC_USE_THINGS`, so
+    their `use` cells could have been rewritten as "you shake it" and
+    posted to a room full of people with nothing complaining. They
+    happened to carry `{player}` throughout, so it never cost a
+    release - but the guard was looking at one id while three needed it.
+
+    Parametrized rather than written once against the plank, so adding
+    a fourth public thing and forgetting this file fails here.
+    """
+    parsed = content.load_files()
+    parsed.thing_text = [
+        replace(row, text={**row.text, "use": "You do the thing."})
+        if row.entity_id == thing_id and row.text.get("use")
+        else row
+        for row in parsed.thing_text
+    ]
+
+    problems = content.validate(parsed)
+
+    assert any("name who acted" in p and thing_id in p for p in problems)
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "watering_can.water.default",
+        "watering_can.water.full",
+        "watering_can.water.partly_full",
+        "watering_can.fill",
+    ],
+)
+def test_a_public_default_in_the_second_person_is_an_error(key):
+    """The can's four, which the check above cannot see.
+
+    They are posted to the room like the plank's line, but they live in
+    `defaults.tsv` rather than in a `use` cell - the can's line depends
+    on the room *and* the level, which no `thing_text` key expresses. So
+    they were a fourth way to write "you" into a sentence a whole room
+    reads, until this.
+    """
+    parsed = content.load_files()
+    parsed.defaults = {**parsed.defaults, key: "You water the herbs."}
+
+    problems = content.validate(parsed)
+
+    assert any("posted to the room" in p and key in p for p in problems)
+
+
+def test_the_two_public_copy_sets_are_what_world_posts():
+    """**A tripwire, and worth saying that it is not a derivation.**
+
+    Which uses are public is decided in `world` - `_place_a_plank`,
+    `after_use` for the rattle and the music box, and
+    `_use_the_watering_can` for the fill and the three pours - and
+    nothing in the content files says so. These two sets are that
+    knowledge copied into `content`, and a copy is exactly what went
+    stale before: the rattle became public in one file and stayed
+    unguarded in the other for two releases.
+
+    This cannot check `world` for itself without importing it, which
+    `content` deliberately does not do. What it can do is fail when
+    somebody edits either set, so the edit is a decision rather than a
+    drift - and point at the three functions to check against. If this
+    test fails, the question to ask is whether `world` agrees.
+    """
+    assert content.PUBLIC_USE_THINGS == {"lumber", "rattle", "music_box"}
+    assert content.PUBLIC_USE_DEFAULTS == {
+        "watering_can.water.default",
+        "watering_can.water.full",
+        "watering_can.water.partly_full",
+        "watering_can.fill",
+    }
+
+
 def test_an_exit_sharing_a_word_with_an_object_is_still_an_error():
     """The case that is almost always a slip rather than a choice."""
     from dataclasses import replace

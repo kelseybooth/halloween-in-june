@@ -916,6 +916,7 @@ def validate(content: Content) -> list[str]:
     problems += _check_visibility_gates(content)
     problems += _check_public_lines_name_the_player(content)
     problems += _check_a_public_use_names_the_player(content)
+    problems += _check_a_public_default_names_the_player(content)
     problems += _check_other_lines_are_not_second_person(content)
     problems += _check_emoji_groups(content)
     problems += _check_craving_reactions(content)
@@ -2434,11 +2435,44 @@ def _bolded_in(text: str) -> list[str]:
 # have to name whoever acted.
 PUBLIC_VERBS = ("take", "drop")
 
-# And the one `use` that is posted rather than sent. The staircase is
-# collective, so the whole room reads the line instead of the player
-# who laid the board - which `world` decides, not the files, so the
-# id is named here the way `world` names it there.
-PUBLIC_USE_THINGS = frozenset({"lumber"})
+# The `use` lines that are posted to the room rather than sent to the
+# player, so they have to name who acted. `world` decides which, not
+# the files, so the ids are named here the way `world` names them
+# there - `_place_a_plank` and `after_use`.
+#
+# **This said "the one `use`" and listed only the plank, and was wrong
+# for two releases.** The rattle and the music box joined the public
+# set in `world.after_use` and nobody added them here, so from the
+# release that made them public until 2 November their four `use`
+# cells could have been rewritten in the second person and nothing
+# would have caught it - the exact failure this check exists to
+# prevent, two rows along from where it was looking. All four happened
+# to carry `{player}` already, so the hole never cost a release.
+#
+# Written as a list rather than a sentence about one thing, because the
+# sentence is what broke: the person adding the second case is the one
+# person who will not grep for a comment claiming there is only one.
+PUBLIC_USE_THINGS = frozenset({"lumber", "rattle", "music_box"})
+
+# And the public lines that live in `defaults.tsv` instead of in a
+# thing's own `use` cell. The watering can's four: its line depends on
+# the room *and* the level, which no `thing_text` key can express, so
+# `Effect.say` names a default instead - see `world.Effect`.
+#
+# Named one by one rather than taken from the `.public` suffix, because
+# the suffix does not mean what it looks like. `delivery.arrived.public`
+# is posted to a room and reads "when you look, the shipping box is a
+# little fuller", which is correct: it addresses everybody present
+# collectively rather than telling one person they did something.
+# A blanket rule would fail it and force a rewrite nobody asked for.
+PUBLIC_USE_DEFAULTS = frozenset(
+    {
+        "watering_can.water.default",
+        "watering_can.water.full",
+        "watering_can.water.partly_full",
+        "watering_can.fill",
+    }
+)
 
 
 def _check_public_lines_name_the_player(content: Content) -> list[str]:
@@ -2469,28 +2503,52 @@ def _check_public_lines_name_the_player(content: Content) -> list[str]:
 
 
 def _check_a_public_use_names_the_player(content: Content) -> list[str]:
-    """The staircase's `use` text has the room for its audience.
+    """A `use` text with the room for its audience has to say who acted.
 
-    **The third text in the game that is read by somebody other than the
-    player who typed the command**, and the newest: the plank's line
-    stopped being sent privately on 30 October and is now posted to the
-    room and nowhere else. The check above has held `take` and `drop` to
-    this since the release where all thirty-two of them said "you" to a
-    room full of people; a `use` in that voice would do the same thing
-    to everybody standing in the Entryway.
+    **The same mistake as the take and drop lines, one column along.**
+    The check above has held those to this since the release where all
+    thirty-two said "you" to a room full of people. A public `use` in
+    that voice does the same thing to everybody standing there: the
+    plank's line read "you haul a plank over to the staircase", posted
+    into the Entryway's thread, so every bystander was told they had
+    laid it.
 
     Named by id rather than derived, because nothing in the files says
-    which uses are public - `world._place_a_plank` does, and this is the
-    only one.
+    which uses are public - `world` does. Which is also how this check
+    came to be looking at one id while three others needed it; see the
+    note on `PUBLIC_USE_THINGS`.
     """
     return [
         f"{row.entity_id} has a use text with no {{player}} in it, and its "
-        "use is posted to the room: name who laid the plank rather than "
-        "addressing whoever reads it as 'you'"
+        "use is posted to the room: name who acted rather than addressing "
+        "whoever reads it as 'you'"
         for row in content.thing_text
         if row.entity_id in PUBLIC_USE_THINGS
         and row.text.get("use")
         and "{player}" not in row.text["use"]
+    ]
+
+
+def _check_a_public_default_names_the_player(content: Content) -> list[str]:
+    """And the same for a public line that lives in `defaults.tsv`.
+
+    The watering can's fill and its three pours are posted to the room
+    and keyed in the defaults rather than in `thing_text`, so the check
+    above cannot see them: it walks `thing_text` rows, and these are not
+    rows. Without this they were the fourth way to write "you" into a
+    sentence a whole room reads.
+
+    Checked on `{player}` rather than on the absence of "you", for the
+    reason the take and drop check gives: the token is what makes the
+    line true for its audience, and a writer who has used it has
+    understood who is reading.
+    """
+    return [
+        f"default {key!r} is posted to the room and has no {{player}} in "
+        "it: name who acted rather than addressing whoever reads it as "
+        "'you'"
+        for key in sorted(PUBLIC_USE_DEFAULTS)
+        if content.defaults.get(key) and "{player}" not in content.defaults[key]
     ]
 
 

@@ -392,6 +392,20 @@ async def _use_the_watering_can(
     an empty can is not either - so the deed is written here, on the
     branch that moved water, rather than inferred afterwards from a
     `thing_uses` row that every use of the can stamps alike.
+
+    **The four that move water answer the room; the four that do not
+    answer the player.** A fill and the three pours change the state of
+    the only can in the house, so everybody standing there has a reason
+    to know - and somebody who walks into the Courtyard to water the
+    herbs wants to find out that they are already wet. The other four
+    change nothing: an already-full can, a tipped empty one, and the
+    two "nothing here needs watering" lines are facts about the person
+    holding it, and posting them would fill the Living Room's thread
+    with other people's inventory.
+
+    `public` is the whole of that, because `_finish_use` already routes
+    it - a public use posts its line to the room and sends no private
+    reply, which is the shape the plank and the rattle arrived at.
     """
     level = await can_level(guild_id)
 
@@ -413,7 +427,9 @@ async def _use_the_watering_can(
             user_id, guild_id, telemetry.USE, WATERING_CAN, room_id
         )
         return Effect(
-            say=f"watering_can.water.{level}", extra=went(poured_to)
+            say=f"watering_can.water.{level}",
+            public=True,
+            extra=went(poured_to),
         )
 
     if room_id == FAUCET_ROOM:
@@ -422,7 +438,9 @@ async def _use_the_watering_can(
                 say="watering_can.fill.already_full", extra=went(level)
             )
         await database.set_thing_state(guild_id, WATERING_CAN, CAN_FULL)
-        return Effect(say="watering_can.fill", extra=went(CAN_FULL))
+        return Effect(
+            say="watering_can.fill", public=True, extra=went(CAN_FULL)
+        )
 
     if level == CAN_EMPTY:
         return Effect(say="watering_can.elsewhere.empty", extra=went(level))
