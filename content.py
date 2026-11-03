@@ -2478,11 +2478,11 @@ PUBLIC_USE_DEFAULTS = frozenset(
 def _check_public_lines_name_the_player(content: Content) -> list[str]:
     """A `take` or `drop` string must say who did it.
 
-    **These two are the only texts in the game with an audience other
-    than the person who typed the command**, and for a release they did
-    not know it: every one was written in the second person - "You
-    pocket the spice jar" - and posted to the room, which told everyone
-    present that *they* had picked something up.
+    **The first texts in the game found to have an audience other than
+    the person who typed the command**, and for a release they did not
+    know it: every one was written in the second person - "You pocket
+    the spice jar" - and posted to the room, which told everyone present
+    that *they* had picked something up.
 
     All thirty-two were rewritten. This is what stops the thirty-third
     arriving in the old voice, which is the easy mistake to make: every
@@ -2491,6 +2491,13 @@ def _check_public_lines_name_the_player(content: Content) -> list[str]:
     Checked on `{player}` rather than on the absence of "you", because
     the token is the thing that makes the line true for its audience,
     and a writer who has used it has understood who is reading.
+
+    **This called these two "the only texts in the game" with such an
+    audience.** That stopped being true when the rattle and the music box
+    became public, and it reads strangely now that the next two functions
+    in this file check the other two kinds - nine lines below the sentence
+    saying they do not exist. "First" is the part that stays true; "only"
+    was a count, and the counts are what keep going stale here.
     """
     return [
         f"{row.entity_id} has a {verb} text with no {{player}} in it: "

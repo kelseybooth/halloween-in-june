@@ -704,3 +704,43 @@ async def test_the_chips_are_eaten_quietly_anywhere_else(ground_floor):
     assert "over the sink" in kitchen
     assert "not very quietly" in courtyard
     assert "sink" not in courtyard
+
+
+# --------------------------------------------------------------------------
+# The shelves, and the book glued shut inside them
+#
+# Neither had a test before this - the shelves are a `use` row and the
+# book is a source, and both read as pure content. The rewrite below is
+# the reason they have one: a line of flavour text turned out to be the
+# only signpost to a stash, and whether it works is a mechanic.
+# --------------------------------------------------------------------------
+
+
+async def test_the_shelves_name_the_book_in_words_a_player_can_type(
+    ground_floor,
+):
+    """**The point of the rewrite, which is not the wording.**
+
+    The line said "one of the dimensional theory books" - plural - and
+    `chocolate_book` answers to `dimensional theory book`, singular. A
+    phrase that matches no alias is a phrase `mark_nouns` leaves plain,
+    so the shelves described the stash in a voice the parser could not
+    hear: there to read, not there to use. Singular, it bolds.
+    """
+    reply = await read(ground_floor, "bookshelves", "LI")
+
+    assert "A **dimensional theory book** doesn't open at all" in reply
+
+
+async def test_and_typing_those_words_reaches_it(ground_floor):
+    """**The other half, because bolding is a promise.** `mark_nouns`
+    marks what is within reach and undertakes that a bold word is a word
+    that works; the test above would pass just as happily on a bold
+    phrase that resolves to nothing at all. This is the half that would
+    notice if the alias were ever renamed out from under the shelves.
+    """
+    reply = replies(
+        await run(ground_floor, bot.look, "dimensional theory book", room="LI")
+    )
+
+    assert "more chocolate in it than should reasonably be" in reply
