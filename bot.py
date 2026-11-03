@@ -2799,15 +2799,27 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
 
     **The reply is private unless the use is the room's business.** A use is
     a small private moment and making every one public would bury the
-    thread, so the public line is opt-in through `Effect.public` and three
+    thread, so the public line is opt-in through `Effect.public` and four
     kinds of use take it: laying a plank, because the staircase is
     collective work; playing with the cat, because that is the thread's
-    whole life; and the rattle and the music box, whose only joke is being
-    overheard. Movement is public in a different way again - it posts in
-    both rooms as well as replying, because the people standing there need
-    to see somebody leave.
+    whole life; the rattle and the music box, whose only joke is being
+    overheard; and the watering can's fill and its three pours, because
+    they change the level of the only can in the house and somebody
+    arriving to water the herbs should find out they are already wet.
+    Movement is public in a different way again - it posts in both rooms
+    as well as replying, because the people standing there need to see
+    somebody leave.
 
-    Which things those are is named in `world.after_use` and nowhere else.
+    **The can is the one that splits down the middle**, which is worth
+    knowing before reading `_use_the_watering_can`: four of its eight
+    outcomes are public and four are not. The four that move water
+    answer the room; an already-full can, a tipped empty one and the two
+    "nothing here needs watering" lines are facts about the person
+    holding it, and posting them would fill the Living Room's thread
+    with other people's inventory.
+
+    Which things those are is named in `world.after_use` and
+    `world._use_the_watering_can`, and nowhere else.
     There is deliberately no column for it: two noisy toys are a list, and
     a `use_public` cell on every row in the house would invite a third one
     that nobody thought about.
@@ -3979,8 +3991,16 @@ async def _finish_use(interaction, state, found) -> None:
         # mention went with it; `{player}` says who without the room
         # being pinged every time anybody lays a board.
         #
-        # The staircase is the only use this reaches, and no hint rides
-        # the reply, so nothing is lost by not sending it.
+        # **This said the staircase was the only use that reaches it**,
+        # and had been wrong for three releases: the rattle and the
+        # music box joined, and on 2 November the watering can's fill
+        # and its three pours did. `world.after_use` and
+        # `_use_the_watering_can` are where the set actually lives.
+        # Corrected rather than deleted, because the sentence that was
+        # here is the reason somebody would trust it.
+        #
+        # No hint rides any of these replies, so nothing is lost by not
+        # sending one privately.
         privately = False
     elif found.thing_id == world.CAT_BED:
         # A successful fluff shakes something out of the bed, once per
@@ -4361,7 +4381,7 @@ async def _place_for(channel, room_id: str, room_name: str | None):
 
 
 async def _post_in_room(interaction, room_id: str, message: str) -> None:
-    """Put a use in the room thread. Only the staircase does this.
+    """Put a use in the room thread, for the uses that have an audience.
 
     **Not an echo any more and not prefixed with a mention.** This is
     the only copy of the line, and the line names the player itself, so

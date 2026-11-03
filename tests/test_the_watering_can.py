@@ -50,11 +50,16 @@ DRY = "dry inside"
 HALF = "about half full"
 BRIM = "filled to the brim"
 
-POUR_RAINWATER = "that's all of it"
+POUR_RAINWATER = "tips an inch of rainwater"
 POUR_FULL = "long, even shower"
 POUR_HALF = "until the can runs dry"
 ONE_DROP = "One drop comes out"
-FILLED = "all the way to the brim"
+# Stops before "kitchen sink", which `reach.mark_nouns` bolds on the
+# way out - the sink is a fixture in the Kitchen, so the engine marks it
+# as a word you can type. The old line said "under the faucet" and there
+# is no faucet in the house, so it pointed at nothing.
+FILLED = "fills the watering can to the brim"
+SINK = "**kitchen sink**"
 ALREADY_FULL = "watering the kitchen floor"
 NOTHING_TO_WATER = "Nothing in here does"
 ITS_EMPTY = "It's empty."
@@ -139,7 +144,28 @@ def replies(interaction) -> str:
 
 
 async def used(courtyard, room, who=ALICE) -> str:
+    """What the player was told privately. Empty for a public use."""
     return replies(await run(courtyard, bot.use, "watering can", room=room, who=who))
+
+
+async def using(courtyard, room, who=ALICE) -> tuple[str, str]:
+    """One use of the can, as (what the player read, what the room read).
+
+    **Both halves, because which one a line arrives in is the
+    behaviour.** Four of the can's eight outcomes post to the room and
+    send nothing back; the other four do the reverse. A helper that
+    joined them would pass whichever way round they came out, which is
+    exactly the bug worth catching - the Living Room's thread filling
+    up with somebody else's "nothing in here needs watering".
+
+    The room's half is sliced from this use only. The fixture's thread
+    accumulates across a test, and two waterings in one test would
+    otherwise each see the other's line.
+    """
+    before = len(thread(courtyard, room).posted)
+    interaction = await run(courtyard, bot.use, "watering can", room=room, who=who)
+    said = thread(courtyard, room).posted[before:]
+    return replies(interaction), "\u0020".join(said)
 
 
 async def fetched(courtyard, who=ALICE) -> None:
@@ -191,9 +217,10 @@ async def test_and_it_is_standing_in_the_courtyard(courtyard):
 
 
 async def test_the_rainwater_is_good_for_one_watering(courtyard):
-    reply = await used(courtyard, "CO")
+    private, room = await using(courtyard, "CO")
 
-    assert POUR_RAINWATER in reply
+    assert POUR_RAINWATER in room
+    assert private == ""
     assert await level() == world.CAN_EMPTY
     assert DRY in await looked(courtyard, "CO")
 
@@ -217,13 +244,14 @@ async def test_a_full_can_is_good_for_two(courtyard):
     await fetched(courtyard)
     await used(courtyard, "KI")
 
-    first = await used(courtyard, "CO")
+    _, first = await using(courtyard, "CO")
     half = await level()
-    second = await used(courtyard, "CO")
+    _, second = await using(courtyard, "CO")
 
     assert POUR_FULL in first
     assert half == world.CAN_PARTLY_FULL
     assert POUR_HALF in second
+    assert POUR_FULL not in second
     assert await level() == world.CAN_EMPTY
 
 
@@ -236,9 +264,10 @@ async def test_the_kitchen_fills_it_from_any_level(courtyard):
     await used(courtyard, "CO")
     await fetched(courtyard)
 
-    reply = await used(courtyard, "KI")
+    private, room = await using(courtyard, "KI")
 
-    assert FILLED in reply
+    assert FILLED in room
+    assert private == ""
     assert await level() == world.CAN_FULL
     assert BRIM in await looked(courtyard, "KI")
 
@@ -284,6 +313,99 @@ async def test_an_empty_can_says_so_instead(courtyard):
 
 
 # --------------------------------------------------------------------------
+# Which half of the room hears about it
+#
+# Four of the can's eight outcomes post to the room and send nothing
+# back; the other four do the reverse. The split is not cosmetic - it is
+# the difference between a thread that tells you the herbs are already
+# watered and a thread full of other people's empty cans.
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "setup,room,phrase",
+    [
+        ("empty", "CO", ONE_DROP),
+        ("full", "KI", ALREADY_FULL),
+        ("rainwater", "LI", NOTHING_TO_WATER),
+        ("empty", "LI", ITS_EMPTY),
+    ],
+)
+async def test_the_four_that_change_nothing_stay_private(
+    courtyard, setup, room, phrase
+):
+    """**Nothing changed, so nobody else has a reason to hear it.**
+
+    Each of these is a fact about the person holding the can rather than
+    about the can: it is already full, it is empty, there is nothing in
+    here to water. A player who walks into the Living Room should not
+    read three lines about somebody else's inventory.
+    """
+    if setup == "empty":
+        await used(courtyard, "CO")
+    await fetched(courtyard)
+    if setup == "full":
+        await used(courtyard, "KI")
+
+    private, said = await using(courtyard, room)
+
+    assert phrase in private
+    assert said == ""
+
+
+@pytest.mark.parametrize("room", ["CO", "KI"])
+async def test_and_the_two_that_do_say_nothing_privately(courtyard, room):
+    """The public line is the whole reply, which is the shape the plank
+    and the rattle arrived at. A player standing in the room reads it
+    once, in the thread, rather than twice."""
+    await fetched(courtyard)
+
+    private, said = await using(courtyard, room)
+
+    assert private == ""
+    assert said != ""
+
+
+@pytest.mark.parametrize("room", ["CO", "KI"])
+async def test_a_public_line_names_the_player_rather_than_addressing_them(
+    courtyard, room
+):
+    """**The mistake this game has now made twice**, once across
+    thirty-two `take` and `drop` lines and once on the plank.
+
+    A line posted to a room and written in the second person tells
+    everybody present that *they* just watered the herbs. Both of these
+    were in that voice until 2 November - "You hold the can under the
+    faucet" - because both were private replies when they were written,
+    and both were correct to be.
+    """
+    await fetched(courtyard)
+
+    _, said = await using(courtyard, room)
+
+    assert "Player" in said
+    assert "You " not in said
+    assert "you " not in said
+
+
+async def test_and_the_fill_points_at_the_sink(courtyard):
+    """**A side effect of the new wording that is worth keeping.**
+
+    `reach.mark_nouns` bolds the nouns in a line that name something
+    within reach, and its promise is that if a word is bold, typing it
+    works. The old line said "under the faucet" and there is no faucet
+    in the house, so it pointed at nothing. "Kitchen sink" is a fixture
+    in the Kitchen, so the new line hands the player something real to
+    look at.
+    """
+    await fetched(courtyard)
+
+    _, said = await using(courtyard, "KI")
+
+    assert SINK in said
+
+
+# --------------------------------------------------------------------------
 # Carried or standing there
 # --------------------------------------------------------------------------
 
@@ -292,9 +414,9 @@ async def test_it_works_without_being_picked_up(courtyard):
     """The can is in the Also here list and that is enough - unlike the
     ladder, which is set down by the act of climbing it. Nothing here
     takes it first."""
-    reply = await used(courtyard, "CO")
+    _, room = await using(courtyard, "CO")
 
-    assert POUR_RAINWATER in reply
+    assert POUR_RAINWATER in room
 
 
 async def test_and_the_level_belongs_to_the_can_and_not_the_carrier(courtyard):
@@ -306,9 +428,9 @@ async def test_and_the_level_belongs_to_the_can_and_not_the_carrier(courtyard):
     await used(courtyard, "KI", who=ALICE)
     await run(courtyard, bot.drop, "watering can", room="CO", who=ALICE)
 
-    reply = await used(courtyard, "CO", who=BOB)
+    _, room = await using(courtyard, "CO", who=BOB)
 
-    assert POUR_FULL in reply
+    assert POUR_FULL in room
     assert await level() == world.CAN_PARTLY_FULL
 
 
@@ -449,9 +571,9 @@ async def test_but_the_can_itself_still_works(courtyard):
     were holding would be stuck with it until they thought to drop it."""
     await carrying_a_full_can(courtyard)
 
-    reply = await used(courtyard, "CO")
+    _, room = await using(courtyard, "CO")
 
-    assert POUR_FULL in reply
+    assert POUR_FULL in room
 
 
 async def test_and_so_do_the_doors(courtyard):
