@@ -821,60 +821,153 @@ async def ladder_is_guarded(guild_id: int) -> bool:
 # now the one thing standing between every other player and an
 # achievement. The justification is the same as the other two's; it is
 # the house that moved, not the rule.
-SET_DOWN_WHEN_IDLE = (LADDER, WATERING_CAN, RATTLE)
+#
+# **Then two of the three left again, on 2 November, and the tuple is
+# down to the ladder.** The argument above is unchanged and is why all
+# three are swept at all; what changed is *which clock* each one is
+# swept on. The can and the rattle went onto timers of their own, in
+# `things.tsv` as `idle_drop_hours`, because the question they answer
+# turned out to be a different one:
+#
+# - This tuple measures the **player**. Twenty-four hours with no
+#   command at all, which is somebody who has stopped playing. The
+#   ladder is right here: climbing sets it down, so a carrier who has
+#   not used it and is still playing is about to.
+# - `idle_drop_hours` measures the **thing**. Six hours in a hand that
+#   has not used it, whether or not its owner is busy. Watering does
+#   not set the can down and shaking does not set the rattle down, so a
+#   player can carry either around all afternoon, playing hard, while
+#   the herbs stay dry and nobody else can earn *Captive Audience*.
+#
+# A thing on its own clock is skipped here rather than swept twice -
+# see `set_down_forgotten_things`. Nothing is in both lists today and
+# the guard is there so that a `things.tsv` edit cannot put it there.
+SET_DOWN_WHEN_IDLE = (LADDER,)
 
 
-async def set_down_forgotten_things(
-    guild_ids: "list[int]",
-) -> list[tuple[int, int, str, str]]:
-    """Take a one-of-a-kind thing off anybody who has held it for a day.
+@dataclass(frozen=True)
+class SetDown:
+    """One thing the sweep took off one player.
 
-    Returns (guild, player, room, thing) for each one actually set
-    down, so the caller can say so in the room it landed in and say it
-    in the thing's own words. Only rows that moved are reported: two
-    sweeps overlapping would otherwise announce the same ladder twice,
-    and the move is what decides, not the query.
+    Was a four-tuple until the second rule arrived, and `unused` is why
+    it is not one now: the caller has to say a different sentence
+    depending on which clock ran out, and a fifth positional field that
+    changes the copy is the kind of thing that gets unpacked into the
+    wrong name once and then reads fine forever.
 
-    **Rare by construction for the ladder and less so for the can.**
-    Climbing sets the ladder down, so the sweep only ever reaches
-    somebody who picked it up and stopped playing without using it.
-    Watering does not set the can down - the design is explicit that it
-    stays in your hands - so a carrier who wanders off with a half-full
-    can is an ordinary afternoon rather than an edge case.
+    `unused` is True for a thing that went quiet in the hands of a
+    player who did not - the `idle_drop_hours` rule - and False for a
+    carrier who stopped playing altogether.
     """
-    moved = []
+
+    guild_id: int
+    user_id: int
+    room_id: str
+    thing_id: str
+    unused: bool
+
+
+async def set_down_forgotten_things(guild_ids: "list[int]") -> list[SetDown]:
+    """Take a one-of-a-kind thing off anybody who has forgotten it.
+
+    Two rules, and the comment on `SET_DOWN_WHEN_IDLE` is where the
+    difference is argued. This runs them in that order - the player's
+    clock, then each thing's own - and returns a `SetDown` for every row
+    that actually moved, so the caller can say so in the room it landed
+    in and say it in the right words.
+
+    **Only rows that moved are reported.** Two sweeps overlapping would
+    otherwise announce the same ladder twice; `drop_into_room` returning
+    False is a thing that was already gone, and the move is what
+    decides, not the query.
+
+    **A thing with its own clock is skipped by the first rule**, and
+    the honest version of why is that it saves a query rather than a
+    bug. What actually stops anything being announced twice is
+    `_set_it_down` returning False on a row that has already moved, so
+    even a thing somehow caught by both rules would be set down once.
+    The guard means the second rule never asks about something the
+    first one has dealt with, and it documents that a thing belongs to
+    one clock. Nothing is in both lists today.
+    """
+    moved: list[SetDown] = []
+    on_their_own_clock = await database.things_with_an_idle_clock()
+
     for guild_id in guild_ids:
-        quiet_since = await database.server_now(guild_id) - timedelta(hours=IDLE_HOURS)
+        now = await database.server_now(guild_id)
+
+        quiet_since = now - timedelta(hours=IDLE_HOURS)
         for thing_id in SET_DOWN_WHEN_IDLE:
+            if thing_id in on_their_own_clock:
+                continue
             for user_id, room_id in await database.idle_carriers(
                 guild_id, thing_id, quiet_since
             ):
-                if not await database.drop_into_room(
-                    user_id, guild_id, room_id, thing_id
-                ):
-                    continue
-                await telemetry.system(
-                    guild_id,
-                    telemetry.ABANDONED,
-                    thing_id=thing_id,
-                    detail=await abandoned_detail(guild_id, thing_id, room_id),
-                )
-                moved.append((guild_id, user_id, room_id, thing_id))
+                if await _set_it_down(guild_id, user_id, room_id, thing_id, False):
+                    moved.append(
+                        SetDown(guild_id, user_id, room_id, thing_id, unused=False)
+                    )
+
+        for thing_id, hours in sorted(on_their_own_clock.items()):
+            unused_since = now - timedelta(hours=hours)
+            for user_id, room_id in await database.carriers_who_stopped_using(
+                guild_id, thing_id, unused_since
+            ):
+                if await _set_it_down(guild_id, user_id, room_id, thing_id, True):
+                    # **Written here and not by the caller**, so a
+                    # channel that will not take the public line cannot
+                    # cost the player the private one. The two are
+                    # independent: the room hearing about it and its
+                    # owner hearing about it fail separately.
+                    await database.record_idle_drop_notice(
+                        guild_id, user_id, thing_id, room_id
+                    )
+                    moved.append(
+                        SetDown(guild_id, user_id, room_id, thing_id, unused=True)
+                    )
     return moved
 
 
-async def abandoned_detail(guild_id: int, thing_id: str, room_id: str) -> str:
-    """Where it was left, and for the can how much was in it.
+async def _set_it_down(
+    guild_id: int, user_id: int, room_id: str, thing_id: str, unused: bool
+) -> bool:
+    """Move it out of their hands onto the floor, and log that it went.
+
+    False when there was nothing to move, which is a row another sweep
+    or another command got to first.
+    """
+    if not await database.drop_into_room(user_id, guild_id, room_id, thing_id):
+        return False
+    await telemetry.system(
+        guild_id,
+        telemetry.ABANDONED,
+        thing_id=thing_id,
+        detail=await abandoned_detail(guild_id, thing_id, room_id, unused),
+    )
+    return True
+
+
+async def abandoned_detail(
+    guild_id: int, thing_id: str, room_id: str, unused: bool = False
+) -> str:
+    """Where it was left, which rule took it, and for the can how full.
 
     The level is the half that cannot be recovered afterwards: the can
     on the floor of the Nursery will have been filled and emptied
     twenty times by the time anybody asks, and "where did people give
     up carrying it, and were they carrying it full" is the question the
     row exists for.
+
+    `rule` is the same kind of fact one rule along. Two clocks can put a
+    thing on the floor now, and "did they wander off or did they just
+    stop using it" is not recoverable from anything else afterwards -
+    the inventory row is gone and `last_command_at` has moved on. It
+    goes last so the prefix every existing row has stays where it was.
     """
+    rule = "unused" if unused else "quiet"
     if thing_id != WATERING_CAN:
-        return f"room={room_id}"
-    return f"room={room_id} level={await can_level(guild_id)}"
+        return f"room={room_id} rule={rule}"
+    return f"room={room_id} level={await can_level(guild_id)} rule={rule}"
 
 
 @dataclass

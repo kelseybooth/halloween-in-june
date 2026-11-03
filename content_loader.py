@@ -253,6 +253,7 @@ def _rows_for(parsed: Content) -> dict[str, list[dict]]:
                 "use_cooldown_daily": t.use_cooldown_daily,
                 "scatter_target": t.scatter_target,
                 "to_hand_in_room": t.to_hand_in_room,
+                "idle_drop_hours": t.idle_drop_hours,
                 "cross_weight": t.cross_weight,
                 "max_per_player": t.max_per_player,
                 "requires": t.requires,

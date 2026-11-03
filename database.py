@@ -828,6 +828,10 @@ class ThingType(Base):
     to_hand_in_room: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("0")
     )
+    # How many hours this may go unused in a carrier's hands before the
+    # sweep sets it down. NULL for everything that has no clock of its
+    # own, which is all but two rows.
+    idle_drop_hours: Mapped[int | None] = mapped_column(Integer, nullable=True)
     cross_weight: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     max_per_player: Mapped[int | None] = mapped_column(Integer, nullable=True)
     requires: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -1037,6 +1041,21 @@ class PlayerInventory(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
     thing_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # When this thing last went into these hands, on the server's clock.
+    #
+    # **The half of the idle clock that `thing_uses` cannot answer.**
+    # That table knows when a player last *used* something, which is the
+    # other half; a player who picks the rattle up and never shakes it
+    # has no row there at all. The sweep in `world` takes the later of
+    # the two, so a thing goes quiet from whichever happened last.
+    #
+    # Re-taking restarts it, which is why the upsert writes this on
+    # conflict as well as on insert. Null is the pre-column past and is
+    # read as "not idle", the same rule `idle_carriers` writes down for
+    # `last_command_at` and for the same reason: better to leave a thing
+    # in the hands of a player the game has never timed than to take it
+    # off them on no evidence.
+    taken_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class RoomContents(Base):
@@ -1116,6 +1135,43 @@ class ThingState(Base):
     thing_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     state: Mapped[str] = mapped_column(String(64), nullable=False)
     set_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class IdleDropNotice(Base):
+    """A thing the sweep took off a player, waiting to be mentioned.
+
+    **The sweep happens while nobody is looking, and that is the
+    problem it solves.** The room is told the moment it happens, in the
+    room's own thread, which is right for everybody standing there and
+    useless to the carrier - who is, by definition, not paying
+    attention. Without this they come back to a game that has quietly
+    emptied one hand and said nothing about it, and the rattle is
+    somewhere they have to guess.
+
+    So one row per (server, player, thing), written by the sweep and
+    read-and-deleted by the next command that player runs. The delete is
+    what makes it once: the line is news the first time and noise after.
+
+    **Not read out of the telemetry log, although the log has it.** The
+    sweep already writes an `abandoned` row carrying the room. That
+    table is for tuning and the game decides nothing from it - a rule
+    this file states twice already - and a log a command reads and then
+    deletes from is not a log any more.
+
+    One row per thing rather than per player, because a player can lose
+    two things to two sweeps and should hear about both. `room_id` is
+    where it was set down, not where it is now: somebody else may have
+    picked it up since, and "you left it in the Nursery" is still true
+    and still the only useful thing to say.
+    """
+
+    __tablename__ = "idle_drop_notices"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    thing_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    room_id: Mapped[str] = mapped_column(String(8), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
 class ServerState(Base):
@@ -1576,6 +1632,7 @@ _LATER_COLUMNS: list[tuple[str, str, str]] = [
     ("restocks", "interval_max_hours", "INTEGER"),
     ("thing_types", "scatter_target", "BOOLEAN NOT NULL DEFAULT TRUE"),
     ("thing_types", "to_hand_in_room", "BOOLEAN NOT NULL DEFAULT FALSE"),
+    ("thing_types", "idle_drop_hours", "INTEGER"),
     ("thing_text", "use_fail_cooldown", "TEXT"),
     ("thing_text", "move_depart", "TEXT"),
     ("thing_text", "move_arrive", "TEXT"),
@@ -1589,6 +1646,7 @@ _LATER_COLUMNS: list[tuple[str, str, str]] = [
     ("users", "toy_plays_today", "INTEGER NOT NULL DEFAULT 0"),
     ("room_contents", "placed_at", "TIMESTAMP"),
     ("users", "last_command_at", "TIMESTAMP"),
+    ("player_inventory", "taken_at", "TIMESTAMP"),
     ("thing_uses", "last_used_room", "TEXT"),
     # Drop 2 renamed `restocks.container` to `destination` and added
     # `max_present`. A rename is two steps for a live database: the new
@@ -2766,17 +2824,41 @@ async def carried_of(user_id: int, guild_id: int, thing_id: str) -> int:
         ) or 0
 
 
-def _add_to_inventory(insert, user_id: int, guild_id: int, thing_id: str, delta: int):
+def _add_to_inventory(
+    insert,
+    user_id: int,
+    guild_id: int,
+    thing_id: str,
+    delta: int,
+    *,
+    taken_at: datetime,
+):
+    """One more of this in these hands, and the clock set to now.
+
+    `taken_at` is required rather than defaulted, because the three
+    callers are the three ways anything reaches an inventory and a
+    fourth one that forgot would be a thing with no clock on it - which
+    reads as "not idle" and so is silent rather than loud. It is the
+    server's now, not the wall clock, so a QA server running a week
+    ahead sees its carriers go quiet on the same schedule as everything
+    else that is dated.
+    """
     return (
         insert(PlayerInventory)
-        .values(user_id=user_id, guild_id=guild_id, thing_id=thing_id, count=delta)
+        .values(
+            user_id=user_id,
+            guild_id=guild_id,
+            thing_id=thing_id,
+            count=delta,
+            taken_at=taken_at,
+        )
         .on_conflict_do_update(
             index_elements=[
                 PlayerInventory.guild_id,
                 PlayerInventory.user_id,
                 PlayerInventory.thing_id,
             ],
-            set_={"count": PlayerInventory.count + delta},
+            set_={"count": PlayerInventory.count + delta, "taken_at": taken_at},
         )
     )
 
@@ -2826,9 +2908,14 @@ async def take_from_source(
     """
     session_factory = _require_session()
     insert = _upsert_statement()
+    now = await server_now(guild_id)
     await ensure_user_exists(user_id, guild_id)
     async with session_factory() as session:
-        await session.execute(_add_to_inventory(insert, user_id, guild_id, thing_id, 1))
+        await session.execute(
+            _add_to_inventory(
+                insert, user_id, guild_id, thing_id, 1, taken_at=now
+            )
+        )
         await session.commit()
     if source_id is not None:
         # **No room, and not an oversight.** A draw is not a use that
@@ -2943,6 +3030,161 @@ async def idle_carriers(
         return [(row[0], row[1]) for row in rows]
 
 
+async def things_with_an_idle_clock() -> dict[str, int]:
+    """{thing_id: hours} for everything carrying its own idle timer.
+
+    Read from `thing_types` rather than named in code, which is the
+    difference between this rule and the ladder's: adding a thing to it
+    is a cell in `things.tsv`, and the sweep picks it up on the next
+    load. That is what the column is for - the design note says other
+    one-of-a-kind things will want it later, and none of them should
+    need a release of `world.py`.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(ThingType.thing_id, ThingType.idle_drop_hours).where(
+                ThingType.idle_drop_hours.is_not(None)
+            )
+        )
+        return {row[0]: row[1] for row in rows}
+
+
+async def carriers_who_stopped_using(
+    guild_id: int, thing_id: str, cutoff: datetime
+) -> list[tuple[int, str]]:
+    """(player, room) for everybody holding this and not using it.
+
+    **The other idleness.** `idle_carriers` above asks who has stopped
+    playing: it joins `users` and reads `last_command_at`, so a player
+    busy elsewhere in the house keeps the ladder. This one asks who has
+    stopped playing *with the thing*, which is a question about one
+    object and not about the player at all - so there is no `users` join
+    here, and somebody running a command a minute still loses a rattle
+    they have not shaken in six hours.
+
+    The clock is the later of two stamps, and the `and` is how that gets
+    said without a `greatest`: a thing is quiet only if it was taken
+    before the cutoff *and* has not been used since, where never having
+    been used counts as not since. The two backends spell that function
+    differently - `greatest` on Postgres, `max` on SQLite - so this is
+    two predicates rather than one neither agrees on.
+
+    **A null `taken_at` is not idleness**, the same rule and the same
+    reason as `idle_carriers`: every inventory row that predates the
+    column has one, and taking a thing off a player the game never
+    timed is worse than letting them keep it until they next pick it up.
+
+    And the `is_not(None)` does not enforce that either, exactly as the
+    one above it does not. SQL compares NULL to nothing, so
+    `taken_at < cutoff` already excludes a null row - deleting the
+    filter and running the suite changes no behaviour, which a mutation
+    run confirmed on 2 November. It stays as the intent written down,
+    for whoever moves this into Python or reaches for a `coalesce` and
+    turns the accident into a decision.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(PlayerInventory.user_id, PlayerGameState.current_room)
+            .join(
+                PlayerGameState,
+                (PlayerGameState.user_id == PlayerInventory.user_id)
+                & (PlayerGameState.guild_id == PlayerInventory.guild_id),
+            )
+            .outerjoin(
+                ThingUse,
+                (ThingUse.guild_id == PlayerInventory.guild_id)
+                & (ThingUse.user_id == PlayerInventory.user_id)
+                & (ThingUse.thing_id == PlayerInventory.thing_id),
+            )
+            .where(
+                PlayerInventory.guild_id == guild_id,
+                PlayerInventory.thing_id == thing_id,
+                PlayerInventory.count > 0,
+                PlayerInventory.taken_at.is_not(None),
+                PlayerInventory.taken_at < cutoff,
+                or_(ThingUse.last_used_at.is_(None), ThingUse.last_used_at < cutoff),
+            )
+        )
+        return [(row[0], row[1]) for row in rows]
+
+
+async def record_idle_drop_notice(
+    guild_id: int, user_id: int, thing_id: str, room_id: str
+) -> None:
+    """Leave word for this player that the sweep emptied their hand.
+
+    `DO UPDATE` rather than `DO NOTHING`, which is the opposite of
+    `record_room_deed` and for the opposite reason. A deed is that it
+    happened, so the first one is the true one; this is where the thing
+    is *now*, so a player who takes the can again, leaves it again and
+    has read neither notice should be told about the second room rather
+    than the first.
+    """
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    now = await server_now(guild_id)
+
+    async with session_factory() as session:
+        await session.execute(
+            insert(IdleDropNotice)
+            .values(
+                guild_id=guild_id,
+                user_id=user_id,
+                thing_id=thing_id,
+                room_id=room_id,
+                created_at=now,
+            )
+            .on_conflict_do_update(
+                index_elements=[
+                    IdleDropNotice.guild_id,
+                    IdleDropNotice.user_id,
+                    IdleDropNotice.thing_id,
+                ],
+                set_={"room_id": room_id, "created_at": now},
+            )
+        )
+        await session.commit()
+
+
+async def take_idle_drop_notices(guild_id: int, user_id: int) -> list[tuple[str, str]]:
+    """(thing, room) for everything this player has yet to be told about.
+
+    Read and deleted together, because the delete is what makes the line
+    arrive once. Both in one transaction, so two commands finishing at
+    the same moment cannot each come away with the same notice - the
+    second finds the rows gone.
+
+    Ordered by `thing_id` so a player who lost two things to one sweep
+    reads them in the same order every time. Nothing in the game depends
+    on that; a test comparing lists does.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = (
+            await session.execute(
+                select(IdleDropNotice.thing_id, IdleDropNotice.room_id)
+                .where(
+                    IdleDropNotice.guild_id == guild_id,
+                    IdleDropNotice.user_id == user_id,
+                )
+                .order_by(IdleDropNotice.thing_id)
+            )
+        ).all()
+        if not rows:
+            return []
+        await session.execute(
+            delete(IdleDropNotice).where(
+                IdleDropNotice.guild_id == guild_id,
+                IdleDropNotice.user_id == user_id,
+                IdleDropNotice.thing_id.in_([row[0] for row in rows]),
+            )
+        )
+        await session.commit()
+    return [(row[0], row[1]) for row in rows]
+
+
 async def active_others_in_room(
     guild_id: int, room_id: str, since: datetime, *, except_user: int
 ) -> int:
@@ -3044,6 +3286,7 @@ async def take_from_room(
     """
     session_factory = _require_session()
     insert = _upsert_statement()
+    now = await server_now(guild_id)
     await ensure_user_exists(user_id, guild_id)
 
     async with session_factory() as session:
@@ -3062,7 +3305,11 @@ async def take_from_room(
             await session.rollback()
             return False
 
-        await session.execute(_add_to_inventory(insert, user_id, guild_id, thing_id, 1))
+        await session.execute(
+            _add_to_inventory(
+                insert, user_id, guild_id, thing_id, 1, taken_at=now
+            )
+        )
         await session.commit()
 
     log.info("User %s took %s in guild %s", user_id, thing_id, guild_id)
@@ -3254,6 +3501,7 @@ async def transform_carried(user_id: int, guild_id: int, thing_id: str, into: st
     """Swap one carried thing for another: one used bottle becomes one sanitized."""
     session_factory = _require_session()
     insert = _upsert_statement()
+    now = await server_now(guild_id)
 
     async with session_factory() as session:
         used = await session.execute(
@@ -3270,7 +3518,9 @@ async def transform_carried(user_id: int, guild_id: int, thing_id: str, into: st
             await session.rollback()
             return False
 
-        await session.execute(_add_to_inventory(insert, user_id, guild_id, into, 1))
+        await session.execute(
+            _add_to_inventory(insert, user_id, guild_id, into, 1, taken_at=now)
+        )
         await session.commit()
 
     log.info("User %s transformed %s into %s in guild %s", user_id, thing_id, into, guild_id)

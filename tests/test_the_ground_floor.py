@@ -495,6 +495,36 @@ async def quiet_for(db, days, who=ALICE):
         await session.commit()
 
 
+async def unused_for(db, hours, thing="rattle", who=ALICE):
+    """Backdate the rattle's own clock: taken, and last shaken.
+
+    The sweep takes the later of the two, so both move. `thing_uses`
+    has no row for a rattle that has only been picked up - `take` does
+    not write one - and the update is a harmless no-op there.
+    """
+    then = await database.server_now(GUILD_A) - timedelta(hours=hours)
+    async with db._require_session()() as session:
+        await session.execute(
+            update(database.PlayerInventory)
+            .where(
+                database.PlayerInventory.user_id == who,
+                database.PlayerInventory.guild_id == GUILD_A,
+                database.PlayerInventory.thing_id == thing,
+            )
+            .values(taken_at=then)
+        )
+        await session.execute(
+            update(database.ThingUse)
+            .where(
+                database.ThingUse.user_id == who,
+                database.ThingUse.guild_id == GUILD_A,
+                database.ThingUse.thing_id == thing,
+            )
+            .values(last_used_at=then)
+        )
+        await session.commit()
+
+
 def the_sweep_can_see_the_server(monkeypatch, ground_floor):
     """Give the background task a guild to walk.
 
@@ -516,12 +546,18 @@ def the_sweep_can_see_the_server(monkeypatch, ground_floor):
     )
 
 
-async def test_a_day_of_silence_sets_the_rattle_down(ground_floor, monkeypatch):
+async def test_six_hours_unshaken_sets_the_rattle_down(ground_floor, monkeypatch):
     """**Taken properly rather than conjured into her hands**, because the
     sweep moves a copy and a copy has to exist. Which is why the content
     is loaded again with the guild named, the way the take test above
     explains: this file's fixture loads before anybody exists, so the
     loader places nothing.
+
+    Six hours since it was last shaken, not a day since its carrier was
+    last here. The rattle went onto its own clock on 2 November, for
+    *Captive Audience*: an achievement that wants a rattle played to a
+    room full of people is blocked just as thoroughly by a busy player
+    who has stopped shaking it as by one who went to bed.
     """
     db, *_ = ground_floor
     the_sweep_can_see_the_server(monkeypatch, ground_floor)
@@ -530,7 +566,7 @@ async def test_a_day_of_silence_sets_the_rattle_down(ground_floor, monkeypatch):
     )
     await run(ground_floor, bot.take, "rattle", room="CO")
     await db.update_current_room(ALICE, GUILD_A, "LI")
-    await quiet_for(db, 2)
+    await unused_for(db, 7)
 
     await bot.idle_sweep.coro()
 
@@ -538,13 +574,49 @@ async def test_a_day_of_silence_sets_the_rattle_down(ground_floor, monkeypatch):
     assert "wooden rattle" in dict(await database.loose_here(GUILD_A, "LI"))
 
 
+async def test_a_busy_player_loses_the_rattle_too(ground_floor, monkeypatch):
+    """Still playing, still loses it. The old rule read the player's
+    clock and would have left this rattle where it was, which is the
+    case *Captive Audience* could not live with."""
+    db, *_ = ground_floor
+    the_sweep_can_see_the_server(monkeypatch, ground_floor)
+    await content_loader.load_content(
+        content_module.load_files(), guild_ids=[GUILD_A]
+    )
+    await run(ground_floor, bot.take, "rattle", room="CO")
+    await unused_for(db, 7)
+    await quiet_for(db, 0)
+
+    await bot.idle_sweep.coro()
+
+    assert await db.carried_of(ALICE, GUILD_A, "rattle") == 0
+
+
+async def test_but_shaking_it_keeps_it(ground_floor, monkeypatch):
+    """`last_used_at` is the later stamp, so somebody playing with the
+    rattle keeps it however long they have carried it."""
+    db, *_ = ground_floor
+    the_sweep_can_see_the_server(monkeypatch, ground_floor)
+    await content_loader.load_content(
+        content_module.load_files(), guild_ids=[GUILD_A]
+    )
+    await run(ground_floor, bot.take, "rattle", room="CO")
+    await unused_for(db, 7)
+
+    await run(ground_floor, bot.use, "rattle", room="CO")
+    await bot.idle_sweep.coro()
+
+    assert await db.carried_of(ALICE, GUILD_A, "rattle") == 1
+
+
 async def test_and_the_room_is_told_in_the_house_s_own_words(ground_floor, monkeypatch):
     """No copy of its own, which is the point of the generalised line.
 
-    The ladder is dropped "out of exhaustion", a joke about its weight;
-    the rattle gets `exhausted.public` with its name filled in, and the
-    sentence that comes out is the one the work order asked for without
-    anybody writing it a second time.
+    `idle_drop.public` fills in `{name}`, so the sentence the room reads
+    is written once and serves the rattle and the can both. Not
+    `exhausted.public`: that one says "gets tired", which is the other
+    clock's sentence and false about somebody who has been busy all
+    afternoon.
     """
     db, *_ = ground_floor
     the_sweep_can_see_the_server(monkeypatch, ground_floor)
@@ -553,17 +625,20 @@ async def test_and_the_room_is_told_in_the_house_s_own_words(ground_floor, monke
     )
     await run(ground_floor, bot.take, "rattle", room="CO")
     await db.update_current_room(ALICE, GUILD_A, "LI")
-    await quiet_for(db, 2)
+    await unused_for(db, 7)
 
     await bot.idle_sweep.coro()
 
     said = " ".join(posted(ground_floor, "Living Room"))
-    assert "gets tired and sets the wooden rattle down" in said
+    assert "absent-mindedly sets the wooden rattle down" in said
+    assert "gets tired" not in said
 
 
-async def test_somebody_still_playing_keeps_the_rattle(ground_floor, monkeypatch):
+async def test_a_rattle_taken_a_moment_ago_stays_in_the_hand(
+    ground_floor, monkeypatch
+):
     """The other half, and the one that fails if the sweep ever stops
-    reading the clock: a rattle taken a moment ago stays in the hand."""
+    reading the clock at all."""
     db, *_ = ground_floor
     the_sweep_can_see_the_server(monkeypatch, ground_floor)
     await content_loader.load_content(
@@ -571,6 +646,7 @@ async def test_somebody_still_playing_keeps_the_rattle(ground_floor, monkeypatch
     )
     await run(ground_floor, bot.take, "rattle", room="CO")
     await quiet_for(db, 0)
+    await unused_for(db, 0)
 
     await bot.idle_sweep.coro()
 

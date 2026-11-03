@@ -162,3 +162,5 @@ watering_can.elsewhere	You look around for something that needs watering. Nothin
 watering_can.elsewhere.empty	It's empty.
 carrying.watering_can	You'd need a free hand, which you don't have with this full watering can.
 exhausted.public	{player} gets tired and sets the {name} down.
+idle_drop.public	{player} absent-mindedly sets the {name} down.
+idle_drop.private	You realize you set the {name} down earlier somewhere in the {room}.
