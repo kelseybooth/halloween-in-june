@@ -4396,13 +4396,26 @@ async def _place_for(channel, room_id: str, room_name: str | None):
 
 
 async def _post_in_room(interaction, room_id: str, message: str) -> None:
-    """Put a use in the room thread, for the uses that have an audience.
+    """Put a use where the room will read it: its thread, or the channel.
 
     **Not an echo any more and not prefixed with a mention.** This is
     the only copy of the line, and the line names the player itself, so
     a mention in front of it read "@Alice Alice hauls a plank" - and
     pinged the room for every board laid against a ninety-plank
     staircase.
+
+    **This read "the room thread" and looked one up by name**, which is
+    every room in the game but one. The road is the channel itself and
+    has no thread, so the lookup returned None and the line went
+    nowhere - and because a public use suppresses the private reply for
+    the reason above, a rattle shaken on the road produced no sentence
+    at all, for anybody. Playtesters reported it as a missing public
+    message; it was a missing message.
+
+    `_place_for` directly above answers this exact question and four
+    callers already ask it. This one asked the narrower one instead,
+    which is why every room-by-room test passed: the road is the only
+    place the two questions have different answers.
     """
     if interaction.guild is None:
         return
@@ -4410,10 +4423,9 @@ async def _post_in_room(interaction, room_id: str, message: str) -> None:
     if channel is None:
         return
     try:
-        name = await resolve.room_name(room_id)
-        thread = await house_utils.get_thread_for_room(channel, name)
-        if thread is not None:
-            await thread.send(message)
+        place = await _place_for(channel, room_id, await resolve.room_name(room_id))
+        if place is not None:
+            await place.send(message)
     except (discord.HTTPException, SQLAlchemyError):
         # The use has already happened; failing to announce it is cosmetic.
         log.warning("Could not post a public use in %s", room_id, exc_info=True)

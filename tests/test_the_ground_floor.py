@@ -110,6 +110,22 @@ async def run(ground_floor, command, arg=None, *, room, who=ALICE):
     return interaction
 
 
+async def on_the_road(ground_floor, command, arg=None, *, who=ALICE):
+    """One command typed in the channel, with the player out on the road.
+
+    `run` above cannot do this. It builds the interaction on the room's
+    thread, and the road has not got one - the fixture is explicit about
+    it, creating a thread for every room *except* `CH`. That is not a gap
+    in the fixture; it is what the road is.
+    """
+    db, guild, halloween, _ = ground_floor
+    await db.update_current_room(who, GUILD_A, content_module.CHANNEL_ROOM)
+    interaction = FakeInteraction(who, GUILD_A, guild=guild, channel=halloween)
+    args = () if arg is None else (arg,)
+    await command.callback(interaction, *args)
+    return interaction
+
+
 def replies(interaction) -> str:
     return "\n".join(text for text, _ in interaction.sent if text)
 
@@ -470,6 +486,54 @@ async def test_and_shaking_it_is_for_the_whole_room(ground_floor):
         "Rattle rattle!" in line for line in posted(ground_floor, "Courtyard")
     )
     assert "Rattle rattle!" not in replies(interaction)
+
+
+async def test_and_shaking_it_on_the_road_tells_the_road(ground_floor):
+    """**The same joke, in the one place the room is not a thread.**
+
+    Playtesters found this: a rattle shaken on the road said nothing to
+    anybody. Worse than it sounds, and worse than they reported - a
+    public use suppresses the player's own reply on purpose, because the
+    room's copy and the player's were the same sentence and the player
+    is standing in the room reading it. So when the post went nowhere,
+    the shake produced no message at all, to anyone. The use happened,
+    the cooldown moved, and the game said nothing.
+
+    `_post_in_room` looked up a thread by the room's name and gave up
+    quietly when there wasn't one. `_place_for`, the function directly
+    above it, exists to answer exactly that question and returns the
+    channel itself for the road - four other callers already used it.
+
+    Asserted both ways round like the Courtyard test: in the channel,
+    and *not* in the player's reply. A fix that posted and also
+    whispered would be a different bug.
+    """
+    db, _, halloween, _ = ground_floor
+    await carry(db, ALICE, GUILD_A, "rattle")
+    before = len(halloween.posted)
+
+    interaction = await on_the_road(ground_floor, bot.use, "rattle")
+
+    assert any("Rattle rattle!" in line for line in halloween.posted[before:])
+    assert "Rattle rattle!" not in replies(interaction)
+
+
+async def test_and_the_player_is_never_left_with_nothing(ground_floor):
+    """The property the bug actually broke, stated without the road.
+
+    Whatever routing a public use gets, the shake has to produce a
+    sentence somewhere a human will see it. This is the assertion that
+    would have failed on the road before the fix while every
+    room-by-room test passed, and it is cheap to keep.
+    """
+    db, _, halloween, _ = ground_floor
+    await carry(db, ALICE, GUILD_A, "rattle")
+    before = len(halloween.posted)
+
+    interaction = await on_the_road(ground_floor, bot.use, "rattle")
+
+    said = replies(interaction) + " ".join(halloween.posted[before:])
+    assert said.strip() != ""
 
 
 # ------------------------------------------------------------------------
