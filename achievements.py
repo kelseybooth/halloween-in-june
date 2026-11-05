@@ -150,6 +150,15 @@ class Earned:
     # None for a group achievement, which has no earner and whose description
     # goes to nobody.
     user_id: int | None
+    # Who a `group` row with recipients actually went to. Carried so the
+    # announcement can name them: the rows are written here and the
+    # display names live in Discord, so the ids have to survive the trip
+    # or the handler would be re-deriving a list this already had.
+    #
+    # Distinct from `user_id` being set, which means one earner with a
+    # private message to answer. These people get no private message -
+    # the award is the server's event, told once, in their names.
+    recipients: tuple[int, ...] | None = None
 
 
 _TRIGGERS: dict[str, Trigger] = {}
@@ -314,7 +323,14 @@ async def _award(context: Context, row: resolve.AchievementRow) -> Earned | None
             )
         if not created:
             return None
-        return Earned(row.achievement_id, row.kind, row.name, row.unlock, None)
+        return Earned(
+            row.achievement_id,
+            row.kind,
+            row.name,
+            row.unlock,
+            None,
+            recipients=tuple(context.recipients),
+        )
 
     if row.kind == "group":
         created = await database.award_server_achievement(

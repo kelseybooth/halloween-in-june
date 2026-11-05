@@ -194,10 +194,21 @@ STAIRS_REPAIRED = "stairs_repaired"
 STAIRS_UPPER = "stairs_upper"
 WITHIN_REACH = 0.8
 
-# What the room reads when the last plank goes in. A key rather than a
-# sentence: the line is the writers' and lives in `defaults.tsv`, which
-# is where every other public line in the game lives.
+# What the room reads when the last plank goes in, and the whole of
+# what it reads - it replaces the plank's own `use` line rather than
+# following it. A key rather than a sentence: the line is the writers'
+# and lives in `defaults.tsv`, which is where every other public line
+# in the game lives.
+#
+# **Two of them, because the last plank is not always a top step.** The
+# ladder one is the ordinary finish: at any target above one the last
+# plank is above the reach line and the top steps refuse without the
+# ladder at hand. At a target of one, `int(1 * 0.8)` is zero, so the
+# single plank crosses into `stairs_upper` and finishes the job in the
+# same breath, laid from the floor with no ladder anywhere - and the
+# ladder sentence would be describing a climb nobody made.
 STAIRS_REPAIRED_LINE = "stairs.repaired.public"
+STAIRS_REPAIRED_FLOOR_LINE = "stairs.repaired.public.floor"
 
 
 async def needs_the_ladder(guild_id: int, user_id: int, room_id: str) -> bool:
@@ -589,7 +600,6 @@ class Effect:
 
     tokens: dict[str, object] = field(default_factory=dict)
     public: bool = False
-    announce: str | None = None
     # The player's score after this use moved it, for the handler to fire
     # `on_relationship_change` on. None when the use did not touch it,
     # which is every use but one.
@@ -625,18 +635,24 @@ class Effect:
     # this layer can produce.
     recipients: tuple[int, ...] | None = None
     # A key in `defaults.tsv` to say instead of the thing's own `use`
-    # row. **The watering can is the only one, and it needs this
-    # because its line depends on two things at once.** Every other
-    # use is described by one axis - the thing, or the thing in a
-    # state, or the thing in a room - and `thing_text` can be keyed on
-    # any one of those. Watering depends on the room *and* the level,
-    # and a row keyed on both would need a state called `in:CO|full`
-    # that the resolution has no way to match.
+    # row, for a use whose line `thing_text` has no way to be keyed on.
+    #
+    # Watering is one: every other use is described by one axis - the
+    # thing, or the thing in a state, or the thing in a room - and
+    # watering depends on the room *and* the level, which would need a
+    # state called `in:CO|full` that the resolution cannot match.
+    #
+    # The last plank is the other, for a different reason: its line is
+    # not a variant of the plank's line but a replacement for it, and
+    # the sentence belongs to the finish rather than to the lumber.
     say: str | None = None
-
-    @property
-    def changed_the_world(self) -> bool:
-        return self.announce is not None
+    # Whether to bold the things this line names. True everywhere but
+    # the staircase's finish: marking tells a player which words they
+    # can type, and the sentence saying the staircase is whole is news
+    # about the house rather than a list of things to try. It named the
+    # staircase and the ladder in bold for a day and read as an
+    # instruction.
+    marked: bool = True
 
 
 async def planks(guild_id: int) -> tuple[int, int]:
@@ -1396,26 +1412,53 @@ async def _place_a_plank(guild_id: int, user_id: int, room_id: str) -> Effect:
     carried_the_ladder = await database.drop_into_room(
         user_id, guild_id, room_id, LADDER
     )
+    # **Read before `check_staircase`, which is what makes it the right
+    # answer.** This is the state the gate saw when it let the plank
+    # through, and `check_staircase` is the only thing that sets
+    # `stairs_upper` - so after that call it would say the plank was a
+    # top step whenever the plank itself crossed the line.
+    from_the_ladder = STAIRS_UPPER in await states.in_force(guild_id, user_id)
     opened = await check_staircase(guild_id)
     placed, required = await planks(guild_id)
+
+    if opened:
+        # **The last plank says the whole thing in one sentence**, which
+        # is why this is `say` rather than an addition to the ordinary
+        # line. It used to be both: the climb line, then the count, then
+        # the finish sentence under a blank line - and the room was told
+        # the plank went "into one of the top steps, then climbs back
+        # down" immediately before being told it was the last one. The
+        # tail of that sentence is wrong on the final plank, so the line
+        # is replaced rather than followed.
+        #
+        # The count goes with it. "90 of 90 repairs done" is a progress
+        # line reporting that there is no more progress to make, and the
+        # sentence it sat under already says the staircase is whole.
+        #
+        # Which of the two finish lines is the one that describes what
+        # just happened - see `STAIRS_REPAIRED_LINE`. The ladder line at
+        # any target above one; the floor line at a target of one, where
+        # the single plank is both the first and the last and no ladder
+        # was ever needed.
+        return Effect(
+            public=True,
+            say=(
+                STAIRS_REPAIRED_LINE if from_the_ladder
+                else STAIRS_REPAIRED_FLOOR_LINE
+            ),
+            # News about the house, not a list of things to type at.
+            marked=False,
+            # Everybody who ever laid one, which is what *Board Meeting*
+            # goes to - and only on the plank that finished the job, so
+            # the award fires once however many planks follow a lowered
+            # target.
+            recipients=tuple(await database.users_of(guild_id, LUMBER)),
+            extra={LADDER: carried_the_ladder},
+        )
 
     return Effect(
         tokens={"n": placed, "total": required},
         public=True,
-        # **The writers' line, not the engine's.** This was a string
-        # typed into this function, and `stairs.repaired.public` sat in
-        # the deck unread - which is the shipping box's failure in
-        # another costume. The `{player}` in it is filled by the handler,
-        # because only Discord knows the display name.
-        announce=(
-            await resolve.default_text(STAIRS_REPAIRED_LINE) if opened else None
-        ),
-        # Everybody who ever laid one, which is what *Board Meeting*
-        # goes to - and only on the plank that finished the job, so the
-        # award fires once however many planks follow a lowered target.
-        recipients=(
-            tuple(await database.users_of(guild_id, LUMBER)) if opened else None
-        ),
         extra={LADDER: carried_the_ladder},
     )
 

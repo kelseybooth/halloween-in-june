@@ -27,6 +27,8 @@ staircase is collective work that not everybody did. It goes to the
 people who laid a plank and announces once.
 """
 
+from types import SimpleNamespace
+
 import pytest
 
 from conftest import ALICE, BOB, GUILD_A
@@ -65,6 +67,11 @@ FROM_THE_FLOOR = "hauls a plank over to the staircase"
 # engine bolds the word and the phrase stops matching itself.
 FROM_THE_LADDER = "climbs with a plank under one arm"
 NO_LADDER = "too high to fix without something to stand on"
+# **Not the same reason, and worth the note.** Making the finish
+# sentence the use's own line put it through the noun marker for a day,
+# which bolded "grand staircase" and broke this constant; `Effect.marked`
+# turns the marking off for that one line, so the phrase matches itself
+# again. `test_the_finish_line_is_not_bolded` is what keeps it true.
 FINISHED = "The grand staircase is whole again"
 BOARD_MEETING = "board_meeting"
 
@@ -343,18 +350,59 @@ async def test_the_room_reads_the_writers_line(hall):
 async def test_and_it_names_who_hammered_it_in(hall):
     """The line opens with `{player}`, which only Discord can fill.
 
-    **Asked of the finish sentence and not of the room.** The display
-    name is somewhere in what the room has seen either way, because the
-    plank's own `use` line opens with it too - so this asserted nothing
-    until a mutation run left the announcement unfilled and the test
-    went on passing with a raw `{player}` posted in the thread.
+    **This used to read `"{name} hammers in the last plank"`**, and the
+    two halves of that phrase are no longer adjacent: the name opens a
+    sentence that reaches the hammering seventeen words later. So the
+    assertion is the opening instead, which is where the token is.
+
+    The note it carried is still the point. The display name used to
+    appear in the thread either way, because the plank's own `use` line
+    opened with it too, so an unfilled `{player}` in the finish sentence
+    went unnoticed until a mutation run produced one. There is only one
+    sentence now and the name appears once, which is what makes a bare
+    opening assertion enough.
     """
     _, guild, _, _ = hall
     name = guild.get_member(BOB).display_name
     await finish_it(hall, who=BOB)
 
-    assert f"{name} hammers in the last plank" in posted(hall)
+    assert f"{name} leans the" in posted(hall)
     assert "{player}" not in posted(hall)
+
+
+async def test_the_ladder_finish_is_the_one_a_real_target_reaches(hall):
+    """The other half of `test_the_floor_finish_does_not_mention_the
+    _ladder`. A ten-plank staircase puts the last plank above the reach
+    line, so the finish is the climb - and the floor line, which is
+    right for a one-plank QA server, would be wrong here.
+    """
+    await finish_it(hall)
+    room = posted(hall)
+
+    assert "leans the ladder against the staircase" in room
+    assert "hauls a plank over to the staircase" not in room
+
+
+async def test_and_the_room_reads_one_sentence_rather_than_three(hall):
+    """**The whole of the change of 5 November.** The room used to get
+    the climb line, then the repair count on its own line, then the
+    finish sentence under a blank line - which told it the plank went
+    into "one of the top steps, then climbs back down" and then, two
+    lines later, that it had been the last one.
+
+    Asserted as the absence of the two parts that went away, because
+    asserting the sentence itself is `test_the_room_reads_the_writers_line`
+    directly above. The count is the sharper of the two: "10 of 10
+    repairs done" is a progress line reporting that there is no more
+    progress to make.
+    """
+    await finish_it(hall)
+    room = posted(hall)
+
+    assert FINISHED in room
+    assert f"of {TARGET} repairs done" not in room
+    assert "then climbs back down" not in room
+    assert "\n\n" not in room
 
 
 async def test_the_lumber_is_gone_afterwards(hall):
@@ -412,9 +460,9 @@ async def test_the_server_does_not_earn_it(hall):
 
 
 async def test_it_is_announced_once_in_the_group_style(hall):
-    """Once however many contributors, and as the server's rather than
-    as anybody's - there is no one earner to name, which is what makes
-    it a `group` row at all.
+    """Once however many contributors. It is still a `group` row - there
+    is no single earner and nobody gets a private message - but since
+    5 November the line names the contributors rather than the server.
 
     In the channel rather than in the room, which is where every
     achievement in the game is announced: the staircase is the
@@ -423,6 +471,90 @@ async def test_it_is_announced_once_in_the_group_style(hall):
     await finish_it(hall, who=BOB)
 
     assert in_the_channel(hall).count("Board Meeting") == 1
+
+
+async def test_the_credit_line_names_everybody_who_laid_a_plank(hall):
+    """**Which is the whole argument of the row, finally in the
+    sentence.** It goes to the contributors rather than the server
+    because the staircase is work not everybody did; a line crediting
+    the server thanks the people who never picked up a hammer, which is
+    the same objection that kept this row parked for two releases.
+
+    Alice laid the first nine and Bob the last, so both are named on a
+    line neither of them earned alone.
+    """
+    _, guild, _, _ = hall
+    await finish_it(hall, who=BOB)
+    announced = in_the_channel(hall)
+
+    assert guild.get_member(ALICE).display_name in announced
+    assert guild.get_member(BOB).display_name in announced
+
+
+async def test_and_does_not_credit_the_player_who_never_helped(hall):
+    """Carol stood in the Entryway for the whole repair. The award
+    already passes her by; so does the thank-you."""
+    _, guild, _, _ = hall
+    await finish_it(hall, who=BOB)
+
+    assert guild.get_member(CAROL).display_name not in in_the_channel(hall)
+
+
+async def test_and_does_not_credit_the_server(hall):
+    """The other three `group` rows still name the server, and this one
+    stopped. Asserted because the fallback is a real branch: a line with
+    no resolvable contributor on it goes back to the server's name
+    rather than announcing a thank-you addressed to nobody."""
+    _, guild, _, _ = hall
+    await finish_it(hall, who=BOB)
+
+    assert guild.name not in in_the_channel(hall)
+
+
+async def test_a_contributor_discord_cannot_name_is_left_out(hall):
+    """Somebody who laid a plank and then left the server has no display
+    name to print, and a raw id in a sentence thanking people is worse
+    than a shorter list. Their award row stays either way - this is the
+    credit line, not the achievement.
+    """
+    _, guild, _, _ = hall
+    gone = 999
+
+    names = bot._contributors_of(
+        SimpleNamespace(recipients=(ALICE, gone, BOB)), guild
+    )
+
+    assert names == sorted(
+        [guild.get_member(ALICE).display_name, guild.get_member(BOB).display_name],
+        key=str.casefold,
+    )
+
+
+async def test_the_credit_line_counts_what_it_could_not_fit(hall):
+    """A ninety-plank staircase can be ninety different players, and a
+    message over Discord's limit does not come back truncated - it fails
+    to post. So the overflow is counted.
+
+    Asked of the helper with a small budget rather than by building a
+    guild of ninety members: the arithmetic is the subject and the
+    members would be scenery. It takes `hall` all the same, because the
+    clause that says what was left out is a writers' key and reading it
+    needs the content in a database.
+    """
+    names = [f"Player {n}" for n in range(1, 21)]
+
+    line = await bot._credit_list(names, budget=60)
+
+    assert line.startswith("Player 1, Player 2")
+    assert "others" in line
+    assert len(line) <= 60 + len("and 00 others")
+
+
+async def test_and_names_everybody_when_they_fit():
+    """The ordinary case, and the one the request was about: all of them."""
+    line = await bot._credit_list(["Ada", "Bo", "Cy"], budget=2000)
+
+    assert line == "Ada, Bo, Cy"
 
 
 async def test_it_does_not_fire_on_an_ordinary_plank(hall):

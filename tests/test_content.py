@@ -116,7 +116,18 @@ def test_the_shipped_content_parses():
     # carrier is told where on their next command. Separate keys from
     # `exhausted.public` because the two clocks describe two different
     # afternoons - see `world.SET_DOWN_WHEN_IDLE`.
-    assert len(c.defaults) == 165
+    #
+    # And two on 5 November, both the staircase award's: a group line
+    # that names the people who did the work instead of the server, and
+    # the clause that counts the names it could not fit. The server
+    # line stays for the three group rows that really are the server's -
+    # collecting 25 of something is not work a subset did.
+    #
+    # And a third the same day, the staircase finish laid from the
+    # floor. A one-plank target crosses both thresholds at once, so the
+    # last plank is also the first and no ladder is involved - which the
+    # ordinary finish line describes anyway until there are two of them.
+    assert len(c.defaults) == 168
     # Ten since 31 October: the ground floor arrives in two halves, and
     # 25 sits below the ceiling rather than above it, which is why
     # nothing else in the suite noticed.
@@ -1012,6 +1023,16 @@ def test_the_two_public_copy_sets_are_what_world_posts():
     somebody edits either set, so the edit is a decision rather than a
     drift - and point at the three functions to check against. If this
     test fails, the question to ask is whether `world` agrees.
+
+    **It did that on 5 November and the answer was yes.** The
+    staircase's finish moved out of `Effect.announce`, which was
+    appended to the plank's line, and into `Effect.say`, which replaces
+    it - so `_place_a_plank` now decides a default key as well as
+    posting the lumber's own cell, and names two of them because a
+    one-plank target finishes from the floor with no ladder. Both are
+    public lines in `defaults.tsv`, which is this set's whole
+    definition. The tripwire did its job: the edit was made with the
+    change rather than noticed two releases later.
     """
     assert content.PUBLIC_USE_THINGS == {"lumber", "rattle", "music_box"}
     assert content.PUBLIC_USE_DEFAULTS == {
@@ -1019,6 +1040,8 @@ def test_the_two_public_copy_sets_are_what_world_posts():
         "watering_can.water.full",
         "watering_can.water.partly_full",
         "watering_can.fill",
+        "stairs.repaired.public",
+        "stairs.repaired.public.floor",
     }
 
 

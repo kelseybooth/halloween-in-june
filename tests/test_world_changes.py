@@ -166,7 +166,10 @@ async def test_the_announcement_does_not_repeat(house):
 
     again = await world.after_use(GUILD_A, BOB, "lumber", "EN")
 
-    assert again.announce is None
+    # `say` rather than `announce`, which is the same question asked of
+    # the field that replaced it: the finish sentence is the use's own
+    # line now instead of one appended to it.
+    assert again.say is None
 
 
 async def test_the_upper_state_is_set_on_the_way(house):
