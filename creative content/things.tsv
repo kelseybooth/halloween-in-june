@@ -56,7 +56,7 @@ skeleton_key	skeleton key	skeleton key|key|iron key	object		0	yes	no	0	1								
 rolltop_desk	roll-top desk	roll-top desk|desk|rolltop|papers	fixture	UH	1	no	yes	0										40	49					
 reading_glasses	reading glasses	glasses|reading glasses|specs	object	UH	1	no	yes	1								rolltop_desk		40	50					
 door_manual	door-hardware manual	manual|door manual|hardware manual	fixture	UH	1	no	yes	0										40	51					
-crowbar	small crowbar	crowbar|pry bar|bar	fixture	UH	1	no	yes	0										40	52					
+crowbar	small crowbar	crowbar|pry bar|bar	fixture	UH	1	no	yes	0										99	52					
 bad_smell	bad smell	bad smell|smell|stink|stench|odour|odor	fixture	UH	1	no	yes	0										40	53					
 oak_wardrobe	oak wardrobe	wardrobe|oak wardrobe|closet	fixture	UH	1	no	yes	0										40	54					
 faded_portraits	faded portraits	portraits|paintings|photographs|pictures|framed portraits	fixture	UH	1	no	yes	0										40	55					
@@ -125,8 +125,8 @@ ED	arched doorway	arch|arched doorway|doorway|dining room|dining	exit	EN	1	no	ye
 DE	arched doorway	arch|arched doorway|entryway|hall|doorway|door	exit	DI	1	no	yes	0							EN			25	117					
 EL	wide doorway	wide doorway|doorway|living room|living	exit	EN	1	no	yes	0							LI			30	118					
 LE	wide doorway	wide doorway|doorway|entryway|hall|door	exit	LI	1	no	yes	0							EN			30	119					
-EH	grand staircase	main staircase|staircase|stairs|banister|upstairs|grand staircase	exit	EN	1	no	yes	0							UH			20	120					
-HE	grand staircase	grand staircase|main staircase|staircase|stairs|downstairs	exit	UH	1	no	yes	0							EN			40	121					
+EH	staircase	main staircase|staircase|stairs|banister|upstairs|grand staircase	exit	EN	1	no	yes	0							UH			20	120					
+HE	staircase	grand staircase|main staircase|staircase|stairs|downstairs	exit	UH	1	no	yes	0							EN			40	121					
 DK	swinging door	swinging door|kitchen door|kitchen|doorway|door	exit	DI	1	no	yes	0							KI			25	122					
 KD	swinging door	swinging door|dining room|dining|doorway|door	exit	KI	1	no	yes	0							DI			25	123					
 KC	back door	back door|courtyard|garden|outside|glazed back door|glass door|doorway|door	exit	KI	1	no	yes	0							CO			30	124					

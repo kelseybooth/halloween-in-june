@@ -567,6 +567,12 @@ async def test_the_ceiling_reaches_the_upstairs(started):
     in. Lowering the ceiling back below 40 fails here, and so does a
     release that raises it to 40 before the rooms are in the files.
 
+    **The Hallway's witness used to be the crowbar**, which moved to
+    drop 99 on 5 November and stopped proving anything about 40. The
+    wardrobe took its place: it is the one thing up there written as
+    immovable - fifty years against the same wall - so it is the least
+    likely of the five to be the next thing a playtest moves.
+
     It does not test the way *up*. The staircase is a server state and
     ninety planks, and is deliberately not the ceiling's business -
     `test_the_ladder` and the staircase's own tests own that.
@@ -578,7 +584,7 @@ async def test_the_ceiling_reaches_the_upstairs(started):
     visible = await resolve.visible_thing_ids(GUILD_A)
 
     assert {
-        "crowbar", "music_box", "baby_monitor", "cat_bowl_hallway",
+        "oak_wardrobe", "music_box", "baby_monitor", "cat_bowl_hallway",
     } <= visible
 
 

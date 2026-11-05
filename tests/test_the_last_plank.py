@@ -62,7 +62,15 @@ CAROL = 400
 TARGET = 10
 UPPER_AT = 8
 
-FROM_THE_FLOOR = "hauls a plank over to the staircase"
+# **Stops before the staircase, for the ladder's reason one step on.**
+# The exit was named "grand staircase" and answered to `staircase` as a
+# single-word alias, and `content.markable` does not bold those - they
+# are "a convenience for the parser, not a noun a sentence is about".
+# The rename on 5 November made `staircase` the *name*, and a name is
+# always markable, so the word is bold here now and the phrase stopped
+# matching itself. `plank` is still safe: it is a one-word alias of the
+# lumber, so it stays plain.
+FROM_THE_FLOOR = "hauls a plank over to the"
 # Not "leans the ladder": `ladder` is a thing in the room, so the
 # engine bolds the word and the phrase stops matching itself.
 FROM_THE_LADDER = "climbs with a plank under one arm"
