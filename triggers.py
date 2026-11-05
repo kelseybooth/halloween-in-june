@@ -474,16 +474,33 @@ def _on_date(matches, targets: set[str], *, source_only: bool = False):
 
 
 # --------------------------------------------------------------------------
-# Green Thumb
+# Green Thumb, and Growth Spurt below it
 #
-# The only achievement assembled out of several different actions rather
-# than counted or triggered by one, which is what makes it the only one
-# that needs to remember anything between commands.
+# The achievements assembled out of several different actions rather than
+# counted or triggered by one, which is what makes them the ones that
+# have to remember anything between commands. They remember it the same
+# way: `thing_uses` already holds a row per player per thing, so "which
+# of these has this player done" is one indexed read and no new state.
+#
+# This said "the only achievement" and named one until 5 November.
+# Growth Spurt is the second, and a sentence counting them is the kind
+# that goes stale without anybody noticing - the person adding the
+# second case is the one person who will not grep for a claim that there
+# is one.
 # --------------------------------------------------------------------------
 
 # Two of the three parts are a `thing_uses` row and nothing more. The
 # watering is not, since 2 November: see `green_thumb` below.
 GREEN_THUMB_PARTS = (PUMPKINS, HERB_GARDEN)
+
+# Marcus's wardrobe, in the three rooms it is scattered across: the
+# booties in the Entryway since drop 20, the sunhat in the Courtyard
+# since 30, and the clothes on the hallway railing since 40.
+#
+# **All three parts are a plain `thing_uses` row**, which is what makes
+# this the cheaper of the two: each piece has one `use` that does one
+# thing, so unlike the watering can there is no branch to tell apart.
+GROWTH_SPURT_PARTS = ("booties", "sunhat", "baby_clothes")
 
 # Aunt Sue's, and the only thing in the house anybody would carry to
 # ten rooms on purpose.
@@ -537,6 +554,48 @@ async def green_thumb(context: Context) -> bool:
         context.user_id, context.guild_id, telemetry.USE, world.WATERING_CAN
     )
     return world.HERB_GARDEN_ROOM in watered
+
+
+async def growth_spurt(context: Context) -> bool:
+    """Booties, sunhat and baby clothes. Any order, any days, no date.
+
+    **The history was already there, so nothing was backfilled.** The
+    brief expected a one-time copy out of `thing_uses` for the sunhat,
+    on the grounds that uses from drop 30 have to count. They do count,
+    and they count for free: `thing_uses` *is* the durable record, one
+    row per player per thing, written by every successful use since the
+    table existed. There was nothing to backfill it from and nothing to
+    backfill it to. Checked against production before building this -
+    46 booties uses across 20 players and 15 sunhat uses across 8 were
+    already sitting there, and the predicate reads them directly.
+
+    **Which also means revising the booties' own `use` text changes
+    nothing here.** That line is being rewritten so it describes trying
+    them on rather than tidying them, which the achievement's wording
+    needs; the rows it already wrote are not affected, so the twenty
+    players who have turned a bootie right side out keep that part.
+
+    **The clothes arriving last is what makes it safe to ship cold.**
+    They are drop 40 and the other two are older, so on the day this
+    lands nobody holds all three - production had eight players on two
+    of three and none on three. Every award therefore fires on a use
+    made after the row exists, which is the ordinary path.
+
+    Were that not true, the shape would still cover it: this is a state
+    test rather than an event test, so a player who somehow qualified
+    first earns it on their next use of any of the three rather than
+    never. Same reasoning as *Tireless* - "at least", not "exactly the
+    one that completed it".
+
+    No early-out on the thing being used, for the reason `green_thumb`
+    gives at length: the condition is "all three parts done" and a
+    guard reading "...and this action was one of them" would be a
+    second condition the design does not ask for.
+    """
+    done = await database.which_of_these_used(
+        context.user_id, context.guild_id, GROWTH_SPURT_PARTS
+    )
+    return len(done) == len(GROWTH_SPURT_PARTS)
 
 
 # ------------------------------------------------------------------------
@@ -1131,6 +1190,11 @@ def register_all() -> None:
     add("self_reflection", "on_use", _on_thing(MIRRORS))
     # The one that shapes the signature: three parts across two hooks.
     add("green_thumb", ("on_use", "on_take"), green_thumb)
+    # Three parts too, but all of them a `/use`, so one hook covers it.
+    # Drawing herbs from the garden is a `/take` that stamps a use,
+    # which is why Green Thumb needs the second hook and this does not:
+    # none of the three pieces of the wardrobe is takeable.
+    add("growth_spurt", "on_use", growth_spurt)
     add("nacho_average_ghost", "on_use", _on_thing({NACHO_CHIPS}))
     # The two trails, drop 50. Both read `room_deeds`, which is written
     # on every climb that reached the top and every `/drop` that put

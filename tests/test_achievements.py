@@ -91,9 +91,13 @@ def test_the_shipped_file_parses():
     # could reach the upstairs - the music box is in the Nursery, so the
     # release that made the room reachable is the one that made the
     # achievement earnable.
-    assert len(parsed.achievements) == 57
+    # Fifty-eight on 5 November: *Growth Spurt*, for trying on all three
+    # pieces of baby clothing the house has. A drop 40 row, and the only
+    # new thing in it is the row - the booties, the sunhat and the
+    # clothes were all usable already.
+    assert len(parsed.achievements) == 58
     # The ids are a set, so this pair is also the file's duplicate check.
-    assert len(parsed.achievement_ids) == 57
+    assert len(parsed.achievement_ids) == 58
 
 
 def test_the_shipped_file_validates():
@@ -212,7 +216,7 @@ async def test_the_rows_reach_the_database(db):
 async def test_the_whole_shipped_file_loads(db):
     await content_loader.load_content(content_module.load_files())
 
-    assert await row_count(db, "achievements") == 57
+    assert await row_count(db, "achievements") == 58
 
 
 async def test_a_reload_replaces_the_rows(db):
