@@ -43,6 +43,10 @@ THIS_DROP = 20
 # A phrase out of `stairs.repaired.public`, which is what the room reads
 # when the last plank goes in. Not the whole line: it opens with
 # `{player}`, and the fake's display names are long numbers.
+#
+# Nouns in it are safe: the finish line opts out of the noun marker
+# through `Effect.marked`, because bolding the staircase in the sentence
+# that says it is whole reads as an instruction rather than as news.
 FINISHED = "The grand staircase is whole again"
 
 
@@ -468,6 +472,17 @@ async def test_the_finish_line_goes_to_the_room(hall):
     sat in the deck unread - the shipping box's failure in another
     costume - so the assertion moved to the row that was always
     supposed to carry it.
+
+    **A one-plank target is also the one target that finishes without a
+    ladder**, which is why there are two finish lines. At a target of
+    one, `int(1 * 0.8)` is zero, so the first plank crosses into
+    `stairs_upper` and finishes the job in the same breath, laid from
+    the floor. Every target of two or more puts the last plank above the
+    reach line, where the top steps refuse without the ladder at hand.
+    So this test reaches `stairs.repaired.public.floor` and
+    `test_the_last_plank` reaches the ladder one; `FINISHED` is the half
+    of the sentence they share. `test_the_floor_finish_does_not_mention
+    _the_ladder` below is the one that cares which.
     """
     db, *_ = hall
     await target(db, 1)
@@ -475,6 +490,42 @@ async def test_the_finish_line_goes_to_the_room(hall):
     await plank(hall)
 
     assert FINISHED in posted(hall)
+
+
+async def test_the_floor_finish_does_not_mention_the_ladder(hall):
+    """**The whole reason there are two finish lines.** A one-plank
+    target is laid from the floor with no ladder anywhere, and the
+    ordinary finish opens "leans the ladder against the staircase" - a
+    climb nobody made, narrated to a room that watched them not make it.
+
+    Asserted both ways round, because only naming the floor line would
+    pass just as well if neither line were reached at all.
+    """
+    db, *_ = hall
+    await target(db, 1)
+
+    await plank(hall)
+    room = posted(hall)
+
+    assert "hauls a plank over to the staircase" in room
+    assert "ladder" not in room
+
+
+async def test_the_finish_line_is_not_bolded(hall):
+    """Marking tells a player which words they can type, and this line
+    is the house saying the staircase is finished. It named the
+    staircase in bold for a day, which read as an instruction.
+
+    A one-plank target reaches it without the ladder in the room, so the
+    only markable noun left in the sentence is the staircase itself -
+    which is the one the bolding was wrong about.
+    """
+    db, *_ = hall
+    await target(db, 1)
+
+    await plank(hall)
+
+    assert "**" not in posted(hall)
 
 
 async def test_and_the_next_plank_does_not_say_so_again(hall):

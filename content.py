@@ -2455,9 +2455,22 @@ PUBLIC_VERBS = ("take", "drop")
 PUBLIC_USE_THINGS = frozenset({"lumber", "rattle", "music_box"})
 
 # And the public lines that live in `defaults.tsv` instead of in a
-# thing's own `use` cell. The watering can's four: its line depends on
-# the room *and* the level, which no `thing_text` key can express, so
-# `Effect.say` names a default instead - see `world.Effect`.
+# thing's own `use` cell, because `Effect.say` named a default instead
+# of a `thing_text` row - see `world.Effect`.
+#
+# The watering can's four are here because its line depends on the room
+# *and* the level, which no `thing_text` key can express. The
+# staircase's two are here because the finish sentence replaces the
+# plank's line rather than varying it, so there is no row it could have
+# been written in; they joined on 5 November, when that sentence stopped
+# being appended to the plank's line and became the line.
+#
+# **A set that grows is a set somebody has to remember to grow.** These
+# two arrived with the change that made them public and were added by
+# the same change, which is the only version of this that works - the
+# thing set above was stale for two releases precisely because the
+# person adding the second and third members did not think to look for
+# a list naming the first.
 #
 # Named one by one rather than taken from the `.public` suffix, because
 # the suffix does not mean what it looks like. `delivery.arrived.public`
@@ -2471,6 +2484,8 @@ PUBLIC_USE_DEFAULTS = frozenset(
         "watering_can.water.full",
         "watering_can.water.partly_full",
         "watering_can.fill",
+        "stairs.repaired.public",
+        "stairs.repaired.public.floor",
     }
 )
 
@@ -2539,11 +2554,11 @@ def _check_a_public_use_names_the_player(content: Content) -> list[str]:
 def _check_a_public_default_names_the_player(content: Content) -> list[str]:
     """And the same for a public line that lives in `defaults.tsv`.
 
-    The watering can's fill and its three pours are posted to the room
-    and keyed in the defaults rather than in `thing_text`, so the check
-    above cannot see them: it walks `thing_text` rows, and these are not
-    rows. Without this they were the fourth way to write "you" into a
-    sentence a whole room reads.
+    The watering can's fill and its three pours, and the staircase's two
+    finishes, are posted to the room and keyed in the defaults rather
+    than in `thing_text`, so the check above cannot see them: it walks
+    `thing_text` rows, and these are not rows. Without this they were
+    the fourth way to write "you" into a sentence a whole room reads.
 
     Checked on `{player}` rather than on the absence of "you", for the
     reason the take and drop check gives: the token is what makes the

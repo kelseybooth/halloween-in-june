@@ -2,7 +2,7 @@ achievement_id	kind	name	unlock	since_drop	sort_order	offered	prompt	requires	no
 strength_in_numbers	group	Strength in Numbers	Who knows why you all collected 25 of something, but here's a prize.	20	10				
 making_a_mess	group	Making a Mess	Amassed 200 things into a single room.	20	20				
 the_feline_collection	group	The Feline Collection	There was a LOT of cat food in that mess.	20	30				
-board_meeting	group	Board Meeting	Got together and nailed down the grand staircase repair.	30	40				Awarded when the last staircase plank goes in, right after stairs.repaired.public, but only to players who laid at least one plank. Announced once, in the group style; players who never laid a plank don't get it. Moved from 99 to 30 on 30 October: drop 30 builds the contributor-only group award
+board_meeting	group	Board Meeting	Got together and hammered out a grand staircase repair.	30	40				Awarded when the last staircase plank goes in, right after stairs.repaired.public, but only to players who laid at least one plank. Announced once, in the group style; players who never laid a plank don't get it. Moved from 99 to 30 on 30 October: drop 30 builds the contributor-only group award
 passing_a_message_to_david	public	Passing a Message to David	Used Alexa to remind David about his auto-delivery.	99	10				Blocked: waits for Alexa, held back for more testing on 29 October
 charcuterie_board	public	Charcuterie Board	Collected all five flavors of cat food.	40	20				
 found_the_specs	public	Found the Specs	Found David's reading glasses in the desk.	40	30				

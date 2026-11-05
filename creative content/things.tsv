@@ -59,7 +59,7 @@ door_manual	door-hardware manual	manual|door manual|hardware manual	fixture	UH	1
 crowbar	small crowbar	crowbar|pry bar|bar	fixture	UH	1	no	yes	0										40	52					
 bad_smell	bad smell	bad smell|smell|stink|stench|odour|odor	fixture	UH	1	no	yes	0										40	53					
 oak_wardrobe	oak wardrobe	wardrobe|oak wardrobe|closet	fixture	UH	1	no	yes	0										40	54					
-faded_portraits	faded portraits	portraits|paintings|photographs|pictures	fixture	UH	1	no	yes	0										40	55					
+faded_portraits	faded portraits	portraits|paintings|photographs|pictures|framed portraits	fixture	UH	1	no	yes	0										40	55					
 halloween_box	Halloween box	halloween box|moving box|box	fixture	BE	1	no	yes	0										40	56					
 carving_tools	carving tools	carving tools|tools|carving kit	object		0	yes	no	0	1									40	57					
 can_opener	can opener	can opener|opener|tin opener	object		0	yes	yes	0	1									25	0					

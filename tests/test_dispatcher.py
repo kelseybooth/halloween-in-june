@@ -593,10 +593,18 @@ async def test_a_recorded_channel_that_is_gone_falls_back_too(guild, halloween):
     assert posted(halloween)
 
 
-async def test_all_three_strings_come_from_defaults(guild):
+async def test_every_announcement_string_comes_from_defaults(guild):
+    """Named for the property rather than the count, which was "all
+    three" until 5 November added two."""
     defaults = content_module.load_files().defaults
 
-    for key in ("achievement.private", "achievement.public", "achievement.public.group"):
+    for key in (
+        "achievement.private",
+        "achievement.public",
+        "achievement.public.group",
+        "achievement.public.group.named",
+        "achievement.public.group.more",
+    ):
         assert defaults.get(key), key
 
 
@@ -606,6 +614,20 @@ async def test_the_group_line_uses_the_server_token(guild):
     assert "{server}" in defaults["achievement.public.group"]
     assert "{description}" in defaults["achievement.public.group"]
     assert "{description}" not in defaults["achievement.public"]
+
+
+async def test_and_the_named_variant_uses_the_players_token(guild):
+    """The two group lines differ only in who is thanked, so the tokens
+    are the test: one names the server and one names the people. A
+    `{server}` left in the named line would read as the server having
+    done work this row exists to credit to players."""
+    defaults = content_module.load_files().defaults
+    named = defaults["achievement.public.group.named"]
+
+    assert "{players}" in named
+    assert "{description}" in named
+    assert "{server}" not in named
+    assert "{more}" in defaults["achievement.public.group.more"]
 
 
 # --------------------------------------------------------------------------

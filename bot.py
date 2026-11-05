@@ -3914,11 +3914,13 @@ async def _finish_use(interaction, state, found) -> None:
         current = (effect.text_state, *current)
 
     if effect is not None and effect.say:
-        # **The use chose its own line, out of the defaults.** The watering
-        # can is the only one: watering, filling and finding nothing to
-        # water are three answers to one verb, and which one it is depends
-        # on the room and the level together - a pair `thing_text` has no
-        # way to be keyed on. Everything else is described by its own row.
+        # **The use chose its own line, out of the defaults**, for the
+        # two uses `thing_text` cannot key. Watering, filling and
+        # finding nothing to water are three answers to one verb, and
+        # which one it is depends on the room and the level together.
+        # The last plank is the other: the finish sentence replaces the
+        # plank's line rather than varying it, so there is no row it
+        # could have been written in.
         reply = await phrasing.default_say(
             effect.say, name=found.name, player=user.display_name, **tokens
         )
@@ -3935,20 +3937,20 @@ async def _finish_use(interaction, state, found) -> None:
     # an achievement, a relationship line, the hint rail - is the game
     # talking about itself rather than about the room, and nothing in it
     # is a noun to type.
-    try:
-        reply = await reach.mark_nouns(
-            guild_id, user.id, state.current_room, reply,
-            except_for=found.thing_id,
-        )
-    except SQLAlchemyError:
-        log.exception("Could not mark the nouns in %s's use text", found.thing_id)
-    if effect and effect.announce:
-        # Filled here because only Discord knows the display name, and
-        # the one announcement in the game that has a `{player}` in it
-        # is the last plank's.
-        announced = phrasing.fill(effect.announce, player=user.display_name)
-        reply = f"{reply}\n\n{announced}" if reply else announced
-
+    #
+    # **A use can opt out**, and the staircase's finish is the one that
+    # does. Marking says "these words are things to type at"; that line
+    # is the house announcing an event, and bolding the staircase in the
+    # sentence that says it is finished reads as an instruction rather
+    # than news. See `Effect.marked`.
+    if effect is None or effect.marked:
+        try:
+            reply = await reach.mark_nouns(
+                guild_id, user.id, state.current_room, reply,
+                except_for=found.thing_id,
+            )
+        except SQLAlchemyError:
+            log.exception("Could not mark the nouns in %s's use text", found.thing_id)
     # Awarded before the rail reads anything, announced after the reply
     # goes out. A tester who used the cat bed was told *Fluffed to
     # Perfection* was available by the very message that earned it,
@@ -4208,11 +4210,28 @@ async def _announce(award, *, interaction=None, guild=None) -> None:
 
     if award.user_id is None:
         # A group achievement has no earner, so "somebody earned" is the
-        # wrong sentence and there is nobody to write to privately. The
-        # server is named instead, and this is the one place the description
-        # belongs in public.
+        # wrong sentence and there is nobody to write to privately. This
+        # is the one place the description belongs in public.
+        #
+        # **Who is named depends on who the award went to.** The three
+        # that go to the server name the server, because the server is
+        # what collected 25 of something and no smaller group did. The
+        # one that goes to its contributors names them: the staircase is
+        # collective work that not everybody did, and crediting the
+        # server would thank players who never picked up a hammer -
+        # which is the same objection that kept the row parked for two
+        # releases, showing up again in the sentence.
+        contributors = await _credit_list(
+            _contributors_of(award, guild),
+            # The rest of the line, minus what the names go in. Measured
+            # rather than guessed so the reserve does not have to be
+            # re-tuned when the copy changes.
+            budget=phrasing.MESSAGE_LIMIT - len(award.name) - len(award.unlock) - 20,
+        )
         line = await phrasing.default_say(
-            "achievement.public.group",
+            "achievement.public.group.named" if contributors
+            else "achievement.public.group",
+            players=contributors,
             server=guild.name,
             achievement=award.name,
             description=award.unlock,
@@ -4277,6 +4296,74 @@ async def _announce(award, *, interaction=None, guild=None) -> None:
         await interaction.followup.send(content_, embed=embed, ephemeral=True)
     except discord.HTTPException:
         log.warning("Could not send %s privately", award.achievement_id, exc_info=True)
+
+
+def _contributors_of(award, guild) -> list[str]:
+    """The display names on a group award, in a settled order.
+
+    **Sorted by name rather than left in the order the ids arrived.**
+    `users_of` reads them off `thing_uses`, whose order is the
+    database's business and not a fact about the staircase - so an
+    unsorted list would reshuffle the same credits between two servers
+    that did the same work. Nothing in the repair makes one contributor
+    first: ninety planks go in over days, the rows carry no sequence
+    worth reading, and alphabetical is at least the same answer twice.
+
+    **A name Discord cannot resolve is dropped.** Somebody who laid a
+    plank and then left the server has no display name to print, and
+    the alternative is a raw id in a sentence thanking people. Their row
+    stays - `/stats` still shows it to them if they come back - so this
+    drops them from the credit line and not from the award.
+    """
+    if not award.recipients:
+        return []
+    names = []
+    for user_id in award.recipients:
+        member = guild.get_member(user_id)
+        if member is not None:
+            names.append(member.display_name)
+    return sorted(names, key=str.casefold)
+
+
+async def _credit_list(names: list[str], *, budget: int) -> str:
+    """Join the names, and say how many did not fit.
+
+    Same shape as `phrasing.listing` and deliberately not a call to it:
+    that one is the `Also here:` line and takes its separator and its
+    truncation clause from the `also_here.*` keys, which have no
+    business phrasing an achievement. The idiom is shared; the copy is
+    not.
+
+    **Every contributor is named while they fit**, which is what the
+    line is for - the whole point of this award is that it goes to the
+    people who did the work rather than to the server. A ninety-plank
+    staircase can be ninety different players, though, and a message
+    over Discord's limit does not get truncated, it fails to post. So
+    the overflow is counted rather than risked.
+    """
+    if not names:
+        return ""
+    separator = ", "
+    kept: list[str] = []
+    length = 0
+    for index, name in enumerate(names):
+        addition = len(name) + (len(separator) if kept else 0)
+        remaining = len(names) - index
+        # Room for the clause that says what was left out, needed only
+        # when something actually is.
+        reserve = 0 if remaining == 1 else 40
+        if length + addition + reserve > budget:
+            break
+        kept.append(name)
+        length += addition
+
+    if len(kept) == len(names):
+        return separator.join(kept)
+
+    tail = await phrasing.default_say(
+        "achievement.public.group.more", more=len(names) - len(kept)
+    )
+    return separator.join(kept) + separator + tail
 
 
 def _earner_of(award, interaction, guild) -> str | None:
