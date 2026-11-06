@@ -70,6 +70,20 @@ HOOKS = (
     # the moment they see the trash can.
     "on_look",
     "on_midnight",
+    # One player picking up what another put down. **A hook of its own
+    # rather than a predicate on `on_take`**, because the earner is not
+    # the actor: *Pass It On* goes to whoever set the thing down, and
+    # the player who fired the hook is the one who took it. Firing
+    # `on_take` a second time with the setter as `user_id` would run
+    # every other take predicate against a take they did not make.
+    #
+    # It also decides how the award is announced. A context fired with
+    # no interaction takes the public-line-and-@mention path through
+    # `_announce`, which is the right one here: the setter has no
+    # interaction token in flight, and the private half of an ordinary
+    # award would arrive in the taker's ephemeral reply telling them
+    # they had earned something that went to somebody else.
+    "on_hand_off",
     "on_cross",
     # Every slash command, after it has run. The widest hook there is,
     # and the only one that can answer "was this player here at all" -

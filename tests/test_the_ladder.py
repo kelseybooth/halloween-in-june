@@ -810,6 +810,7 @@ async def test_but_a_climb_she_takes_is_not(house, monkeypatch):
     ) == set()
 
 
+
 # ------------------------------------------------------------------------
 # Walking away from it, and asking where it went
 #
@@ -866,3 +867,635 @@ async def test_and_carrying_it_in_describes_the_ladder(house):
     reply = replies(await run(house, bot.look, "ladder", room="KI"))
 
     assert "heavy, it's awkward" in reply
+
+
+
+# ------------------------------------------------------------------------
+# The other five, 6 November
+#
+# One work order, five achievements, three hooks. They are all here
+# rather than in `test_triggers` because all five turn on what a handler
+# writes - the tallies and the set-down offer - and a predicate tested on
+# a hand-built context would pass while no command ever wrote the number
+# it reads. `test_triggers` has the conditions; this has the mechanics.
+#
+# The work order's acceptance tests are the spine of this section: with
+# an audience and one fewer, three cat climbs and somebody else's swats,
+# five minutes and eleven, four moves and a drop after three.
+# ------------------------------------------------------------------------
+
+KING = "king_of_the_mountain"
+SECOND = "second_place"
+PASS_IT_ON = "pass_it_on"
+HEAVY = "heavy_lifting"
+HEIGHTS = "head_for_heights"
+
+
+async def an_audience_of(house, how_many, room, *, awake=True):
+    """Players standing in a room, stamped as having just done something.
+
+    Awake means stamped: `active_others_in_room` reads
+    `last_command_at`, because where somebody is standing says nothing
+    about whether anybody is at the keyboard.
+    """
+    db, *_ = house
+    watchers = []
+    for n in range(how_many):
+        who = 300000000000000000 + n
+        await db.ensure_user_exists(who, GUILD_A)
+        await db.start_game(who, GUILD_A, room, [room])
+        await db.update_current_room(who, GUILD_A, room)
+        if awake:
+            await db.stamp_command(who, GUILD_A)
+        watchers.append(who)
+    return watchers
+
+
+async def walk(house, door, room, who=ALICE):
+    """One real move, through a real door, with whatever is in the bag."""
+    return await use_it(house, door, room, who=who)
+
+
+async def tally(column, who=ALICE):
+    async with database._require_session()() as session:
+        return await session.scalar(
+            select(getattr(database.User, column)).where(
+                database.User.id == who, database.User.guild_id == GUILD_A
+            )
+        )
+
+
+async def age_the_offer(minutes):
+    """Back-date the standing set-down so the window can be tested.
+
+    **Not the clock offset**, which the lock tests use: `CLOCK_KEY` is
+    `clock_offset_days`, so the smallest step it can take is a day and
+    it cannot tell five minutes from eleven. Moving the row is the
+    honest way to age it, and it is the row the window is read against.
+    """
+    async with database._require_session()() as session:
+        await session.execute(
+            update(database.SetDownOffer)
+            .where(
+                database.SetDownOffer.guild_id == GUILD_A,
+                database.SetDownOffer.thing_id == world.LADDER,
+            )
+            .values(
+                at=await database.server_now(GUILD_A) - timedelta(minutes=minutes)
+            )
+        )
+        await session.commit()
+
+
+async def climb_log(house):
+    """Every logged climb of the ladder, oldest first."""
+    db, *_ = house
+    async with db._require_session()() as session:
+        return list(
+            (
+                await session.scalars(
+                    select(database.InteractionLog)
+                    .where(
+                        database.InteractionLog.guild_id == GUILD_A,
+                        database.InteractionLog.thing_id == world.LADDER,
+                        database.InteractionLog.action == telemetry.USE,
+                    )
+                    .order_by(database.InteractionLog.id)
+                )
+            ).all()
+        )
+
+
+# --- King of the Mountain -------------------------------------------------
+
+
+async def test_a_climb_with_an_audience_earns_it(house):
+    """The work order's first acceptance test: enough other testers
+    active in the room, and a climb earns it."""
+    db, *_ = house
+    await db.set_config(GUILD_A, "captive_audience_size", "2")
+    await an_audience_of(house, 2, "CO")
+
+    await climb(house, "CO")
+
+    assert KING in await earned_by()
+
+
+async def test_and_one_fewer_does_not(house):
+    """The edge, not a spare case. Two watchers against a bar of three
+    is the shape the rattle's tests use for the same reason."""
+    db, *_ = house
+    await db.set_config(GUILD_A, "captive_audience_size", "3")
+    await an_audience_of(house, 2, "CO")
+
+    await climb(house, "CO")
+
+    assert KING not in await earned_by()
+
+
+async def test_a_cat_climb_with_a_full_audience_does_not(house, monkeypatch):
+    """**Nobody surveyed a kingdom from halfway up.** The work order
+    asks for this case by name, and it is the same distinction *Hive
+    Five* turns on: both are `on_use` of the ladder in a room with a
+    crowd in it, and only one of them reached the top."""
+    db, *_ = house
+    await db.set_config(GUILD_A, "captive_audience_size", "2")
+    await an_audience_of(house, 2, "CO")
+    monkeypatch.setattr(world, "random", _AlwaysTheCat())
+
+    await climb(house, "CO")
+
+    assert KING not in await earned_by()
+
+
+async def test_the_climber_is_not_their_own_audience(house):
+    """With the bar at one, which is the only setting where counting
+    yourself would pass unnoticed - the rattle's test, for the ladder."""
+    db, *_ = house
+    await db.set_config(GUILD_A, "captive_audience_size", "1")
+
+    await climb(house, "CO")
+
+    assert KING not in await earned_by()
+
+
+async def test_an_audience_that_has_gone_quiet_does_not_count(house):
+    """Standing somewhere is not being at the keyboard. The rows are
+    there and never stamped, which is no evidence rather than absence -
+    the rule the sweep reads the other way round."""
+    db, *_ = house
+    await db.set_config(GUILD_A, "captive_audience_size", "2")
+    await an_audience_of(house, 2, "CO", awake=False)
+
+    await climb(house, "CO")
+
+    assert KING not in await earned_by()
+
+
+async def test_an_audience_in_another_room_does_not_count(house):
+    db, *_ = house
+    await db.set_config(GUILD_A, "captive_audience_size", "2")
+    await an_audience_of(house, 2, "LI")
+
+    await climb(house, "CO")
+
+    assert KING not in await earned_by()
+
+
+async def test_the_audience_is_logged_on_every_climb(house):
+    """**Including the climbs that earn nothing**, which is the whole
+    reason the headcount is taken in the handler rather than in the
+    predicate: the number is collected to settle what
+    `captive_audience_size` should be for a climb, and a column holding
+    only numbers already over the bar could not answer that."""
+    db, *_ = house
+    await db.set_config(GUILD_A, "captive_audience_size", "9")
+    await an_audience_of(house, 2, "CO")
+
+    await climb(house, "CO")
+
+    climbs = await climb_log(house)
+
+    assert climbs, "the climb wrote no log row"
+    assert "audience=2" in climbs[-1].detail
+
+
+# --- Second Place ---------------------------------------------------------
+
+
+async def cat_climbs(house, how_many, who=ALICE):
+    """Roll the cat this many times, walking out of her lock between.
+
+    **The offset is set, not stepped**, which is the trap here: she
+    keeps the ladder for five minutes from each climb, and writing the
+    same `clock_offset_days` twice leaves the second lock in the
+    future. The day has to go up every time or the third climb is
+    refused and the tally quietly stops at two.
+    """
+    db, *_ = house
+    for day in range(1, how_many + 1):
+        await climb(house, "CO", who=who)
+        await db.set_setting(GUILD_A, database.CLOCK_KEY, day)
+
+
+async def test_three_cat_climbs_earn_it(house, monkeypatch):
+    """Tester A's climb rolls the cat three times: earned."""
+    monkeypatch.setattr(world, "random", _AlwaysTheCat())
+
+    await cat_climbs(house, 3)
+
+    assert SECOND in await earned_by()
+    assert await tally("ladder_cat_climbs") == 3
+
+
+async def test_two_are_not_enough(house, monkeypatch):
+    monkeypatch.setattr(world, "random", _AlwaysTheCat())
+
+    await cat_climbs(house, 2)
+
+    assert SECOND not in await earned_by()
+    assert await tally("ladder_cat_climbs") == 2
+
+
+async def test_a_swat_is_not_a_tick(house, monkeypatch):
+    """**The work order's second acceptance test.** Bob's swats, taken
+    while Alice's cat is guarding the ladder, must not move Bob's tally:
+    he only earns ticks from his own climbs that roll her. A swat is a
+    refusal and never reaches `after_use`, which is what makes this
+    true rather than checked - so the test is that the counter is
+    untouched, not that the award is absent."""
+    monkeypatch.setattr(world, "random", _AlwaysTheCat())
+    await climb(house, "CO")
+
+    assert SWAT_USE in await climb(house, "CO", who=BOB)
+    assert SWAT_TAKE in replies(
+        await run(house, bot.take, "ladder", room="CO", who=BOB)
+    )
+    assert await tally("ladder_cat_climbs", who=BOB) in (None, 0)
+    assert SECOND not in await earned_by(BOB)
+
+
+async def test_an_ordinary_climb_is_not_a_cat_climb(house):
+    """The ninety percent, which `no_cat` is making certain of."""
+    await climb(house, "CO")
+
+    assert await tally("ladder_cat_climbs") in (None, 0)
+
+
+# --- Head for Heights -----------------------------------------------------
+
+
+async def test_the_twenty_fifth_climb_earns_it(house):
+    for n in range(triggers.HEAD_FOR_HEIGHTS_CLIMBS):
+        await climb(house, "CO")
+        if n < triggers.HEAD_FOR_HEIGHTS_CLIMBS - 1:
+            assert HEIGHTS not in await earned_by(), f"earned on climb {n + 1}"
+
+    assert HEIGHTS in await earned_by()
+    assert await tally("ladder_climbs") == triggers.HEAD_FOR_HEIGHTS_CLIMBS
+
+
+async def test_cat_climbs_are_not_counted(house, monkeypatch):
+    """**The one place this departs from the work order is not here.**
+    That the count excludes her is exactly what the order asks for;
+    what it does not get is the climbs made before this shipped, because
+    neither `room_deeds` nor `thing_uses` could supply them. Two columns
+    rather than a total and a subtraction is what makes this testable at
+    all."""
+    db, *_ = house
+    monkeypatch.setattr(world, "random", _AlwaysTheCat())
+
+    await climb(house, "CO")
+
+    assert await tally("ladder_climbs") in (None, 0)
+    assert await tally("ladder_cat_climbs") == 1
+
+
+async def test_any_room_counts(house):
+    """Climbs, not places - which is what separates this from *Rung by
+    Rung*. Three climbs of one ladder in one room is three."""
+    for _ in range(3):
+        await climb(house, "CO")
+
+    assert await tally("ladder_climbs") == 3
+
+
+# --- Pass It On -----------------------------------------------------------
+
+
+async def take_log(house):
+    """Every logged take of the ladder, oldest first."""
+    db, *_ = house
+    async with db._require_session()() as session:
+        return list(
+            (
+                await session.scalars(
+                    select(database.InteractionLog)
+                    .where(
+                        database.InteractionLog.guild_id == GUILD_A,
+                        database.InteractionLog.thing_id == world.LADDER,
+                        database.InteractionLog.action == telemetry.TAKE,
+                    )
+                    .order_by(database.InteractionLog.id)
+                )
+            ).all()
+        )
+
+
+async def test_every_take_of_the_ladder_says_what_the_offer_was(house):
+    """**All three outcomes are written down**, which is what the work
+    order's logging line asks for: how often one player picks up what
+    another put down is only answerable beside how often they nearly
+    did. A first take with nothing standing, a hand-off, and a player
+    taking their own ladder back."""
+    await carry_it(house)
+    await run(house, bot.drop, "ladder", room="CO")
+    await run(house, bot.take, "ladder", room="CO", who=BOB)
+    await run(house, bot.drop, "ladder", room="CO", who=BOB)
+    await run(house, bot.take, "ladder", room="CO", who=BOB)
+
+    details = [row.detail for row in await take_log(house)]
+
+    assert details[0] == "handoff=none"
+    assert details[1].startswith("handoff=")
+    assert f"from={ALICE}" in details[1]
+    assert details[2] == "handoff=self"
+
+
+async def test_a_take_of_anything_else_is_unchanged(house):
+    """The ladder is the only thing with offers on it, and the detail
+    for everything else has to read as it always did - `_moved_detail`
+    returns None for most things, and a stray "handoff=none" on a pair
+    of booties would be a column that meant two things."""
+    await run(house, bot.take, "ladder", room="CO")
+    taking = await run(house, bot.take, "booties", room="EN")
+
+    assert replies(taking) or posted(house, "EN")
+    async with database._require_session()() as session:
+        detail = await session.scalar(
+            select(database.InteractionLog.detail).where(
+                database.InteractionLog.guild_id == GUILD_A,
+                database.InteractionLog.thing_id == "booties",
+                database.InteractionLog.action == telemetry.TAKE,
+            )
+        )
+    assert detail is None or "handoff" not in detail
+
+
+async def test_a_drop_and_somebody_else_taking_it_earns_it(house):
+    """**The award goes to the player who is not in the room.** Alice
+    drops it and Bob picks it up, so Alice earns it and Bob does not -
+    which is the whole of why `on_hand_off` is a hook of its own."""
+    await carry_it(house)
+    await run(house, bot.drop, "ladder", room="CO")
+
+    await run(house, bot.take, "ladder", room="CO", who=BOB)
+
+    assert PASS_IT_ON in await earned_by(ALICE)
+    assert PASS_IT_ON not in await earned_by(BOB)
+
+
+async def test_the_taker_is_not_told_they_earned_it(house):
+    """**The reason the hook fires with no interaction.** An ordinary
+    player award sends its private half to `interaction.followup`, and
+    the interaction in flight here is Bob's - so a context fired the
+    ordinary way would congratulate Bob on Alice's achievement in his
+    own ephemeral reply."""
+    await carry_it(house)
+    await run(house, bot.drop, "ladder", room="CO")
+
+    taking = await run(house, bot.take, "ladder", room="CO", who=BOB)
+
+    assert "Pass It On" not in replies(taking)
+
+
+async def test_eleven_minutes_is_too_late(house):
+    """The work order's third acceptance test, the far half: after
+    eleven minutes, nobody earns it."""
+    await carry_it(house)
+    await run(house, bot.drop, "ladder", room="CO")
+
+    await age_the_offer(11)
+    await run(house, bot.take, "ladder", room="CO", who=BOB)
+
+    assert PASS_IT_ON not in await earned_by(ALICE)
+    assert PASS_IT_ON not in await earned_by(BOB)
+
+
+async def test_five_minutes_is_in_time(house):
+    """And the near half, in the order's own numbers: five minutes
+    later, A earns it and B does not."""
+    await carry_it(house)
+    await run(house, bot.drop, "ladder", room="CO")
+
+    await age_the_offer(5)
+    await run(house, bot.take, "ladder", room="CO", who=BOB)
+
+    assert PASS_IT_ON in await earned_by(ALICE)
+    assert PASS_IT_ON not in await earned_by(BOB)
+
+
+async def test_an_expired_offer_is_cleared_rather_than_left(house):
+    """A take after the window spends the row as surely as one inside
+    it. Otherwise a stale offer would sit there until somebody happened
+    to set the ladder down again, and the next taker would earn it for
+    a gesture made an hour ago."""
+    await carry_it(house)
+    await run(house, bot.drop, "ladder", room="CO")
+    await age_the_offer(11)
+
+    await run(house, bot.take, "ladder", room="CO", who=BOB)
+
+    assert await database.claim_set_down_offer(
+        GUILD_A, world.LADDER, timedelta(minutes=world.HANDOFF_MINUTES)
+    ) is None
+
+
+async def test_taking_it_back_yourself_earns_nothing(house):
+    await carry_it(house)
+    await run(house, bot.drop, "ladder", room="CO")
+
+    await run(house, bot.take, "ladder", room="CO")
+
+    assert PASS_IT_ON not in await earned_by(ALICE)
+
+
+async def test_and_spends_the_chance(house):
+    """**Explicit in the work order**, and the half a reading could
+    miss: taking it back does not merely fail to earn, it clears the
+    offer. Asserted on the row rather than on the award, because the
+    award is absent either way and only the row says which reason."""
+    await carry_it(house)
+    await run(house, bot.drop, "ladder", room="CO")
+
+    await run(house, bot.take, "ladder", room="CO")
+
+    assert await database.claim_set_down_offer(
+        GUILD_A, world.LADDER, timedelta(minutes=world.HANDOFF_MINUTES)
+    ) is None
+
+
+async def test_but_dropping_it_again_makes_a_fresh_one(house):
+    """The other side of that: the chance is spent, not the mechanic.
+    Alice takes it back, puts it down again, and Bob picking it up is
+    an ordinary hand-off."""
+    await carry_it(house)
+    await run(house, bot.drop, "ladder", room="CO")
+    await run(house, bot.take, "ladder", room="CO")
+
+    await run(house, bot.drop, "ladder", room="CO")
+    await run(house, bot.take, "ladder", room="CO", who=BOB)
+
+    assert PASS_IT_ON in await earned_by(ALICE)
+
+
+async def test_a_climb_hands_it_on_too(house):
+    """The second of the three deliberate set-downs. Climbing a ladder
+    you were carrying puts it down, and the next player along taking it
+    is the same gesture as a `/drop`."""
+    await carry_it(house)
+
+    await climb(house, "KI")
+    await run(house, bot.take, "ladder", room="KI", who=BOB)
+
+    assert PASS_IT_ON in await earned_by(ALICE)
+
+
+async def test_but_climbing_one_already_standing_there_does_not(house):
+    """Nothing was set down. The ladder was in the Courtyard before the
+    climb and is in the Courtyard after it, so the next player could
+    have taken it either way and there is no gesture to reward."""
+    await climb(house, "CO")
+
+    await run(house, bot.take, "ladder", room="CO", who=BOB)
+
+    assert PASS_IT_ON not in await earned_by(ALICE)
+
+
+async def test_a_cat_climb_hands_it_to_nobody(house, monkeypatch):
+    """She took it off them, so the player chose nothing. The work
+    order rules this out by name, and the row is what says so - after
+    the five minutes are walked out of, a take would look the same
+    either way."""
+    db, *_ = house
+    await carry_it(house)
+    monkeypatch.setattr(world, "random", _AlwaysTheCat())
+
+    await climb(house, "CO")
+
+    assert await database.claim_set_down_offer(
+        GUILD_A, world.LADDER, timedelta(minutes=world.HANDOFF_MINUTES)
+    ) is None
+    await db.set_setting(GUILD_A, database.CLOCK_KEY, 6)
+    await run(house, bot.take, "ladder", room="CO", who=BOB)
+    assert PASS_IT_ON not in await earned_by(ALICE)
+
+
+async def test_and_clears_one_that_was_standing(house, monkeypatch):
+    """**The half that is easy to miss**, and the reason the cat branch
+    clears rather than simply not writing. Alice leaves the ladder
+    standing, nobody comes for it, and then somebody rolls the cat on
+    it - the offer Alice's drop made must not survive a climb she won,
+    or the next player along would earn Alice a hand-off she had
+    nothing to do with."""
+    await carry_it(house)
+    await run(house, bot.drop, "ladder", room="CO")
+    await run(house, bot.take, "ladder", room="CO")
+    await run(house, bot.drop, "ladder", room="CO")
+    monkeypatch.setattr(world, "random", _AlwaysTheCat())
+
+    await climb(house, "CO")
+
+    assert await database.claim_set_down_offer(
+        GUILD_A, world.LADDER, timedelta(minutes=world.HANDOFF_MINUTES)
+    ) is None
+
+
+async def test_an_idle_drop_hands_it_to_nobody(house):
+    """**The work order's fourth acceptance test**, and the one that
+    says what the achievement is for: a player who went quiet for a day
+    did not decide to share."""
+    db, *_ = house
+    await carry_it(house)
+    async with db._require_session()() as session:
+        await session.execute(
+            update(database.User)
+            .where(database.User.id == ALICE, database.User.guild_id == GUILD_A)
+            .values(
+                last_command_at=await db.server_now(GUILD_A)
+                - timedelta(hours=world.IDLE_HOURS + 1)
+            )
+        )
+        await session.commit()
+
+    await bot.idle_sweep.coro()
+    await run(house, bot.take, "ladder", room="CO", who=BOB)
+
+    assert PASS_IT_ON not in await earned_by(ALICE)
+
+
+# --- Heavy Lifting --------------------------------------------------------
+
+
+async def test_four_moves_carrying_it_earn_it(house):
+    """**The work order's fifth acceptance test.** Four moves without
+    setting it down, earned on the fourth - and back and forth between
+    two rooms, which the order says counts because it is still four
+    rooms' worth of carrying."""
+    await carry_it(house)
+    await walk(house, "back door", "CO")
+
+    await walk(house, "swinging door", "KI")
+    await walk(house, "swinging door", "DI")
+    assert HEAVY not in await earned_by()
+
+    await walk(house, "swinging door", "KI")
+
+    assert HEAVY in await earned_by()
+    assert await tally("ladder_carry_moves") == 4
+
+
+async def test_the_road_is_one_of_the_rooms(house):
+    """Named in the work order, and it is the one place a player can
+    walk to that is not a thread."""
+    await carry_it(house)
+    await walk(house, "back door", "CO")
+    await walk(house, "swinging door", "KI")
+    await walk(house, "arched doorway", "DI")
+
+    await walk(house, "front door", "EN")
+
+    assert HEAVY in await earned_by()
+
+
+async def test_a_drop_after_three_loses_them(house):
+    """The other half of the order's fifth test: drop it after three
+    and carry it three more, and nothing is earned. Four in one trip is
+    the condition, and this is the zeroing that makes "trip" mean
+    something."""
+    await carry_it(house)
+    await walk(house, "back door", "CO")
+    await walk(house, "swinging door", "KI")
+    await walk(house, "swinging door", "DI")
+
+    await run(house, bot.drop, "ladder", room="DI")
+    await run(house, bot.take, "ladder", room="DI")
+    assert await tally("ladder_carry_moves") == 0
+
+    await walk(house, "swinging door", "DI")
+    await walk(house, "swinging door", "KI")
+    await walk(house, "swinging door", "DI")
+
+    assert HEAVY not in await earned_by()
+
+
+async def test_a_climb_loses_them_too(house):
+    """Every route out of the bag zeroes it, and the climb is the one a
+    player reaches by accident: it sets the ladder down whether they
+    meant it to or not."""
+    await carry_it(house)
+    await walk(house, "back door", "CO")
+
+    await climb(house, "KI")
+
+    assert await tally("ladder_carry_moves") == 0
+
+
+async def test_moving_without_it_counts_nothing(house):
+    """Which is almost every move in the game. The hook carries no
+    count at all unless the ladder was in the bag."""
+    await walk(house, "arched doorway", "EN")
+    await walk(house, "swinging door", "DI")
+
+    assert await tally("ladder_carry_moves") in (None, 0)
+
+
+async def test_one_players_haul_is_not_anothers(house):
+    """Per player, like every other tally on that row. Alice carrying
+    it three rooms must not put Bob a move away from the award."""
+    await carry_it(house)
+    await walk(house, "back door", "CO")
+    await walk(house, "swinging door", "KI")
+    await walk(house, "swinging door", "DI")
+
+    assert await tally("ladder_carry_moves", who=BOB) in (None, 0)

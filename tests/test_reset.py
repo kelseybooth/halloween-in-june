@@ -241,7 +241,12 @@ async def test_the_content_is_still_loaded(two_games):
     # Forty-nine with *Growth Spurt* on 5 November, also drop 40 and
     # also reachable only because the ceiling moved - the clothes it
     # wants are in the Nursery's hallway.
-    assert len(await resolve.achievements(GUILD_A)) == 49
+    # Fifty-four on 6 November, the ladder's other five. All drop 30
+    # rows, so they arrive for any guild past the ground floor - which
+    # is one drop before the ladder itself, at 31. Harmless and
+    # deliberate: it is what *Hive Five* already does, and a row for a
+    # thing nobody can hold yet is a row nobody can earn.
+    assert len(await resolve.achievements(GUILD_A)) == 54
 
 
 async def test_the_art_is_kept_by_default(two_games):

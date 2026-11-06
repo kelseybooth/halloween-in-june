@@ -515,6 +515,45 @@ class User(Base):
     last_command_at: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True
     )
+
+    # The ladder's three tallies. All per player and per server, like
+    # everything else on this row, and all three written by the handler
+    # rather than by a predicate - `achievements` is explicit that a
+    # condition checks and never mutates.
+    #
+    # **Counted rather than derived, and this is the one decision in the
+    # ladder work worth arguing.** The work order says to read the climbs
+    # off `room_deeds` or `thing_uses`, and neither can answer:
+    # `room_deeds` is idempotent per room, so a player who climbs in all
+    # ten places has ten rows however many hundred climbs they made, and
+    # `thing_uses.use_count` counts every `/use ladder` including the one
+    # in ten the cat takes. Production says the same thing out loud - one
+    # beta player has four climb deeds and a `use_count` of 1, because
+    # the deeds were recovered by `backfill_room_deeds` and the counter
+    # was not. So a count that has to exclude cat climbs and include
+    # every climb needs a column of its own.
+    #
+    # The cost is that climbs made before this ships do not count, which
+    # is the one thing the work order says would not happen. It is two
+    # players and six climbs on the beta today, against a target of
+    # twenty-five.
+    ladder_climbs: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    # Climbs the cat got to the top of first, which *Second Place*
+    # counts to three. Kept apart from `ladder_climbs` rather than
+    # subtracted from a total, because the two achievements want
+    # different things and a single column could only answer one.
+    ladder_cat_climbs: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    # Moves made with the ladder still in the bag, since the last time
+    # it left. Not a lifetime total: *Heavy Lifting* is four rooms in
+    # **one trip**, so this is zeroed by every route the ladder has out
+    # of a player's hands, and the zeroing is what the column is for.
+    ladder_carry_moves: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -551,6 +590,48 @@ class ThingLock(Base):
     )
     thing_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     locked_until: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class SetDownOffer(Base):
+    """The last deliberate set-down of a thing, and who made it.
+
+    One row per (server, thing), overwritten by each set-down, which is
+    the work order's own wording: *keep one record of the last set-down -
+    who did it, and when - and check it on every take*. There is one
+    ladder per server, so one row is the whole of the state and a
+    history would be a log nothing reads.
+
+    **Only the set-downs a player chose.** A `/drop`, the set-down that
+    comes with climbing a carried ladder, and the one that comes with
+    laying a top-step plank are all somebody putting it down where
+    another player can reach it. The idle sweep is not: a carrier who
+    went quiet for a day did not decide to share, and the cat climb is
+    not either, because the player who rolled it handed it to nobody.
+    Those two paths clear the row instead of writing it, so the thing
+    they leave on the floor carries no offer with it.
+
+    **Cleared by the take, whoever makes it.** Taking it back yourself
+    is explicitly not a hand-off and spends the chance, so the row is
+    deleted on every take rather than only on the ones that award - and
+    a row that expired unclaimed is deleted the next time anybody picks
+    the thing up. The ten minutes are read against `at`; a row older
+    than that is no longer an offer and the delete is the whole of
+    tidying it away.
+
+    A table rather than a column on `room_contents`, because the offer
+    outlives the row it was made about: a scatter or a cat could move
+    the thing, and what is being remembered is a player's gesture
+    rather than where the object ended up.
+    """
+
+    __tablename__ = "set_down_offers"
+
+    guild_id: Mapped[int] = mapped_column(
+        BigInteger, primary_key=True, autoincrement=False
+    )
+    thing_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
 class InteractionLog(Base):
@@ -1663,6 +1744,14 @@ _LATER_COLUMNS: list[tuple[str, str, str]] = [
     ("restocks", "destination", "VARCHAR(64)"),
     ("restocks", "max_present", "INTEGER"),
     ("room_text", "visible_when", "VARCHAR(32)"),
+    # The ladder's three tallies, 6 November. All three default to zero,
+    # which is also what they mean on a row that predates them: nobody
+    # has a counted climb until they make one. `set_down_offers` is a new
+    # table and needs nothing here - `create_all` creates a missing
+    # table and only a missing *column* has to be ALTERed in.
+    ("users", "ladder_climbs", "INTEGER NOT NULL DEFAULT 0"),
+    ("users", "ladder_cat_climbs", "INTEGER NOT NULL DEFAULT 0"),
+    ("users", "ladder_carry_moves", "INTEGER NOT NULL DEFAULT 0"),
 ]
 
 # `room_text.fragment` is deliberately *not* in that list. It joined the
@@ -2966,6 +3055,194 @@ async def thing_is_locked(guild_id: int, thing_id: str) -> bool:
     return until is not None and until > await server_now(guild_id)
 
 
+# --------------------------------------------------------------------------
+# The ladder's tallies, and the offer a set-down leaves behind
+#
+# Five functions for five achievements, and every one of them is called by
+# a handler rather than by a predicate: `achievements` is explicit that a
+# condition checks and never writes, because a predicate that mutates makes
+# the same action behave differently depending on what the player had
+# already earned. Each of the counters hands back the number it just wrote,
+# so the handler can put it on the hook and the predicate can read a fact
+# instead of taking a second look at the table.
+# --------------------------------------------------------------------------
+
+
+async def count_a_climb(guild_id: int, user_id: int, *, cat: bool) -> int:
+    """Add one to this player's climbs, or to the ones the cat took.
+
+    **Two columns rather than a total and a subtraction.** *Head for
+    Heights* wants twenty-five climbs that reached the top and *Second
+    Place* wants three the cat took, and a single counter could answer
+    one of them: climbs minus cat climbs needs both numbers anyway, and
+    a total that quietly included the cat's ten percent would hand out
+    *Head for Heights* two or three climbs early.
+
+    Returns the column it incremented, which is the number the
+    achievement compares. The upsert creates the row because this is
+    reached from a use and a use does not guarantee one: the same
+    reason `note_a_pet` inserts rather than updating.
+    """
+    column = "ladder_cat_climbs" if cat else "ladder_climbs"
+    counter = User.ladder_cat_climbs if cat else User.ladder_climbs
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    async with session_factory() as session:
+        total = await session.scalar(
+            insert(User)
+            .values(id=user_id, guild_id=guild_id, **{column: 1})
+            .on_conflict_do_update(
+                index_elements=[User.id, User.guild_id],
+                set_={column: counter + 1, "updated_at": func.now()},
+            )
+            .returning(counter)
+        )
+        await session.commit()
+    return int(total or 0)
+
+
+async def count_a_carried_move(guild_id: int, user_id: int) -> int:
+    """Add one to the moves this player has made without putting it down.
+
+    The trip, not the lifetime: `forget_the_carry` zeroes this, and
+    between them they are the whole of *Heavy Lifting*. Returns the
+    new count so the move hook carries it.
+    """
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    async with session_factory() as session:
+        total = await session.scalar(
+            insert(User)
+            .values(id=user_id, guild_id=guild_id, ladder_carry_moves=1)
+            .on_conflict_do_update(
+                index_elements=[User.id, User.guild_id],
+                set_={
+                    "ladder_carry_moves": User.ladder_carry_moves + 1,
+                    "updated_at": func.now(),
+                },
+            )
+            .returning(User.ladder_carry_moves)
+        )
+        await session.commit()
+    return int(total or 0)
+
+
+async def forget_the_carry(guild_id: int, user_id: int) -> None:
+    """The ladder has left this player's hands, by whatever route.
+
+    Called from every one of them - `/drop`, a climb, a plank, the idle
+    sweep, the bin - because *Heavy Lifting* is four rooms in one trip
+    and a route that forgot to zero this would let a player bank three
+    rooms a day until the fourth arrived.
+
+    An UPDATE with no insert: a player with no row has carried nothing,
+    which is already zero, and creating a row to write a zero into it
+    would be a row per player who has never touched the ladder.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        await session.execute(
+            update(User)
+            .where(User.id == user_id, User.guild_id == guild_id)
+            .values(ladder_carry_moves=0)
+        )
+        await session.commit()
+
+
+async def offer_on_set_down(
+    guild_id: int, user_id: int, thing_id: str, when: datetime | None = None
+) -> None:
+    """Record that this player put this thing down for somebody to take.
+
+    Overwrites, like the lock above: there is one of this thing, so the
+    last person to set it down is the only one with an offer standing.
+    Only the deliberate set-downs call this - `SetDownOffer` says which
+    those are and why the idle sweep and the cat are not among them.
+    """
+    now = when if when is not None else await server_now(guild_id)
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    async with session_factory() as session:
+        await session.execute(
+            insert(SetDownOffer)
+            .values(guild_id=guild_id, thing_id=thing_id, user_id=user_id, at=now)
+            .on_conflict_do_update(
+                index_elements=[SetDownOffer.guild_id, SetDownOffer.thing_id],
+                set_={"user_id": user_id, "at": now},
+            )
+        )
+        await session.commit()
+
+
+async def claim_set_down_offer(
+    guild_id: int, thing_id: str, within: timedelta
+) -> "tuple[int, timedelta] | None":
+    """Take the standing offer on this thing, and say whose it was.
+
+    **Reads and deletes in one call, because every take spends it.**
+    Picking the thing back up yourself is explicitly not a hand-off and
+    clears the chance; a take after the window has closed earns nothing
+    and clears it too. So the row goes whatever the answer is, and the
+    caller is handed the setter and how long they waited - or None,
+    when there was no offer or it had expired.
+
+    The elapsed time comes back because the log wants it: *how long
+    since the last set-down, and who did it* is the line the work order
+    asks for on every take of the ladder.
+
+    **Whether the taker is the setter is not decided here.** This says
+    what the offer was; the caller knows who is taking and is the only
+    one that can compare them, and a function that answered "is this a
+    hand-off" would need the taker and would still have to delete the
+    row either way.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        row = (
+            await session.execute(
+                select(SetDownOffer.user_id, SetDownOffer.at).where(
+                    SetDownOffer.guild_id == guild_id,
+                    SetDownOffer.thing_id == thing_id,
+                )
+            )
+        ).one_or_none()
+        if row is not None:
+            await session.execute(
+                delete(SetDownOffer).where(
+                    SetDownOffer.guild_id == guild_id,
+                    SetDownOffer.thing_id == thing_id,
+                )
+            )
+            await session.commit()
+    if row is None:
+        return None
+    setter, at = row
+    waited = await server_now(guild_id) - at
+    if waited > within:
+        return None
+    return int(setter), waited
+
+
+async def forget_set_down_offer(guild_id: int, thing_id: str) -> None:
+    """Take the offer away without anybody having claimed it.
+
+    The idle sweep and the cat climb, which are the two ways the thing
+    reaches a floor with nobody having chosen to share it. Clearing
+    rather than leaving the old row is the point: a player who set the
+    ladder down nine minutes ago and then had it taken off them by the
+    sweep did not hand it to the next person along.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        await session.execute(
+            delete(SetDownOffer).where(
+                SetDownOffer.guild_id == guild_id,
+                SetDownOffer.thing_id == thing_id,
+            )
+        )
+        await session.commit()
+
+
 async def stamp_command(user_id: int, guild_id: int) -> None:
     """Note that this player just finished a command on this server.
 
@@ -3249,6 +3526,22 @@ async def take_idle_drop_notices(guild_id: int, user_id: int) -> list[tuple[str,
         )
         await session.commit()
     return [(row[0], row[1]) for row in rows]
+
+
+# How recently somebody has to have run a command to count as present.
+# Not a config value, unlike how many of them there are: the number of
+# players a small server can muster is a fact about that server, and ten
+# minutes is a fact about how long somebody stays in a room after typing
+# something.
+#
+# **It lives here rather than in `triggers`, where it was written**, now
+# that the query below has two callers. *Captive Audience* asks it of a
+# rattle from a predicate and the ladder asks it of a climb from the
+# handler - `world` cannot import `triggers`, which imports it - and the
+# alternative was the same tuning number written down twice in two
+# modules that must agree. It belongs with the question it is the window
+# for.
+AUDIENCE_MINUTES = 10
 
 
 async def active_others_in_room(

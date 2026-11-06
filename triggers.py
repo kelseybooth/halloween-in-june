@@ -6,8 +6,19 @@ none of them writes anything. A trigger that mutates game state makes the same
 action behave differently depending on what the player had already earned,
 which is a bug that only shows up in somebody's second October.
 
-Read this beside the **Achievement Trigger Spec**, which is authoritative for
-what fires. Where a predicate departs from it, the docstring says so and why.
+Read this beside the **Achievement Trigger Spec**, which is Release 1's
+record of what fires, and beside the work order for whichever batch an
+achievement came in. Where a predicate departs from either, the docstring
+says so and why.
+
+**The spec stopped being authoritative some time ago**, and this said it
+was until 6 November. It is frozen at Release 1's thirty-five: it does not
+carry *Board Meeting*, *Rung by Rung*, *Hive Five*, *Captive Audience*,
+*Accompanist*, *Growth Spurt* or the ladder's five, and its hook table is
+missing `on_look`, `on_relationship_change`, `on_command` and
+`on_hand_off`. Each batch since has shipped with a work order of its own,
+which is the document that says what was decided; this file and
+`achievements.tsv` are what say what is true.
 
 Three families do most of the work and are written once:
 
@@ -74,11 +85,13 @@ RATTLE = "rattle"
 MUSIC_BOX = "music_box"
 
 # How recently somebody has to have run a command to count as an
-# audience. Not a config value, unlike how many of them there are: the
-# number of players a small server can muster is a fact about that
-# server, and ten minutes is a fact about how long somebody stays in a
-# room after typing something.
-AUDIENCE_MINUTES = 10
+# audience. Moved to `database`, beside the query it is the window for,
+# when the ladder's *King of the Mountain* became its second caller:
+# that one counts its audience in the handler rather than here, because
+# the log wants the number on every climb, and `world` cannot import
+# this module. Kept as a name here because it reads as one of this
+# file's own numbers and `ACCOMPANIST_SECONDS` below still is one.
+AUDIENCE_MINUTES = database.AUDIENCE_MINUTES
 
 # How long after somebody else's music box a rattle still counts as
 # keeping time with it. Not a config value for the same reason
@@ -135,6 +148,17 @@ MAKING_A_MESS = 200
 FELINE_COLLECTION_CANS = 100
 LOST_ARRIVALS = 5
 LOST_WINDOW = timedelta(minutes=5)
+
+# The ladder's three, 6 November. None of them is a config value: how
+# many climbs are a lot and how many rooms are a haul are facts about
+# the house, not about how many players a server can muster. *King of
+# the Mountain* is the exception and has no number here, because the
+# size of a crowd *is* a fact about the server - it reads
+# `captive_audience_size`, which is the rattle's knob reused rather
+# than a second one that would have to be tuned to agree with it.
+SECOND_PLACE_CAT_CLIMBS = 3
+HEAVY_LIFTING_MOVES = 4
+HEAD_FOR_HEIGHTS_CLIMBS = 25
 
 
 # --------------------------------------------------------------------------
@@ -646,6 +670,149 @@ async def rung_by_rung(context: Context) -> bool:
     return await _every_room(context, telemetry.USE, world.LADDER)
 
 
+# ------------------------------------------------------------------------
+# The ladder's other five, 6 November
+#
+# **Every one of them reads a number the handler already wrote.** The
+# ladder is the only thing in the house with tallies of its own, and the
+# reason they are tallies is argued on `database.User`: neither
+# `room_deeds` nor `thing_uses` can count climbs, one being idempotent
+# per room and the other including the climbs the cat takes. Writing
+# them is `world._climb_the_ladder`'s job and the move hook's, because
+# `achievements` is explicit that a predicate checks and never writes -
+# so each of these compares a fact it was handed rather than going back
+# to the column for a number that may have moved since.
+#
+# They are five one-liners on top of that, which is the whole of what
+# this file is supposed to be.
+# ------------------------------------------------------------------------
+
+
+async def king_of_the_mountain(context: Context) -> bool:
+    """A climb to the top with other people watching.
+
+    **The audience is counted in the handler, not here**, which is the
+    one place these five differ from *Captive Audience* - the
+    achievement they otherwise share a condition with. The log wants the
+    headcount on every climb so that `captive_audience_size` can be
+    tuned for climbs as well as rattles, and counting it twice from two
+    places would be two queries that could disagree about who was in the
+    room.
+
+    **A cat climb earns nothing**, however full the room. Nobody
+    surveyed a kingdom from halfway up a ladder a cat is sitting on, and
+    the handler reports which kind of climb it was.
+
+    The bar is the rattle's `captive_audience_size` rather than a second
+    setting. An admin who has tuned a small server down to one other
+    player has said what a crowd is on that server, and saying it twice
+    is how two numbers end up disagreeing.
+    """
+    if context.thing_id != world.LADDER or context.extra.get(world.CAT_CLIMB):
+        return False
+    audience = context.extra.get(world.AUDIENCE)
+    if audience is None:
+        return False
+    wanted = await database.get_setting(context.guild_id, "captive_audience_size")
+    return audience >= wanted
+
+
+async def second_place(context: Context) -> bool:
+    """Three climbs the cat got to the top of first.
+
+    **Only climbs the player rolled themselves.** The swat a player gets
+    for trying to take or climb a ladder she is already guarding is a
+    refusal, not a climb: it never reaches `after_use`, so it writes no
+    tally and cannot tick this along. What earns a tick is starting up a
+    ladder and having her beat you to the top, which is the ten percent.
+
+    Whose ladder it was does not matter, and nothing here asks. Carrying
+    it there is not part of the condition - the work order is explicit
+    that only whose `/use` rolled her counts.
+
+    "Three or more and not held", like the other thresholds, so a climb
+    that races or lands while the bot is down costs a climb rather than
+    the award. At ten percent a roll, three of them is about thirty
+    climbs, and it is meant to take a while.
+    """
+    cat_climbs = context.extra.get(world.CAT_CLIMBS)
+    if cat_climbs is None:
+        return False
+    return cat_climbs >= SECOND_PLACE_CAT_CLIMBS
+
+
+async def pass_it_on(context: Context) -> bool:
+    """Somebody else picked up the ladder this player put down.
+
+    **The one condition in this file whose earner is not the actor**, and
+    the whole of why `on_hand_off` is a hook of its own: `context.user_id`
+    here is the player who set the ladder down, and the player whose
+    command fired the hook is the one who took it. A predicate on
+    `on_take` would have had the two the wrong way round.
+
+    **Reads what the take reported**, the shape *Board Meeting* and *Hive
+    Five* both use. `_settle_a_hand_off` has already asked the one
+    question that needs the table - was there an offer, and had it
+    expired - and spent the row doing it, so this re-states the
+    condition from the facts rather than reading a row that is gone.
+
+    The guard that earns its place is the one on the taker. The handler
+    will not fire this hook for a player taking their own ladder back,
+    and checking it here too costs nothing and means the rule survives a
+    second caller who forgets.
+    """
+    if context.thing_id != world.LADDER or context.user_id is None:
+        return False
+    taker = context.extra.get(world.TAKEN_BY)
+    return taker is not None and taker != context.user_id
+
+
+async def heavy_lifting(context: Context) -> bool:
+    """Four moves with the ladder still on their shoulder.
+
+    Moves rather than rooms, which the work order settles out loud:
+    walking back and forth between two rooms is still four rooms' worth
+    of carrying it, and the shoulders are what is being paid.
+
+    **The count is a trip and not a lifetime**, and the zeroing is the
+    half of that worth testing: `database.forget_the_carry` is called
+    from every route the ladder has out of a bag, so a player cannot
+    bank three rooms a day until the fourth arrives.
+
+    `None` when the move happened without the ladder, which is almost
+    every move in the game - the hook only carries a count when the
+    thing was in the bag.
+    """
+    moves = context.extra.get(world.CARRY_MOVES)
+    if moves is None:
+        return False
+    return moves >= HEAVY_LIFTING_MOVES
+
+
+async def head_for_heights(context: Context) -> bool:
+    """Twenty-five climbs that reached the top.
+
+    **Cat climbs are counted elsewhere and not here**, which is the
+    distinction `database.count_a_climb` keeps two columns for: a total
+    that quietly included the one climb in ten she takes would hand this
+    out two or three climbs early.
+
+    **Climbs from before 6 November do not count**, which is the one
+    place this departs from the work order. That asked for the count to
+    come off `room_deeds` or `thing_uses` so no backfill would be
+    needed, and neither can answer: `room_deeds` is idempotent per room,
+    so ten rows is a player who has climbed everywhere rather than a
+    player who has climbed ten times, and `thing_uses.use_count`
+    includes cat climbs and was never backfilled when the deeds were -
+    on the beta today one player has four climb deeds and a `use_count`
+    of one. So it is a counter, and it starts where counters start.
+    """
+    climbs = context.extra.get(world.CLIMBS)
+    if climbs is None:
+        return False
+    return climbs >= HEAD_FOR_HEIGHTS_CLIMBS
+
+
 async def burrito_trail(context: Context) -> bool:
     """One of Aunt Sue's burritos left in all ten places.
 
@@ -1110,7 +1277,15 @@ async def met_the_craving(context: Context) -> bool:
 
 
 def register_all() -> None:
-    """Wire every one of the thirty-five. Idempotent per process."""
+    """Wire every row in the file. Idempotent per process.
+
+    **It said "every one of the thirty-five" until 6 November**, when the
+    file had fifty-eight in it and this added five more. The count was
+    true when it was written and has been wrong for longer than it was
+    right, so it is gone rather than corrected: what matters is that
+    every row is wired, and `registration_problems` is what actually
+    checks it - in both directions, which no sentence can.
+    """
     if achievements.registered_ids():
         return
 
@@ -1241,4 +1416,14 @@ def register_all() -> None:
     # staircase can be finished and the award has a shape.
     add("board_meeting", "on_use", board_meeting)
     add("hive_five", "on_use", hive_five)
+    # The ladder's other five, 6 November, and three hooks between them
+    # rather than one - which is what the ladder is: a thing you climb,
+    # a thing you carry, and a thing you leave somewhere for somebody
+    # else. *Pass It On* is on a hook of its own because its earner is
+    # not the player who fired it; see `achievements.HOOKS`.
+    add("king_of_the_mountain", "on_use", king_of_the_mountain)
+    add("second_place", "on_use", second_place)
+    add("head_for_heights", "on_use", head_for_heights)
+    add("heavy_lifting", "on_move", heavy_lifting)
+    add("pass_it_on", "on_hand_off", pass_it_on)
     add("bin_looking_for_you", "on_look", bin_looking_for_you)
