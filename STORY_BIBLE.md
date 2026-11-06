@@ -48,7 +48,7 @@ Two things this revision did **not** decide, and which are still open below: who
 
 ## Premise
 
-Dr. Elena Voss, a paranormal researcher, rented a Victorian house for fieldwork with her husband David and their four-month-old son Marcus. A black cat named Eunoia already lived there and adopted them immediately.
+Dr. Elena Vaughn, a paranormal researcher, rented a Victorian house for fieldwork with her husband David and their four-month-old son Marcus. A black cat named Eunoia already lived there and adopted them immediately.
 
 The house is a "thin place," where the wall between worlds is naturally worn. On the fall equinox, **September 22, 2026**, Elena ran a small, careful experiment in the Secret Library to observe that wall. The equinox amplified it far past what she expected. The house split cleanly into two copies of itself:
 
@@ -675,13 +675,13 @@ Gourmet wet is a treat, so David only ever bought a little of it. It's the one f
 
 ## Characters
 
-### Dr. Elena Voss
+### Dr. Elena Vaughn
 
 - Paranormal researcher with a PhD in folklore and dimensional theory.
 - Ran the experiment. Now in Dimension B with David and Marcus, though at first she doesn't know that.
 - Documents everything. Her notes bleed through to Dimension A.
 - Misses Eunoia and writes about the cat often. Once she suspects the split, she starts addressing whoever might be looking after the cat on the other side.
-- **Voice:** formal field notes signed "Dr. E. Voss"; personal diary entries signed "Elena." Clear, curious, calm about Marcus, a little guilty about the cat.
+- **Voice:** formal field notes signed "Dr. E. Vaughn"; personal diary entries signed "Elena." Clear, curious, calm about Marcus, a little guilty about the cat.
 - **Arc:** early notes are puzzled: something about the experiment felt off, and both Eunoia and David seem to be missing. A panicked entry or two later, she realizes David was just spending a very long time in the bathroom and was with them all along (a good early laugh). Eunoia is still missing. Mid-game notes test theories and grow more certain. Late notes state it plainly: the experiment split the house, and she's in a different dimension from the cat. Her growing certainty is a counterpoint to David's insistence that the doors are just jammed.
 
 ### David
@@ -710,7 +710,7 @@ Gourmet wet is a treat, so David only ever bought a little of it. It's the one f
 
 ### L, the former resident
 
-- **Lucille Marsh.** Lived in the house before the Voss family and looked after Eunoia for years. Left in a hurry in late August, shortly before the family moved in, leaving a stash of cat food behind.
+- **Lucille Marsh.** Lived in the house before the Vaughn family and looked after Eunoia for years. Left in a hurry in late August, shortly before the family moved in, leaving a stash of cat food behind.
 - **Why she left:** certain rooms had started to feel wrong. Walking into them sent a chill down her back or raised goosebumps across her skin, as if the wall between dimensions was thinning as the fall equinox got closer.
 - Never seen. Known only through small traces: the note in the roll-top desk's bottom drawer, the portraits in the Upstairs Hallway and hints dropped in flavor text throughout the month.
 - Where she went is proposed in the Release Timeline (12 Harbor Street, Gull Point), pending approval.
