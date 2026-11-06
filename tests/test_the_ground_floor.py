@@ -44,6 +44,7 @@ import database
 import phrasing
 import resolve
 import states
+import telemetry
 import triggers
 import world
 
@@ -808,3 +809,132 @@ async def test_and_typing_those_words_reaches_it(ground_floor):
     )
 
     assert "more chocolate in it than should reasonably be" in reply
+
+
+# --------------------------------------------------------------------------
+# The pumpkins, and the gate that was only ever a sentence
+#
+# They arrive at 30 and nothing can carve them until 40, which is the
+# same shape as the stove and the pasta pot in `test_through_the_arch`:
+# a fixture that lands ten drops before the thing it needs, reading
+# correctly in the meantime because the writers wrote the refusal about
+# the player's hands.
+#
+# **Except this one was not a refusal.** "You'd need something to carve
+# with." sat in the `use` column rather than `use_fail`, so it was the
+# *success* text - the sentence saying you cannot carve was what the
+# game printed when you did. The use went through, `record_use` stamped
+# a `thing_uses` row, and `green_thumb` reads that row as a carved
+# pumpkin. Eight players on beta earned it with the carving tools still
+# upstairs behind a staircase their server had not repaired.
+#
+# Nothing caught it because nothing looked. The achievement's own tests
+# call the predicate with a context they build, which is the right test
+# for a predicate and cannot see a column; the drop-30 file had no
+# pumpkin test at all. These are command-level on purpose: the bug was
+# in neither half, it was in what the two halves assumed about each
+# other.
+# --------------------------------------------------------------------------
+
+GOURD_JOB = "gourd_job"
+GREEN_THUMB = "green_thumb"
+THE_GATE = "You'd need something to carve with."
+THE_CARVE = "carves a crooked grin into one of the pumpkins"
+
+
+async def earned_by(who=ALICE) -> set:
+    return set(await database.player_achievements_of(GUILD_A, who))
+
+
+async def a_gardener_but_for_the_pumpkin(db, who=ALICE) -> None:
+    """Two of *Green Thumb*'s three parts, written rather than played.
+
+    The watering and the herbs are `test_the_watering_can`'s subject and
+    the herb garden's own; replaying them here would make these tests
+    fail for reasons they are not about. What is left is the part this
+    section is for.
+    """
+    await database.record_use(who, GUILD_A, "herb_garden", room_id="CO")
+    await database.record_room_deed(
+        who, GUILD_A, telemetry.USE, world.WATERING_CAN, "CO"
+    )
+
+
+async def test_the_pumpkins_refuse_without_anything_to_carve_with(ground_floor):
+    """The sentence the writers wrote, now said at the moment it is true."""
+    reply = replies(await run(ground_floor, bot.use, "pumpkins", room="CO"))
+
+    assert THE_GATE in reply
+    assert THE_CARVE not in reply
+
+
+async def test_and_a_refused_carve_is_not_a_use(ground_floor):
+    """**The one that would have caught it.**
+
+    A `requires` miss returns before `record_use`, so there is no row -
+    which is the whole difference between a gate and a sentence. The
+    test above passed in the broken version too: the gate line was
+    printed either way, because it was the success text. Only the row
+    tells the two apart.
+    """
+    await run(ground_floor, bot.use, "pumpkins", room="CO")
+
+    assert await database.which_of_these_used(ALICE, GUILD_A, ["pumpkins"]) == set()
+
+
+async def test_which_is_what_keeps_green_thumb_out_of_reach(ground_floor):
+    """**The production symptom, from the player's end.**
+
+    Watered, picked, and standing in front of six pumpkins she cannot
+    carve: two parts of three, and the third is a drop away. The award
+    reads a `thing_uses` row and asks nothing about tools, so the row
+    not being written is the only thing holding it - and for eight
+    people it was not holding it at all.
+    """
+    db, *_ = ground_floor
+    await a_gardener_but_for_the_pumpkin(db)
+
+    await run(ground_floor, bot.use, "pumpkins", room="CO")
+
+    assert GREEN_THUMB not in await earned_by()
+
+
+async def test_the_tools_carve_it(ground_floor):
+    """The other direction, which is the half a gate can break silently.
+
+    At drop 40 rather than this file's 30, because that is when the
+    tools exist: they come out of the Halloween box upstairs, and a
+    drop-30 player holding them is a world state the house cannot
+    reach. The pumpkins' own row has been there since 30 and does not
+    change.
+    """
+    db, *_ = ground_floor
+    await resolve.set_current_drop(GUILD_A, 40)
+    await carry(db, ALICE, GUILD_A, "carving_tools")
+
+    reply = replies(await run(ground_floor, bot.use, "pumpkins", room="CO"))
+
+    assert THE_CARVE in reply
+    assert THE_GATE not in reply
+    assert await database.which_of_these_used(ALICE, GUILD_A, ["pumpkins"]) == {
+        "pumpkins"
+    }
+    assert GOURD_JOB in await earned_by()
+
+
+async def test_and_that_is_the_third_part_of_green_thumb(ground_floor):
+    """Both halves of the gate meeting the achievement that reads it.
+
+    *Gourd Job* was never wrong - it asks `carried_of` directly, which
+    is why production had eight *Green Thumb*s and no *Gourd Job*s. This
+    is the pair the other way up: the carve that actually happened
+    finishing the set.
+    """
+    db, *_ = ground_floor
+    await a_gardener_but_for_the_pumpkin(db)
+    await resolve.set_current_drop(GUILD_A, 40)
+    await carry(db, ALICE, GUILD_A, "carving_tools")
+
+    await run(ground_floor, bot.use, "pumpkins", room="CO")
+
+    assert GREEN_THUMB in await earned_by()

@@ -32,7 +32,7 @@ cat_food_expired	expired cat food	expired cat food|expired|off cat food	object		
 cat_food_gourmet	gourmet wet cat food	gourmet|gourmet cat food|good cat food|can|tin|gold can	object		0	yes	yes	1	1	can_opener|cat_bowl								25	28	yes				
 herb_garden	herb garden	herb garden|herb bed|garden|lavender|sage|rosemary|herbs	source	CO	1	no	yes	0						herbs				30	29					
 herbs	herbs	herbs|sprigs|cut herbs|herb	object		0	yes	yes	1										30	30	yes				
-pumpkins	pumpkins	pumpkins|pumpkin	fixture	CO	6	no	yes	0										30	31					
+pumpkins	pumpkins	pumpkins|pumpkin	fixture	CO	6	no	yes	0		carving_tools								30	31					
 watering_can	watering can	watering can|can|watering	object	CO	1	yes	yes	0	1									30	32				yes	6
 stone_circle	stone circle	stone circle|stones|circle|chalk|diagram|chalk diagram	fixture	CO	1	no	yes	0										30	33					
 sunhat	baby's sunhat	sunhat|hat|baby hat	fixture	CO	1	no	yes	0										30	34					
