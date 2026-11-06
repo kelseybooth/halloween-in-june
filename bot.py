@@ -3529,6 +3529,13 @@ async def _threw_it_away(
         return
 
     left = await database.carried_of(user.id, guild_id, thing_id)
+    # **The bin is a route out of the bag like any other**, and the work
+    # order names it: a trip that ends with the ladder in the trash is
+    # over, so the carry count goes with it. The offer goes too - a
+    # ladder in a bin is not standing in a room for anybody to pick up.
+    if thing_id == world.LADDER and not left:
+        await database.forget_the_carry(guild_id, user.id)
+        await database.forget_set_down_offer(guild_id, world.LADDER)
     await telemetry.succeeded(
         guild_id,
         user.id,
@@ -4132,9 +4139,15 @@ async def _finish_use(interaction, state, found) -> None:
 async def _fire(context, *, interaction=None, guild=None, announce=True) -> list:
     """Run a hook, award what passed, and announce what this call created.
 
-    One function for all nine hooks, so an achievement cannot be awarded in
-    one call site and left unannounced in another - the same reason every
-    world-changing use routes through `_finish_use`.
+    One function for every hook there is, so an achievement cannot be
+    awarded in one call site and left unannounced in another - the same
+    reason every world-changing use routes through `_finish_use`.
+
+    **It said "all nine hooks" until 6 November**, and `achievements.HOOKS`
+    had twelve in it by then. The number was right when it was written and
+    nothing was going to make it right again, so it is gone rather than
+    corrected: the sentence is about there being one function, and the
+    count was never what it was for.
 
     Everything here is decoration on an action that has already committed, so
     nothing raises: a player who loses an achievement to a Discord hiccup can
@@ -4788,6 +4801,13 @@ def _climb_detail(room_id: str, effect) -> str:
     assumed. `nest` is whether a piece fell, which with `cat` says how
     often the roll is spending a climb somebody made for the nest.
 
+    **`audience` is the fourth, and it is a number**: how many other
+    players were in the room and awake when somebody went up. Recorded
+    on every climb and not only on the ones that earn *King of the
+    Mountain*, because the question it is collected to settle is what
+    `captive_audience_size` should be for a climb - and a column that
+    only ever held numbers already over the bar could not answer it.
+
     One string, like the plank's: `detail` is the column the log keeps
     for whatever an action needs, and a column per question is how a
     wide table happens.
@@ -4799,7 +4819,75 @@ def _climb_detail(room_id: str, effect) -> str:
 
     return (
         f"room={room_id} carried={flag(world.CARRIED)} "
-        f"cat={flag(world.CAT_CLIMB)} nest={flag(world.NEST_PIECE)}"
+        f"cat={flag(world.CAT_CLIMB)} nest={flag(world.NEST_PIECE)} "
+        f"audience={facts.get(world.AUDIENCE, 0)}"
+    )
+
+
+def _hand_off_detail(base, thing_id: str, handed_on, taker: int) -> "str | None":
+    """What a take of the ladder carries beyond what any take carries.
+
+    Three outcomes, all of them written down, because the question the
+    work order is collecting this to answer is how often one player
+    actually picks up what another put down - and a column that only
+    ever held the hand-offs could not say how often it *nearly*
+    happened. `none` is no offer standing or one past its ten minutes;
+    `self` is somebody taking their own ladder back, which spends the
+    chance; a number of seconds and a setter is the real thing.
+
+    Everything that is not the ladder gets `base` back untouched. The
+    ladder is the only thing with offers on it, and threading this
+    through every take rather than branching at the call site keeps the
+    one `telemetry.succeeded` for takes a single call.
+    """
+    if thing_id != world.LADDER:
+        return base
+    if handed_on is None:
+        extra = "handoff=none"
+    else:
+        setter, waited = handed_on
+        extra = (
+            "handoff=self"
+            if setter == taker
+            else f"handoff={waited.total_seconds():.0f}s from={setter}"
+        )
+    return f"{base} {extra}" if base else extra
+
+
+async def _award_a_hand_off(interaction, room_id: str, handed_on) -> None:
+    """Pay the player who put the ladder down, not the one who took it.
+
+    **The award goes to the person who is not here.** *Pass It On*
+    rewards putting the ladder down rather than grabbing it, so the
+    earner is whoever set it down and the actor is whoever took it -
+    which is why this fires `on_hand_off` with the setter as `user_id`
+    rather than putting a predicate on `on_take`.
+
+    **And with no interaction**, deliberately. `_announce` reads that as
+    an award with nobody to answer, so it posts the public line with an
+    `@mention` and sends no private half - exactly right here, where the
+    private half would otherwise land in the taker's ephemeral reply and
+    congratulate them on somebody else's achievement. It is the same
+    path *Met the Craving* takes off a reaction.
+
+    The caller has already established that there was an offer and that
+    it was not the taker's own: both are read off the row this spends,
+    and both are on the log line the take wrote.
+    """
+    setter, waited = handed_on
+    await _fire(
+        achievements.Context(
+            guild_id=interaction.guild_id,
+            hook="on_hand_off",
+            user_id=setter,
+            thing_id=world.LADDER,
+            room_id=room_id,
+            # Who took it and how long they left it, so the predicate
+            # reads facts rather than going back to a row the take has
+            # already deleted.
+            extra={world.TAKEN_BY: interaction.user.id, world.WAITED: waited},
+        ),
+        guild=interaction.guild,
     )
 
 
@@ -5450,6 +5538,16 @@ async def _use_exit(interaction, state, found, row) -> None:
     await interaction.followup.send(reply, ephemeral=True)
 
 
+    # **One more room of carrying, if the ladder came too.** *Heavy
+    # Lifting* is four moves in one trip, so this counts moves rather
+    # than rooms: back and forth between two rooms is four rooms' worth
+    # of carrying it, which is what the shoulders are being paid for.
+    # Counted here, where the move has already happened, and zeroed by
+    # every route the ladder has out of a bag.
+    carry_moves = None
+    if await database.carried_of(user.id, guild_id, world.LADDER):
+        carry_moves = await database.count_a_carried_move(guild_id, user.id)
+
     await _fire(
         achievements.Context(
             guild_id=guild_id,
@@ -5457,6 +5555,9 @@ async def _use_exit(interaction, state, found, row) -> None:
             user_id=user.id,
             thing_id=found.thing_id,
             room_id=destination,
+            extra=(
+                {} if carry_moves is None else {world.CARRY_MOVES: carry_moves}
+            ),
         ),
         interaction=interaction,
     )
@@ -6490,12 +6591,34 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
             )
             return
 
+        # **Claimed before the take is logged**, because the log row is
+        # where it belongs: *each take of the ladder, with how long
+        # since the last set-down and who did it* is what the work
+        # order asks to see, and one row per event is this file's rule
+        # everywhere else - a second row for the hand-off would be two
+        # records of one player picking one thing up.
+        #
+        # The award does not happen here. It waits until the room has
+        # been told, with the rest of the achievements, which is the
+        # order `_fire(announce=...)` exists to keep.
+        handed_on = None
+        if taken == world.LADDER:
+            await database.forget_the_carry(guild_id, user.id)
+            handed_on = await database.claim_set_down_offer(
+                guild_id, world.LADDER, timedelta(minutes=world.HANDOFF_MINUTES)
+            )
+
         await telemetry.succeeded(
             guild_id,
             user.id,
             telemetry.TAKE,
             thing_id=taken,
-            detail=await _moved_detail(guild_id, state.current_room, taken),
+            detail=_hand_off_detail(
+                await _moved_detail(guild_id, state.current_room, taken),
+                taken,
+                handed_on,
+                user.id,
+            ),
         )
 
         taken_row = await phrasing.thing_row(taken)
@@ -6569,6 +6692,11 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
                 *nudges,
             ]
         await _say_in_the_room(interaction, reply, nudges)
+
+        # The other half of the claim above: the offer was spent when
+        # the take was logged, and this is where it pays somebody.
+        if handed_on is not None and handed_on[0] != user.id:
+            await _award_a_hand_off(interaction, room_id, handed_on)
 
         # `source_id` is what separates gardening from scavenging: taking herbs
         # from the herb garden earns Green Thumb, picking up a herbs somebody
@@ -6822,6 +6950,15 @@ async def drop(interaction: discord.Interaction, thing: str) -> None:
             user.id, guild_id, telemetry.DROP, found.thing_id,
             state.current_room,
         )
+
+        # **The plainest of the three deliberate set-downs**, and the
+        # one *Pass It On* was written for: a player who types `/drop
+        # ladder` has decided to leave it where somebody else can take
+        # it. The other two come with a climb and with a plank, where
+        # putting it down is a consequence of doing something else.
+        if found.thing_id == world.LADDER:
+            await database.forget_the_carry(guild_id, user.id)
+            await database.offer_on_set_down(guild_id, user.id, world.LADDER)
 
         # Retires `hint.drop_something`. Recorded here rather than
         # inferred from an empty bag, because putting one of three

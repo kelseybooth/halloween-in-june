@@ -937,10 +937,18 @@ def test_what_can_actually_be_earned():
     with 40. It needed nothing built: `thing_uses` has held the rows
     since those things shipped, so the predicate is one read of a table
     that was already answering this question for *Green Thumb*.
+
+    **Fifty-four with the ladder's other five**, and they are the first
+    batch since drop 20 that arrives earnable only because storage
+    shipped with them. Three tallies on `users` and a table for the last
+    set-down: neither `room_deeds` nor `thing_uses` can count a climb,
+    one being idempotent per room and the other counting the climbs the
+    cat takes. Had the columns been left for later, all five would have
+    gone to `BLOCKED` and this number would not have moved at all.
     """
     earnable = achievements.registered_ids() - set(BLOCKED) - set(BY_HAND)
 
-    assert len(earnable) == 49
+    assert len(earnable) == 54
 
 
 # --------------------------------------------------------------------------

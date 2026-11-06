@@ -149,6 +149,14 @@ def test_every_hook_in_the_spec_exists():
         # somebody who has already read the room, and a hook that fired
         # on both would have spent the one chance on the wrong command.
         "on_look",
+        # One player picking up what another put down, added 6 November
+        # for *Pass It On*. The only hook whose earner is not the player
+        # whose command fired it: the award goes to whoever set the
+        # ladder down, and the taker is the one holding the interaction.
+        # A predicate on `on_take` would have had them the wrong way
+        # round, and firing `on_take` twice would have run every other
+        # take condition against a take the setter never made.
+        "on_hand_off",
     }
 
 

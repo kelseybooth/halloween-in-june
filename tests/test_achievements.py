@@ -95,9 +95,17 @@ def test_the_shipped_file_parses():
     # pieces of baby clothing the house has. A drop 40 row, and the only
     # new thing in it is the row - the booties, the sunhat and the
     # clothes were all usable already.
-    assert len(parsed.achievements) == 58
+    # Sixty-three on 6 November, the ladder's other five in one work
+    # order: *King of the Mountain* for a climb with an audience,
+    # *Second Place* for losing three races to the cat, *Pass It On* for
+    # a ladder somebody else picked up, *Heavy Lifting* for four rooms
+    # without setting it down, and *Head for Heights* for twenty-five
+    # climbs. The first batch since drop 20 that needed columns built
+    # for it: three tallies on `users` and a row for the last set-down,
+    # because neither `room_deeds` nor `thing_uses` can count a climb.
+    assert len(parsed.achievements) == 63
     # The ids are a set, so this pair is also the file's duplicate check.
-    assert len(parsed.achievement_ids) == 58
+    assert len(parsed.achievement_ids) == 63
 
 
 def test_the_shipped_file_validates():
@@ -216,7 +224,7 @@ async def test_the_rows_reach_the_database(db):
 async def test_the_whole_shipped_file_loads(db):
     await content_loader.load_content(content_module.load_files())
 
-    assert await row_count(db, "achievements") == 58
+    assert await row_count(db, "achievements") == 63
 
 
 async def test_a_reload_replaces_the_rows(db):

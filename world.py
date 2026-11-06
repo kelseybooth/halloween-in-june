@@ -280,6 +280,38 @@ GUARDED = "guarded"
 # ladder rather than climbing one somebody else left standing.
 CARRIED = "carried"
 
+# How long a set-down stays an offer somebody else can take up. The
+# work order's ten minutes, and the reason it is not the audience's ten
+# is that they measure different things: that one is how long ago a
+# player typed something, this one is how long a ladder has been
+# standing where they left it.
+HANDOFF_MINUTES = 10
+
+# The four facts a climb or a carry reports that are counts rather than
+# yes-or-nos. **Written by the handler and read by the predicate**, the
+# shape `bin_looking_for_you` argues for: the tally has to be
+# incremented, a predicate must not write, so the handler writes it and
+# puts the number it wrote on the hook. A predicate that re-read the
+# column would be asking a second time for a number it was already
+# handed, and would get a different answer if the player climbed twice
+# in one second.
+CLIMBS = "climbs"
+CAT_CLIMBS = "cat_climbs"
+CARRY_MOVES = "carry_moves"
+# What a hand-off reports: who picked the ladder up, and how long it had
+# been standing there. The hook's `user_id` is the player who set it
+# down, because they are the one earning something, so the taker has to
+# ride in `extra` - there is no other field on a context for "somebody
+# else, who did this".
+TAKEN_BY = "taken_by"
+WAITED = "waited"
+# How many other people were in the room, awake, at the moment of the
+# climb. Counted here rather than in the predicate - which is where
+# *Captive Audience* counts its own - because the log wants the number
+# on every climb and not only on the ones that earn something. Two
+# readers, one query.
+AUDIENCE = "audience"
+
 # The kitchen trash can. A container players throw things into, fish
 # things out of, and empty - three mechanics on one fixture, and the
 # only `/take` in the game that does something other than pick a thing
@@ -790,22 +822,61 @@ async def _climb_the_ladder(
     `/use` of one thing, and the handler writes them into that use's
     own log row. A second row per climb would be two records of one
     event, which is how a count ends up doubled.
+
+    **And since 6 November, four counts beside them**, for the five
+    ladder achievements. The climb tallies and the headcount are
+    written here for the reason the three facts are reported here: this
+    is the only code that knows which branch the climb took, and a
+    predicate that worked it out again would be writing from a place
+    that must not write.
+
+    **Every exit from this function puts the ladder on a floor**, so
+    every one of them ends a carry and settles what the set-down was
+    worth. A deliberate set-down leaves an offer another player can
+    take up within `HANDOFF_MINUTES`; the cat taking it leaves none,
+    because the player who rolled her handed the ladder to nobody.
     """
     carried = await database.drop_into_room(user_id, guild_id, room_id, LADDER)
     facts = {CARRIED: carried, CAT_CLIMB: False, NEST_PIECE: False}
 
+    # **Counted on every climb, including the ones that earn nothing.**
+    # The work order asks for the audience size on each climb so that
+    # `captive_audience_size` can be tuned for climbs as well as
+    # rattles, and a number recorded only when it was already large
+    # enough would answer the question it was collected to settle.
+    now = await database.server_now(guild_id)
+    facts[AUDIENCE] = await database.active_others_in_room(
+        guild_id,
+        room_id,
+        now - timedelta(minutes=database.AUDIENCE_MINUTES),
+        except_user=user_id,
+    )
+
+    # The climb ended the trip, whatever happened at the top of it.
+    await database.forget_the_carry(guild_id, user_id)
+
     if (rng or random).randint(1, 100) <= CAT_TAKES_IT_PERCENT:
-        until = await database.server_now(guild_id) + timedelta(
-            minutes=GUARDED_MINUTES
+        await database.lock_thing(
+            guild_id, LADDER, now + timedelta(minutes=GUARDED_MINUTES)
         )
-        await database.lock_thing(guild_id, LADDER, until)
+        # **No offer, and any standing one goes.** The work order is
+        # explicit that a cat climb is not a hand-off - nobody chose to
+        # share - and clearing is the half that is easy to miss: a
+        # player who set the ladder down two minutes ago and then rolled
+        # the cat on picking it back up must not leave an offer behind
+        # them. She is sitting on it for five minutes anyway.
+        await database.forget_set_down_offer(guild_id, LADDER)
+        cat_climbs = await database.count_a_climb(guild_id, user_id, cat=True)
         # **No deed for a climb she took.** The design is explicit that
         # cat climbs do not count toward *Rung by Rung*, and this is the
         # only branch that knows one happened - the handler sees a
         # successful use either way. Returning before the write rather
         # than writing and filtering later, so the table never holds a
         # row the achievement has to remember to ignore.
-        return Effect(text_state=CAT_CLIMB, extra={**facts, CAT_CLIMB: True})
+        return Effect(
+            text_state=CAT_CLIMB,
+            extra={**facts, CAT_CLIMB: True, CAT_CLIMBS: cat_climbs},
+        )
 
     # Every climb that reached the top, in whatever room. *Rung by Rung*
     # counts rooms rather than climbs, so the tenth climb of one room is
@@ -813,6 +884,15 @@ async def _climb_the_ladder(
     await database.record_room_deed(
         user_id, guild_id, telemetry.USE, LADDER, room_id
     )
+    climbs = await database.count_a_climb(guild_id, user_id, cat=False)
+    facts[CLIMBS] = climbs
+
+    # **Only a ladder that was on their shoulder was set down.** Climbing
+    # one that was already standing in the room moves nothing and offers
+    # nothing: the next player along could have taken it before the climb
+    # just as well as after, so there is no gesture to reward.
+    if carried:
+        await database.offer_on_set_down(guild_id, user_id, LADDER)
 
     if room_id != ROAD:
         return Effect(extra=facts)
@@ -1002,9 +1082,25 @@ async def _set_it_down(
 
     False when there was nothing to move, which is a row another sweep
     or another command got to first.
+
+    **An idle drop is not a hand-off**, which is the work order's own
+    ruling on *Pass It On*: a player who went quiet did not choose to
+    share, so this clears any offer rather than leaving one. Clearing
+    matters more than not writing - a carrier who put the ladder down
+    five minutes ago, picked it back up and then went quiet would
+    otherwise still have the earlier gesture standing when somebody
+    else came along.
     """
     if not await database.drop_into_room(user_id, guild_id, room_id, thing_id):
         return False
+    # **The carry counter is the ladder's and the offer is any thing's.**
+    # This function sweeps three things on two clocks, and a watering can
+    # taken off somebody must not zero the ladder trip they are in the
+    # middle of - whereas the offer row is keyed by thing, so clearing it
+    # says only that *this* thing reached the floor unchosen.
+    if thing_id == LADDER:
+        await database.forget_the_carry(guild_id, user_id)
+    await database.forget_set_down_offer(guild_id, thing_id)
     await telemetry.system(
         guild_id,
         telemetry.ABANDONED,
@@ -1412,6 +1508,15 @@ async def _place_a_plank(guild_id: int, user_id: int, room_id: str) -> Effect:
     carried_the_ladder = await database.drop_into_room(
         user_id, guild_id, room_id, LADDER
     )
+    # **A plank is the third deliberate set-down**, beside `/drop` and
+    # climbing a carried ladder, and it counts for *Pass It On* for the
+    # same reason those two do: the player chose to put it down where
+    # anybody in the room can reach it. Only when they were carrying it,
+    # though - laying a plank beside a ladder that was already standing
+    # there moves nothing and offers nobody anything.
+    if carried_the_ladder:
+        await database.forget_the_carry(guild_id, user_id)
+        await database.offer_on_set_down(guild_id, user_id, LADDER)
     # **Read before `check_staircase`, which is what makes it the right
     # answer.** This is the state the gate saw when it let the plank
     # through, and `check_staircase` is the only thing that sets
