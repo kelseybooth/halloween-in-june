@@ -429,39 +429,6 @@ async def _gather(
     return candidates
 
 
-async def _not_here_yet(guild_id: int, user_id: int, room_id: str) -> set[str]:
-    """Every word for a thing in this room that this player cannot see yet.
-
-    Two ways to be in a room and out of `_gather`'s candidates: the
-    thing's drop has not arrived, or its `present_when` gate is not in
-    force for this player. Both are read here the same way `_gather`
-    reads them, and for the same reason - a gate is per player, so two
-    people in one room are looking at different rooms.
-
-    Asked only on the cold path: an exact match failed and a near one
-    was found. One query, and only then.
-    """
-    visible = await resolve.visible_thing_ids(guild_id)
-    held = await states.in_force(guild_id, user_id)
-    session_factory = database._require_session()
-    async with session_factory() as session:
-        rows = await session.execute(
-            select(
-                database.ThingType.thing_id,
-                database.ThingType.name,
-                database.ThingType.aliases,
-                database.ThingType.present_when,
-            ).where(database.ThingType.room_id.in_([room_id, content.EVERYWHERE]))
-        )
-
-    words: set[str] = set()
-    for thing_id, name, aliases, gate in rows:
-        if thing_id in visible and states.passes(gate, held):
-            continue
-        words |= _names_of(name, aliases)
-    return words
-
-
 # **Which copy of a thing a verb acts on**, in order. Pass two used to
 # be three places deep and one of them was "the room", which is the
 # question this answers properly: a room holds a thing in several places
@@ -756,27 +723,45 @@ async def find(
 
     correction = None
     if not matches:
+        # **A word the house already knows is not a typo**, and nothing
+        # the player spelled correctly is ever answered with something
+        # else. Asked once here and used twice: it decides whether a
+        # near miss may be forgiven at all, and it is the difference
+        # between the two refusals below.
+        #
+        # The forgiving pass runs over the candidates, and the
+        # candidates are what the player can reach - so without this it
+        # reaches *past* a word it knows perfectly well to a different
+        # thing that happens to be standing here. On 6 November a
+        # playtester climbed the ladder in the Courtyard, which sets it
+        # down, walked into the Kitchen and typed `/look ladder`. She
+        # was told about the pantry, which answers to `larder`, one edit
+        # away. She tried again and was told about the pantry again.
+        #
+        # Drop 25 found the narrow version of this - `living room` two
+        # edits from `dining room`, in an Entryway where only the arch
+        # had arrived - and it was fixed by asking whether the word
+        # belonged to something in *this room* that had not arrived yet.
+        # That was the same bug with a smaller question: the ladder is
+        # not in the Kitchen at all, not even invisibly, so the room was
+        # the wrong place to look. The game-wide question subsumes it,
+        # and `test_the_doorway_that_has_not_arrived_is_refused_and_not_corrected`
+        # still passes unchanged because a doorway that has not arrived
+        # is still a word the house knows.
+        #
+        # The refusal this leaves is the true one and the useful one:
+        # *You don't see a ladder here*, which sent her back to the
+        # Courtyard - where it was.
+        known_elsewhere = await _exists_anywhere(needle)
+
         # Pass one again, this time forgiving a typo - and only ever after the
         # exact pass has failed, so a word somebody spelled correctly can never
         # lose to somebody else's near miss.
-        near = _nearest(needle, candidates.values()) if fuzzy else None
-        # **And never a near miss on something standing beside it that
-        # has not arrived.** The rule above holds inside the candidate
-        # set, and the candidate set is what the player can see: `living
-        # room` is two edits from `dining room`, so an Entryway with the
-        # arch open and the wide doorway still to come took a player who
-        # had spelled the Living Room correctly and walked them through
-        # the other doorway without a word about it.
-        #
-        # Drop 25 surfaced this rather than causing it. The same pair,
-        # with one of them unearned, has been able to do it since
-        # `fed_the_cat` went onto the exits themselves - and the answer
-        # is the one the refusal gives anyway: *you don't see a wide
-        # doorway here*, which is true, and says nothing about why.
-        if near is not None and needle in await _not_here_yet(
-            guild_id, user_id, room_id
-        ):
-            near = None
+        near = (
+            _nearest(needle, candidates.values())
+            if fuzzy and not known_elsewhere
+            else None
+        )
         if near is None:
             carried_elsewhere = False
             if scope is Scope.ROOM:
@@ -787,7 +772,7 @@ async def find(
                 carried_elsewhere = any(needle in c.names for c in bag.values())
             return NotFound(
                 typed=typed,
-                exists_elsewhere=await _exists_anywhere(typed),
+                exists_elsewhere=known_elsewhere,
                 carried=carried_elsewhere,
             )
 
