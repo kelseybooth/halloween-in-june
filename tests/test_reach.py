@@ -40,17 +40,25 @@ async def find(room="EN", typed="", scope=Scope.REACH, user=ALICE):
 
 
 # --------------------------------------------------------------------------
-# A thing you cannot see yet is not a typo for one you can
+# A word the house knows is not a typo for one it also knows
 #
 # The forgiving pass runs over the candidates, and the candidates are
-# what the player can see - so until 31 October it could reach past a
-# thing standing right there. Drop 25 found it with two doorways: `living
-# room` is two edits from `dining room`, so an Entryway with the arch
-# open and the wide doorway still to come took a player who had spelled
-# the Living Room correctly and walked them through the other one.
+# what the player can reach - so on its own it reaches past a word the
+# house knows perfectly well to a different thing that happens to be
+# standing here.
 #
-# Both halves of "cannot see yet" are here, because both are per-room and
-# only one of them is per-server.
+# Drop 25 found the narrow half with two doorways: `living room` is two
+# edits from `dining room`, so an Entryway with the arch open and the
+# wide doorway still to come took a player who had spelled the Living
+# Room correctly and walked them through the other one. That was fixed
+# by asking whether the word belonged to something in *this room* that
+# had not arrived yet.
+#
+# 6 November found the rest of it, and the room was the wrong place to
+# have looked: the ladder is not in the Kitchen at all, not even
+# invisibly. So the question is now game-wide - does the house know this
+# word - and the two doorway cases below pass unchanged, because a
+# doorway that has not arrived is still a word the house knows.
 # --------------------------------------------------------------------------
 
 
@@ -143,6 +151,92 @@ async def test_and_opens_to_the_player_who_has_passed_it(a_gated_doorway):
     await states.set_player_state(GUILD_A, ALICE, "drawer_unjammed")
 
     assert (await find(typed="living room")).thing_id == "EL"
+
+
+@pytest.fixture
+async def a_ladder_and_a_larder(house):
+    """Two rooms, and the one word each that the other sits an edit from.
+
+    The report's own shape, with the content files' two words: a thing
+    that is somewhere else entirely, not merely unarrived or gated.
+    """
+    await content_loader.load_content(
+        a_house(
+            a_thing("ladder", name="ladder", aliases=("rungs",), room_id="CO"),
+            a_doorway("pantry", "pantry", "cupboard", "larder", room_id="KI"),
+        )
+    )
+    await database.place_in_room(GUILD_A, "CO", "ladder", 1)
+    return house
+
+
+async def test_a_thing_in_another_room_is_not_a_typo_for_one_here(a_ladder_and_a_larder):
+    """The bug, in the two words that found it. A playtester climbed the
+    ladder in the Courtyard - which sets it down - walked into the Kitchen
+    and typed `/look ladder`. She was told about the pantry, which answers
+    to `larder`, and when she did not believe it she was told again."""
+    assert reach._distance("ladder", "larder", 1) == 1
+
+    result = await find(room="KI", typed="ladder")
+
+    assert isinstance(result, NotFound)
+
+
+async def test_and_the_refusal_still_says_it_exists_somewhere(a_ladder_and_a_larder):
+    """Which is the half that sends her back to the Courtyard: the verbs
+    read this to choose `take_fail.absent` - *you don't see a ladder here* -
+    over `look_fail.unknown`, and the first is both true and a direction."""
+    result = await find(room="KI", typed="ladder")
+
+    assert result.exists_elsewhere
+
+
+async def test_the_ladder_answers_in_the_room_it_is_actually_in(a_ladder_and_a_larder):
+    """The guard is on the forgiving pass alone. Nothing about reaching a
+    thing that is there changes."""
+    assert (await find(room="CO", typed="ladder")).thing_id == "ladder"
+    assert (await find(room="KI", typed="larder")).thing_id == "pantry"
+
+
+async def test_and_a_word_that_spells_nothing_is_still_forgiven(a_ladder_and_a_larder):
+    """The rule is about words the house knows, not about distance. `lardet`
+    is a word of nothing, so it reaches the pantry's `larder` from one edit
+    away exactly as before - which is the behaviour this keeps."""
+    result = await find(room="KI", typed="lardet")
+
+    assert result.thing_id == "pantry"
+    assert result.fuzzy == "lardet→larder"
+
+
+async def test_against_the_shipped_content_in_the_room_it_happened_in(house):
+    """The report end to end, on drop 31's own files: one ladder, lying in
+    the Courtyard where its last climb set it down, and a player standing
+    in the Kitchen."""
+    await content_loader.load_content(content_module.load_files())
+    await resolve.set_current_drop(GUILD_A, 31)
+    await database.place_in_room(GUILD_A, "CO", "ladder", 1)
+
+    refused = await find(room="KI", typed="ladder")
+
+    assert isinstance(refused, NotFound)
+    assert refused.exists_elsewhere
+    assert (await find(room="KI", typed="larder")).thing_id == "pantry"
+    assert (await find(room="CO", typed="ladder")).thing_id == "ladder"
+
+
+async def test_and_carrying_it_into_the_kitchen_describes_the_ladder(house):
+    """The other half of her run, and why she was sure the game was wrong:
+    the climb before it worked. A ladder in her hands resolves in the
+    Kitchen on the exact pass, as it always did."""
+    await content_loader.load_content(content_module.load_files())
+    await resolve.set_current_drop(GUILD_A, 31)
+    await carry(house, ALICE, GUILD_A, "ladder")
+
+    found = await find(room="KI", typed="ladder")
+
+    assert found.thing_id == "ladder"
+    assert found.where is Where.CARRIED
+    assert found.fuzzy is None
 
 
 # --------------------------------------------------------------------------

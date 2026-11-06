@@ -73,6 +73,10 @@ SWAT_USE = "swats you smartly on the head"
 ARMS_FULL = "can't figure out how while you're carrying this ladder"
 EXHAUSTED = "drops the heavy wooden ladder out of exhaustion"
 
+# What `/look larder` says in the Kitchen, and what `/look ladder` there
+# was saying until 6 November. Off `thing_text.tsv`'s pantry row.
+PANTRY = "A narrow pantry with a door that won't quite shut"
+
 
 @pytest.fixture(autouse=True)
 def registry():
@@ -804,6 +808,67 @@ async def test_but_a_climb_she_takes_is_not(house, monkeypatch):
     assert await db.rooms_where(
         ALICE, GUILD_A, telemetry.USE, world.LADDER
     ) == set()
+
+
+
+# ------------------------------------------------------------------------
+# Walking away from it, and asking where it went
+#
+# The two behaviours at the top of this file meet here and the meeting
+# is what a playtester hit on 6 November: every climb sets the ladder
+# down, and anybody can carry it anywhere - so the room you climbed in
+# is where it stays, and the room you walk into has no ladder in it.
+#
+# Asking about it there used to describe the pantry, which answers to
+# `larder`, one edit from `ladder`. She asked twice. The guard itself is
+# `reach.find`'s; these four are what she typed, in the rooms she typed
+# it in.
+# ------------------------------------------------------------------------
+
+
+async def test_the_kitchen_says_the_ladder_is_not_here(house):
+    """Her run: take it, climb it, walk next door, ask where it went.
+    The refusal is what sent her back to the Courtyard, and it is true -
+    she had left it there, because climbing it is what puts it down."""
+    await carry_it(house)
+    await climb(house, "CO")
+
+    reply = replies(await run(house, bot.look, "ladder", room="KI"))
+
+    assert "ladder" in await floor_of("CO")
+    assert "don't see a ladder here" in reply
+
+
+async def test_rather_than_describing_the_pantry(house):
+    """The sentence she was given instead, quoted off the file so that a
+    change which makes it reachable from `ladder` again fails here."""
+    await carry_it(house)
+    await climb(house, "CO")
+
+    reply = replies(await run(house, bot.look, "ladder", room="KI"))
+
+    assert PANTRY in replies(await run(house, bot.look, "larder", room="KI"))
+    assert PANTRY not in reply
+
+
+async def test_and_the_pantry_still_answers_to_larder(house):
+    """The alias is a good word for a pantry and keeps it. The bug was
+    never the alias - it was a correction nobody asked for."""
+    reply = replies(await run(house, bot.look, "larder", room="KI"))
+
+    assert "don't see" not in reply
+
+
+async def test_and_carrying_it_in_describes_the_ladder(house):
+    """The climb before hers worked, which is why she was sure the game
+    was wrong rather than that she had put it down."""
+    await carry_it(house)
+
+    reply = replies(await run(house, bot.look, "ladder", room="KI"))
+
+    assert "heavy, it's awkward" in reply
+
+
 
 # ------------------------------------------------------------------------
 # The other five, 6 November

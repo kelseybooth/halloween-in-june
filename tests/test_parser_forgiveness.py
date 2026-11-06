@@ -185,18 +185,29 @@ async def test_an_exact_word_never_loses_to_a_typo(channel):
 
 
 async def test_the_cats_kitten_sits_two_edits_from_the_kitchen(channel):
-    """**Why `/look` runs its passes in rank order.** `kitten` is a word the
-    cat answers to in every room, and it is two edits from `kitchen` - so with
-    the typo pass running before the room's name, `/look kitchen` in the
-    Kitchen described the cat instead of the room.
+    """**The collision that made `/look` run its passes in rank order**, and
+    which no longer resolves at all.
 
-    The end-to-end guard is `test_naming_your_own_room_describes_it` in
-    test_verbs.py. This is the collision underneath it: the word reaches the
-    cat only through the forgiving pass, which is exactly why the room's own
-    name has to be tried between the two.
+    `kitten` is a word the cat answers to in every room and it is two edits
+    from `kitchen`, so with the typo pass running before the room's name,
+    `/look kitchen` in the Kitchen described the cat instead of the room. The
+    room's own name was put between the two passes to settle that.
+
+    Six players still reached the cat this way from everywhere else, because
+    the room pass only answers for the room you are standing in. `kitchen` is
+    a word of both doors into the Kitchen, so now it is never corrected
+    anywhere: the house knows it, and a word the house knows is not a typo.
+
+    **The ordering still stands and is still tested.** It is what answers
+    `/look kitchen` in the Kitchen at all - the Secret Library, the Upstairs
+    Hallway and the channel are the three rooms whose names belong to no
+    thing, so nothing else would. The end-to-end guard is
+    `test_naming_your_own_room_describes_it` in test_verbs.py.
     """
     assert reach._distance("kitchen", "kitten", 2) == 2
-    assert (await resolves("kitchen")).thing_id == "eunoia"
+
+    assert isinstance(await resolves("kitchen"), reach.NotFound)
+    assert (await resolves("kitten")).thing_id == "eunoia"
 
     exact_only = await reach.find(
         GUILD_A, ALICE, CHANNEL, "kitchen", reach.Scope.REACH, fuzzy=False

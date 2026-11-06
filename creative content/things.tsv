@@ -29,7 +29,7 @@ cat_food_chicken	chicken cat food	chicken cat food|chicken|cat food	object		0	ye
 cat_food_salmon	salmon cat food	salmon cat food|salmon|cat food	object		0	yes	yes	1		cat_bowl								10	25	yes				
 cat_food_tuna	tuna cat food	tuna cat food|tuna|cat food	object		0	yes	yes	1		can_opener|cat_bowl								25	26	yes				
 cat_food_expired	expired cat food	expired cat food|expired|off cat food	object		0	yes	yes	1		can_opener								40	27	yes				
-cat_food_gourmet	gourmet wet cat food	gourmet|gourmet cat food|good cat food|can|tin|gold can	object		0	yes	yes	1	1	can_opener|cat_bowl								25	28	yes				
+cat_food_gourmet	gourmet wet cat food	gourmet|gourmet cat food|good cat food|can|tin|gold can|gourmet wet food	object		0	yes	yes	1	1	can_opener|cat_bowl								25	28	yes				
 herb_garden	herb garden	herb garden|herb bed|garden|lavender|sage|rosemary|herbs	source	CO	1	no	yes	0						herbs				30	29					
 herbs	herbs	herbs|sprigs|cut herbs|herb	object		0	yes	yes	1										30	30	yes				
 pumpkins	pumpkins	pumpkins|pumpkin	fixture	CO	6	no	yes	0		carving_tools								30	31					
@@ -96,7 +96,7 @@ ivy	ivy	ivy|creeper|vines	exit	CO	1	no	yes	0							BE			30	86
 stone_wall	stone wall	stone wall|wall|garden wall	fixture	CO	1	no	yes	0										30	87					
 bench	stone bench	bench|stone bench|seat	fixture	CO	1	no	yes	0										30	88					
 sofa	sofa	sofa|couch|settee	fixture	LI	1	no	yes	0										30	89					
-armchairs	armchairs	armchairs|armchair|chairs	fixture	LI	1	no	yes	0										30	90					
+armchairs	armchairs	armchairs|armchair|chairs|chair	fixture	LI	1	no	yes	0										30	90					
 fireplace	fireplace	fireplace|hearth|fire|chimney	fixture	LI	1	no	yes	0										30	91					
 bookshelves	bookshelves	bookshelves|bookshelf|books|shelves	fixture	LI	1	no	yes	0										30	92					
 bare_wall	bare patch of wall	bare wall|bare patch|patch of wall|blank wall	fixture	LI	1	no	yes	0										30	93					
