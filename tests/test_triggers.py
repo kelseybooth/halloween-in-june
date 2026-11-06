@@ -477,6 +477,75 @@ async def pick(who=ALICE):
     await database.take_from_source(who, GUILD_A, "herbs", source_id=PICKED)
 
 
+async def wore(who=ALICE, *, piece):
+    """One piece of the wardrobe tried on, which is a plain use row."""
+    await database.record_use(who, GUILD_A, piece, room_id=None)
+
+
+async def test_growth_spurt_takes_all_three(playing):
+    for piece in triggers.GROWTH_SPURT_PARTS:
+        await wore(piece=piece)
+
+    assert "growth_spurt" in await earned(
+        a_context("on_use", thing_id="baby_clothes")
+    )
+
+
+@pytest.mark.parametrize("missing", triggers.GROWTH_SPURT_PARTS)
+async def test_growth_spurt_takes_nothing_less(playing, missing):
+    """Parametrized off the constant rather than a hand-copied list, so a
+    fourth piece of wardrobe gets a case for free."""
+    for piece in triggers.GROWTH_SPURT_PARTS:
+        if piece != missing:
+            await wore(piece=piece)
+
+    assert "growth_spurt" not in await earned(
+        a_context("on_use", thing_id="baby_clothes")
+    )
+
+
+async def test_growth_spurt_does_not_care_about_the_order_or_the_day(playing):
+    """**The sunhat is the case the brief was about.** It has been usable
+    since drop 30 and the clothes only arrive at 40, so every earning of
+    this reads a row written weeks earlier. `thing_uses` keeps it, which
+    is why nothing had to be backfilled."""
+    await wore(piece="sunhat")
+    await wore(piece="booties")
+    await wore(piece="baby_clothes")
+
+    assert "growth_spurt" in await earned(
+        a_context("on_use", thing_id="booties", now=pacific(2027, 4, 1))
+    )
+
+
+async def test_growth_spurt_is_not_earned_by_somebody_else_s_wardrobe(playing):
+    """The parts are per player. Bob in the booties does nothing for
+    Alice, which a `thing_uses` read gets right only because the row is
+    keyed on the player."""
+    await wore(BOB, piece="booties")
+    await wore(BOB, piece="sunhat")
+    await wore(piece="baby_clothes")
+
+    assert "growth_spurt" not in await earned(
+        a_context("on_use", thing_id="baby_clothes")
+    )
+
+
+async def test_growth_spurt_fires_on_a_later_use_rather_than_never(playing):
+    """A state test, not an event test. Nobody can hold all three on the
+    day this ships - the clothes are drop 40 and the other two are older
+    - but if somebody did, the award should still reach them on their
+    next use of anything rather than being lost to the one use that
+    happened to complete the set. Same reasoning as *Tireless*.
+    """
+    for piece in triggers.GROWTH_SPURT_PARTS:
+        await wore(piece=piece)
+
+    assert "growth_spurt" in await earned(
+        a_context("on_use", thing_id="reading_glasses")
+    )
+
+
 async def test_green_thumb_takes_all_three(playing):
     await water()
     await pick()
@@ -861,10 +930,17 @@ def test_what_can_actually_be_earned():
     had it parked behind drop 40 as well, and the ceiling moved to 40
     on 2 November. Had the column been left for later this would have
     gone to `BLOCKED` and this number would not have moved.
+
+    **Forty-nine with Growth Spurt**, which arrives earnable because
+    all three pieces of the wardrobe already exist and already have a
+    `use` - the booties since drop 20, the sunhat since 30, the clothes
+    with 40. It needed nothing built: `thing_uses` has held the rows
+    since those things shipped, so the predicate is one read of a table
+    that was already answering this question for *Green Thumb*.
     """
     earnable = achievements.registered_ids() - set(BLOCKED) - set(BY_HAND)
 
-    assert len(earnable) == 48
+    assert len(earnable) == 49
 
 
 # --------------------------------------------------------------------------

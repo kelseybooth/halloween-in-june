@@ -238,7 +238,10 @@ async def test_the_content_is_still_loaded(two_games):
     # A guild at the last drop reaches it; one held below 40 would not,
     # which is the only reason this number and `test_triggers`'s
     # earnable count are not the same kind of number.
-    assert len(await resolve.achievements(GUILD_A)) == 48
+    # Forty-nine with *Growth Spurt* on 5 November, also drop 40 and
+    # also reachable only because the ceiling moved - the clothes it
+    # wants are in the Nursery's hallway.
+    assert len(await resolve.achievements(GUILD_A)) == 49
 
 
 async def test_the_art_is_kept_by_default(two_games):
