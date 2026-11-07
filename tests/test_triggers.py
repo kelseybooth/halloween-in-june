@@ -945,10 +945,15 @@ def test_what_can_actually_be_earned():
     one being idempotent per room and the other counting the climbs the
     cat takes. Had the columns been left for later, all five would have
     gone to `BLOCKED` and this number would not have moved at all.
+
+    **Fifty-five with the collar**, which needed storage of a kind none
+    of the others did: a server state rather than a count. *Name Tag*
+    is earned by the one player who buckles it on, and the state it
+    sets is what everybody else sees afterwards.
     """
     earnable = achievements.registered_ids() - set(BLOCKED) - set(BY_HAND)
 
-    assert len(earnable) == 54
+    assert len(earnable) == 55
 
 
 # --------------------------------------------------------------------------

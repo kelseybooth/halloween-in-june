@@ -167,3 +167,4 @@ carrying.watering_can	You'd need a free hand, which you don't have with this ful
 exhausted.public	{player} gets tired and sets the {name} down.
 idle_drop.public	{player} absent-mindedly sets the {name} down.
 idle_drop.private	You realize you set the {name} down earlier somewhere in the {room}.
+collar.public	{player} buckles the cat's collar back on. The little brass tag reads EUNOIA.

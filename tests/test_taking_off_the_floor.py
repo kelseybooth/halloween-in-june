@@ -182,10 +182,17 @@ async def test_a_thing_with_no_floor_line_is_unchanged(house):
     room row, no origin row, and it starts lying loose in the bedroom,
     so picking it up *is* a floor take. Dropping the room from the order
     has nothing to fall past, and it reads exactly as it always did.
+
+    **The line it reads changed on 6 November and this test did not.**
+    The collar became something a player gives back rather than keeps,
+    so "something worth keeping safe" - advice to keep it - was replaced
+    by a hint that somebody is missing it. The subject here is that a
+    thing with no floor line takes the same way it always has, which is
+    about the row that is read and not about the words in it.
     """
     await run(house, bot.take, "collar", room="BE")
 
-    assert "something worth keeping safe" in posted(house, "BE")
+    assert "Somebody is probably missing this" in posted(house, "BE")
 
 
 def test_only_the_burrito_keyed_a_take_on_its_room():
