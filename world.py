@@ -349,6 +349,45 @@ IVY_FROM_BEDROOM = "BC"
 IVY_FROM_COURTYARD = "ivy"
 IVY = (IVY_FROM_BEDROOM, IVY_FROM_COURTYARD)
 
+# Falling off it, which only happens on the way down. Climbing up ends
+# at a sill you haul yourself over; climbing down starts with your whole
+# weight on a handful of ivy.
+#
+# **A config key rather than a constant**, because it is the one number
+# in this that wants tuning against what playtesters actually do - and
+# it already has been: the doc proposed 5 and Kelsey raised it to 10
+# before this was built, on the grounds that nobody had fallen.
+IVY_FALL_PERCENT = "ivy_fall_percent"
+IVY_FALL_PERCENT_DEFAULT = 10
+
+# How many things come out of a bag that has just hit a herb garden, at
+# most, counted one at a time so a player holding two loses two.
+SPILL_AT_MOST = 3
+
+# **Two exemptions by name, for two different reasons.** The gourmet can
+# is one per player ever, and losing it to a dice roll is a different
+# kind of loss from losing a crinkle ball. The watering can is exempt
+# because the design gives it its own outcome - it stays in the bag and
+# arrives empty - and a can that sometimes spilled instead would make
+# that sentence a lie one time in several.
+#
+# Everything undroppable is already exempt without being named: a thing
+# you cannot put down is not a thing that falls out of a bag, and
+# `carried_droppable` never offers one.
+NEVER_SPILLS = frozenset({"cat_food_gourmet", "watering_can"})
+
+# The shaky hands a fall leaves behind: no `/take` until the player eats
+# or drinks something, or until half an hour has gone by.
+# `database.EXPIRES_AFTER` holds the half hour, and is the list of states
+# that work this way at all.
+SHAKEN = "shaken"
+
+# What steadies them, each with its own line. A fixture and four things
+# you carry, which is why this is a set of ids rather than a type test.
+STEADYING = ("coffee_maker", "nacho_chips", "candy", "frozen_burrito",
+             "dark_chocolate")
+STEADIED_LINE = "shaken.cleared"
+
 # Carving, which can be reached from either end: `/use pumpkins` while
 # holding the tools, or `/use carving tools` while standing in the
 # Courtyard. The second is the newer one and exists because a player
@@ -1661,6 +1700,125 @@ async def _place_a_plank(guild_id: int, user_id: int, room_id: str) -> Effect:
         public=True,
         extra={LADDER: carried_the_ladder},
     )
+
+
+@dataclass(frozen=True)
+class Fall:
+    """What a fall off the ivy cost, for the reply and for the log."""
+
+    spilled: tuple[str, ...] = ()
+    emptied_the_can: bool = False
+
+
+async def ivy_fall_is_due(guild_id: int, thing_id: str) -> bool:
+    """Whether this climb ends in the lavender. Down only, and no writes.
+
+    **Pure, and called before the move.** The private line and the line
+    the Courtyard reads are both decided from this, and both are built
+    before the player is written into the room - so the roll has to be
+    answerable without touching anything. What the fall *costs* is
+    applied afterwards by `land_in_the_herbs`, once the move has
+    actually happened, or a post that failed would leave somebody's
+    belongings in a room they never reached.
+
+    **Climbing up never falls**, which is the design's call and reads
+    right: going down starts with your whole weight on a handful of ivy,
+    and coming up ends with you hauling yourself over a sill.
+    """
+    if thing_id != IVY_FROM_BEDROOM:
+        return False
+    chance = await database.get_setting(guild_id, IVY_FALL_PERCENT)
+    return random.randrange(100) < chance
+
+
+async def a_full_can_is_carried(guild_id: int, user_id: int) -> bool:
+    """Whether this player is carrying the watering can, full.
+
+    Asked before a fall is applied, because the sentence about the can
+    going into the herbs is part of the reply and the reply is written
+    before the can is emptied. Two reads rather than one shared answer:
+    the alternative is passing a level down through the move for the one
+    climb in ten that needs it.
+    """
+    if not await database.carried_of(user_id, guild_id, WATERING_CAN):
+        return False
+    return await can_level(guild_id) == CAN_FULL
+
+
+async def land_in_the_herbs(guild_id: int, user_id: int, room_id: str) -> Fall:
+    """Apply what a fall costs: a spill, a full can emptied, shaky hands.
+
+    **Counted one at a time, not by kind.** A player holding two crinkle
+    balls can lose two, because three things out of a bag is three
+    things and the bag does not know what is in it. Which is also why
+    the player's line says "a few things" and names none of them: the
+    sentence is true whatever the dice did, and a list would be a list
+    of their own belongings read back at them.
+
+    `carried_droppable` does the first half of the filtering for free -
+    the skeleton key, the carving tools and the ghost's bedsheet are
+    never offered - and `NEVER_SPILLS` does the rest.
+
+    Nothing here can fail in a way worth handling: a spill with an empty
+    bag is a fall with nothing in it, which the copy already allows for.
+    """
+    loose = [
+        thing_id
+        for thing_id, _name, count in await database.carried_droppable(
+            user_id, guild_id
+        )
+        if thing_id not in NEVER_SPILLS
+        for _ in range(count)
+    ]
+    chosen = random.sample(loose, min(SPILL_AT_MOST, len(loose)))
+    spilled = [
+        thing_id
+        for thing_id in chosen
+        if await database.drop_into_room(user_id, guild_id, room_id, thing_id)
+    ]
+
+    # The can is not in the spill and does not leave the bag. It arrives
+    # upside down and empty, which is a worse outcome than dropping it
+    # and the one the design asks for.
+    emptied = False
+    if await database.carried_of(user_id, guild_id, WATERING_CAN):
+        if await can_level(guild_id) == CAN_FULL:
+            await database.set_thing_state(guild_id, WATERING_CAN, CAN_EMPTY)
+            emptied = True
+
+    await states.set_player_state(guild_id, user_id, SHAKEN)
+    return Fall(spilled=tuple(spilled), emptied_the_can=emptied)
+
+
+async def steady_their_hands(guild_id: int, user_id: int, thing_id: str) -> str | None:
+    """Clear a fall's shaky hands if this use was something to eat or drink.
+
+    The line to add to whatever the use already said, or None - so eating
+    a burrito while shaken is one use with two sentences rather than two
+    uses, and the burrito's own line about the middle being a popsicle is
+    not replaced by a line about hands.
+
+    **Called from the handler rather than from `after_use`.** Four of the
+    five steadying things are also cans the cat is offered, so this would
+    have had to be threaded through every branch of that function and
+    merged with whatever each one returned. A use that steadies somebody
+    is still the use it was.
+
+    **Cleared, not stamped.** `clear_player_state` deletes the row, and
+    that delete is the whole difference between a state somebody ate
+    their way out of and one that ran out - which is what *Walk It Off*
+    is awarded on. See `database.stale_player_states`.
+
+    Each food has its own line, falling back to the general one. The
+    general line is not dead: it is what clears this next, whatever that
+    turns out to be.
+    """
+    if thing_id not in STEADYING:
+        return None
+    if not await states.has(guild_id, user_id, SHAKEN):
+        return None
+    await states.clear_player_state(guild_id, user_id, SHAKEN)
+    return f"{STEADIED_LINE}.{thing_id}"
 
 
 async def _open_the_window(

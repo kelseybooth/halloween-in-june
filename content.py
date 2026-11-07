@@ -1425,6 +1425,7 @@ def _check_states(content: Content, things: dict[str, Thing]) -> list[str]:
         "stairs_repaired",
         "drawer_unjammed",
         "window_open",
+        "shaken",
         "has_key",
         "passage_open",
         "library_found",

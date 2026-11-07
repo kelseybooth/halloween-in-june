@@ -64,6 +64,14 @@ async def house(db, monkeypatch):
     for who in (ALICE, BOB):
         await db.ensure_user_exists(who, GUILD_A)
     await db.set_setting(GUILD_A, resolve.DROP_KEY, THIS_DROP)
+    # **The fall off the ivy is turned off for this whole file.** It
+    # arrived after these tests did and made two of them flaky at one in
+    # ten: a fall replaces the climb-down line, so anything asserting
+    # that line fails whenever the dice land. Nothing here is about
+    # falling - `test_falling_off_the_ivy` is - and a mechanic that
+    # quietly randomises an existing suite is worth switching off by name
+    # rather than living with.
+    await db.set_setting(GUILD_A, world.IVY_FALL_PERCENT, 0)
     await content_loader.load_content(content_module.load_files(), guild_ids=[GUILD_A])
     rooms = {rid: name for rid, name in await resolve.all_rooms()}
     halloween.add_active(*[name for rid, name in rooms.items() if rid != "CH"])

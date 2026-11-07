@@ -948,7 +948,16 @@ def test_what_can_actually_be_earned():
     """
     earnable = achievements.registered_ids() - set(BLOCKED) - set(BY_HAND)
 
-    assert len(earnable) == 54
+    # Fifty-six on 6 November, the ivy fall's two. *Stuck the
+    # Landing* arrives earnable the day it ships - the fall is the
+    # only thing that sets the state it reads. *Walk It Off* arrives
+    # earnable too, but it is the first row here that cannot be
+    # earned in the same command that makes it true: nothing is
+    # awake when its half hour runs out, so it waits for whatever
+    # the player does next. Both are exercised in
+    # `test_falling_off_the_ivy`, the way the ladder's five are
+    # exercised in `test_the_ladder` rather than here.
+    assert len(earnable) == 56
 
 
 # --------------------------------------------------------------------------

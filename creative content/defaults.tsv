@@ -167,3 +167,14 @@ carrying.watering_can	You'd need a free hand, which you don't have with this ful
 exhausted.public	{player} gets tired and sets the {name} down.
 idle_drop.public	{player} absent-mindedly sets the {name} down.
 idle_drop.private	You realize you set the {name} down earlier somewhere in the {room}.
+ivy.fall	Halfway down, a handful of ivy comes away in your hand. You land in the lavender, which is softer than it looks and smells wonderful. A few things have tumbled out of your bag.
+ivy.fall.watering_can	The watering can lands upside down in the lavender, and every drop of it goes into the herbs.
+ivy.fall.public	{player} comes down the ivy a lot faster than they meant to and lands in the herb garden.
+carrying.ladder.ivy	Not with a ladder. You'd need a third hand, and possibly a fourth.
+shaken.take_fail	Your hands are still a little shaky. Maybe eat or drink something first.
+shaken.cleared	That's better. Your hands have stopped shaking.
+shaken.cleared.coffee_maker	The coffee does its job. Your hands stop shaking, though your heart is now going a little faster.
+shaken.cleared.nacho_chips	A few chips and a bit of salt, and your hands are steady again. Crunching helps more than you'd think.
+shaken.cleared.candy	The sugar hits all at once. Your hands stop shaking almost immediately, and you feel about six years old.
+shaken.cleared.frozen_burrito	It's still half frozen, but it's food, and it works. Your hands have stopped shaking. Aunt Sue would be proud.
+shaken.cleared.dark_chocolate	One square of dark chocolate, and the world settles back into place. Your hands have stopped shaking.
