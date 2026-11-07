@@ -348,6 +348,20 @@ IVY_FROM_BEDROOM = "BC"
 IVY_FROM_COURTYARD = "ivy"
 IVY = (IVY_FROM_BEDROOM, IVY_FROM_COURTYARD)
 
+# Carving, which can be reached from either end: `/use pumpkins` while
+# holding the tools, or `/use carving tools` while standing in the
+# Courtyard. The second is the newer one and exists because a player
+# holding the tools reaches for them by name.
+#
+# **The two have to earn the same things**, which is the whole reason
+# this is here rather than in the files. *Gourd Job* reads the hook's
+# thing id and *Green Thumb* reads a `thing_uses` row for `pumpkins`,
+# so a carve that stamped only `carving_tools` would show the player
+# the carving line and credit them with nothing. Content can say what
+# a use looks like; only this module can say what else it writes.
+PUMPKINS = "pumpkins"
+CARVING_TOOLS = "carving_tools"
+
 
 # The Secret Library. Two ways in, and the order they happen in is structural
 # rather than enforced: the keys hang inside, so a player cannot hold one until
@@ -399,7 +413,8 @@ HOUSE_FROM_DROP = 10
 # --------------------------------------------------------------------------
 
 WATERING_CAN = "watering_can"
-HERB_GARDEN_ROOM = "CO"
+COURTYARD = "CO"
+HERB_GARDEN_ROOM = COURTYARD
 FAUCET_ROOM = "KI"
 
 # The levels, most water first, which is also the order they are poured
@@ -829,6 +844,12 @@ async def after_use(
 
     if thing_id == BEDROOM_WINDOW:
         return await _open_the_window(guild_id, user_id)
+
+    # Keyed on the room the same way the graphite is, and for the same
+    # reason: away from the Courtyard this use is only a sentence, and
+    # the files already say so on the `default` row.
+    if thing_id == CARVING_TOOLS and room_id == COURTYARD:
+        return await _carve_with_the_tools(guild_id, user_id, room_id)
 
     if thing_id == LADDER:
         return await _climb_the_ladder(guild_id, user_id, room_id)
@@ -1698,6 +1719,32 @@ async def _open_the_window(
         text_state=resolve.DEFAULT_STATE if first_time else None,
         line_from=line_from,
     )
+
+
+async def _carve_with_the_tools(guild_id: int, user_id: int, room_id: str) -> Effect:
+    """Carve from the tools' end, and leave the same mark as the other end.
+
+    **One extra write, against `pumpkins`.** `_finish_use` has already
+    stamped `carving_tools`, which is correct and is not what the
+    achievements read: *Green Thumb* asks `which_of_these_used` for a
+    `pumpkins` row, so without this the carving part of it could never
+    be completed from this end. The row is the same row `/use pumpkins`
+    would have written, so the two ways to carve are one fact
+    afterwards rather than two that have to be reconciled.
+
+    **Not a `room_deeds` row.** The watering needed one because
+    `/use watering can` is three different actions and only one of them
+    is gardening; carving is one action wherever you reach it from, and
+    `thing_uses` already answers "has this player carved" exactly.
+    A second table would be two records of one event, which is how a
+    count ends up doubled.
+
+    *Gourd Job* is not served from here: it reads the hook's thing id,
+    which is still `carving_tools` on this path, so the predicate is
+    what had to learn about the second route.
+    """
+    await database.record_use(user_id, guild_id, PUMPKINS, room_id=room_id)
+    return Effect()
 
 
 async def _unjam_the_drawer(guild_id: int, user_id: int) -> Effect:
