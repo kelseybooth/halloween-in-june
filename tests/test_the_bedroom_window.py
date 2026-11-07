@@ -100,12 +100,39 @@ async def where_is(who=ALICE) -> str:
 
 
 async def carry(db, thing_id, who=ALICE):
+    """One of something in somebody's bag, however many times it is called.
+
+    An insert would do for the first call and fail on the second: the
+    powder is `consumed_on_use`, which leaves the row behind at zero
+    rather than deleting it, so handing somebody a second twist of it
+    means setting the count rather than adding a row.
+    """
+    from sqlalchemy import select, update
+
     async with db._require_session()() as session:
-        session.add(
-            database.PlayerInventory(
-                guild_id=GUILD_A, user_id=who, thing_id=thing_id, count=1
+        existing = await session.scalar(
+            select(database.PlayerInventory.count).where(
+                database.PlayerInventory.guild_id == GUILD_A,
+                database.PlayerInventory.user_id == who,
+                database.PlayerInventory.thing_id == thing_id,
             )
         )
+        if existing is None:
+            session.add(
+                database.PlayerInventory(
+                    guild_id=GUILD_A, user_id=who, thing_id=thing_id, count=1
+                )
+            )
+        else:
+            await session.execute(
+                update(database.PlayerInventory)
+                .where(
+                    database.PlayerInventory.guild_id == GUILD_A,
+                    database.PlayerInventory.user_id == who,
+                    database.PlayerInventory.thing_id == thing_id,
+                )
+                .values(count=1)
+            )
         await session.commit()
 
 
@@ -346,20 +373,55 @@ async def test_the_powder_elsewhere_still_says_its_own_line(house):
     assert not await states.has(GUILD_A, ALICE, world.WINDOW_OPEN)
 
 
-async def test_the_drawer_upstairs_is_untouched(house):
-    """The other room the powder works in, which keeps its own behaviour.
+async def test_the_drawer_upstairs_says_so_as_well(house):
+    """The other room the powder is the answer to, closed the same way.
 
-    Named here because this change could have redirected it too. It
-    still prints the powder's line and says nothing about the drawer,
-    which is a gap `line_from` could close and this PR does not.
+    The hallway opens on a bad smell, the smell points at the desk, the
+    desk says its bottom drawer is swollen shut, and the manual on it
+    says to apply powdered graphite. This is the end of that chain, and
+    it used to be answered with the powder's palm line.
     """
     await carry(house[0], world.GRAPHITE)
 
     reply = await run(house, bot.use, "graphite powder", room="UH")
 
-    assert "onto your palm" in reply
+    assert "bottom drawer slides out easily now" in reply
+    assert "onto your palm" not in reply
     assert await states.has(GUILD_A, ALICE, world.DRAWER_UNJAMMED)
     assert not await states.has(GUILD_A, ALICE, world.WINDOW_OPEN)
+
+
+async def test_and_names_the_cans_which_nothing_else_does(house):
+    """The reason it is worth a redirect rather than only reading better.
+
+    `cat_food_stash_drawer` is a source `contained_in` the desk, so
+    nothing ever lists it, and the desk's `drawer_unjammed` use row is
+    the only sentence in the game that names those cans. Pinned, because
+    a writer trimming that clause would silently strip the end off the
+    puzzle.
+    """
+    await carry(house[0], world.GRAPHITE)
+
+    reply = await run(house, bot.use, "graphite powder", room="UH")
+
+    assert "expired" in reply or "expired cat food" in reply
+    assert "cans" in reply
+
+
+async def test_but_a_second_use_upstairs_is_just_powder_again(house):
+    """Once the drawer is open, using powder on nothing in particular.
+
+    The desk has no "again" row and does not need one: `line_from` falls
+    away on a repeat and the powder says what it says everywhere else.
+    """
+    await carry(house[0], world.GRAPHITE)
+    await run(house, bot.use, "graphite powder", room="UH")
+    await carry(house[0], world.GRAPHITE)
+
+    reply = await run(house, bot.use, "graphite powder", room="UH")
+
+    assert "onto your palm" in reply
+    assert "slides out easily now" not in reply
 
 
 async def test_opening_it_twice_reads_as_a_second_look(house):
