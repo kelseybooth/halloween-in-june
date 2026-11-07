@@ -114,9 +114,9 @@ def test_three_sentences_satisfy_the_check_and_only_one_is_a_route():
     So the check is not the thin guard it first appears to be. But three
     sentences are not three routes. David's note is itself found through
     the changing table, and the music box's line is a `use` line on a
-    thing that has been carryable since drop 40 and is set down wherever
-    its owner left it after six idle hours - so a player standing in the
-    Nursery may well have neither in front of them.
+    thing that is carryable from the moment it arrives and is set down
+    wherever its owner left it after six idle hours - so a player
+    standing in the Nursery may well have neither in front of them.
 
     Pinned as a set so that deleting one is visible here, where the
     difference between a mention and a route is written down, rather than
