@@ -329,6 +329,7 @@ NO_PUTTING_BACK_IN = ("SE",)
 GRAPHITE = "graphite_powder"
 DRAWER_ROOM = "UH"
 DRAWER_UNJAMMED = "drawer_unjammed"
+ROLLTOP_DESK = "rolltop_desk"
 
 # The stuck bedroom window, and the ivy outside it. The same tin of
 # powder as the drawer, in the other room it is the answer to.
@@ -1752,6 +1753,39 @@ async def _unjam_the_drawer(guild_id: int, user_id: int) -> Effect:
 
     Per player because the discovery is the content. Server-wide would mean
     only the first person ever found the smell, the drawer or what is in it.
+
+    **It reads the desk's line, because the payoff of the whole chain is
+    in it.** The hallway opens on a bad smell, the smell points at the
+    desk, the desk says its bottom drawer is swollen shut, and the manual
+    on top of it says to apply powdered graphite. A player who walks to
+    the bedroom for the tin and comes back has earned the answer - and
+    used to be handed "you puff a little of the powder onto your palm, it
+    gets absolutely everywhere", which is the same sentence that room
+    would print, says nothing about the drawer, and reads like the powder
+    was wasted. The drawer opened, the stash came into being, and nothing
+    said so.
+
+    The stash is why it matters rather than only reads badly:
+    `cat_food_stash_drawer` is `contained_in` this desk and a source, so
+    nothing ever lists it, and the desk's `drawer_unjammed` *use* row is
+    the only sentence in the game that names those cans. Left silent, the
+    end of the puzzle sat behind a second `/use desk` nobody was prompted
+    to make.
+
+    **No `text_state` pin, unlike the window**, and the asymmetry is the
+    content's rather than a special case: the desk keeps its reveal on
+    `drawer_unjammed` and its "doesn't move at all" on `default`, so
+    resolving after the effect lands on the right row by itself. The
+    window has them the other way round.
+
+    **First time only.** Afterwards the drawer is already open and
+    `line_from` falls away, so a second use upstairs prints the powder's
+    own line - which is the right answer to using powder on nothing in
+    particular, and the line it prints in every other room.
     """
-    await states.set_player_state(guild_id, user_id, DRAWER_UNJAMMED)
-    return Effect(tokens={}, public=False)
+    first_time = await states.set_player_state(guild_id, user_id, DRAWER_UNJAMMED)
+    return Effect(
+        tokens={},
+        public=False,
+        line_from=ROLLTOP_DESK if first_time else None,
+    )
