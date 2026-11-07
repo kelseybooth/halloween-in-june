@@ -20,6 +20,7 @@ the bot is restarting.
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from types import SimpleNamespace
 
 from conftest import ALICE, BOB, GUILD_A, LAST_DROP
@@ -53,6 +54,18 @@ def forget_admissions():
     bot._ADMITTING.clear()
     yield
     bot._ADMITTING.clear()
+
+
+@pytest.fixture(autouse=True)
+def settle_immediately(monkeypatch):
+    """Take the two-second wait out of the join handler's second look.
+
+    The wait is there so a move's write can land before the handler
+    decides, and nothing here is racing a real write - the tests that
+    care drive the two reads directly. Paying it would add seconds to
+    the suite to test a `sleep`.
+    """
+    monkeypatch.setattr(bot, "_SETTLE_DELAY", 0)
 
 
 async def a_server(db, channel_name):
@@ -427,6 +440,143 @@ async def test_a_join_the_bot_is_making_is_not_policed(house):
     await bot.on_thread_member_join(joined(house, "Kitchen", ALICE))
 
     assert kitchen.removed_users == []
+
+
+def two_minds(monkeypatch, second):
+    """Make `get_game_state` answer differently the second time it is asked.
+
+    The handler reads the row, and `_still_elsewhere` reads it again after
+    the wait. In production those two reads straddle the move's commit;
+    here `second` is whatever the second one should find, and the returned
+    list counts the reads so a test can insist both happened.
+    """
+    looks: list[int] = []
+    real = database.get_game_state
+
+    async def answer(user_id, guild_id):
+        looks.append(user_id)
+        if len(looks) == 1:
+            return await real(user_id, guild_id)
+        return await second(user_id, guild_id)
+
+    monkeypatch.setattr(database, "get_game_state", answer)
+    return looks
+
+
+async def test_a_join_that_races_its_own_move_is_not_policed(house, monkeypatch):
+    """**The bug, exactly as production had it.**
+
+    The in-memory flag is what normally covers this, and over 2,144 moves
+    it missed four times - a second instance up over a deploy sees no
+    entry and polices a join the bot itself was making. The player was
+    thrown out of the Entryway six milliseconds before the move into it
+    committed, left holding a pointer at a thread they were no longer in.
+
+    So the flag is no longer the only thing standing in the way. The row
+    is read again once the write has had time to land, and a disagreement
+    that has resolved itself is not a disagreement.
+    """
+    kitchen = thread(house, "Kitchen")
+
+    async def the_move_has_landed(user_id, guild_id):
+        return SimpleNamespace(current_room="KI")
+
+    looks = two_minds(monkeypatch, the_move_has_landed)
+
+    await bot.on_thread_member_join(joined(house, "Kitchen", ALICE))
+
+    assert kitchen.removed_users == []
+    assert len(looks) == 2, "one read cannot tell a race from an intruder"
+
+
+async def test_and_the_race_it_caught_is_written_down(house, monkeypatch):
+    """A race nobody counts is a race nobody knows is still happening.
+
+    This one went a week unnoticed because its only symptom was a bare
+    `@mention` a playtester thought was a bug in something else. The row
+    makes the rate one query away: `why=join` with `outcome = refused` is
+    the second look declining to evict, and nothing else writes it.
+    """
+    db, *_ = house
+
+    async def the_move_has_landed(user_id, guild_id):
+        return SimpleNamespace(current_room="KI")
+
+    two_minds(monkeypatch, the_move_has_landed)
+
+    await bot.on_thread_member_join(joined(house, "Kitchen", ALICE))
+
+    rows = await logged(db, database.THREAD_REMOVED)
+    assert len(rows) == 1
+    assert rows[0].outcome == database.REFUSED
+    assert rows[0].reason == database.ALREADY_ARRIVED
+    assert rows[0].detail == "thread=KI why=join"
+
+
+async def test_an_intruder_is_looked_at_twice_and_still_removed(house, monkeypatch):
+    """The fix must not amount to switching the handler off.
+
+    Somebody added by hand is still somewhere else on the second read, so
+    the second read changes nothing for them - which is the whole bargain:
+    two seconds of patience, paid only by people who are about to be
+    removed anyway or who were never going to be.
+    """
+    kitchen = thread(house, "Kitchen")
+
+    async def still_in_the_entryway(user_id, guild_id):
+        return SimpleNamespace(current_room="EN")
+
+    looks = two_minds(monkeypatch, still_in_the_entryway)
+
+    await bot.on_thread_member_join(joined(house, "Kitchen", ALICE))
+
+    assert ALICE in kitchen.removed_users
+    assert len(looks) == 2
+
+
+async def test_a_failed_second_look_keeps_them_in(house, monkeypatch):
+    """Deliberate, and the same choice the first read makes.
+
+    The sweep takes a real intruder out within the hour. A player evicted
+    because a read failed is wrong at once, and wrong in the way that is
+    hardest to diagnose from their side - they are standing in a room
+    whose window will not open, and nothing anywhere says why.
+    """
+    kitchen = thread(house, "Kitchen")
+
+    async def the_database_goes(user_id, guild_id):
+        raise SQLAlchemyError("no connection")
+
+    two_minds(monkeypatch, the_database_goes)
+
+    await bot.on_thread_member_join(joined(house, "Kitchen", ALICE))
+
+    assert kitchen.removed_users == []
+
+
+async def test_an_admit_that_lands_during_the_wait_spares_them(house, monkeypatch):
+    """This process can be the slow half of its own race as easily as the fast.
+
+    The flag is checked again on the far side of the wait, so an admit
+    registered while the handler was waiting counts - and when it does,
+    the row never has to be read a second time.
+    """
+    kitchen = thread(house, "Kitchen")
+    looks: list[int] = []
+    real = database.get_game_state
+
+    async def and_the_admit_lands(user_id, guild_id):
+        looks.append(user_id)
+        state = await real(user_id, guild_id)
+        bot._admit(kitchen.id, ALICE)
+        return state
+
+    monkeypatch.setattr(database, "get_game_state", and_the_admit_lands)
+
+    await bot.on_thread_member_join(joined(house, "Kitchen", ALICE))
+
+    assert kitchen.removed_users == []
+    assert len(looks) == 1, "the flag answers it; the row does not need asking"
 
 
 async def test_it_polices_a_renamed_channel_too(renamed_house):

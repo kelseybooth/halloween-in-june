@@ -5,6 +5,7 @@ Slash commands:
   /stats  - show your pet total
 """
 
+import asyncio
 import dataclasses
 import logging
 import os
@@ -1141,6 +1142,24 @@ async def _room_of_thread(channel, guild) -> str | None:
 _ADMITTING: dict[tuple[int, int], float] = {}
 _ADMITTING_WINDOW = 30.0
 
+# **The window above is necessary and not sufficient, and production said so
+# rather than reasoning.** `_ADMITTING` lives in this process's memory, so it
+# only knows about joins this process made: a second instance briefly up over
+# a deploy, or a restart between the admit and the event, sees no entry and
+# polices a join the bot itself was making. Over 2,144 moves the handler
+# evicted five people, and four of the five were somebody being thrown out of
+# the room they were walking into - gaps of 6ms, 14ms, -75ms and -109ms
+# around their own move row. One was the case it exists for.
+#
+# So the flag is no longer the only thing standing between a player and the
+# wrong door. On a disagreement the handler waits and asks the row again,
+# which closes the race whatever opened it - another process, a restart, or a
+# transaction slower than the gateway - because by then the write has either
+# landed or there was never a move at all. Two seconds is about twenty times
+# the worst gap measured, and still fast enough for what this layer is for:
+# somebody added by hand is out before they have read anything.
+_SETTLE_DELAY = 2.0
+
 
 def _admitting(thread_id: int, user_id: int) -> bool:
     deadline = _ADMITTING.get((thread_id, user_id))
@@ -1301,7 +1320,58 @@ async def on_thread_member_join(member) -> None:
     location = state.current_room if state else content.CHANNEL_ROOM
     if location == room_id or _staff(guild, member.id):
         return
+    if not await _still_elsewhere(guild, thread, member.id, room_id):
+        return
     await _evict(guild, thread, room_id, member.id, "join")
+
+
+async def _still_elsewhere(guild, thread, user_id: int, room_id: str) -> bool:
+    """Ask the row again, once a write that may be in flight has landed.
+
+    **The second look, and the only one that can be trusted.** The first
+    read happens while the arrival line is still ahead of the move it
+    announces, so a disagreement means either "this player is not in this
+    room" or "this player is halfway into this room" - and nothing in the
+    event says which.
+
+    Waiting and re-reading tells them apart without needing to know what
+    broke the in-memory flag, which is the property worth having here:
+    whether the admit was missed because another process handled the event,
+    because this one restarted, or because the transaction was slower than
+    the gateway, by now the move has either committed or never existed.
+
+    **A read that fails keeps the player in.** The sweep will take a real
+    intruder out within the hour; a legitimate player evicted on a failed
+    read is wrong immediately, and wrong in the way that is hard to
+    diagnose from the other side. The same choice the first read makes.
+    """
+    await asyncio.sleep(_SETTLE_DELAY)
+    # The admit may have landed during the wait - this process can be the
+    # slow half of its own race as easily as the fast one.
+    if _admitting(thread.id, user_id):
+        return False
+    try:
+        state = await database.get_game_state(user_id, guild.id)
+    except SQLAlchemyError:
+        log.exception("Could not re-check whether %s belongs in %s", user_id, room_id)
+        return False
+
+    location = state.current_room if state else content.CHANNEL_ROOM
+    if location != room_id:
+        return True
+
+    # Written down, because a race nobody counts is a race nobody knows is
+    # still happening. `why=join` with `outcome = refused` is this branch and
+    # only this branch, so the rate is one query away.
+    await telemetry.system(
+        guild.id,
+        telemetry.THREAD_REMOVED,
+        user_id=user_id,
+        outcome=telemetry.REFUSED,
+        reason=telemetry.ALREADY_ARRIVED,
+        detail=f"thread={room_id} why=join",
+    )
+    return False
 
 
 def _where_typed(interaction) -> str:
