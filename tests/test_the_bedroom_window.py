@@ -1,0 +1,298 @@
+"""Drop 40: the stuck sash, and the ivy it is the only way onto.
+
+Graphite unsticks the bedroom window, and the ivy outside becomes a way
+between the Bedroom and the Courtyard. The content for all of it shipped
+on 30 October and none of it has ever worked: `window_open` was written
+through `thing_text` and nothing in the engine set it. Production says so
+plainly - 29 attempts to climb either ivy, 12 players, 2 to 7 November,
+every one refused `wrong_state`, and not one `window_open` row in
+`player_states` on any guild.
+
+**Why the refusal was right and still useless.** Both ivy exits keep
+their only success line on a `window_open` row and leave `use` empty on
+every other, which is how a writer says "not yet": `_state_refusal`
+walks the held states, finds a refusal with no success, and turns the
+move away. Correct, and unreachable past, because the state it waits for
+could not be held.
+
+**Why the state is per player.** The drawer's reason, sharper here: the
+window's success line is the only place in the game the ivy is named as
+a way down. A window opened server-wide would hand later players a route
+whose discovery they never had - and `/look window` would describe an
+open sash to somebody who had not touched it.
+
+**Why `window_open` outranks `stairs_repaired`.** A player who has
+opened the window holds both, and the courtyard ivy is written for each.
+The other order would have them climb up to the window they had just
+opened and be told it was shut.
+"""
+
+import pytest
+from types import SimpleNamespace
+
+from conftest import ALICE, BOB, GUILD_A
+from fake_discord import FakeChannel, FakeGuild, FakeInteraction, FakeMember
+
+import bot
+import content as content_module
+import content_loader
+import database
+import resolve
+import states
+import world
+
+
+THIS_DROP = 40
+
+# Phrases quoted off `thing_text.tsv`, each one in the row it belongs to
+# and in no other. Matching on "ivy" would pass on any of the four.
+CLIMBED_DOWN = "swing a leg over the sill"
+CLIMBED_UP = "haul yourself in over the sill"
+WINDOW_SHUT = "the window between you is stuck shut"
+NO_WAY_IN = "no way to open it from out here"
+NOT_YET = "Not this way. Not yet."
+OPENED = "slides up smoothly"
+
+
+@pytest.fixture
+async def house(db, monkeypatch):
+    """The shipped content at drop 40, with the staircase repaired."""
+    halloween = FakeChannel(name="halloween")
+    guild = FakeGuild(
+        GUILD_A, channels=[halloween], members=[FakeMember(ALICE), FakeMember(BOB)]
+    )
+    for who in (ALICE, BOB):
+        await db.ensure_user_exists(who, GUILD_A)
+    await db.set_setting(GUILD_A, resolve.DROP_KEY, THIS_DROP)
+    await content_loader.load_content(content_module.load_files(), guild_ids=[GUILD_A])
+    rooms = {rid: name for rid, name in await resolve.all_rooms()}
+    halloween.add_active(*[name for rid, name in rooms.items() if rid != "CH"])
+    await database.set_announcement_channel(GUILD_A, halloween.id)
+    await states.set_server_state(GUILD_A, world.HOUSE_UNLOCKED)
+    await states.set_server_state(GUILD_A, world.STAIRS_UPPER)
+    for who in (ALICE, BOB):
+        await db.start_game(who, GUILD_A, "EN", await resolve.rooms_open_at_launch())
+    monkeypatch.setattr(
+        bot,
+        "bot",
+        SimpleNamespace(
+            guilds=[guild], get_guild=lambda gid: guild if gid == GUILD_A else None
+        ),
+    )
+    return db, guild, halloween, rooms
+
+
+def place(house, room):
+    _, _, halloween, rooms = house
+    return next(t for t in halloween.threads if t.name == rooms[room])
+
+
+async def run(house, command, arg, *, room, who=ALICE):
+    db, guild, _, _ = house
+    await db.update_current_room(who, GUILD_A, room)
+    interaction = FakeInteraction(who, GUILD_A, guild=guild, channel=place(house, room))
+    await command.callback(interaction, arg)
+    return "\n".join(text for text, _ in interaction.sent if text)
+
+
+async def where_is(who=ALICE) -> str:
+    return (await database.get_game_state(who, GUILD_A)).current_room
+
+
+async def carry(db, thing_id, who=ALICE):
+    async with db._require_session()() as session:
+        session.add(
+            database.PlayerInventory(
+                guild_id=GUILD_A, user_id=who, thing_id=thing_id, count=1
+            )
+        )
+        await session.commit()
+
+
+async def repair_the_staircase():
+    """Set once and never cleared, so the tests that want it ask for it.
+
+    `states` has no `clear_server_state` - a state is something that has
+    become true - so the fixture leaves it off and the two tests that
+    need an upstairs a player could have reached set it themselves.
+    """
+    await states.set_server_state(GUILD_A, world.STAIRS_REPAIRED)
+
+
+async def open_the_window(house, who=ALICE) -> str:
+    """The way a player does it: powder in hand, then use the window."""
+    await carry(house[0], world.GRAPHITE, who=who)
+    return await run(house, bot.use, "window", room="BE", who=who)
+
+
+# ---------------------------------------------------------------------------
+# Point 1: using the window sets the state
+
+
+async def test_the_window_opens_and_says_so(house):
+    reply = await open_the_window(house)
+
+    assert OPENED in reply
+    assert await states.has(GUILD_A, ALICE, world.WINDOW_OPEN)
+
+
+async def test_without_powder_it_is_refused_and_nothing_is_set(house):
+    reply = await run(house, bot.use, "window", room="BE")
+
+    assert OPENED not in reply
+    assert not await states.has(GUILD_A, ALICE, world.WINDOW_OPEN)
+
+
+async def test_and_it_opens_for_one_player_only(house):
+    """Per player, so a second player still has the discovery to make."""
+    await open_the_window(house, who=ALICE)
+
+    assert await states.has(GUILD_A, ALICE, world.WINDOW_OPEN)
+    assert not await states.has(GUILD_A, BOB, world.WINDOW_OPEN)
+
+
+async def test_the_window_then_describes_itself_as_open(house):
+    await open_the_window(house)
+
+    assert "pushed all the way up" in await run(
+        house, bot.look, "window", room="BE"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Point 2: the ivy, both ends, before and after
+
+
+async def test_the_ivy_down_is_refused_until_the_window_is_open(house):
+    """The bug the playtester hit, from the bedroom side."""
+    reply = await run(house, bot.use, "ivy", room="BE")
+
+    assert WINDOW_SHUT in reply
+    assert await where_is() == "BE"
+
+
+async def test_and_then_climbs_down_to_the_courtyard(house):
+    await open_the_window(house)
+
+    reply = await run(house, bot.use, "ivy", room="BE")
+
+    assert CLIMBED_DOWN in reply
+    assert await where_is() == "CO"
+
+
+async def test_the_ivy_up_is_refused_while_the_sash_is_shut(house):
+    """And with the staircase repaired, which is the row that was unreachable.
+
+    `stairs_repaired` is held here, so this is the line a player who has
+    been upstairs gets - not the drop 30 one about the curtain of ivy
+    peeling away. It is the proof that `window_open` leading
+    `STATE_PRIORITY` did not cost the state below it its own row.
+    """
+    await repair_the_staircase()
+
+    reply = await run(house, bot.use, "ivy", room="CO")
+
+    assert NO_WAY_IN in reply
+    assert NOT_YET not in reply
+    assert await where_is() == "CO"
+
+
+async def test_and_then_climbs_up_into_the_bedroom(house):
+    await open_the_window(house)
+    await run(house, bot.use, "ivy", room="BE")
+
+    reply = await run(house, bot.use, "ivy", room="CO")
+
+    assert CLIMBED_UP in reply
+    assert await where_is() == "BE"
+
+
+async def test_before_the_staircase_the_ivy_up_says_not_yet(house):
+    """The drop 30 line still wins when it is the most specific one held."""
+    reply = await run(house, bot.use, "ivy", room="CO")
+
+    assert NOT_YET in reply
+    assert NO_WAY_IN not in reply
+
+
+async def test_go_is_gated_the_same_way_as_use(house):
+    """One gate, not two: `_state_refusal` is read by both verbs."""
+    assert WINDOW_SHUT in await run(house, bot.go, "ivy", room="BE")
+    assert await where_is() == "BE"
+
+    await open_the_window(house)
+
+    await run(house, bot.go, "ivy", room="BE")
+    assert await where_is() == "CO"
+
+
+# ---------------------------------------------------------------------------
+# The orderings, which are the part a future state could quietly break
+
+
+def test_window_open_outranks_the_staircase_in_both_orderings():
+    """Two orderings decide this, and they are not the same list.
+
+    `in_priority_order` is what `_state_refusal` walks; `exit_state` is
+    what both of an exit's texts resolve against. A state in one and not
+    the other reads correctly in one verb and not the other, which is
+    the shape of bug this pins.
+    """
+    held = {"stairs_repaired", "stairs_upper", "house_unlocked", "window_open"}
+
+    assert states.in_priority_order(held)[0] == world.WINDOW_OPEN
+    assert world.exit_state(held)[0] == world.WINDOW_OPEN
+
+
+def test_the_staircase_states_stay_out_of_the_exit_list():
+    """Deliberate, and worth a test because adding them looks like a fix.
+
+    `exit_state` picks an exit's success line as well as its refusal, and
+    the Entryway staircase has `stairs_upper` and `stairs_repaired` rows.
+    Putting those states in here to shorten the courtyard ivy's path
+    would change which line a repaired staircase prints on a climb -
+    drop 20's content, and nobody's ask. The ivy's own refusal comes
+    through `_state_refusal`, which does know them.
+    """
+    assert world.STAIRS_REPAIRED not in world.EXIT_STATES
+    assert world.STAIRS_UPPER not in world.EXIT_STATES
+
+
+def test_every_state_an_exit_is_written_for_is_one_the_engine_can_set():
+    """The invariant `window_open` broke, scoped to where it bites.
+
+    An exit's success row keyed on a state nobody can hold is a door
+    nobody can open, and the content checker cannot see it: it asks
+    whether a state name is *known*, and a text row declaring the state
+    is what makes it known. So `window_open` sat in the files for a week,
+    passing every check, with 29 refusals and no successes behind it.
+
+    **Asked of exits only, on purpose.** A fixture written for a state
+    that never arrives is a paragraph nobody reads, which is a waste; an
+    exit written that way is a room nobody reaches. And the house has
+    three other ways to set a state - a thing's own (`full`, `empty`),
+    and the transient one an `Effect` names for a single line (`cat`,
+    `guarded`, `reminded`) - none of which lives in a registry this
+    could check. Widening it would need a hand-kept list of six
+    unrelated names, which is the kind of list that is wrong by the time
+    anybody reads it.
+    """
+    files = content_module.load_files()
+    exits = {thing.thing_id for thing in files.things if thing.type == "exit"}
+    settable = (
+        states.SERVER_STATES
+        | states.PLAYER_STATES
+        | {world.HAS_KEY, resolve.DEFAULT_STATE}
+    )
+
+    unreachable = sorted(
+        {
+            (row.entity_id, row.state)
+            for row in files.thing_text
+            if row.entity_id in exits
+            and row.state not in settable
+            and not row.state.startswith(content_module.ROOM_STATE_PREFIX)
+        }
+    )
+
+    assert unreachable == [], unreachable

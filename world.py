@@ -330,6 +330,24 @@ GRAPHITE = "graphite_powder"
 DRAWER_ROOM = "UH"
 DRAWER_UNJAMMED = "drawer_unjammed"
 
+# The stuck bedroom window, and the ivy outside it. The same tin of
+# powder as the drawer, in the other room it is the answer to.
+#
+# **Per player, because the discovery is the content** - the same reason
+# the drawer is per player. Rubbing the runners is not a repair the
+# house keeps; it is one player finding out there is a way down.
+BEDROOM_WINDOW = "bedroom_window"
+WINDOW_ROOM = "BE"
+WINDOW_OPEN = "window_open"
+
+# Both ends of it. The ivy is one plant and two exits, and neither is
+# usable until the window between them is open: climbing up arrives at
+# a shut sash with no catch on the outside, and climbing down starts
+# from a window that will not lift.
+IVY_FROM_BEDROOM = "BC"
+IVY_FROM_COURTYARD = "ivy"
+IVY = (IVY_FROM_BEDROOM, IVY_FROM_COURTYARD)
+
 
 # The Secret Library. Two ways in, and the order they happen in is structural
 # rather than enforced: the keys hang inside, so a player cannot hold one until
@@ -537,7 +555,24 @@ UNGATED_EXITS = frozenset({OAK, HOUSE, FRONT_DOOR})
 # a row for, so the same list works for every exit: a player who has opened
 # the passage reads the open cabinet, and asked about the oak the list falls
 # past both to the oak's own `library_found` row.
-EXIT_STATES = (HOUSE_UNLOCKED, PASSAGE_OPEN, HAS_KEY, LIBRARY_FOUND)
+# **`window_open` has to be in here, not only ordered within it.** This
+# tuple is what both of an exit's texts resolve against - the refusal
+# above and the success at the end of `_use_exit` - so a state missing
+# from it cannot be read at all. Both ivy exits keep their only success
+# line on a `window_open` row, and without this they would resolve to
+# `default`, where that cell is deliberately empty.
+#
+# It leads because a player who has opened the window holds it on top of
+# everything else they had, and it is the most recent thing to have
+# become true - the same rule `STATE_PRIORITY` argues at length.
+#
+# **The two staircase states are deliberately still absent.** The
+# courtyard ivy has a `stairs_repaired` refusal and it is reached
+# through `_state_refusal`, which walks `states.in_priority_order` and
+# does know them. Adding them here to shorten that path would also
+# change which line the Entryway staircase prints on a successful climb,
+# which is drop 20's content and nobody's ask.
+EXIT_STATES = (WINDOW_OPEN, HOUSE_UNLOCKED, PASSAGE_OPEN, HAS_KEY, LIBRARY_FOUND)
 
 
 def exit_state(held: set[str]) -> tuple[str, ...]:
@@ -756,6 +791,9 @@ async def after_use(
 
     if thing_id == GRAPHITE and room_id == DRAWER_ROOM:
         return await _unjam_the_drawer(guild_id, user_id)
+
+    if thing_id == BEDROOM_WINDOW:
+        return await _open_the_window(guild_id, user_id)
 
     if thing_id == LADDER:
         return await _climb_the_ladder(guild_id, user_id, room_id)
@@ -1566,6 +1604,46 @@ async def _place_a_plank(guild_id: int, user_id: int, room_id: str) -> Effect:
         public=True,
         extra={LADDER: carried_the_ladder},
     )
+
+
+async def _open_the_window(guild_id: int, user_id: int) -> Effect:
+    """Unstick the bedroom sash, for this player and nobody else.
+
+    Per player for the drawer's reason, which is the stronger one here:
+    the window's success line is the only place in the game the ivy is
+    named as a way down. Opening it server-wide would hand every later
+    player a route whose discovery they never had - and `/look window`
+    would describe an open window to somebody who had not opened it.
+
+    **Nothing is checked here.** `requires = graphite_powder` on the
+    window's own row is the gate, and `/use` has already refused anybody
+    without powder in hand before this runs. The powder is not spent:
+    `requires` only asks whether it is held.
+
+    `public=False` like the drawer. One player leaning out of a window
+    is not news, and the ivy below it is a discovery rather than an
+    announcement.
+
+    **`text_state` pins the `default` row, and without it this change
+    silently destroys the thing it exists for.** `_finish_use` resolves
+    the text *after* the effect, on purpose - a use that changes a state
+    can then be described by the state it produced. Here that is exactly
+    wrong. The window has two `use` rows: `default` is the paragraph
+    where the sash slides up and the player leans out and sees the ivy
+    for the first time, and `window_open` is the shorter line for every
+    later look out of an open window. Resolved after the state is set,
+    the opening paragraph can never be read by the one player it is
+    written for - they open the window and are told they have leaned out
+    "again".
+
+    That paragraph is the only place in the game the ivy is named as a
+    way down, which is also why `BC` is `contained_in = bedroom_window`:
+    the exit is hidden, and this sentence is its whole discovery. Losing
+    it would leave a player holding `window_open` with a route nobody
+    ever mentioned.
+    """
+    await states.set_player_state(guild_id, user_id, WINDOW_OPEN)
+    return Effect(tokens={}, public=False, text_state=resolve.DEFAULT_STATE)
 
 
 async def _unjam_the_drawer(guild_id: int, user_id: int) -> Effect:

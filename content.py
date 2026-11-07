@@ -1409,6 +1409,7 @@ def _check_states(content: Content, things: dict[str, Thing]) -> list[str]:
     engine_states = {
         "stairs_repaired",
         "drawer_unjammed",
+        "window_open",
         "has_key",
         "passage_open",
         "library_found",
