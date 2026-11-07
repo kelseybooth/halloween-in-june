@@ -6678,13 +6678,38 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
             # burrito comes out of a stack in the Kitchen and off the
             # floor everywhere else, and those are not the same sentence.
             #
-            # **What it cannot tell** is a freezer take from a floor take
-            # inside the Kitchen - the room decides the line, not where
-            # the thing came from, so a burrito somebody dropped by the
-            # fridge still comes away with a crack. Known and left: the
-            # fix is a check on the source, and the case is rare.
-            in_order = states.in_priority_order(
-                await states.in_force(guild_id, user.id), state.current_room
+            # **And now it can tell a floor take from the thing it was
+            # lying next to**, which is what the paragraph above used to
+            # say it could not. A burrito somebody dropped by the fridge
+            # came away with a crack, because the room decided the line
+            # and the room could not say where the copy came from.
+            #
+            # Two halves, and the first is the whole of the burrito's
+            # fix: **a copy off the floor is not described by its
+            # room.** An `in:XX` take row says how a thing comes out of
+            # something that lives in that room - the freezer's stack is
+            # the only one written - and a copy lying loose came out of
+            # nothing. So the room drops out of the order and the
+            # writers' general line is read instead.
+            #
+            # The second half is for a thing whose general line is the
+            # *source's*: `from:floor` goes in front, so content can say
+            # what being picked up off the floor is like. The graphite
+            # powder is the case that asked - its own `take` row folds a
+            # spoonful out of the tin, which is nonsense about a twist of
+            # paper somebody left on the ground.
+            #
+            # Exactly one `in:XX` row in the files fills `take`, and it
+            # is the burrito's, so the first half costs nothing anywhere
+            # else. Every other one is a `use`.
+            from_the_floor = (
+                found.where is reach.Where.ROOM and found.container_id is None
+            )
+            held_now = await states.in_force(guild_id, user.id)
+            in_order = (
+                (content.FROM_THE_FLOOR, *states.in_priority_order(held_now))
+                if from_the_floor
+                else states.in_priority_order(held_now, state.current_room)
             )
             reply = (
                 await phrasing.say(
