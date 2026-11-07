@@ -290,7 +290,7 @@ async def test_an_achievement_image_rides_the_private_line(house):
 
     await bot._announce(
         achievements.Earned(
-            "follow_your_nose", "public", "Follow Your Nose", "Unstuck the drawer", ALICE
+            "follow_your_nose", "secret", "Follow Your Nose", "Unstuck the drawer", ALICE
         ),
         interaction=interaction,
     )
@@ -307,7 +307,7 @@ async def test_the_public_line_carries_no_image(house):
 
     await bot._announce(
         achievements.Earned(
-            "follow_your_nose", "public", "Follow Your Nose", "Unstuck the drawer", ALICE
+            "follow_your_nose", "secret", "Follow Your Nose", "Unstuck the drawer", ALICE
         ),
         interaction=interaction,
     )
@@ -406,7 +406,7 @@ async def test_follow_your_nose_is_a_verdict_on_a_smell(house):
 
     await bot._announce(
         achievements.Earned(
-            "follow_your_nose", "public", "Follow Your Nose", "Unstuck the drawer", ALICE
+            "follow_your_nose", "secret", "Follow Your Nose", "Unstuck the drawer", ALICE
         ),
         interaction=interaction,
     )
@@ -535,7 +535,7 @@ async def test_a_message_still_sends_with_nothing_uploaded(house):
 
     await bot._announce(
         achievements.Earned(
-            "follow_your_nose", "public", "Follow Your Nose", "Unstuck the drawer", ALICE
+            "follow_your_nose", "secret", "Follow Your Nose", "Unstuck the drawer", ALICE
         ),
         interaction=interaction,
     )
@@ -552,7 +552,7 @@ async def test_a_broken_url_still_sends_the_message(house):
 
     await bot._announce(
         achievements.Earned(
-            "follow_your_nose", "public", "Follow Your Nose", "Unstuck the drawer", ALICE
+            "follow_your_nose", "secret", "Follow Your Nose", "Unstuck the drawer", ALICE
         ),
         interaction=interaction,
     )

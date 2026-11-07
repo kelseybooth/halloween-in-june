@@ -150,6 +150,37 @@ def test_the_group_achievements_are_the_room_ones_and_the_staircase():
     }
 
 
+def test_public_means_offered_and_nothing_else_is_public():
+    """Two kinds of goal, not three.
+
+    `kind` is read nowhere in the code but the `group` branch, so
+    `public` and `secret` differed only for a reader of the file:
+    neither appears in `/stats` before it is earned, and both announce
+    by name when it is. That let `public` mean two unrelated things -
+    the four cat goals the game actually puts in front of a player,
+    and fourteen it never mentions - and for the fourteen, secret is
+    what the game was already doing.
+
+    So the column now says what the game does. A row is `public`
+    exactly when it is `offered`, which is the only thing that shows a
+    goal before it is earned; every other goal is found or not found,
+    which is `secret`.
+
+    Pinned both ways, because the two failures are not the same
+    mistake. A `public` row that is not offered is this file's old
+    state - a goal the writers meant to signpost and the game never
+    mentions. An `offered` row that is not public would be a secret
+    printed in `/stats` as an open quest, which gives away the one
+    thing `secret` is for. Neither raises at runtime.
+    """
+    parsed = content_module.load_files()
+    public = {a.achievement_id for a in parsed.achievements if a.kind == 'public'}
+    offered = {a.achievement_id for a in parsed.achievements if a.offered}
+    # Both empty would pass the equality and prove nothing.
+    assert offered, 'no achievement is offered, so this proves nothing'
+    assert public == offered
+
+
 def test_no_name_or_unlock_is_blank():
     for row in content_module.load_files().achievements:
         assert row.name.strip(), row.achievement_id
