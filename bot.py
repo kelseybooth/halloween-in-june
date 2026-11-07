@@ -3991,6 +3991,22 @@ async def _finish_use(interaction, state, found) -> None:
             line_from=effect.line_from if effect else None,
             name=found.name, player=user.display_name, **tokens,
         )
+    # **A use that steadies somebody says so, after saying what it was.**
+    # Added here rather than replacing the line, because the burrito's
+    # own sentence about the middle being a popsicle is the better half
+    # of eating one and a player who ate it to stop shaking did both.
+    #
+    # Per food, falling back to the general line. The fallback is not
+    # dead code: it is what clears this next, whatever that turns out to
+    # be, and it means a sixth snack needs a cell and not a branch.
+    steadied = await world.steady_their_hands(guild_id, user.id, found.thing_id)
+    if steadied:
+        said = await phrasing.default_say(steadied) or await phrasing.default_say(
+            world.STEADIED_LINE
+        )
+        if said:
+            reply = f"{reply}\n\n{said}" if reply else said
+
     # The use path already has the numbers in `tokens`, so it needs the
     # break and not the lookup.
     if "n" in tokens and "total" in tokens:
@@ -5387,6 +5403,37 @@ async def _use_exit(interaction, state, found, row) -> None:
     # than stored, and text keyed on it has to resolve like any other state.
     held = await world.states_for_exit(guild_id, user.id)
 
+    # **The ivy is the one door a ladder cannot go through**, and it is an
+    # exception to an exception. Full hands normally refuse `/use`
+    # outright and exits are the carve-out, because walking through a
+    # door while carrying something is what people do. Climbing is not
+    # walking: both hands are on the ivy, and the thing in them is a
+    # ladder.
+    #
+    # Here rather than in `_hands_full`, which answers "what is filling
+    # your hands" and is read by three verbs - this is a fact about one
+    # pair of exits, not about the ladder. And here rather than in the
+    # two handlers, so `/use ivy` and `/go ivy` cannot drift apart.
+    #
+    # The watering can is deliberately not included. A full can is
+    # refused everything except exits and is carried down the ivy on
+    # purpose: the fall emptying it into the herb garden is a joke the
+    # design asks for, which it cannot make if the climb is refused.
+    if found.thing_id in world.IVY and await database.carried_of(
+        user.id, guild_id, world.LADDER
+    ):
+        await interaction.followup.send(
+            await phrasing.default_say("carrying.ladder.ivy"), ephemeral=True
+        )
+        await _turned_away(
+            interaction,
+            telemetry.MOVE,
+            telemetry.FULL_HANDS,
+            thing_id=found.thing_id,
+            detail=world.LADDER,
+        )
+        return
+
     # Three exits are exceptions to `rooms_unlocked`, and `UNGATED_EXITS`
     # says why each one is. The oak is the old one: the Secret Library is
     # `open_at_launch = no`, so nobody starts with it unlocked, and climbing
@@ -5488,6 +5535,19 @@ async def _use_exit(interaction, state, found, row) -> None:
     #
     # The departure line still carries a plain name. It is for the people
     # left behind in the room, and none of them has moved.
+    # **The fall is rolled here and paid for after the move.** Both lines
+    # it changes are composed below - the public ones first, the player's
+    # own at the end - and all of them before the player is written into
+    # the room, so the roll has to be answerable without writing anything.
+    # What it costs waits until they are actually standing in the
+    # Courtyard, or a post that failed would leave their belongings in a
+    # room they never reached.
+    #
+    # Whether a full can is about to empty is read now for the same
+    # reason: the sentence about it goes in the reply, and the reply is
+    # written before the can is.
+    fell = await world.ivy_fall_is_due(guild_id, found.thing_id)
+    can_will_empty = fell and await world.a_full_can_is_carried(guild_id, user.id)
     state_now = world.exit_state(held)
     depart = await phrasing.say(
         guild_id, found.thing_id, "move_depart", state=state_now,
@@ -5500,6 +5560,21 @@ async def _use_exit(interaction, state, found, row) -> None:
         player=user.mention,
         name=found.name, room=origin_name,
     )
+    if fell:
+        # **The Courtyard sees the fall and the Bedroom sees the usual
+        # departure**, which the design asks for and is right either way:
+        # upstairs they watched somebody climb out of a window, which is
+        # what happened, and downstairs they watched the part that went
+        # wrong.
+        #
+        # Filled with the mention like the line it replaces, and that is
+        # load-bearing rather than cosmetic: the arrival line is what
+        # admits the player to the destination thread, so a fall line
+        # carrying a plain name would land them outside the room it says
+        # they are lying in.
+        arrive = await phrasing.default_say(
+            "ivy.fall.public", player=user.mention
+        )
 
     # The arrival line is what admits the player. A mention from a bot holding
     # Manage Threads adds them to a private thread and posts nothing, where
@@ -5575,6 +5650,15 @@ async def _use_exit(interaction, state, found, row) -> None:
         await database.record_use(
             user.id, guild_id, found.thing_id, room_id=origin
         )
+        # **Now, after the move, because now they are in the room the
+        # things land in.** The roll happened before the lines were
+        # written, which it had to; this is the half that writes, and it
+        # waits until the player is where the spill belongs.
+        landing = (
+            await world.land_in_the_herbs(guild_id, user.id, destination)
+            if fell
+            else None
+        )
         # The rail never recommends what the player has already done, so
         # each of drop 10's two doors retires the hint that points at it. A
         # player who found either on their own is never told about it.
@@ -5587,7 +5671,21 @@ async def _use_exit(interaction, state, found, row) -> None:
             user.id,
             telemetry.MOVE,
             thing_id=found.thing_id,
-            detail=f"from={origin} to={destination}",
+            # **The fall rides the move's own row rather than getting
+            # one of its own**, for the reason a feed is logged once: two
+            # rows for one event is how a count ends up doubled, and a
+            # fall is a climb that went wrong rather than a second thing
+            # that happened. What spilled and whether a can emptied are
+            # in the detail, which is where the tuning question is asked
+            # from - a fall that costs nothing reads differently from one
+            # that costs three things and a full can.
+            detail=(
+                f"from={origin} to={destination} fell"
+                + (f" spilled={','.join(landing.spilled)}" if landing.spilled else "")
+                + (" emptied_can" if landing.emptied_the_can else "")
+                if landing is not None
+                else f"from={origin} to={destination}"
+            ),
         )
         # The discovery is recorded after the move has committed, so a player
         # who could not be moved is not told they found something.
@@ -5642,9 +5740,17 @@ async def _use_exit(interaction, state, found, row) -> None:
     # twenty has a `use` line written and players only ever saw "You head to".
     # It is what carries the discovery when somebody climbs the oak, and the
     # state decides whether they get the long version or the short one.
+
     walked = await phrasing.say(
         guild_id, found.thing_id, "use", state=state_now, name=found.name
     )
+    if fell:
+        # The climb-down line is replaced rather than added to: they did
+        # not swing a leg over the sill and find the ivy with their foot,
+        # which is what it says.
+        walked = await phrasing.default_say("ivy.fall")
+        if can_will_empty:
+            walked = f"{walked} {await phrasing.default_say('ivy.fall.watering_can')}"
     arriving = f"You head to {destination_place.mention}."
     reply = f"{walked}\n\n{arriving}" if walked else arriving
 
@@ -6690,6 +6796,33 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
                 reason,
                 thing_id=found.thing_id,
                 detail=detail,
+            )
+            return
+
+        # **Shaky hands come last, after every refusal about the thing.**
+        # The table above is ordered on a principle it writes down - a
+        # player with full arms who types `/take stove` hears that the
+        # stove weighs as much as a small car, because the answer about
+        # the player implies the one about the thing is not the problem.
+        # Shaking hands are the same kind of fact and the most temporary
+        # one in the game, so they speak only where the take would
+        # otherwise have worked: `/take staircase` is still answered by
+        # the staircase, and somebody already holding their one candle
+        # stub is still told so rather than told to have a biscuit.
+        #
+        # Read through `states.has`, so a state whose half hour ran out
+        # refuses nothing - which is the whole of how this ends without
+        # anything sweeping it up.
+        if await states.has(guild_id, user.id, world.SHAKEN):
+            await interaction.followup.send(
+                await phrasing.default_say("shaken.take_fail"), ephemeral=True
+            )
+            await _turned_away(
+                interaction,
+                telemetry.TAKE,
+                telemetry.WRONG_STATE,
+                thing_id=found.thing_id,
+                detail=world.SHAKEN,
             )
             return
 

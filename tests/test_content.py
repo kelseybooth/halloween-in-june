@@ -132,7 +132,15 @@ def test_the_shipped_content_parses():
     # line on the collar's own row because the room's sentence and the
     # buckler's are two different sentences: `Effect.public` would have
     # replaced the private half rather than adding to it.
-    assert len(c.defaults) == 169
+    # And eleven more the same day, the ivy fall's, which is the largest
+    # jump this number has taken: three for the fall itself (the landing,
+    # the watering can emptying into the herbs, and what the Courtyard
+    # sees), one refusing the ivy to anybody carrying the ladder, and
+    # seven for the shaky state - the refused `/take`, a general line for
+    # being steadied, and one per food, because the Keurig and a frozen
+    # burrito are not the same recovery. The general `shaken.cleared`
+    # stays for whatever clears it next.
+    assert len(c.defaults) == 180
     # Ten since 31 October: the ground floor arrives in two halves, and
     # 25 sits below the ceiling rather than above it, which is why
     # nothing else in the suite noticed.
