@@ -195,6 +195,14 @@ class _NeverTheCat:
     def randint(self, low, high):
         return high
 
+    def choice(self, seq):
+        """Not part of the roll, and here because this stands in for the
+        whole module. The cat bed's fluff draws its toy through the same
+        `world.random`, so any test that fluffs the bed while the roll is
+        stubbed lands here and used to raise `AttributeError`. First
+        element, so the draw stays deterministic."""
+        return seq[0]
+
 
 class _AlwaysTheCat:
     def randint(self, low, high):
@@ -612,6 +620,50 @@ async def test_the_lock_is_the_ladder_s_and_not_the_player_s(house, she_has_it):
     """Per thing, which is what a cat sitting on a ladder means: she is
     in everybody's way at once."""
     assert SWAT_USE in await climb(house, "CO", who=BOB)
+
+
+# What the lock is NOT. Added 7 November, after a playtester in the
+# Alaska timezone was told she had put a foot on the bottom rung while
+# trying to fluff the cat bed, on a road two rooms away from the ladder.
+FLUFFED = "fluffs the cat bed"
+PICKED_UP_THE_STUB = "picks up the candle stub"
+
+
+async def test_the_lock_does_not_reach_the_rest_of_the_house(house, she_has_it):
+    """**The bug this pair was written for.** `_the_cat_has_it` took the
+    reached-for thing's name, to fill the written line with, and never
+    its id - so for five minutes after a cat climb it answered for
+    whatever was in hand. The lock is a row in `thing_locks` under the
+    ladder's id; nothing compared that id to anything.
+
+    It read as correct in review because both call sites sit where the
+    ladder is the obvious subject, and because neither written row
+    names a thing: `{name}` goes unfilled, so a player fluffing the cat
+    bed in the Channel was told about rungs, verbatim, with nothing in
+    the sentence to reveal which object had answered.
+
+    The cat bed is the playtester's own case, and it is two rooms from
+    the Courtyard where the ladder stands.
+    """
+    reply = await use_it(house, "cat bed", "CH")
+
+    assert SWAT_USE not in reply
+    assert SWAT_USE not in posted(house, "CH")
+    assert FLUFFED in posted(house, "CH")
+
+
+async def test_nor_stop_you_picking_up_something_else(house, she_has_it):
+    """The same hole in `/take`, which has its own call and its own row.
+
+    Fixing one and not the other would leave a player able to use the
+    house but not to pick anything up in it, which is the harder half
+    to notice.
+    """
+    reply = replies(await run(house, bot.take, "candle stub", room="DI"))
+
+    assert SWAT_TAKE not in reply
+    assert PICKED_UP_THE_STUB in posted(house, "DI")
+    assert await database.carried_of(ALICE, GUILD_A, "candle_stub") == 1
 
 
 async def test_and_it_lifts_on_its_own(house, she_has_it):
