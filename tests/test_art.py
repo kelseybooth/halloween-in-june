@@ -295,7 +295,7 @@ async def test_an_achievement_image_rides_the_private_line(house):
         interaction=interaction,
     )
 
-    assert image_of(interaction) == "black_cat_sniffing.png"
+    assert image_of(interaction) == "black_cat_disdain.png"
 
 
 async def test_the_public_line_carries_no_image(house):
@@ -372,6 +372,91 @@ async def test_the_diaper_is_per_player(house):
 
 
 # --------------------------------------------------------------------------
+# Which image goes with which smell, settled 7 November
+# --------------------------------------------------------------------------
+#
+# The sniffing cat is a cat crouched over a dirty diaper with stink lines
+# coming off it, and it was on *Follow Your Nose* - which is the end of
+# the upstairs chain, where a bad smell leads to a desk, a swollen
+# drawer, and cans of expired cat food behind it. No diaper anywhere in
+# it, so the picture named the wrong find. It moved to the achievement
+# that is actually about carrying a diaper, and the nose took disdain.
+
+
+async def carrying(db, thing_id, who=ALICE):
+    """One of something in somebody's bag."""
+    async with db._require_session()() as session:
+        session.add(
+            database.PlayerInventory(
+                guild_id=GUILD_A, user_id=who, thing_id=thing_id, count=1
+            )
+        )
+        await session.commit()
+
+
+async def test_follow_your_nose_is_a_verdict_on_a_smell(house):
+    """Disdain: head tipped back, pointedly looking away.
+
+    Checked through `_announce` rather than off the map, because the map
+    being right is worth nothing if the image does not reach the player.
+    """
+    _, guild, _, assets = house
+    await bot.upload_art(guild, assets)
+    interaction = await an_interaction(house)
+
+    await bot._announce(
+        achievements.Earned(
+            "follow_your_nose", "public", "Follow Your Nose", "Unstuck the drawer", ALICE
+        ),
+        interaction=interaction,
+    )
+
+    assert image_of(interaction) == "black_cat_disdain.png"
+    assert image_of(interaction) != "black_cat_sniffing.png"
+
+
+async def test_and_the_sniffing_cat_now_belongs_to_the_bin(house):
+    """Earned the way a player earns it, not announced by hand.
+
+    `bin_looking_for_you` fires `on_look`, and that hook is dispatched
+    with the interaction that asked - which is the whole reason the
+    image can ride its ephemeral private line at all. A hook fired
+    without one would award the achievement and show nothing.
+    """
+    db, guild, _, assets = house
+    await bot.upload_art(guild, assets)
+    await carrying(db, "dirty_diaper")
+    await db.update_current_room(ALICE, GUILD_A, "KI")
+    interaction = FakeInteraction(
+        ALICE, GUILD_A, guild=guild, channel=a_room_thread("Kitchen")
+    )
+
+    await bot.look.callback(interaction, None)
+
+    earned = set(await database.player_achievements_of(GUILD_A, ALICE))
+    assert "bin_looking_for_you" in earned
+    assert image_of(interaction) == "black_cat_sniffing.png"
+
+
+async def test_the_sniffing_cat_is_on_no_other_achievement(house):
+    """What the move was for, kept from drifting back.
+
+    Both places the image appears are about a diaper: this achievement,
+    and a player's first ever look at one. If a third achievement ever
+    takes it, this is where somebody has to argue that it is about a
+    diaper too.
+    """
+    using_it = {
+        achievement
+        for achievement, art in bot.ART_FOR_ACHIEVEMENT.items()
+        if art == "black_cat_sniffing"
+    }
+
+    assert using_it == {"bin_looking_for_you"}
+    assert bot.ART_DIAPER == "black_cat_sniffing"
+
+
+# --------------------------------------------------------------------------
 # Where it must not appear
 # --------------------------------------------------------------------------
 
@@ -421,12 +506,22 @@ async def test_the_avatar_is_never_sent_as_an_image(house):
 
 async def test_no_image_is_tied_to_the_relationship_meter(house):
     """`black_cat_content` and `black_cat_disdain` are the two endings of the
-    relationship arc, and both fire on their achievement and nowhere else.
-    A score that can swing back and forth would make them blink."""
+    relationship arc, and each fires on an achievement and never on the score.
+    A score that can swing back and forth would make them blink.
+
+    **`black_cat_disdain` serves a third achievement since 7 November**, and
+    the pairing survives it: *Follow Your Nose* borrows the image for what it
+    shows rather than for where it sits in the arc. What this test is about is
+    that neither image is reachable from a value - no achievement is the
+    relationship meter, so none of them blinks.
+    """
     assert bot.ART_FOR_ACHIEVEMENT["making_friends"] == "black_cat_content"
     assert bot.ART_FOR_ACHIEVEMENT["trying_to_make_friends"] == "black_cat_disdain"
     assert "black_cat_content" not in (
         bot.ART_FIRST_PET, bot.ART_CROWDING,
+    )
+    assert "black_cat_disdain" not in (
+        bot.ART_FIRST_PET, bot.ART_CROWDING, bot.ART_DIAPER,
     )
 
 
