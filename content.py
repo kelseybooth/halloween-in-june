@@ -1908,6 +1908,19 @@ def _check_achievements(content: Content) -> list[str]:
     return problems
 
 
+# **Things meant to leave the game when they are used**, exempt from the
+# rule below. The cat collar is the first: a player buckles it onto the
+# cat, a server state records that it is on her, and there is deliberately
+# no second collar to find. Destroying it for good is the feature.
+#
+# Named here rather than given a cell in `things.tsv`, for the reason the
+# two noise-making things are named in `world`: a per-thing flag would
+# hand the writers the power to delete an object from a server by filling
+# in a column, and one is not yet a class. When there are three of these,
+# this is the comment to argue with.
+SPENT_FOR_GOOD = frozenset({"cat_collar"})
+
+
 def _check_consumables(content: Content) -> list[str]:
     """Nothing may be used up that a player cannot get again.
 
@@ -1918,7 +1931,14 @@ def _check_consumables(content: Content) -> list[str]:
     for the rest of October, and no other check would notice.
 
     A thing is safe if a source yields it, something transforms into it, or a
-    restock puts it back.
+    restock puts it back - or if it is in `SPENT_FOR_GOOD`, where going away
+    is the point rather than an accident.
+
+    **The `object` half of the rule still applies to those**, which is not
+    pedantry: `consume_carried` takes a thing off a bag, so a consumed
+    fixture would refuse every use with "take it first" for a thing nobody
+    can take. Being deliberate about destroying something does not make it
+    carryable.
     """
     produced = {t.yields for t in content.things if t.yields}
     produced |= {t.transforms_to for t in content.things if t.transforms_to}
@@ -1933,7 +1953,7 @@ def _check_consumables(content: Content) -> list[str]:
                 f"thing {thing.thing_id} is consumed on use but is a "
                 f"{thing.type}, which is never in anybody's bag"
             )
-        elif thing.thing_id not in produced:
+        elif thing.thing_id not in produced and thing.thing_id not in SPENT_FOR_GOOD:
             problems.append(
                 f"thing {thing.thing_id} is consumed on use and nothing yields, "
                 "transforms into or restocks it, so using it would destroy it "

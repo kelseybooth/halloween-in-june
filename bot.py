@@ -3909,6 +3909,10 @@ async def _finish_use(interaction, state, found) -> None:
             if found.thing_id == world.LADDER
             else _can_detail(state.current_room, effect)
             if found.thing_id == world.WATERING_CAN
+            else await _collar_detail(
+                guild_id, user.id, state.current_room, effect
+            )
+            if found.thing_id == world.CAT_COLLAR
             else None
         ),
     )
@@ -4076,6 +4080,11 @@ async def _finish_use(interaction, state, found) -> None:
         # No hint rides any of these replies, so nothing is lost by not
         # sending one privately.
         privately = False
+    elif found.thing_id == world.CAT_COLLAR:
+        # The reply is kept. See `_announce_collar`: the room's line and
+        # the buckler's are two different sentences, so this adds to the
+        # private half instead of standing in for it.
+        await _announce_collar(interaction)
     elif found.thing_id == world.CAT_BED:
         # A successful fluff shakes something out of the bed, once per
         # player ever. The yield is what gives drop 2 something to
@@ -4807,6 +4816,40 @@ async def _announce_bed_fluff(interaction) -> None:
         await _post_quietly(channel, line)
 
 
+async def _collar_detail(guild_id: int, user_id: int, room_id: str, effect) -> str:
+    """What the one buckling of the collar carries.
+
+    Three things the work order asks for, and the fourth it asks for
+    comes free: the time and who did it are the log row's own columns.
+
+    **`score` is recorded even though nothing reads it any more.** The
+    relationship minimum was dropped on 6 November, so the score no
+    longer decides anything here - which is exactly why it is worth
+    having. The question the deck will ask is whether the gate should
+    have existed: how friendly people actually were when they gave the
+    collar back. A column that was never written cannot answer that
+    later, and this event happens once per server.
+
+    `in_play` is seconds between the first take of the collar anywhere
+    on the server and this moment - how long it sat in somebody's bag
+    before it went on the cat. None of the above is derivable
+    afterwards: the inventory row is already gone by the time this
+    runs, which is why the reader goes to the log.
+
+    `first=no` cannot happen today, there being one collar and it being
+    spent before this point. It is reported rather than assumed,
+    because the state is what is actually one-way and the inventory is
+    only the thing that makes a second attempt unreachable.
+    """
+    facts = effect.extra if effect is not None else {}
+    score = await database.get_relationship(user_id, guild_id)
+    taken = await database.when_first_taken(guild_id, world.CAT_COLLAR)
+    now = await database.server_now(guild_id)
+    in_play = "?" if taken is None else int((now - taken).total_seconds())
+    first = "yes" if facts.get(world.COLLAR_ON, True) else "no"
+    return f"room={room_id} score={score} first={first} in_play={in_play}"
+
+
 def _can_detail(room_id: str, effect) -> str:
     """What a use of the watering can carries: where, and the water.
 
@@ -4994,6 +5037,36 @@ async def _announce_feed(interaction) -> None:
     )
     if line:
         await _post_quietly(channel, line)
+
+
+async def _announce_collar(interaction) -> bool:
+    """The collar's public line. True if it actually went out.
+
+    **Public and private both, and the two are not the same beat.** The
+    rule everywhere else - the staircase, the toy yield, the bed's
+    ordinary fluff - is that a public line replaces the private one,
+    because both were the same sentence and the player was standing in
+    the room reading it twice. Here they are written as two: the
+    buckler gets the scene, where the cat lowers her head and the tag
+    settles, and the room gets the notice that it happened and what the
+    tag says. That is the work order's shape and it is the shape worth
+    keeping, because the long line is addressed to the one player who
+    will ever read it.
+
+    Which is also why this is not `Effect.public`: that flag replaces
+    the reply rather than adding to it, and using it here would throw
+    the scene away to keep the summary.
+    """
+    channel = interaction.channel
+    if channel is None or not hasattr(channel, "send"):
+        return False
+    line = await phrasing.default_say(
+        "collar.public", player=interaction.user.display_name
+    )
+    if not line:
+        return False
+    await _post_quietly(channel, line)
+    return True
 
 
 async def _announce_bed_yield(interaction, key: bool = False) -> bool:

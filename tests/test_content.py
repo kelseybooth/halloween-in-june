@@ -128,15 +128,19 @@ def test_the_shipped_content_parses():
     # last plank is also the first and no ladder is involved - which the
     # ordinary finish line describes anyway until there are two of them.
     #
-    # And eleven on 6 November, the ivy fall's, which is the largest jump
-    # this number has taken: three for the fall itself (the landing, the
-    # watering can emptying into the herbs, and what the Courtyard sees),
-    # one refusing the ivy to anybody carrying the ladder, and seven for
-    # the shaky state - the refused `/take`, a general line for being
-    # steadied, and one per food, because the Keurig and a frozen burrito
-    # are not the same recovery. The general `shaken.cleared` stays for
-    # whatever clears it next.
-    assert len(c.defaults) == 179
+    # And `collar.public` on 6 November, which is a key rather than a
+    # line on the collar's own row because the room's sentence and the
+    # buckler's are two different sentences: `Effect.public` would have
+    # replaced the private half rather than adding to it.
+    # And eleven more the same day, the ivy fall's, which is the largest
+    # jump this number has taken: three for the fall itself (the landing,
+    # the watering can emptying into the herbs, and what the Courtyard
+    # sees), one refusing the ivy to anybody carrying the ladder, and
+    # seven for the shaky state - the refused `/take`, a general line for
+    # being steadied, and one per food, because the Keurig and a frozen
+    # burrito are not the same recovery. The general `shaken.cleared`
+    # stays for whatever clears it next.
+    assert len(c.defaults) == 180
     # Ten since 31 October: the ground floor arrives in two halves, and
     # 25 sits below the ceiling rather than above it, which is why
     # nothing else in the suite noticed.
@@ -944,15 +948,21 @@ def test_and_a_timer_of_no_hours_is_too(shipped):
     assert problems_matching(broken, "idle_drop_hours=0")
 
 
-def test_the_two_things_on_their_own_clock_are_the_two_we_meant(shipped):
+def test_the_things_on_their_own_clock_are_the_ones_we_meant(shipped):
     """**Read off the file rather than typed here**, so this is a check
     on the content and not a copy of it.
 
     The column is the whole mechanism for the second idle rule, and a
-    stray `6` on a third row would quietly start taking something off
-    players with nothing announcing it. Both members are one-of-a-kind
-    things somebody else needs, which is the test
+    stray `6` on a fourth row would quietly start taking something off
+    players with nothing announcing it. Every member is a one-of-a-kind
+    thing somebody else needs, which is the test
     `world.SET_DOWN_WHEN_IDLE` applies to its own members.
+
+    **The collar joined on 6 November** and is the strongest case of
+    that rule rather than an exception to it: there is exactly one, it
+    is the only way anybody learns the cat's name, and it is spent for
+    good on the player who gets to it. Six hours is how long one person
+    may sit on it.
     """
     on_a_clock = {
         t.thing_id: t.idle_drop_hours
@@ -960,7 +970,7 @@ def test_the_two_things_on_their_own_clock_are_the_two_we_meant(shipped):
         if t.idle_drop_hours is not None
     }
 
-    assert on_a_clock == {"watering_can": 6, "rattle": 6}
+    assert on_a_clock == {"watering_can": 6, "rattle": 6, "cat_collar": 6}
 
 
 @pytest.mark.parametrize("thing_id", ["lumber", "rattle", "music_box"])

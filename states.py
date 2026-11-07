@@ -42,7 +42,7 @@ log = logging.getLogger(__name__)
 #
 # Permanent like the other two. A server that lowers `staircase_planks`
 # after reaching it keeps it, which is correct: those planks are in.
-SERVER_STATES = {"stairs_repaired", "stairs_upper", "house_unlocked"}
+SERVER_STATES = {"stairs_repaired", "stairs_upper", "house_unlocked", "collar_on"}
 PLAYER_STATES = {
     "has_key",
     "passage_open",
@@ -93,7 +93,15 @@ PLAYER_STATES = {
 # Unknown states sort last, alphabetically, so a state added here
 # without a thought about priority still resolves the same way twice.
 STATE_PRIORITY = (
-    # **First, over `stairs_repaired`, and the ivy is why.** A player who
+    # **Newest first, and nothing yet depends on it.** The cat is the
+    # only entity with a `collar_on` row and she has no text for any
+    # other state, so no resolution today can be decided by where this
+    # sits. It goes first because the rule says the most recent thing
+    # to have become true is the most specific description of the
+    # world, and the collar went on after the sash went up - not
+    # because anything would read differently the other way round.
+    "collar_on",
+    # **Over `stairs_repaired`, and the ivy is why.** A player who
     # has opened the bedroom window holds both, and the courtyard ivy is
     # written for each: `stairs_repaired` says it climbs to a shut sash
     # with no catch on the outside, `window_open` says they haul

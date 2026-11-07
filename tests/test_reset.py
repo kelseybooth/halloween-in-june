@@ -246,11 +246,15 @@ async def test_the_content_is_still_loaded(two_games):
     # is one drop before the ladder itself, at 31. Harmless and
     # deliberate: it is what *Hive Five* already does, and a row for a
     # thing nobody can hold yet is a row nobody can earn.
-    # Fifty-six on 6 November, the ivy fall's two. Both drop 40
-    # rows, so like *Accompanist* and *Growth Spurt* they need the
-    # ceiling to have moved - a guild held below 40 has the window
-    # shut and no way onto the ivy to fall off.
-    assert len(await resolve.achievements(GUILD_A)) == 56
+    # Fifty-five on 6 November with *Name Tag*, a drop 40 row, so it
+    # arrives only for a guild the ceiling has been raised for - the
+    # same condition as *Growth Spurt* above rather than the ladder
+    # five below it.
+    # Fifty-seven the same day, the ivy fall's two as well. Both are
+    # drop 40 rows too, so like *Accompanist* and *Growth Spurt* they
+    # need the ceiling to have moved - a guild held below 40 has the
+    # window shut and no way onto the ivy to fall off.
+    assert len(await resolve.achievements(GUILD_A)) == 57
 
 
 async def test_the_art_is_kept_by_default(two_games):

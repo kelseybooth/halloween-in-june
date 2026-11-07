@@ -4645,6 +4645,34 @@ async def server_achievements_of(guild_id: int) -> dict[str, datetime]:
     return {row[0]: row[1] for row in rows}
 
 
+async def when_first_taken(guild_id: int, thing_id: str) -> datetime | None:
+    """When anybody on this server first took this thing, ever.
+
+    **From the log and not from `inventory.taken_at`**, which answers a
+    different question and stops answering it at all. `taken_at` is the
+    current holder's stamp: it moves when the thing changes hands, and
+    the row is gone the moment a `consumed_on_use` thing is spent - so
+    for the collar it would be deleted exactly when the one caller
+    wants to read it.
+
+    The log keeps the take rows whatever happens to the thing
+    afterwards, which is what "how long was this in play" needs.
+
+    None when nobody ever took it, which for the collar means a server
+    where it is still sitting in the Bedroom.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        return await session.scalar(
+            select(func.min(InteractionLog.created_at)).where(
+                InteractionLog.guild_id == guild_id,
+                InteractionLog.thing_id == thing_id,
+                InteractionLog.action == TAKE,
+                InteractionLog.outcome == SUCCESS,
+            )
+        )
+
+
 async def when_drop_arrived(guild_id: int, drop_id: int) -> datetime | None:
     """When this server first stood on `drop_id` or anything past it.
 

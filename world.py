@@ -402,6 +402,21 @@ STEADIED_LINE = "shaken.cleared"
 PUMPKINS = "pumpkins"
 CARVING_TOOLS = "carving_tools"
 
+# The collar, which is the one thing in the house a player gives back.
+#
+# **Server-wide, unlike the drawer and the window.** Those two are per
+# player because the discovery is the content - one person finding out
+# there is a smell, or a way down. This is the opposite kind of change:
+# the cat is one cat and everybody is looking at her, so a collar that
+# only its buckler could see would be a cat wearing a collar for one
+# person and not for the player standing beside them.
+#
+# One way, and never unset. `set_server_state` is already idempotent
+# and permanent, which is the behaviour this wants: the collar does not
+# come off, and there is only ever one to put on.
+CAT_COLLAR = "cat_collar"
+COLLAR_ON = "collar_on"
+
 
 # The Secret Library. Two ways in, and the order they happen in is structural
 # rather than enforced: the keys hang inside, so a player cannot hold one until
@@ -890,6 +905,11 @@ async def after_use(
     # the files already say so on the `default` row.
     if thing_id == CARVING_TOOLS and room_id == COURTYARD:
         return await _carve_with_the_tools(guild_id, user_id, room_id)
+
+    # No room test: the cat is `room_id = ALL`, so she is wherever the
+    # player is, the road included.
+    if thing_id == CAT_COLLAR:
+        return await _put_the_collar_on(guild_id, user_id)
 
     if thing_id == LADDER:
         return await _climb_the_ladder(guild_id, user_id, room_id)
@@ -1878,6 +1898,33 @@ async def _open_the_window(
         text_state=resolve.DEFAULT_STATE if first_time else None,
         line_from=line_from,
     )
+
+
+async def _put_the_collar_on(guild_id: int, user_id: int) -> Effect:
+    """Buckle it on, for the whole server, once and for good.
+
+    **Nothing is checked here**, which is the shape the drawer and the
+    window already have: the collar is `consumed_on_use`, so
+    `_finish_use` has taken it off this player's bag before this runs
+    and refused anybody who was not carrying it. A player who reaches
+    this had the collar in hand a line ago.
+
+    **`public=False`, and the room still hears about it.** The public
+    half is a different sentence from the private one - the buckler
+    gets the scene, the room gets the notice - so it cannot ride
+    `Effect.public`, which replaces the private reply rather than
+    adding to it. `bot._announce_collar` posts it, the way the cat
+    bed's key announces beside a reply it keeps.
+
+    **Returns whether this was the buckling**, because `set_server_state`
+    is idempotent and the second caller needs to be told they were
+    second. There is only one collar, so no second caller can exist
+    today - the state is the thing that cannot be re-set, and the
+    handler says so rather than assuming the inventory will always be
+    the only guard.
+    """
+    first = await states.set_server_state(guild_id, COLLAR_ON)
+    return Effect(public=False, extra={COLLAR_ON: first})
 
 
 async def _carve_with_the_tools(guild_id: int, user_id: int, room_id: str) -> Effect:

@@ -68,7 +68,7 @@ costume	costume	costume|cape|vampire cape|witch hat	object		0	yes	yes	1									
 cookie_cutters	pumpkin cookie cutters	cookie cutters|cutters	fixture	BE	1	no	yes	0										40	59					
 spider_web	fake spider web	spider web|web|cobweb	fixture	BE	1	no	yes	0								halloween_box		40	60					
 welcome_mat	doormat	welcome mat|doormat|mat	fixture	BE	1	no	yes	0								halloween_box		40	61					
-cat_collar	cat collar	collar|cat collar|tag	object	BE	1	yes	yes	1										40	62					
+cat_collar	cat collar	collar|cat collar|tag	object	BE	1	yes	yes	1										40	62	yes				6
 dresser_mirror	dresser mirror	dresser mirror|mirror|tall mirror	fixture	BE	1	no	yes	0										40	63					
 laptop	laptop	laptop|computer|notebook	fixture	BE	1	no	yes	0										40	64					
 baby_monitor	baby monitor	baby monitor|monitor	fixture	NU	1	no	yes	0										40	65					

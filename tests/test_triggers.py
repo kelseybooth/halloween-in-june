@@ -945,19 +945,27 @@ def test_what_can_actually_be_earned():
     one being idempotent per room and the other counting the climbs the
     cat takes. Had the columns been left for later, all five would have
     gone to `BLOCKED` and this number would not have moved at all.
+
+    **Fifty-five with the collar**, which needed storage of a kind none
+    of the others did: a server state rather than a count. *Name Tag*
+    is earned by the one player who buckles it on, and the state it
+    sets is what everybody else sees afterwards.
+
+    **Fifty-seven with the fall's two**, and the second of them is the
+    first row here that cannot be earned in the same command that makes
+    it true. *Stuck the Landing* is ordinary: a fall sets a state
+    nothing else sets, so the climb that goes wrong is the climb that
+    awards it. *Walk It Off* becomes true when half an hour has gone by
+    with that state not eaten away, and nothing is awake at that moment
+    to notice - so it sits on the widest hook there is and arrives on
+    whatever the player does next. Neither needed storage: one reads
+    the state, the other reads the `player_states` row that expiry
+    leaves behind. Both are exercised in `test_falling_off_the_ivy`,
+    the way the ladder's five are exercised in `test_the_ladder`.
     """
     earnable = achievements.registered_ids() - set(BLOCKED) - set(BY_HAND)
 
-    # Fifty-six on 6 November, the ivy fall's two. *Stuck the
-    # Landing* arrives earnable the day it ships - the fall is the
-    # only thing that sets the state it reads. *Walk It Off* arrives
-    # earnable too, but it is the first row here that cannot be
-    # earned in the same command that makes it true: nothing is
-    # awake when its half hour runs out, so it waits for whatever
-    # the player does next. Both are exercised in
-    # `test_falling_off_the_ivy`, the way the ladder's five are
-    # exercised in `test_the_ladder` rather than here.
-    assert len(earnable) == 56
+    assert len(earnable) == 57
 
 
 # --------------------------------------------------------------------------
