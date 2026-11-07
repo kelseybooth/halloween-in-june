@@ -512,6 +512,33 @@ async def test_the_sash_stays_open_and_the_ivy_stays_climbable(house):
     assert await where_is() == "CO"
 
 
+async def test_an_open_sash_does_not_follow_the_player_out_of_the_room(house):
+    """The repeat is keyed on the state, and the line is keyed on the room.
+
+    Raised off the 7 November playtest, where the player's later puffs
+    could not be placed: `interaction_log` has no room column and
+    `detail` is null on every `graphite_powder` row, so which room a use
+    happened in is not recoverable from it. Worth settling by test
+    rather than by argument, since the two facts are easy to conflate -
+    `window_open` is a player state that travels with them, and
+    `line_from` is handed out per room by `after_use`.
+
+    A player holding `window_open` who puffs powder in the Nursery gets
+    the powder's own line, which is also what they got before the sash
+    was ever opened. Nothing about carrying the state changes a room
+    that was never the answer to the powder.
+    """
+    await open_the_window(house)
+    await carry(house[0], world.GRAPHITE)
+
+    reply = await run(house, bot.use, "graphite powder", room="NU")
+
+    assert "gets absolutely everywhere" in reply
+    assert "lean out over the courtyard again" not in reply
+    assert OPENED not in reply
+    assert await states.has(GUILD_A, ALICE, world.WINDOW_OPEN)
+
+
 async def test_the_first_puff_still_carries_the_discovery(house):
     """The sentence the redirect exists for, pinned against over-reach.
 
