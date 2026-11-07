@@ -13,8 +13,8 @@ Shorter descriptions for the eight rooms after the Entryway, at about four fifth
 | Dining Room | **25** | Two **dining chairs** are pushed back from a **long table**, with a **high chair** beside. A **candy bowl** and a **vase of flowers** stand on the **sideboard**, under **tall windows** onto an overgrown garden. Through the **arched doorway** you can see a crowded coat tree, and a **swinging door** lets through the hum of a fridge. | 82% |
 | Kitchen | **25** + 30 | A big old-fashioned kitchen. A **pasta pot** sits on the **cast-iron stove**, a **drying rack** stands empty by the **kitchen sink**, and a **Keurig** waits with a clean mug. The **fridge-freezer** hums beside the **trash can**, a **cake box** sits at the end of the **counter**, and the **pantry** door is ajar. A **swinging door** shows a sliver of a long table each time it moves. *[fragment 1, drop 30:]* Through the glazed **back door** there are steps, then tangled green. | 61% |
 | Courtyard | 30 | An overgrown sunken courtyard. **Ivy** swallows the side of the house, and a **stone wall** enclosed **herb garden** has run wild beside a **watering can**. A **picnic blanket** is spread over a **stone bench**. In the middle, a **stone circle** holds the last of a chalk diagram. An autumn-bronzed **oak tree** crowds the far wing of the house. **Pumpkins** wait by the kitchen steps next to a **cat bowl**, and at the top, the **back door** glows warm and smells faintly of coffee. | 85% |
-| Living Room | 30 | A room for long evenings: a deep **sofa** with a **baby blanket**, two **armchairs****,**** b****ookshe****l****v****e****s** and a **fireplace** full of cold ash. One armchair has been turned to face a **bare patch of wall**. A stack of **board books** sits on the **rug**. A tall **curiosity cabinet** stands in the corner. Through the **wide doorway** you can see the foot of a staircase and a pile of shoes. | 91% |
-| Upstairs Hallway | 40 | A long hallway hung with **faded portraits** of nobody who lives here. A **roll-top desk** stands half closed and beside it looms an **oak wardrobe**, with a **small crowbar** on the floor. **Baby clothes** are drying over the railing, and a **cat bowl** sits at the top of the **g****r****and ****staircase**, which sweeps down to the front door far below. A **paneled door** stands half open on the corner of an unmade bed, and a **sage door** hums softly with white noise. A bad smell lingers in the air. | 70% |
+| Living Room | 30 | A room for long evenings: a deep **sofa** with a **baby blanket**, two **armchairs, bookshelves** and a **fireplace** full of cold ash. One armchair has been turned to face a **bare patch of wall**. A stack of **board books** sits on the **rug**. A tall **curiosity cabinet** stands in the corner. Through the **wide doorway** you can see the foot of a staircase and a pile of shoes. | 91% |
+| Upstairs Hallway | 40 | A long hallway hung with **faded portraits** of nobody who lives here. A **roll-top desk** stands half closed and beside it looms an **oak wardrobe**, with a **small crowbar** on the floor. **Baby clothes** are drying over the railing, and a **cat bowl** sits at the top of the **grand ****staircase**, which sweeps down to the front door far below. A **paneled door** stands half open on the corner of an unmade bed, and a **sage door** hums softly with white noise. A bad smell lingers in the air. | 70% |
 | Bedroom | 40 | The main bedroom: an **unmade bed**, a **dresser** with its drawers half open, and a **tall mirror** above it that catches the light at odd angles. A **bottle warmer** sits on the **nightstand**. In the corner, a **moving box** labeled HALLOWEEN overflows with a **welcome mat** and a tangle of **fake spider web**. A **tin of graphite powder** sits open by the **window**. The **paneled door** stands half open on a row of faded portraits. | 89% |
 | Nursery | 40 | A small, warm room painted sage green. The **crib** is made up under a slowly turning **mobile**, with a **shelf** above it, out of reach of anybody small. On the **changing table**, a **baby monitor** crackles with faint, happy sounds, though the crib is empty. Through the **sage door**, open a crack, you can see baby clothes drying over a railing. | 73% |
 | Secret Library | 50 | A close little library with packed **library shelves**. A **scorch circle** is burned into the floorboards, with a **coil of copper wire** among the things scattered around it, and a **spirit board** lies just outside it. An **empty cat bed** sits in the corner. The air feels charged, like the moment before a storm. The back of a **heavy cabinet** fills one wall, a keyhole set at waist height, and behind the shelves a shaded **library window** stands open a crack. | 80% |
@@ -147,9 +147,115 @@ The courtyard's `ivy` changes from a fixture to an exit with destination BE. It 
 4. **The trigger is `/use window` while carrying powder.** `/use graphite` in the bedroom would be ambiguous, because both the tin and the powder answer to "graphite" and "graphite powder". The powder isn't used up: `requires` only checks it's in hand, and the tin is right there anyway.
 5. **Which drop it ships in:** the courtyard ivy's change to an exit and its drop 30 refusal belong in the drop 30 work order. Everything else is drop 40.
 
+### Falling off the ivy (decided 6 November)
+
+**On 5% of climbs down the ivy from the Bedroom window, the player falls, softly, into the herb garden.** Every climb down can fall, the first one included. Climbing up from the Courtyard never does. Nobody is hurt: the fall is a small, funny setback, in keeping with the Story Bible's rule that nobody in this house is in danger.
+
+**What a fall does:**
+
+1. **The player still arrives in the Courtyard,** just faster than planned.
+2. **Up to 3 things spill from their bag** into the Courtyard's Also here list, chosen at random from what they carry. The rare gourmet can never spills, and things that can't be dropped (the skeleton key, the carving tools, the ghost's bedsheet) stay put as always.
+3. **A full watering can lands empty.** The full can's hands-full rule allows `/use` on exits, so a player can take a full can down the ivy. If they fall, the can stays in their bag, at the empty level.
+4. **The player is shaky.** Until they eat or drink something, `/take` refuses. Any successful use of the Keurig, the tortilla chips, a piece of candy, a frozen burrito or the dark chocolate clears it. So does 30 minutes passing, so nobody gets stuck.
+5. **The room sees it.** The Courtyard gets the fall's public line in place of the ivy's usual arrival line. The Bedroom still sees the usual departure line.
+
+| Key | Who sees it | Text |
+| --- | --- | --- |
+| `ivy.fall` | The player, in place of the ivy's climb-down line | Halfway down, a handful of ivy comes away in your hand. You land in the lavender, which is softer than it looks and smells wonderful. A few things have tumbled out of your bag. |
+| `ivy.fall.watering_can` | The player, added when a full can empties | The watering can lands upside down in the lavender, and every drop of it goes into the herbs. |
+| `ivy.fall.public` | The Courtyard | {player} comes down the ivy a lot faster than they meant to and lands in the herb garden. |
+| `shaken.take_fail` | The player, on a refused `/take` | Your hands are still a little shaky. Maybe eat or drink something first. |
+| `shaken.cleared` | The player, after eating or drinking | That's better. Your hands have stopped shaking. |
+
+**What steadies them.** Each food has its own line in place of `shaken.cleared`, which stays as the line for anything else that might clear it later.
+
+| Key | Food | Text |
+| --- | --- | --- |
+| `shaken.cleared.coffee_maker` | Keurig | The coffee does its job. Your hands stop shaking, though your heart is now going a little faster. |
+| `shaken.cleared.nacho_chips` | Tortilla chips | A few chips and a bit of salt, and your hands are steady again. Crunching helps more than you'd think. |
+| `shaken.cleared.candy` | Candy | The sugar hits all at once. Your hands stop shaking almost immediately, and you feel about six years old. |
+| `shaken.cleared.frozen_burrito` | Frozen burrito | It's still half frozen, but it's food, and it works. Your hands have stopped shaking. Aunt Sue would be proud. |
+| `shaken.cleared.dark_chocolate` | Dark chocolate | One square of dark chocolate, and the world settles back into place. Your hands have stopped shaking. |
+
+**Two new secret achievements for falling:**
+
+| Field | Value |
+| --- | --- |
+| `achievement_id` | `stuck_the_landing` |
+| `kind` | secret |
+| `name` | **Stuck the Landing** |
+| `unlock` | Came down the ivy the quick way. The lavender broke your fall, and you've never smelled better. |
+| `since_drop` | 40 |
+| `sort_order` | 275 |
+
+| Field | Value |
+| --- | --- |
+| `achievement_id` | `walk_it_off` |
+| `kind` | secret |
+| `name` | **Walk It Off** |
+| `unlock` | Fell off the ivy and refused all snacks. Your hands stopped shaking eventually. |
+| `since_drop` | 40 |
+| `sort_order` | 285 |
+
+Earned when a player's shaky state runs out its 30 minutes without being cleared by food.
+
+**Not with a ladder.** A player carrying the ladder can't use the ivy in either direction. The ladder normally allows `/use` on exits, but the ivy is the exception: `/use ivy` and `/go ivy` both refuse with `carrying.ladder.ivy`, "Not with a ladder. You'd need a third hand, and possibly a fourth." That line is already in `defaults.tsv`. Since nobody carrying the ladder can climb the ivy, the ladder never falls with them.
+
+**For the developer:**
+
+1. **The roll.** On each successful climb down (`BC`, with `window_open`), roll `ivy_fall_percent` (config, default 5). Climbs up (`ivy` from the Courtyard) never roll.
+2. **The spill.** Move up to 3 randomly chosen carried items, counted one at a time, from the inventory to the Courtyard's room contents. Skip `cat_food_gourmet` and anything with `droppable = no`. If the player carries nothing that can spill, the fall still happens, and the "tumbled out" sentence is harmless.
+3. **The can.** If the watering can is carried at `full`, set it to `empty` and add `ivy.fall.watering_can` to the private reply.
+4. **The shaky state.** Set a per-player state, `shaken`, that expires 30 minutes after the fall. While it holds, `/take` refuses with `shaken.take_fail`. A successful use of `coffee_maker`, `nacho_chips`, `candy`, `frozen_burrito` or `dark_chocolate` clears it and sends that food's `shaken.cleared.<thing_id>` line, or `shaken.cleared` if a food has no line of its own. Expiry clears it silently.
+5. **The ladder refusal** for `/use ivy` and `/go ivy`, on both ivy exits, while the ladder is carried.
+6. ***Stuck the Landing*** on a player's first fall, and ***Walk It Off*** the first time a player's shaky state expires after 30 minutes without being cleared by food.
+7. **Logging:** each fall, with what spilled and whether a full can emptied, and each shaky state cleared, by food or by time.
+
+## Where this stands in the files (status note, 6 November)
+
+Added by the developer, not part of the drafts above. Read off
+`room_text.tsv` and `things.tsv` rather than from memory, because four of
+the eight rows above no longer describe what a player sees.
+
+**Where this document and the shipped text differ, the shipped text has
+superseded it.** The drafts are a proposal from 30 October and the files
+have moved since; a difference is this document being behind rather than
+a bug in the game or a question waiting on anybody. That is the rule for
+reading everything below.
+
+| Room | In the files? | |
+| --- | --- | --- |
+| Kitchen | **yes, verbatim** | At 25, with the back-door clause as fragment 1 at drop 30. |
+| Living Room | **yes, verbatim** | At 30. |
+| Dining Room | at 25, edited | The candy bowl and vase clause shipped as *"The tall windows above the sideboard look onto an overgrown garden."* Both nouns are still reachable: the candy bowl is a source named in the sideboard's own prose, and the vase is named there too. |
+| Courtyard | at 30, edited | Shipped without *"beside a watering can"*, which is correct - the can is takeable, so the engine lists it and the prose must not name it. |
+| Bedroom | **superseded** | A different description shipped on 6 November. It drops the bottle warmer, the mat, the web, the costumes and the tin; all of them are still reachable one look deeper, and the ivy is deliberately not named at all. |
+| Upstairs Hallway | **no** | Still the pre-rewrite text, and the draft is outdated in its own right: the crowbar was moved to drop 99 after it was written, so the sentence naming it describes a thing that is not there at 40. The shipped text has a second row parked at 99 that puts the crowbar back when it arrives. |
+| Nursery | **no** | The shipped text is a *later* revision than this draft, not an earlier one - it has the nursery door painted the same soft sage, which the draft does not. |
+| Secret Library | **no** | Still the pre-rewrite text. |
+
+**The window and the ivy.** *For the developer* points 1 and 2 shipped on 6
+November: a successful use of the window sets a per-player `window_open`,
+and both ivy exits are refused without it. Before that the content had been
+complete and inert since 30 October - 29 attempts to climb either ivy by 12
+players, every one refused, not one success. `/use graphite powder` in the
+bedroom now opens it too, reading the window's line rather than the
+powder's. **The fall is not built.**
+
+Point 2 is gated in the content rather than in `exit_refused_by` as written
+above: that path picks its refusal with a state list that has no
+`stairs_repaired` in it, so the courtyard ivy would have served the drop 30
+line to a player on a repaired staircase.
+
+**The staircase, for the record**, because the files look like the rename
+never happened and that is not what they mean. It was renamed from *main
+staircase* to *grand staircase* and then simplified: both ends now carry
+`name = staircase`, with `grand staircase` kept as an alias, so a player
+who types either word is answered. Decided, applied, and revised - which
+is what a ticked box in this document can mean.
 ## Open questions
 
-- [ ] **Approve or edit the remaining four drafts.** The four drop 30 rooms are approved and in the files. The Upstairs Hallway, Bedroom, Nursery and Secret Library are still waiting, and the Upstairs Hallway's interim bowl sentence comes out when its draft goes in.
-- [ ] **Delete the back stairs?** If yes, I'll make the cuts listed above and keep only the repaired Upstairs Hallway text.
-- [ ] **Rename the upstairs end of the staircase** to "grand staircase"?
+- [x] **Approve or edit the remaining four drafts.** The four drop 30 rooms are approved and in the files. The Upstairs Hallway, Bedroom, Nursery and Secret Library are still waiting, and the Upstairs Hallway's interim bowl sentence comes out when its draft goes in.
+- [x] **Delete the back stairs?** If yes, I'll make the cuts listed above and keep only the repaired Upstairs Hallway text.
+- [x] **Rename the upstairs end of the staircase** to "grand staircase"?
 - [x] **One paragraph or fragments?** ~~These drafts are single paragraphs.~~ **Answered for the Kitchen on 31 October**, and in the direction the Entryway already went: the back-door clause became fragment 1 at drop 30 so the Kitchen could open at 25 without a way out into the Courtyard. It cost nothing, because the clause was already the last thing in the paragraph. The question stands open for every other room — these are still single paragraphs, and the Kitchen is a split made for a drop boundary rather than for pacing.

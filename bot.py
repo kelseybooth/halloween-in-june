@@ -3765,7 +3765,9 @@ async def _turned_away(interaction, action: str, reason: str, **fields) -> None:
     )
 
 
-async def _a_use_line(guild_id: int, found, current, **tokens) -> str:
+async def _a_use_line(
+    guild_id: int, found, current, *, line_from: str | None = None, **tokens
+) -> str:
     """What a successful `/use` says, drawn from the thing's whole pool.
 
     One line for nearly everything, which is the thing's own `use` row.
@@ -3797,9 +3799,14 @@ async def _a_use_line(guild_id: int, found, current, **tokens) -> str:
     standing in a line that had already had a `{player}` put into it.
     One pass has no such name to find.
     """
-    written = await resolve.thing_text(guild_id, found.thing_id, "use", current)
+    # **Whose row this is**, which is the thing the player used unless an
+    # `Effect` has named another. Both reads take the same id: if a use
+    # is speaking as the window, the window's extra lines are the ones
+    # that belong with it.
+    speaking_as = line_from or found.thing_id
+    written = await resolve.thing_text(guild_id, speaking_as, "use", current)
     extras = await phrasing.defaults_matching(
-        f"{content.EXTRA_USE_PREFIX}{found.thing_id}."
+        f"{content.EXTRA_USE_PREFIX}{speaking_as}."
     )
     if written and extras:
         written = random.choice([written, *extras])
@@ -3960,6 +3967,7 @@ async def _finish_use(interaction, state, found) -> None:
     else:
         reply = await _a_use_line(
             guild_id, found, current,
+            line_from=effect.line_from if effect else None,
             name=found.name, player=user.display_name, **tokens,
         )
     # The use path already has the numbers in `tokens`, so it needs the
