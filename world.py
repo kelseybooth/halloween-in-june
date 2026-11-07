@@ -720,6 +720,23 @@ class Effect:
     # staircase and the ladder in bold for a day and read as an
     # instruction.
     marked: bool = True
+    # Another *thing's* `use` row to read instead of this one's, for a use
+    # that does something a second thing already has the words for.
+    #
+    # **`say` cannot do this job and the difference is where the sentence
+    # lives.** `say` names a key in `defaults.tsv`, for a line
+    # `thing_text` has no way to be keyed on - watering, the last plank.
+    # Here the line is keyed perfectly well: it is the bedroom window's
+    # `use` row, written for the window, and the only question is that
+    # rubbing graphite into the runners and using the window are the same
+    # act. Copying that paragraph into the powder's row would leave the
+    # ivy's one introduction in two cells that have to be kept in step,
+    # which is the way a writer's edit goes half-applied.
+    #
+    # The tokens are not redirected with it: they describe what the
+    # player did, and the row being read is only where the words come
+    # from. Nothing written for this needs one.
+    line_from: str | None = None
 
 
 async def planks(guild_id: int) -> tuple[int, int]:
@@ -791,6 +808,24 @@ async def after_use(
 
     if thing_id == GRAPHITE and room_id == DRAWER_ROOM:
         return await _unjam_the_drawer(guild_id, user_id)
+
+    # **The same tin, in the other room it is the answer to.** A player
+    # in the bedroom holding powder and typing `/use graphite powder`
+    # has said what they mean, and the two rooms now read the same way:
+    # the powder is used where it is the fix.
+    #
+    # It borrows the window's line rather than printing the powder's own
+    # - "you puff a little onto your palm, it gets absolutely
+    # everywhere" - because that sentence does not mention the sash, and
+    # the window's does the work: it is the only place in the game the
+    # ivy is named as a way down. Opening the window silently would
+    # leave a player holding `window_open` and a route nobody told them
+    # about. The drawer upstairs still has that gap, and `line_from` is
+    # what would close it.
+    if thing_id == GRAPHITE and room_id == WINDOW_ROOM:
+        return await _open_the_window(
+            guild_id, user_id, line_from=BEDROOM_WINDOW
+        )
 
     if thing_id == BEDROOM_WINDOW:
         return await _open_the_window(guild_id, user_id)
@@ -1606,7 +1641,9 @@ async def _place_a_plank(guild_id: int, user_id: int, room_id: str) -> Effect:
     )
 
 
-async def _open_the_window(guild_id: int, user_id: int) -> Effect:
+async def _open_the_window(
+    guild_id: int, user_id: int, *, line_from: str | None = None
+) -> Effect:
     """Unstick the bedroom sash, for this player and nobody else.
 
     Per player for the drawer's reason, which is the stronger one here:
@@ -1641,9 +1678,26 @@ async def _open_the_window(guild_id: int, user_id: int) -> Effect:
     the exit is hidden, and this sentence is its whole discovery. Losing
     it would leave a player holding `window_open` with a route nobody
     ever mentioned.
+
+    **Pinned on the first open only**, which the first cut of this got
+    wrong: it pinned `default` every time, so a second `/use window`
+    reprinted the whole opening paragraph and the `window_open` row -
+    "you lean out over the courtyard again", written for exactly that -
+    could never be read. The sash is only unstuck once; afterwards the
+    state describing it is the right one, which is what the ordinary
+    resolution already does.
+
+    `line_from` is for the other way in. `/use graphite powder` in the
+    bedroom does the same thing and reads the window's row, because the
+    powder's own line never mentions the window.
     """
-    await states.set_player_state(guild_id, user_id, WINDOW_OPEN)
-    return Effect(tokens={}, public=False, text_state=resolve.DEFAULT_STATE)
+    first_time = await states.set_player_state(guild_id, user_id, WINDOW_OPEN)
+    return Effect(
+        tokens={},
+        public=False,
+        text_state=resolve.DEFAULT_STATE if first_time else None,
+        line_from=line_from,
+    )
 
 
 async def _unjam_the_drawer(guild_id: int, user_id: int) -> Effect:

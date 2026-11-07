@@ -296,3 +296,83 @@ def test_every_state_an_exit_is_written_for_is_one_the_engine_can_set():
     )
 
     assert unreachable == [], unreachable
+
+
+# ---------------------------------------------------------------------------
+# The other way in: `/use graphite powder`, which borrows the window's line
+
+
+async def test_using_the_powder_in_the_bedroom_opens_the_window(house):
+    """What a player types, and what cost one playtester a trip to the tin.
+
+    `/use graphite powder` used to print the powder's own line - a puff
+    on the palm, slippery, everywhere - spend the powder, and leave the
+    sash shut. The resolver was never the problem: a source is merged
+    with what it yields into one candidate, so the tin and the powder
+    are one thing to the parser and a carried copy outranks the source.
+    """
+    await carry(house[0], world.GRAPHITE)
+
+    reply = await run(house, bot.use, "graphite powder", room="BE")
+
+    assert OPENED in reply
+    assert "onto your palm" not in reply
+    assert await states.has(GUILD_A, ALICE, world.WINDOW_OPEN)
+
+
+async def test_and_the_ivy_is_climbable_straight_afterwards(house):
+    """The whole point: the line a player reads is the one naming the ivy."""
+    await carry(house[0], world.GRAPHITE)
+    await run(house, bot.use, "graphite powder", room="BE")
+
+    reply = await run(house, bot.use, "ivy", room="BE")
+
+    assert CLIMBED_DOWN in reply
+    assert await where_is() == "CO"
+
+
+async def test_the_powder_elsewhere_still_says_its_own_line(house):
+    """`line_from` is per room, so the powder keeps its own words.
+
+    The Nursery is neither room the powder is the answer to, so nothing
+    is redirected and nothing is set.
+    """
+    await carry(house[0], world.GRAPHITE)
+
+    reply = await run(house, bot.use, "graphite powder", room="NU")
+
+    assert "onto your palm" in reply
+    assert OPENED not in reply
+    assert not await states.has(GUILD_A, ALICE, world.WINDOW_OPEN)
+
+
+async def test_the_drawer_upstairs_is_untouched(house):
+    """The other room the powder works in, which keeps its own behaviour.
+
+    Named here because this change could have redirected it too. It
+    still prints the powder's line and says nothing about the drawer,
+    which is a gap `line_from` could close and this PR does not.
+    """
+    await carry(house[0], world.GRAPHITE)
+
+    reply = await run(house, bot.use, "graphite powder", room="UH")
+
+    assert "onto your palm" in reply
+    assert await states.has(GUILD_A, ALICE, world.DRAWER_UNJAMMED)
+    assert not await states.has(GUILD_A, ALICE, world.WINDOW_OPEN)
+
+
+async def test_opening_it_twice_reads_as_a_second_look(house):
+    """The bug the first cut of this shipped, pinned.
+
+    `text_state` was pinned to `default` on every open, so a second
+    `/use window` reprinted the whole opening paragraph and the
+    `window_open` row - written for exactly this - could never be read.
+    The sash is only unstuck once.
+    """
+    await open_the_window(house)
+
+    reply = await run(house, bot.use, "window", room="BE")
+
+    assert OPENED not in reply
+    assert "lean out over the courtyard again" in reply
