@@ -950,10 +950,22 @@ def test_what_can_actually_be_earned():
     of the others did: a server state rather than a count. *Name Tag*
     is earned by the one player who buckles it on, and the state it
     sets is what everybody else sees afterwards.
+
+    **Fifty-seven with the fall's two**, and the second of them is the
+    first row here that cannot be earned in the same command that makes
+    it true. *Stuck the Landing* is ordinary: a fall sets a state
+    nothing else sets, so the climb that goes wrong is the climb that
+    awards it. *Walk It Off* becomes true when half an hour has gone by
+    with that state not eaten away, and nothing is awake at that moment
+    to notice - so it sits on the widest hook there is and arrives on
+    whatever the player does next. Neither needed storage: one reads
+    the state, the other reads the `player_states` row that expiry
+    leaves behind. Both are exercised in `test_falling_off_the_ivy`,
+    the way the ladder's five are exercised in `test_the_ladder`.
     """
     earnable = achievements.registered_ids() - set(BLOCKED) - set(BY_HAND)
 
-    assert len(earnable) == 55
+    assert len(earnable) == 57
 
 
 # --------------------------------------------------------------------------

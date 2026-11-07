@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import logging
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 import content
 import database
@@ -66,6 +66,13 @@ PLAYER_STATES = {
     # unknown state is a row that fails to load.
     "tutorial_seen",
     "diaper_seen",
+    # **The first one that stops being true on its own.** A player who
+    # has fallen off the ivy cannot `/take` until they eat or drink
+    # something, or until half an hour has gone by. How long is
+    # `database.EXPIRES_AFTER`, which is also the list of states that
+    # work this way; everything else above is a discovery, set once and
+    # kept.
+    "shaken",
 }
 
 # **Which state's text wins when a player holds several.**
@@ -86,7 +93,15 @@ PLAYER_STATES = {
 # Unknown states sort last, alphabetically, so a state added here
 # without a thought about priority still resolves the same way twice.
 STATE_PRIORITY = (
-    # **First, over `stairs_repaired`, and the ivy is why.** A player who
+    # **Newest first, and nothing yet depends on it.** The cat is the
+    # only entity with a `collar_on` row and she has no text for any
+    # other state, so no resolution today can be decided by where this
+    # sits. It goes first because the rule says the most recent thing
+    # to have become true is the most specific description of the
+    # world, and the collar went on after the sash went up - not
+    # because anything would read differently the other way round.
+    "collar_on",
+    # **Over `stairs_repaired`, and the ivy is why.** A player who
     # has opened the bedroom window holds both, and the courtyard ivy is
     # written for each: `stairs_repaired` says it climbs to a shut sash
     # with no catch on the outside, `window_open` says they haul
@@ -98,14 +113,6 @@ STATE_PRIORITY = (
     # Consistent with the rule rather than an exception to it: the most
     # recent thing to have become true is the most specific description
     # of the world, and the sash moved after the staircase did.
-    # **Newest first, and nothing yet depends on it.** The cat is the
-    # only entity with a `collar_on` row and she has no text for any
-    # other state, so no resolution today can be decided by where this
-    # sits. It goes first because the rule says the most recent thing
-    # to have become true is the most specific description of the
-    # world, and the collar went on after the sash went up - not
-    # because anything would read differently the other way round.
-    "collar_on",
     "window_open",
     "stairs_repaired",
     "stairs_upper",
@@ -252,23 +259,71 @@ async def set_player_state(guild_id: int, user_id: int, state: str) -> bool:
                 database.PlayerState.state == state,
             )
         )
-        if existing is not None:
+        # **An expiring state is set again rather than left alone.** For a
+        # discovery, a row that exists is the whole answer and this returns
+        # False without writing - the drawer does not re-unjam. For one
+        # whose row carries a clock, that gave two wrong answers from one
+        # call: `set_at` kept the old fall's stamp, so a second fall left
+        # the player not shaken at all once the first had run out, and the
+        # False said they were already shaken when they were not.
+        #
+        # So the stamp is rewritten and the answer is True: this call is
+        # what made the state true *now*, which is the only sense a state
+        # with a clock on it has.
+        expiring = state in database.EXPIRES_AFTER
+        if existing is not None and not expiring:
             return False
-        await session.execute(
-            insert(database.PlayerState)
-            .values(guild_id=guild_id, user_id=user_id, state=state)
-            .on_conflict_do_nothing(
-                index_elements=[
-                    database.PlayerState.guild_id,
-                    database.PlayerState.user_id,
-                    database.PlayerState.state,
-                ]
+        if existing is not None:
+            await session.execute(
+                update(database.PlayerState)
+                .where(
+                    database.PlayerState.guild_id == guild_id,
+                    database.PlayerState.user_id == user_id,
+                    database.PlayerState.state == state,
+                )
+                .values(set_at=await database.server_now(guild_id))
             )
-        )
+        else:
+            await session.execute(
+                insert(database.PlayerState)
+                .values(guild_id=guild_id, user_id=user_id, state=state)
+                .on_conflict_do_nothing(
+                    index_elements=[
+                        database.PlayerState.guild_id,
+                        database.PlayerState.user_id,
+                        database.PlayerState.state,
+                    ]
+                )
+            )
         await session.commit()
 
     log.info("Guild %s, player %s: %s is now true", guild_id, user_id, state)
     return True
+
+
+async def clear_player_state(guild_id: int, user_id: int, state: str) -> bool:
+    """Take an expiring state off a player. False if they did not hold it.
+
+    Refuses a permanent one outright rather than quietly deleting it: a
+    discovery cannot be undiscovered, and a caller asking to clear one
+    has misunderstood something that a silent success would hide.
+    """
+    if state not in database.EXPIRES_AFTER:
+        raise ValueError(f"{state!r} does not expire and cannot be cleared")
+    cleared = await database.clear_player_state(guild_id, user_id, state)
+    if cleared:
+        log.info("Guild %s, player %s: %s cleared", guild_id, user_id, state)
+    return cleared
+
+
+async def ran_out(guild_id: int, user_id: int, state: str) -> bool:
+    """Whether this player has an expiring state whose time has run out.
+
+    The question `has` is built to answer "no" to. Reads the row
+    `in_force` hides, which is what tells a state somebody ate their way
+    out of from one that simply ended.
+    """
+    return state in await database.stale_player_states(guild_id, user_id)
 
 
 async def has(guild_id: int, user_id: int, state: str) -> bool:

@@ -1187,6 +1187,24 @@ class PlayerState(Base):
     )
 
 
+# **The states that stop being true on their own.** Every other player
+# state is a discovery, set once and kept for ever, and `set_at` was only
+# ever a record of when. For these it is the whole mechanism.
+#
+# `shaken` is the first: a player who has fallen off the ivy cannot
+# `/take` until they eat or drink something, or until half an hour has
+# gone by. Listed here rather than in `states` because `states` imports
+# this module and not the other way round - the same reason the
+# `requires` syntax lives in `content`.
+#
+# **Lazy, with no sweep.** Nothing wakes up to clear these; a row whose
+# time has run out is simply not in force the next time anybody asks.
+# What that costs is that the row stays in the table, and that turns out
+# to be the only way to tell a state somebody ate their way out of from
+# one that ran out - see `stale_player_states`.
+EXPIRES_AFTER = {"shaken": timedelta(minutes=30)}
+
+
 class ThingState(Base):
     """What one thing has become, on one server, for everybody.
 
@@ -4838,18 +4856,102 @@ async def states_of(guild_id: int, user_id: int) -> set[str]:
     Nothing sets either in 2c - the staircase and the drawer are 2c.5 - so this
     is empty today and every lookup falls through to `default`. It is wired now
     so the text resolution is already correct when states start being set.
+
+    **The one chokepoint for expiry, and it has to be.** `states.has`
+    is `state in await in_force(...)` and `in_force` is this function, so
+    a state filtered out here is invisible to every reader - seventeen
+    call sites across `bot`, `reach` and `world`, which is every look,
+    use and reach resolution. Filtering anywhere else would mean a state
+    that had run out still refused a `/take`.
+
+    **Through `server_now`, per the single-clock rule**, so a QA clock
+    offset moves this with everything else dated. Only asked for when an
+    expiring state is actually held, which is almost never: `clock_offset`
+    is a query, and putting it on every resolution to serve one state
+    nobody holds would be a cost paid by the whole game.
     """
     session_factory = _require_session()
     async with session_factory() as session:
-        mine = await session.execute(
-            select(PlayerState.state).where(
-                PlayerState.guild_id == guild_id, PlayerState.user_id == user_id
+        mine = list(
+            await session.execute(
+                select(PlayerState.state, PlayerState.set_at).where(
+                    PlayerState.guild_id == guild_id,
+                    PlayerState.user_id == user_id,
+                )
             )
         )
         shared = await session.execute(
             select(ServerState.state).where(ServerState.guild_id == guild_id)
         )
-        return {row[0] for row in mine} | {row[0] for row in shared}
+        held = {state for state, _ in mine if state not in EXPIRES_AFTER}
+        held |= {row[0] for row in shared}
+
+        timed = [(state, at) for state, at in mine if state in EXPIRES_AFTER]
+        if timed:
+            now = await server_now(guild_id)
+            held |= {
+                state
+                for state, at in timed
+                if at is not None and now - at <= EXPIRES_AFTER[state]
+            }
+        return held
+
+
+async def stale_player_states(guild_id: int, user_id: int) -> set[str]:
+    """The expiring states this player holds whose time has run out.
+
+    The row left behind, which is the record `states_of` has just hidden.
+
+    **Why the row is kept rather than deleted on read.** A `shaken` that
+    somebody ate their way out of and a `shaken` that ran out are the
+    same absence once the row is gone, and *Walk It Off* is the award for
+    the second. So clearing by food deletes the row and expiry leaves it,
+    which makes a row older than its window the durable evidence of a
+    fall nobody snacked their way out of.
+
+    Read straight off the table because it has to be: every other
+    predicate in `triggers` asks `states.has`, and this is the one fact
+    `states.has` is built to conceal.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = list(
+            await session.execute(
+                select(PlayerState.state, PlayerState.set_at).where(
+                    PlayerState.guild_id == guild_id,
+                    PlayerState.user_id == user_id,
+                    PlayerState.state.in_(tuple(EXPIRES_AFTER)),
+                )
+            )
+        )
+    if not rows:
+        return set()
+    now = await server_now(guild_id)
+    return {
+        state
+        for state, at in rows
+        if at is not None and now - at > EXPIRES_AFTER[state]
+    }
+
+
+async def clear_player_state(guild_id: int, user_id: int, state: str) -> bool:
+    """Take a state off one player. False if they did not have the row.
+
+    Only expiring states are ever cleared - a discovery cannot be
+    undiscovered - and the delete is what separates "cleared" from "ran
+    out", so it matters that this removes the row rather than stamping it.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        result = await session.execute(
+            delete(PlayerState).where(
+                PlayerState.guild_id == guild_id,
+                PlayerState.user_id == user_id,
+                PlayerState.state == state,
+            )
+        )
+        await session.commit()
+    return bool(result.rowcount)
 
 
 # --------------------------------------------------------------------------
@@ -4880,6 +4982,16 @@ CONFIG_KEYS: dict[str, tuple[int, str]] = {
     "toys_present": (
         2,
         "How many cat toys the channel is kept topped up to.",
+    ),
+    # **Ten, not the five the design proposed**, and the difference is
+    # evidence rather than taste: the mechanic turned out not to be built
+    # at all, so nobody had ever fallen, and it was raised before it
+    # shipped on exactly that ground. Tunable because it is the one
+    # number here that wants watching against what playtesters do.
+    "ivy_fall_percent": (
+        10,
+        "The percent chance of falling when climbing down the ivy from the "
+        "bedroom window. Climbing up never falls.",
     ),
     # **Three is the beta number, not a placeholder.** It is a config
     # value because a quiet server has to be able to reach the
