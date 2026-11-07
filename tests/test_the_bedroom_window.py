@@ -438,3 +438,83 @@ async def test_opening_it_twice_reads_as_a_second_look(house):
 
     assert OPENED not in reply
     assert "lean out over the courtyard again" in reply
+
+
+# ---------------------------------------------------------------------------
+# A second puff at a sash already up, reported from a test server on
+# 7 November: the powder answered as the window, for a use nobody made
+
+
+async def test_a_second_puff_in_the_bedroom_is_just_powder_again(house):
+    """What the playtester did, in the order they did it.
+
+    They were in a bedroom whose window was already open, took the
+    powder, used it, and were told "you lean out over the courtyard
+    again" - the window's `window_open` row, which is a sentence about
+    looking out of a window they had not touched this time.
+
+    `line_from` was unconditional here, so the powder borrowed the
+    window's words on every use rather than on the open. The drawer
+    upstairs has always fallen away on a repeat; this is the window
+    doing the same.
+    """
+    await open_the_window(house)
+    await carry(house[0], world.GRAPHITE)
+
+    reply = await run(house, bot.use, "graphite powder", room="BE")
+
+    assert "gets absolutely everywhere" in reply
+    assert "lean out over the courtyard again" not in reply
+    assert OPENED not in reply
+
+
+async def test_and_the_same_when_the_powder_was_what_opened_it(house):
+    """The other route into the open state, which must read the same.
+
+    Opening with `/use graphite powder` and then puffing again is the
+    one case where both uses are the same command, so a fix keyed to
+    anything but the state would show up here.
+    """
+    await carry(house[0], world.GRAPHITE)
+    first = await run(house, bot.use, "graphite powder", room="BE")
+    await carry(house[0], world.GRAPHITE)
+
+    second = await run(house, bot.use, "graphite powder", room="BE")
+
+    assert OPENED in first
+    assert "gets absolutely everywhere" in second
+    assert OPENED not in second
+
+
+async def test_the_sash_stays_open_and_the_ivy_stays_climbable(house):
+    """The thing a repeat must not quietly undo.
+
+    `set_player_state` is idempotent and nothing here clears it, so the
+    second puff changes the line and nothing else - checked through the
+    exit rather than the state, because the exit is what a player would
+    notice.
+    """
+    await open_the_window(house)
+    await carry(house[0], world.GRAPHITE)
+    await run(house, bot.use, "graphite powder", room="BE")
+
+    assert await states.has(GUILD_A, ALICE, world.WINDOW_OPEN)
+    reply = await run(house, bot.use, "ivy", room="BE")
+    assert CLIMBED_DOWN in reply
+    assert await where_is() == "CO"
+
+
+async def test_the_first_puff_still_carries_the_discovery(house):
+    """The sentence the redirect exists for, pinned against over-reach.
+
+    Dropping `line_from` one use too early would cost the only place in
+    the game the ivy is named as a way down - so the fix is only right
+    if a first puff still reads the window's opening paragraph.
+    """
+    await carry(house[0], world.GRAPHITE)
+
+    reply = await run(house, bot.use, "graphite powder", room="BE")
+
+    assert OPENED in reply
+    assert "ivy" in reply
+    assert "gets absolutely everywhere" not in reply

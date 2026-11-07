@@ -851,8 +851,13 @@ async def after_use(
     # the window's does the work: it is the only place in the game the
     # ivy is named as a way down. Opening the window silently would
     # leave a player holding `window_open` and a route nobody told them
-    # about. The drawer upstairs still has that gap, and `line_from` is
-    # what would close it.
+    # about.
+    #
+    # Only on the open, though. `_open_the_window` drops `line_from` on
+    # a repeat, so a second puff at a sash already up reads as powder
+    # again rather than as a window nobody touched. (This comment used
+    # to end "the drawer upstairs still has that gap" - #166 closed it,
+    # and the window was the one left open.)
     if thing_id == GRAPHITE and room_id == WINDOW_ROOM:
         return await _open_the_window(
             guild_id, user_id, line_from=BEDROOM_WINDOW
@@ -1732,13 +1737,24 @@ async def _open_the_window(
     `line_from` is for the other way in. `/use graphite powder` in the
     bedroom does the same thing and reads the window's row, because the
     powder's own line never mentions the window.
+
+    **`line_from` is first open only, for the reason `text_state` is.**
+    It borrows the window's words to carry a discovery, and on a second
+    use there is no discovery left to carry: the sash is already up, the
+    ivy has already been named, and a player who puffs powder at an open
+    window is told they have leaned out "again" - an answer to a use they
+    did not make. Falling away leaves the powder saying what it says in
+    every other room, which is what using powder on nothing in
+    particular should read like. This is the shape `_unjam_the_drawer`
+    already has; the window was the asymmetric one, and a playtester in
+    a bedroom with the sash already open found it on 7 November.
     """
     first_time = await states.set_player_state(guild_id, user_id, WINDOW_OPEN)
     return Effect(
         tokens={},
         public=False,
         text_state=resolve.DEFAULT_STATE if first_time else None,
-        line_from=line_from,
+        line_from=line_from if first_time else None,
     )
 
 
