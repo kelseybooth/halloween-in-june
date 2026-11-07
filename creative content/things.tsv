@@ -72,7 +72,7 @@ cat_collar	cat collar	collar|cat collar|tag	object	BE	1	yes	yes	1										40	62
 dresser_mirror	dresser mirror	dresser mirror|mirror|tall mirror	fixture	BE	1	no	yes	0										40	63					
 laptop	laptop	laptop|computer|notebook	fixture	BE	1	no	yes	0										40	64					
 baby_monitor	baby monitor	baby monitor|monitor	fixture	NU	1	no	yes	0										45	65					
-graphite_powder	graphite powder	graphite|graphite powder|powder	object		0	yes	yes	5										40	66	yes				
+graphite_powder	graphite powder	graphite|graphite powder|powder|packet|twist	object		0	yes	yes	5										40	66	yes				
 music_box	music box	music box|musicbox|box	object	NU	1	yes	yes	1										45	67					6
 david_note	note from David	note|david's note|note from david	fixture	NU	1	no	yes	0								changing_table		45	68					
 mobile	mobile	mobile|crib mobile	fixture	NU	1	no	yes	0										45	69					
