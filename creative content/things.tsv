@@ -115,7 +115,7 @@ bedroom_window	window	window|windowsill|sill|sash window	fixture	BE	1	no	yes	0		
 cat_food_stash_sofa	stash of chicken cat food	chicken cat food|chicken|cat food|cans|stash	source	LI	1	no	yes	0						cat_food_chicken		sofa		30	107					
 cat_food_stash_hall	pack of salmon cat food	salmon cat food|salmon|cat food|cans|flat|stash|pack|pack of cat food	source	EN	1	no	yes	0						cat_food_salmon		coat_rack		10	108					
 cat_food_stash_drawer	cans of expired cat food	expired cat food|expired|cat food|cans|drawer|stash|drawer of expired cat food|drawer of cat food	source	UH	1	no	yes	0			drawer_unjammed			cat_food_expired		rolltop_desk		40	109					
-graphite_tin	tin of graphite powder	graphite|graphite powder|tin|graphite tin	source	BE	1	no	yes	0						graphite_powder				40	110					
+graphite_tin	tin of graphite powder	graphite|graphite powder|tin|graphite tin	source	BE	1	no	yes	0						graphite_powder		bedroom_window		40	110					
 cat_food_stash_bed	crate of chicken cat food	chicken cat food|chicken|cat food|cans|crate|stash	source	BE	1	no	yes	0						cat_food_chicken		bed		40	111					
 cat_food_stash_sideboard	cupboard of tuna cat food	tuna cat food|tuna|cat food|cans|cupboard|stash	source	DI	1	no	yes	0						cat_food_tuna		sideboard		25	112					
 copper_wire_coil	coil of copper wire	copper wire|wire|copper|coil	source	SE	1	no	yes	0						copper_wire				50	113					
@@ -137,7 +137,7 @@ CS	oak tree	oak tree|tree|oak|window	exit	CO	1	no	yes	0							SE			30	130
 SC	library window	window|library window|sill	exit	SE	1	no	yes	0							CO			50	131					
 HB	bedroom door	bedroom door|paneled door|bedroom|doorway|door	exit	UH	1	no	yes	0							BE			40	132					
 BH	bedroom door	bedroom door|hallway|door|out|panelled door|paneled door|doorway|hall door|hallway door	exit	BE	1	no	yes	0							UH			40	133					
-BC	ivy	ivy|vines|creeper	exit	BE	1	no	yes	0							CO			40	167					
+BC	ivy	ivy|vines|creeper	exit	BE	1	no	yes	0							CO	bedroom_window		40	167					
 HN	nursery door	nursery door|nursery|green door|sage door|doorway|door	exit	UH	1	no	yes	0							NU			40	134					
 NH	nursery door	nursery door|hallway|door|out|sage door|green door|doorway|hall door|hallway door	exit	NU	1	no	yes	0							UH			40	135					
 cake_box	cake box	cake box|white box|bakery box|caramel apple cake|cake	fixture	KI	1	no	yes	0										25	136					

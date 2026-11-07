@@ -421,6 +421,25 @@ async def test_every_exit_is_named_in_its_room_prose(db):
     This became load-bearing in 2e, which settled that discovery stays in the
     prose rather than adding an exit list. Before that the rule was implicit
     and nothing checked it.
+
+    **An exit reached through something is checked against that thing
+    instead**, which is the same two branches
+    `_check_sources_are_named_in_prose` already has: a free-standing
+    source answers to its room's description, a `contained_in` one to
+    its container's `look` or `use`. Named in one sentence or the other,
+    never neither.
+
+    The bedroom ivy is the first exit to use it, and it is what the
+    branch is for. A hidden exit is not an unfindable one - the window
+    is in the room description, and greasing the sash is what tells you
+    the ivy is there, so the route is discovered rather than listed. Put
+    in the room description it would not be hidden at all, and that is
+    the one thing it is supposed to be. Discovery still lives in prose;
+    this only says whose prose.
+
+    Still a test rather than a load error, which the source rule is -
+    worth knowing, because the two now share a rule and not its
+    severity.
     """
     parsed = content_module.load_files()
     # **Every fragment, joined.** Keyed by room and state alone, the
@@ -433,12 +452,30 @@ async def test_every_exit_is_named_in_its_room_prose(db):
         prose[key] = f"{prose.get(key, '')} {(row.text.get('look') or '').lower()}"
 
 
+    # A container's own two sentences, joined the same way, for the exits
+    # that are reached through one.
+    thing_prose: dict[tuple[str, str], str] = {}
+    for row in parsed.thing_text:
+        key = (row.entity_id, row.state)
+        thing_prose[key] = " ".join(
+            (
+                thing_prose.get(key, ""),
+                (row.text.get("look") or "").lower(),
+                (row.text.get("use") or "").lower(),
+            )
+        )
+
     unmentioned = []
     for thing in parsed.things:
         if thing.type != "exit" or not thing.room_id:
             continue
-        here = prose.get((thing.room_id, "default"), "")
+        if thing.contained_in:
+            here = thing_prose.get((thing.contained_in, "default"), "")
+            where = f"the look or use text of {thing.contained_in}"
+        else:
+            here = prose.get((thing.room_id, "default"), "")
+            where = f"the description of room {thing.room_id}"
         if not any(name.lower() in here for name in (thing.name, *thing.aliases) if name):
-            unmentioned.append(f"{thing.thing_id} ({thing.name}) in {thing.room_id}")
+            unmentioned.append(f"{thing.thing_id} ({thing.name}) is named nowhere in {where}")
 
     assert unmentioned == [], unmentioned
