@@ -963,6 +963,14 @@ def test_the_things_on_their_own_clock_are_the_ones_we_meant(shipped):
     is the only way anybody learns the cat's name, and it is spent for
     good on the player who gets to it. Six hours is how long one person
     may sit on it.
+
+    **And the music box on 7 November**, which is the same argument with
+    a second player in it. It is the condition *Accompanist* turns on:
+    the rattler earns it by shaking within a minute of somebody else's
+    music box, so a player who pockets the only one and wanders off is
+    not just holding a toy, they are holding everybody's accompaniment.
+    It was already takeable and had no clock, which is the one
+    combination this column exists to rule out.
     """
     on_a_clock = {
         t.thing_id: t.idle_drop_hours
@@ -970,7 +978,12 @@ def test_the_things_on_their_own_clock_are_the_ones_we_meant(shipped):
         if t.idle_drop_hours is not None
     }
 
-    assert on_a_clock == {"watering_can": 6, "rattle": 6, "cat_collar": 6}
+    assert on_a_clock == {
+        "watering_can": 6,
+        "rattle": 6,
+        "cat_collar": 6,
+        "music_box": 6,
+    }
 
 
 @pytest.mark.parametrize("thing_id", ["lumber", "rattle", "music_box"])
