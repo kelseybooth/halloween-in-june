@@ -91,9 +91,25 @@ def test_three_sentences_satisfy_the_check_and_only_one_is_a_route():
     `_check_unlisted_things_are_named_in_prose` asks whether anything in
     the room names the thing, by any writer but itself. Three rows do,
     and any one of them is enough - established by mutation, not by
-    reading: blanking the changing table's mentions still loads, blanking
-    David's note's as well still loads, and only with the music box's
-    `in:NU` line gone does `content.load()` raise and name the monitor.
+    reading: rename the monitor out of the changing table's two mentions
+    and content still loads, rename it out of David's note as well and it
+    still loads, and only with the music box's `in:NU` line gone does
+    `content.load()` raise and name the monitor.
+
+    **Four sentences carried it before this room paragraph was rewritten,
+    and three carry it now.** Keep the room's old clause and rename all
+    three of these, and content is clean - so the paragraph alone used to
+    be enough, and what is left holding the monitor up is a lullaby.
+
+    Two notes on how to redo this, because both ways of getting it wrong
+    look like answers. Mutate by renaming the monitor to a noun nothing
+    answers to, never by emptying the `look` cell: an empty cell fires a
+    couple of hundred unrelated problems and buries the one being tested.
+    And read the problems from `content.validate()`, never off the
+    exception - `ContentError.args[0]` is a string, so filtering it as a
+    list of problems iterates characters, matches nothing, and reports
+    none about the monitor at exactly the moment the monitor is the
+    problem.
 
     So the check is not the thin guard it first appears to be. But three
     sentences are not three routes. David's note is itself found through
