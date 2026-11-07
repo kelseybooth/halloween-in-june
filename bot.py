@@ -2682,7 +2682,24 @@ ART_FOR_ACHIEVEMENT = {
     "charcuterie_board": "black_cat_gorging",
     "bulk_buyer": "black_cat_gorging",
     "the_feline_collection": "black_cat_gorging",
-    "follow_your_nose": "black_cat_sniffing",
+    # **The smell upstairs is expired cat food, not a diaper.** This was
+    # `black_cat_sniffing` - a cat crouched over something pale with stink
+    # lines coming off it, which is a dirty diaper and is what the image
+    # was drawn for. *Follow Your Nose* is the end of the hallway chain:
+    # a bad smell, a desk, a swollen drawer, and cans of expired cat food
+    # behind it. Nothing in that is a diaper, so the picture was telling
+    # the player they had found the wrong thing.
+    #
+    # Disdain is the right half of the pair for it. The head tipped back
+    # and the pointed look away is a cat's verdict on a smell, which is
+    # what the achievement is about - and it is the one image in the set
+    # that reads as a judgement rather than an action.
+    "follow_your_nose": "black_cat_disdain",
+    # Where the sniffing went, because this is the achievement that is
+    # actually about a diaper: carrying one into the Kitchen and finding
+    # the trash can. It rides the ephemeral private line, the same as
+    # every other earner's image.
+    "bin_looking_for_you": "black_cat_sniffing",
     "catproof_the_house": "black_cat_bottle",
     # No live trigger in Release 1 - the ghost system is not built - and
     # shipped anyway so the image is there the day the ghosts land.
