@@ -958,7 +958,27 @@ async def somethings_cooking(context: Context) -> bool:
 
 
 async def gourd_job(context: Context) -> bool:
-    """Carving a pumpkin, which means holding the tools while using them."""
+    """Carving a pumpkin, from either end.
+
+    **Two routes, and they ask different questions.** `/use pumpkins`
+    has to ask whether the tools are in the bag, because the pumpkins
+    are a fixture anybody can reach empty-handed. `/use carving tools`
+    asks the room alone, and that is not a looser test: the tools are
+    an object with no room of their own, so a player who is not
+    carrying them cannot use them at all - dropping them in the
+    Courtyard and typing it there answers "You don't see a carving
+    tools here", checked rather than assumed. `carried_of` on this
+    branch would be a second question with the same answer.
+
+    The condition that matters is that **this is true exactly when the
+    carving line was shown**, which is what the room test gives: the
+    files only grant the tools a carving line on the `in:CO` row. A
+    guard that disagreed with the content by even one case would
+    re-create the bug this route was built to avoid, where a player
+    watches a pumpkin get a face and is credited with nothing.
+    """
+    if context.thing_id == CARVING_TOOLS:
+        return context.room_id == world.COURTYARD
     if context.thing_id != PUMPKINS:
         return False
     return await database.carried_of(context.user_id, context.guild_id, CARVING_TOOLS) > 0

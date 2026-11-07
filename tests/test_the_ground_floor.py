@@ -938,3 +938,159 @@ async def test_and_that_is_the_third_part_of_green_thumb(ground_floor):
     await run(ground_floor, bot.use, "pumpkins", room="CO")
 
     assert GREEN_THUMB in await earned_by()
+
+
+# --------------------------------------------------------------------------
+# Carving from the tools' end, 6 November
+# --------------------------------------------------------------------------
+#
+# The same carve, reached by the other noun. A player holding the tools
+# reaches for them by name, and until now `/use carving tools` was one
+# sentence everywhere - including standing in front of six pumpkins.
+#
+# **The whole risk here is the credit, not the sentence.** *Gourd Job*
+# reads the hook's thing id and *Green Thumb* reads a `thing_uses` row
+# for `pumpkins`, so a second route that stamped only `carving_tools`
+# would have printed the carving line and credited nothing: the same
+# shape as the gate bug above, from the opposite direction. Half of
+# these tests are about the row and the award rather than the reply,
+# because the reply was never the part that broke.
+
+THE_WANT = "These want a pumpkin."
+# Matched short of the noun on purpose: the reply bolds whatever thing it
+# names, so `**pumpkins**` is in the sentence and not in THE_CARVE.
+THE_CARVE_OPENING = "carves a crooked grin into one of the"
+
+
+async def used_both(who=ALICE) -> set:
+    return await database.which_of_these_used(
+        who, GUILD_A, ["pumpkins", "carving_tools"]
+    )
+
+
+async def holding_the_tools(ground_floor, who=ALICE):
+    """Drop 40 and the tools in the bag, which is the only way to hold them."""
+    db, *_ = ground_floor
+    await resolve.set_current_drop(GUILD_A, 40)
+    await carry(db, who, GUILD_A, "carving_tools")
+    return db
+
+
+async def test_away_from_the_courtyard_the_tools_only_want_a_pumpkin(ground_floor):
+    """The line the playtesters asked for, in the room it is true in."""
+    await holding_the_tools(ground_floor)
+
+    reply = replies(await run(ground_floor, bot.use, "carving tools", room="BE"))
+
+    assert THE_WANT in reply
+    assert THE_CARVE not in reply
+    assert "courtyard" not in reply.lower()
+
+
+async def test_and_that_is_not_a_carve(ground_floor):
+    """**The row, not the reply.**
+
+    A use away from the Courtyard still stamps the tools - it succeeded,
+    it just did nothing - and must not stamp the pumpkins. If it did,
+    *Green Thumb*'s carving part would be completable from a bedroom.
+    """
+    await holding_the_tools(ground_floor)
+
+    await run(ground_floor, bot.use, "carving tools", room="BE")
+
+    assert await used_both() == {"carving_tools"}
+    assert GOURD_JOB not in await earned_by()
+
+
+async def test_in_the_courtyard_the_tools_carve(ground_floor):
+    await holding_the_tools(ground_floor)
+
+    reply = replies(await run(ground_floor, bot.use, "carving tools", room="CO"))
+
+    assert THE_CARVE_OPENING in reply
+    assert THE_WANT not in reply
+
+
+async def test_and_the_carve_stamps_the_pumpkins_as_well_as_the_tools(ground_floor):
+    """Both rows, which is the point of the handler.
+
+    The tools' row is `_finish_use`'s and would be there anyway. The
+    pumpkins' row is the one `world._carve_with_the_tools` adds, and it
+    is the row *Green Thumb* reads.
+    """
+    await holding_the_tools(ground_floor)
+
+    await run(ground_floor, bot.use, "carving tools", room="CO")
+
+    assert await used_both() == {"pumpkins", "carving_tools"}
+
+
+async def test_and_earns_gourd_job_from_this_end_too(ground_floor):
+    """The predicate's half. The handler cannot reach this one: the hook
+    still carries `carving_tools`, so only `gourd_job` could learn it."""
+    await holding_the_tools(ground_floor)
+
+    await run(ground_floor, bot.use, "carving tools", room="CO")
+
+    assert GOURD_JOB in await earned_by()
+
+
+async def test_and_finishes_green_thumb_from_this_end(ground_floor):
+    """Watered and picked already, and the pumpkin carved the new way."""
+    db = await holding_the_tools(ground_floor)
+    await a_gardener_but_for_the_pumpkin(db)
+
+    await run(ground_floor, bot.use, "carving tools", room="CO")
+
+    assert GREEN_THUMB in await earned_by()
+
+
+async def test_the_two_routes_are_one_carve_afterwards(ground_floor):
+    """Carving both ways leaves one pumpkin row, not two records to reconcile.
+
+    `thing_uses` is one row per player per thing, so the second carve
+    counts on the same row the first one opened - which is what makes
+    "has this player carved" answerable without asking how they did it.
+    """
+    await holding_the_tools(ground_floor)
+
+    await run(ground_floor, bot.use, "carving tools", room="CO")
+    await run(ground_floor, bot.use, "pumpkins", room="CO")
+
+    assert await used_both() == {"pumpkins", "carving_tools"}
+    assert GOURD_JOB in await earned_by()
+
+
+async def test_tools_on_the_floor_cannot_carve_because_they_cannot_be_used(ground_floor):
+    """Why `gourd_job` asks the room and not the bag on this branch.
+
+    The tools are an object with no room of their own, so putting them
+    down in the Courtyard does not leave them usable there - the house
+    does not see them. That is what makes the room test on the tools
+    branch equivalent to a carried test rather than weaker than one,
+    and it is written down because the predicate's comment claims it.
+    """
+    await resolve.set_current_drop(GUILD_A, 40)
+    await database.drop_into_room(ALICE, GUILD_A, "CO", "carving_tools")
+
+    reply = replies(await run(ground_floor, bot.use, "carving tools", room="CO"))
+
+    assert THE_CARVE_OPENING not in reply
+    assert await used_both() == set()
+    assert GOURD_JOB not in await earned_by()
+
+
+async def test_the_tools_still_look_like_themselves_in_the_courtyard(ground_floor):
+    """The `in:CO` row carries only `use`; every other field falls through.
+
+    Written down because a room row that had to repeat the look text
+    would be two copies of one sentence, and the next edit would change
+    one of them.
+    """
+    await holding_the_tools(ground_floor)
+
+    here = replies(await run(ground_floor, bot.look, "carving tools", room="CO"))
+    away = replies(await run(ground_floor, bot.look, "carving tools", room="BE"))
+
+    assert "serrated scoop" in here
+    assert here == away
