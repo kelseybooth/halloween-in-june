@@ -531,10 +531,15 @@ async def _exists_anywhere(typed: str) -> bool:
         return any(needle in _names_of(name, aliases) for name, aliases in rows)
 
 
-async def missing_requirements(
-    guild_id: int, user_id: int, room_id: str, thing_ids: list[str]
-) -> list[str]:
-    """Which of these the player cannot satisfy, in the cell's own order.
+async def _to_hand(
+    guild_id: int, user_id: int, room_id: str, same_named: dict[str, set[str]]
+) -> set[str]:
+    """Every thing id this player can count as to hand, out of these candidates.
+
+    The rules a requirement is judged by, and nothing about requirements
+    themselves: `missing_requirements` decides what a cell wanted and
+    `satisfied_by` decides which one they had, and both ask this the same
+    question so the two can never disagree about what "to hand" means.
 
     **`requires` used to mean "in your bag", and now means "to hand".**
     A thing you could pick up still has to be carried - that is what the
@@ -554,12 +559,6 @@ async def missing_requirements(
     everything would mean a can opener on the kitchen floor let anybody
     feed the cat without lifting it, which `test_feeding` pins as
     deliberate.
-
-    **The order of the answer is the order of the cell**, because the
-    caller has one refusal string and has to decide which missing item
-    it is about. `can_opener|cat_bowl` names the opener first, so a
-    player in the kitchen with no bowl hears about the bowl only once
-    the opener is in their hand.
 
     A thing that is everywhere counts as present, which is the cat and
     the smart speaker today. A fixture whose `present_when` this player
@@ -582,13 +581,12 @@ async def missing_requirements(
     opens on a thing nobody meant. Three things share a name here and
     they are three of the same object.
     """
-    if not thing_ids:
-        return []
+    if not same_named:
+        return set()
     held_states = await states.in_force(guild_id, user_id)
-    same_named = await _things_sharing_a_name(thing_ids)
     # Every candidate, asked about as one set. The answer is folded back
-    # onto the cell's own ids at the end, because the caller's refusal
-    # text is keyed on what the cell asked for.
+    # onto the cell's own ids by the callers, because their refusal text
+    # is keyed on what the cell asked for.
     wanted = sorted({w for group in same_named.values() for w in group})
     session_factory = database._require_session()
     async with session_factory() as session:
@@ -644,12 +642,76 @@ async def missing_requirements(
                 )
             }
             standing = (standing - opted_in) | here
-    to_hand = carried | standing
+    return carried | standing
+
+
+async def missing_requirements(
+    guild_id: int, user_id: int, room_id: str, parts: list[str]
+) -> list[str]:
+    """Which of these parts the player cannot satisfy, in the cell's own order.
+
+    A part is one thing id, or a `/` group any one of which will do -
+    `states.alternatives` has the syntax and the reason. A group is
+    missing only when every alternative in it is, so the two bottles are
+    one requirement rather than two, and the part comes back as written
+    because the caller's refusal text is keyed on what the cell asked
+    for.
+
+    A plain id has no group in it and takes the same path, so every
+    `requires` in the files today is answered exactly as before.
+    """
+    if not parts:
+        return []
+    ids = [one for part in parts for one in states.alternatives(part)]
+    same_named = await _things_sharing_a_name(ids)
+    to_hand = await _to_hand(guild_id, user_id, room_id, same_named)
     return [
-        thing_id
-        for thing_id in thing_ids
-        if not (same_named[thing_id] & to_hand)
+        part
+        for part in parts
+        if not any(
+            same_named[one] & to_hand
+            for one in states.alternatives(part)
+            if one in same_named
+        )
     ]
+
+
+async def satisfied_by(
+    guild_id: int, user_id: int, room_id: str, part: str
+) -> str | None:
+    """The name of the thing that satisfies this part, for text that says so.
+
+    `requires` is a gate everywhere else, and for one part it is also a
+    noun: a group's whole point is that which alternative the player has
+    is not known from the cell, so a line that mentions it has to be
+    told. The bottle warmer is the first to need it.
+
+    **The first alternative to hand, in the cell's order**, which is the
+    same tie-break the refusal uses one function up - a player holding
+    both bottles is told about the one the writer listed first rather
+    than whichever the database returned first. Returns the display name
+    and not the id, because the only caller is a sentence.
+    """
+    ids = states.alternatives(part)
+    if not ids:
+        return None
+    same_named = await _things_sharing_a_name(ids)
+    to_hand = await _to_hand(guild_id, user_id, room_id, same_named)
+    for one in ids:
+        if one in same_named and (same_named[one] & to_hand):
+            return await _display_name(one)
+    return None
+
+
+async def _display_name(thing_id: str) -> str | None:
+    """A thing's own name, for a line that has to print it."""
+    session_factory = database._require_session()
+    async with session_factory() as session:
+        return await session.scalar(
+            select(database.ThingType.name).where(
+                database.ThingType.thing_id == thing_id
+            )
+        )
 
 
 async def _things_sharing_a_name(thing_ids: list[str]) -> dict[str, set[str]]:

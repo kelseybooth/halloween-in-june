@@ -3907,6 +3907,32 @@ async def _finish_use(interaction, state, found) -> None:
     )
     tokens = dict(effect.tokens) if effect else {}
 
+    # **`{to_hand}`, for a use whose own line names what let them do it.**
+    # The bottle warmer is the first: a player with a bottle is told
+    # which bottle they pulled out, and the two are called different
+    # things on purpose.
+    #
+    # **Asked only for a group**, which is also the only case where
+    # there is anything to ask. A plain `requires` names the thing in
+    # the cell, so a writer who wants it in the sentence can type it;
+    # `a/b` is the one shape where which one it was is not knowable
+    # until a player turns up holding one. So every `requires` in the
+    # files today costs nothing, and the gate above has already decided
+    # the answer is not None by the time this runs.
+    group = next(
+        (
+            part
+            for part in states.required_things(row.requires if row else None)
+            if len(states.alternatives(part)) > 1
+        ),
+        None,
+    )
+    if group is not None:
+        tokens.setdefault(
+            "to_hand",
+            await reach.satisfied_by(guild_id, user.id, state.current_room, group),
+        )
+
     # The text is resolved *after* the effect, so a use that changes a state
     # can be described by the state it produced rather than the one it left.
     held = await states.in_force(guild_id, user.id)
