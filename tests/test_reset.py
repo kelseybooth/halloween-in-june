@@ -246,7 +246,11 @@ async def test_the_content_is_still_loaded(two_games):
     # is one drop before the ladder itself, at 31. Harmless and
     # deliberate: it is what *Hive Five* already does, and a row for a
     # thing nobody can hold yet is a row nobody can earn.
-    assert len(await resolve.achievements(GUILD_A)) == 54
+    # Fifty-five on 6 November with *Name Tag*, a drop 40 row, so it
+    # arrives only for a guild the ceiling has been raised for - the
+    # same condition as *Growth Spurt* above rather than the ladder
+    # five below it.
+    assert len(await resolve.achievements(GUILD_A)) == 55
 
 
 async def test_the_art_is_kept_by_default(two_games):

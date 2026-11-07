@@ -42,7 +42,7 @@ log = logging.getLogger(__name__)
 #
 # Permanent like the other two. A server that lowers `staircase_planks`
 # after reaching it keeps it, which is correct: those planks are in.
-SERVER_STATES = {"stairs_repaired", "stairs_upper", "house_unlocked"}
+SERVER_STATES = {"stairs_repaired", "stairs_upper", "house_unlocked", "collar_on"}
 PLAYER_STATES = {
     "has_key",
     "passage_open",
@@ -98,6 +98,14 @@ STATE_PRIORITY = (
     # Consistent with the rule rather than an exception to it: the most
     # recent thing to have become true is the most specific description
     # of the world, and the sash moved after the staircase did.
+    # **Newest first, and nothing yet depends on it.** The cat is the
+    # only entity with a `collar_on` row and she has no text for any
+    # other state, so no resolution today can be decided by where this
+    # sits. It goes first because the rule says the most recent thing
+    # to have become true is the most specific description of the
+    # world, and the collar went on after the sash went up - not
+    # because anything would read differently the other way round.
+    "collar_on",
     "window_open",
     "stairs_repaired",
     "stairs_upper",

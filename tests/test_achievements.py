@@ -103,9 +103,14 @@ def test_the_shipped_file_parses():
     # climbs. The first batch since drop 20 that needed columns built
     # for it: three tallies on `users` and a row for the last set-down,
     # because neither `room_deeds` nor `thing_uses` can count a climb.
-    assert len(parsed.achievements) == 63
+    # Sixty-four on 6 November, the cat collar: the first thing in the
+    # game a player gives back rather than keeps. It is also the first
+    # row whose thing is destroyed on purpose - `content.SPENT_FOR_GOOD`
+    # exempts the collar from the rule that nothing may be consumed
+    # unless something puts it back.
+    assert len(parsed.achievements) == 64
     # The ids are a set, so this pair is also the file's duplicate check.
-    assert len(parsed.achievement_ids) == 63
+    assert len(parsed.achievement_ids) == 64
 
 
 def test_the_shipped_file_validates():
@@ -224,7 +229,7 @@ async def test_the_rows_reach_the_database(db):
 async def test_the_whole_shipped_file_loads(db):
     await content_loader.load_content(content_module.load_files())
 
-    assert await row_count(db, "achievements") == 63
+    assert await row_count(db, "achievements") == 64
 
 
 async def test_a_reload_replaces_the_rows(db):

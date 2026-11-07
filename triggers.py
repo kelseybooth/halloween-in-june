@@ -74,6 +74,7 @@ COSTUME = "costume"
 CANDY = "candy"
 PUMPKINS = "pumpkins"
 CARVING_TOOLS = "carving_tools"
+CAT_COLLAR = "cat_collar"
 HERB_GARDEN = "herb_garden"
 HERBS = "herbs"
 KEURIG = "coffee_maker"
@@ -1332,6 +1333,13 @@ def register_all() -> None:
     add("return_to_sender", "on_cross", _blocked("cat crossing"))
     add("it_takes_a_village", "on_cross", _blocked("cat crossing"))
     add("gourd_job", "on_use", gourd_job)
+    # **`_used` and not a predicate of its own.** The relationship
+    # minimum the work order opened with was dropped on 6 November, and
+    # with it the only thing this would have had to ask: the collar is
+    # `consumed_on_use`, so a successful use already means the player
+    # was carrying it and no longer is. A `carried_of` read here would
+    # ask whether the thing just spent is still in the bag.
+    add("name_tag", "on_use", _used(CAT_COLLAR))
     add("follow_your_nose", "on_use", follow_your_nose)
     add("baby_talk", "on_use", _used(BABY_MONITOR))
     add("dressed_for_the_season", "on_use", _used(COSTUME))

@@ -234,15 +234,31 @@ async def test_a_thing_with_a_refusal_and_no_success_refuses(house):
     }
 
 
-async def test_no_text_of_hers_names_her(house):
+async def test_no_text_of_hers_names_her_until_she_is_wearing_it(house):
     """The player learns her name from the collar tag in the Bedroom. A
-    `look` that opened with "Eunoia" would spend that on the first room."""
+    `look` that opened with "Eunoia" would spend that on the first room.
+
+    **`collar_on` is the exception, and it is the rule arriving rather
+    than bending.** The reason this test exists is that the tag is where
+    the name comes from; once somebody has buckled the tag onto her
+    neck, her own description is where the tag is. A player meeting her
+    after that reads the name off the collar exactly as the Bedroom
+    intended - the discovery moved with the object, it was not spent.
+
+    Every other state of hers is still held to it, which is the half
+    worth keeping: the default row is what almost every player sees for
+    almost all of the game, and it must not open with her name.
+    """
     parsed = content_module.load_files()
-    hers = [r for r in parsed.thing_text if r.entity_id == "eunoia"]
+    hers = [
+        r for r in parsed.thing_text
+        if r.entity_id == "eunoia" and r.state != "collar_on"
+    ]
+    assert hers, "the default row has gone missing"
 
     for row in hers:
         for column, value in row.text.items():
-            assert "eunoia" not in (value or "").lower(), (column, value)
+            assert "eunoia" not in (value or "").lower(), (row.state, column, value)
 
 
 async def test_her_prose_never_mentions_furniture(house):
