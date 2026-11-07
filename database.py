@@ -698,6 +698,23 @@ class InteractionLog(Base):
     drop: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # The hint rung for `hint`, the typed noun for `unknown_noun`.
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The word the player typed to reach `thing_id`, kept on every row a
+    # resolution produced - the successes included, which is the whole point.
+    #
+    # It is not `detail` for two reasons. `detail` is already spoken for at
+    # most of the sites that would want this (`holding=`, the requirement
+    # that was missing, the rung the toy reached), and a column asked about
+    # by name is worth more than a word buried in a free-text bag: *what did
+    # they type* is now one `SELECT` with no branching on `reason`.
+    #
+    # Null wherever there was no word, which is three cases and worth
+    # telling apart from each other: a system row, where the world acted on
+    # its own; a row for a thing chosen off a menu rather than typed, which
+    # is every throw into the bin; and the rows written before anything
+    # resolved, which carry the word in `detail` already. Null on every row
+    # written before 7 November 2026 as well - it means *not recorded*, and
+    # never "they typed nothing".
+    typed: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
@@ -1775,6 +1792,11 @@ _LATER_COLUMNS: list[tuple[str, str, str]] = [
     ("users", "ladder_climbs", "INTEGER NOT NULL DEFAULT 0"),
     ("users", "ladder_cat_climbs", "INTEGER NOT NULL DEFAULT 0"),
     ("users", "ladder_carry_moves", "INTEGER NOT NULL DEFAULT 0"),
+    # The word the player typed, 7 November. Nullable with no default,
+    # because the rows already in the table were written without it and
+    # there is nothing to backfill: what those players typed was never
+    # recorded anywhere.
+    ("interaction_log", "typed", "TEXT"),
 ]
 
 # `room_text.fragment` is deliberately *not* in that list. It joined the
@@ -4176,6 +4198,7 @@ async def log_interaction(
     score_after: int | None = None,
     drop: int | None = None,
     detail: str | None = None,
+    typed: str | None = None,
     now: datetime | None = None,
 ) -> int | None:
     """Write one row to `interaction_log` and return its id.
@@ -4209,6 +4232,7 @@ async def log_interaction(
                 score_after=score_after,
                 drop=drop,
                 detail=detail,
+                typed=typed,
                 created_at=stamp,
             )
             session.add(row)

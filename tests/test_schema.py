@@ -124,11 +124,15 @@ async def test_the_interaction_log_can_answer_the_questions_it_exists_for(db):
     outcome, so a refusal is not a zero-scoring success; a reason, so
     you can see what players bounce off rather than only that they do;
     the score after, so a row is self-describing; and the thing, so
-    `use` means something."""
+    `use` means something.
+
+    `typed` is the fifth, added after a bug report that could not be
+    traced: the thing says what the game decided, and only this says
+    what the player asked for."""
     assert {
         "guild_id", "user_id", "actor", "action", "thing_id", "outcome",
         "reason", "relationship_delta", "score_after", "drop", "detail",
-        "created_at",
+        "typed", "created_at",
     } <= await columns_of(db, "interaction_log")
 
 
@@ -373,6 +377,34 @@ async def test_fragment_is_not_in_the_alter_list(tmp_path):
     assert not any(
         table == "room_text" and column == "fragment"
         for table, column, _ in database._LATER_COLUMNS
+    )
+
+
+async def test_the_log_gains_the_typed_column_in_place(db):
+    """**The migration whose failure would be silent.**
+
+    `log_interaction` swallows every error it meets, by design - a
+    telemetry write that throws turns a pet the player already made
+    into an error message. So a column the live database never gained
+    is not an exception anybody sees. It is a log that simply stops
+    filling, which is the drop 2 failure in a different table, and the
+    reason that list carries a warning rather than a comment.
+
+    Checked against a database that has the table *without* the column,
+    because that is the live beta's shape and `create_all` will not
+    touch a table that already exists.
+    """
+    async with db._engine.begin() as conn:
+        await conn.execute(text("ALTER TABLE interaction_log DROP COLUMN typed"))
+    assert "typed" not in await columns_of(db, "interaction_log")
+
+    async with db._engine.begin() as conn:
+        await db._add_missing_columns(conn)
+    assert "typed" in await columns_of(db, "interaction_log")
+
+    # And a row lands in it, which is the thing that was actually broken.
+    assert await db.log_interaction(
+        GUILD_A, action=database.USE, thing_id="cat_bed", typed="bed"
     )
 
 

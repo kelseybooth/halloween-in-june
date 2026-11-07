@@ -86,6 +86,24 @@ class Found:
     # words, as "what was typed → what it matched". Carried so a caller can log
     # it and a wrong guess can be found afterwards.
     fuzzy: str | None = None
+    # The word the player actually typed, carried through a *successful*
+    # resolution so the log can keep it.
+    #
+    # **The gap this closes.** On 7 November a playtester reported being
+    # blocked by the ladder while using the cat bed. The log answered every
+    # question the report raised but one: her rows said
+    # `use / cat_bed / refused / guarded`, and the word she had actually
+    # typed was gone. `fuzzy` is set only when a typo was forgiven and
+    # `NotFound.typed` only when nothing matched, so an *exact* match - the
+    # overwhelmingly common case - recorded the word nowhere. The thing id
+    # cannot stand in for it. Half the things in the house answer to three or
+    # four names, `/go dining room` resolves to an arch, and a source and its
+    # yield are filed as one id, so the id says what the game decided and not
+    # what the player asked for. Those are the same when nothing is wrong and
+    # different in exactly the cases worth reading afterwards.
+    #
+    # Empty only on a `Found` built by hand; `find` always fills it.
+    typed: str = ""
 
     @property
     def is_source(self) -> bool:
@@ -867,6 +885,11 @@ async def find(
         yields=candidate.yields if where is Where.SOURCE else None,
         source_id=candidate.source_id if where is Where.SOURCE else None,
         fuzzy=correction,
+        # The raw word, not `needle`: normalising is this module's business
+        # and the log wants what was in the box. Stripped, because the
+        # surrounding whitespace is Discord's and not the player's, and the
+        # refusals that already record a typed word strip it too.
+        typed=typed.strip(),
     )
 
 

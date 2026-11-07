@@ -3009,7 +3009,11 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
                 ephemeral=True,
             )
             await _turned_away(
-                interaction, telemetry.USE, telemetry.ABSENT, thing_id=found.thing_id
+                interaction,
+                telemetry.USE,
+                telemetry.ABSENT,
+                thing_id=found.thing_id,
+                typed=found.typed,
             )
             return
 
@@ -3023,6 +3027,7 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
                 telemetry.USE,
                 telemetry.GUARDED,
                 thing_id=found.thing_id,
+                typed=found.typed,
             )
             return
 
@@ -3066,6 +3071,7 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
                     telemetry.USE,
                     telemetry.ARMS_FULL,
                     thing_id=found.thing_id,
+                    typed=found.typed,
                     # Which thing is in the way, because two can be
                     # now and the refusal reads the same either way.
                     detail=f"holding={holding}",
@@ -3098,6 +3104,7 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
                 telemetry.USE,
                 telemetry.ALREADY_DONE,
                 thing_id=found.thing_id,
+                typed=found.typed,
             )
             return
 
@@ -3134,6 +3141,7 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
                 telemetry.USE,
                 telemetry.REQUIRES_MISSING,
                 thing_id=found.thing_id,
+                typed=found.typed,
                 detail=row.requires,
             )
             return
@@ -3195,6 +3203,7 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
                 telemetry.USE,
                 telemetry.NOT_CARRIED,
                 thing_id=found.thing_id,
+                typed=found.typed,
             )
             return
 
@@ -3245,6 +3254,7 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
                 telemetry.USE,
                 telemetry.WRONG_STATE,
                 thing_id=found.thing_id,
+                typed=found.typed,
                 detail=(
                     await _plank_detail(guild_id, user.id)
                     if found.thing_id == world.LUMBER
@@ -3272,6 +3282,7 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
                 telemetry.USE,
                 telemetry.REQUIRES_MISSING,
                 thing_id=found.thing_id,
+                typed=found.typed,
                 detail=world.LADDER,
             )
             return
@@ -3352,7 +3363,7 @@ async def _a_feed_refusal(interaction, found, missing: list[str]) -> bool:
 
     await interaction.followup.send(line, ephemeral=True)
     await _turned_away(
-        interaction, telemetry.FEED, reason, thing_id=found.thing_id
+        interaction, telemetry.FEED, reason, thing_id=found.thing_id, typed=found.typed
     )
     return True
 
@@ -3671,6 +3682,7 @@ async def _open_the_trash(interaction, state, found) -> None:
             telemetry.USE,
             telemetry.NOT_CARRIED,
             thing_id=found.thing_id,
+            typed=found.typed,
         )
         return
     await interaction.followup.send(prompt, view=view, ephemeral=True)
@@ -3704,6 +3716,7 @@ async def _take_the_trash_out(interaction, state, found) -> None:
         user.id,
         telemetry.TRASH_EMPTIED,
         thing_id=found.thing_id,
+        typed=found.typed,
         detail=_trash_detail(run),
     )
 
@@ -3982,6 +3995,7 @@ async def _finish_use(interaction, state, found) -> None:
                 telemetry.USE,
                 telemetry.NOT_CARRIED,
                 thing_id=found.thing_id,
+                typed=found.typed,
             )
             return
 
@@ -4004,6 +4018,7 @@ async def _finish_use(interaction, state, found) -> None:
         user.id,
         telemetry.FEED if found.thing_id in world.CAT_FOOD else telemetry.USE,
         thing_id=found.thing_id,
+        typed=found.typed,
         relationship_delta=effect.delta if effect else None,
         score_after=effect.relationship if effect else None,
         detail=(
@@ -4726,7 +4741,11 @@ async def _play_with_toy(interaction, state, found) -> None:
             ephemeral=True,
         )
         await _turned_away(
-            interaction, telemetry.USE, telemetry.COOLDOWN, thing_id=found.thing_id
+            interaction,
+            telemetry.USE,
+            telemetry.COOLDOWN,
+            thing_id=found.thing_id,
+            typed=found.typed,
         )
         return
 
@@ -4773,6 +4792,7 @@ async def _play_with_toy(interaction, state, found) -> None:
             user.id,
             telemetry.USE,
             thing_id=found.thing_id,
+            typed=found.typed,
             relationship_delta=paid,
             score_after=standing,
             detail=f"play={effect.tokens.get('play')}",
@@ -4790,6 +4810,7 @@ async def _play_with_toy(interaction, state, found) -> None:
             telemetry.USE,
             reason=telemetry.RAMP,
             thing_id=found.thing_id,
+            typed=found.typed,
             detail=f"rung_after={effect.tokens.get('ramp')}",
         )
         reply = await _a_play_refusal(found.thing_id, found.name)
@@ -5391,6 +5412,7 @@ async def _use_once_a_day(interaction, state, found, row) -> None:
                 telemetry.USE,
                 telemetry.ONCE_A_DAY,
                 thing_id=found.thing_id,
+                typed=found.typed,
                 detail=(
                     await _plank_detail(guild_id, user.id)
                     if found.thing_id == world.LUMBER
@@ -5427,7 +5449,11 @@ async def _use_with_cooldown(interaction, state, found, row) -> None:
                 ephemeral=True,
             )
             await _turned_away(
-                interaction, telemetry.USE, telemetry.COOLDOWN, thing_id=found.thing_id
+                interaction,
+                telemetry.USE,
+                telemetry.COOLDOWN,
+                thing_id=found.thing_id,
+                typed=found.typed,
             )
             return
 
@@ -5454,7 +5480,11 @@ async def _no_such_doorway(interaction, found, typed: str) -> None:
         ephemeral=True,
     )
     await _turned_away(
-        interaction, telemetry.MOVE, telemetry.ABSENT, thing_id=found.thing_id
+        interaction,
+        telemetry.MOVE,
+        telemetry.ABSENT,
+        thing_id=found.thing_id,
+        typed=found.typed,
     )
 
 
@@ -5517,6 +5547,7 @@ async def _use_exit(interaction, state, found, row) -> None:
             telemetry.MOVE,
             telemetry.FULL_HANDS,
             thing_id=found.thing_id,
+            typed=found.typed,
             detail=world.LADDER,
         )
         return
@@ -5567,6 +5598,7 @@ async def _use_exit(interaction, state, found, row) -> None:
             telemetry.MOVE,
             telemetry.WRONG_STATE,
             thing_id=found.thing_id,
+            typed=found.typed,
         )
         return
 
@@ -5758,6 +5790,7 @@ async def _use_exit(interaction, state, found, row) -> None:
             user.id,
             telemetry.MOVE,
             thing_id=found.thing_id,
+            typed=found.typed,
             # **The fall rides the move's own row rather than getting
             # one of its own**, for the reason a feed is logged once: two
             # rows for one event is how a count ends up doubled, and a
@@ -6030,6 +6063,7 @@ async def go(interaction: discord.Interaction, where: str) -> None:
                 telemetry.MOVE,
                 telemetry.NOT_AN_EXIT,
                 thing_id=found.thing_id,
+                typed=found.typed,
             )
             return
 
@@ -6051,6 +6085,7 @@ async def go(interaction: discord.Interaction, where: str) -> None:
                 telemetry.MOVE,
                 telemetry.REQUIRES_MISSING,
                 thing_id=found.thing_id,
+                typed=found.typed,
                 detail=row.requires,
             )
             return
@@ -6323,7 +6358,7 @@ async def _look_at_one_thing(
     content_, embed = await _with_art(interaction.guild, text, art)
     await interaction.followup.send(content_, embed=embed, ephemeral=True)
     await telemetry.succeeded(
-        guild_id, user_id, telemetry.LOOK, thing_id=found.thing_id
+        guild_id, user_id, telemetry.LOOK, thing_id=found.thing_id, typed=found.typed
     )
 
 
@@ -6882,6 +6917,7 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
                 telemetry.TAKE,
                 reason,
                 thing_id=found.thing_id,
+                typed=found.typed,
                 detail=detail,
             )
             return
@@ -6909,6 +6945,7 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
                 telemetry.TAKE,
                 telemetry.WRONG_STATE,
                 thing_id=found.thing_id,
+                typed=found.typed,
                 detail=world.SHAKEN,
             )
             return
@@ -6931,7 +6968,11 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
                 ephemeral=True,
             )
             await _turned_away(
-                interaction, telemetry.TAKE, telemetry.ABSENT, thing_id=found.thing_id
+                interaction,
+                telemetry.TAKE,
+                telemetry.ABSENT,
+                thing_id=found.thing_id,
+                typed=found.typed,
             )
             return
 
@@ -6956,7 +6997,13 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
             guild_id,
             user.id,
             telemetry.TAKE,
+            # `taken` rather than `found.thing_id`, because a source hands
+            # over something else and what went in the bag is what the row
+            # is about. The typed word is still the player's, and the two
+            # differing is the normal case here rather than a warning sign:
+            # `/take herbs` at the herb garden is one word and two ids.
             thing_id=taken,
+            typed=found.typed,
             detail=_hand_off_detail(
                 await _moved_detail(guild_id, state.current_room, taken),
                 taken,
@@ -7287,6 +7334,7 @@ async def drop(interaction: discord.Interaction, thing: str) -> None:
                 telemetry.DROP,
                 telemetry.NOT_TAKEABLE,
                 thing_id=found.thing_id,
+                typed=found.typed,
             )
             return
 
@@ -7300,6 +7348,7 @@ async def drop(interaction: discord.Interaction, thing: str) -> None:
                 telemetry.DROP,
                 telemetry.NOT_HELD,
                 thing_id=found.thing_id,
+                typed=found.typed,
             )
             return
 
@@ -7308,6 +7357,7 @@ async def drop(interaction: discord.Interaction, thing: str) -> None:
             user.id,
             telemetry.DROP,
             thing_id=found.thing_id,
+            typed=found.typed,
             detail=await _moved_detail(
                 guild_id, state.current_room, found.thing_id
             ),

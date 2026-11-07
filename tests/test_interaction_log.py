@@ -198,6 +198,53 @@ async def test_the_word_is_stored_as_it_was_typed(server):
     assert row.detail == "Fireplaces"
 
 
+# --------------------------------------------------------------------------
+# The word on the rows that *did* resolve, which is the half that was
+# missing until 7 November
+# --------------------------------------------------------------------------
+
+
+async def test_a_use_that_worked_keeps_the_word_the_player_used(server):
+    """**The gap a bug report fell into.** Until this, the typed word
+    was recorded only when the match failed or had to be forgiven - so
+    every row that resolved cleanly, which is nearly all of them, said
+    what the game decided and not what was asked for.
+
+    `bed` and `cat_bed` are the whole argument. The id is the thing's,
+    chosen by whoever wrote the content; the word is the player's, and
+    half the things in the house answer to three or four of them."""
+    db, *_ = server
+    await run(server, bot.use, "bed")
+
+    (row,) = await rows(db, action=database.USE)
+    assert row.outcome == database.SUCCESS
+    assert row.thing_id == "cat_bed"
+    assert row.typed == "bed"
+
+
+async def test_the_resolved_word_is_kept_as_it_was_typed(server):
+    """Stripped, because the spaces are Discord's, and otherwise
+    untouched - for the same reason the unknown nouns are: normalising
+    casing away costs nothing until somebody wants it back."""
+    db, *_ = server
+    await run(server, bot.use, "  Bed  ")
+
+    (row,) = await rows(db, action=database.USE)
+    assert row.typed == "Bed"
+
+
+async def test_a_row_nobody_typed_into_has_no_word(server):
+    """Null, and it means *not recorded* rather than "typed nothing".
+    The nightly recovery is the clearest case: it acts on a whole
+    server, nobody asked it to, and there is no word to keep."""
+    db, *_ = server
+    await telemetry.recoveries([])
+    await run(server, bot.pet)
+
+    for row in await rows(db):
+        assert row.typed is None
+
+
 async def test_a_refusal_scores_nothing_and_says_so(server):
     """Zero rather than null, and told apart from a success that
     happened to score zero by the outcome beside it."""
@@ -444,3 +491,34 @@ async def test_using_a_toy_on_the_floor_is_refused_for_not_carrying_it(with_a_to
     refusals = [r for r in await rows(db, action=database.USE)
                 if r.outcome == database.REFUSED]
     assert refusals[-1].reason == database.NOT_CARRIED
+
+
+async def test_a_refusal_after_the_thing_resolved_keeps_the_word(with_a_toy):
+    """**The shape of the row that could not be traced.** A playtester
+    reported being blocked by the ladder while using the cat bed, and
+    her rows read `use / cat_bed / refused / guarded` with nothing
+    else: the reply named rungs, the row named a bed, and the word she
+    had typed to get there was gone. A refusal is where the word is
+    worth most, because a refusal is where somebody asks what the
+    player was trying to do."""
+    db, *_ = with_a_toy
+    await run(with_a_toy, bot.use, "wand")
+
+    refusals = [r for r in await rows(db, action=database.USE)
+                if r.outcome == database.REFUSED]
+    assert refusals[-1].thing_id == WAND
+    assert refusals[-1].typed == "wand"
+
+
+async def test_the_take_row_keeps_the_word_as_well(with_a_toy):
+    """`/take` writes its success row about what went into the bag,
+    which is not always the thing that was named - a source hands over
+    something else. The word stays the player's either way, so this is
+    the one row where the two are *expected* to differ."""
+    db, *_ = with_a_toy
+    await run(with_a_toy, bot.take, "wand")
+
+    (row,) = await rows(db, action=database.TAKE)
+    assert row.outcome == database.SUCCESS
+    assert row.thing_id == WAND
+    assert row.typed == "wand"
