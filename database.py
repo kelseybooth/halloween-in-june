@@ -121,6 +121,11 @@ UNLOCK = "unlock"
 # value of the column is that it distinguishes.
 NO_GAME_YET = "no_game"
 WRONG_ROOM = "wrong_room"
+# Why the join handler did *not* throw somebody out: it looked again and
+# the move had landed. The row says a removal was considered and declined,
+# so `why=join` with `outcome = refused` counts the races the second look
+# caught - which is the only way to know the guard is doing anything.
+ALREADY_ARRIVED = "already_arrived"
 AMBIGUOUS = "ambiguous"
 ABSENT = "absent"
 UNKNOWN = "unknown"
