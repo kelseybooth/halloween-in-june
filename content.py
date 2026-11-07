@@ -232,6 +232,20 @@ EVERYWHERE = "ALL"
 # thing that distinguishes them.
 ROOM_STATE_PREFIX = "in:"
 
+# Where a copy came from, for the one verb that cares. A take out of a
+# source and a take off the floor are different sentences about the same
+# thing, and until now the only axes a take could be written on were the
+# thing, a state, and the room - none of which can tell those apart.
+#
+# **One origin, not an enum of four.** A copy is carried, loose in the
+# room, in a container, or drawn from a source; the bin already has its
+# own pair of lines in code, a container take has never wanted its own
+# words, and a source take is what a thing's ordinary `take` row has
+# always described. The floor is the one that had nothing to say with.
+ORIGIN_STATE_PREFIX = "from:"
+FROM_THE_FLOOR = "from:floor"
+ORIGINS = frozenset({"floor"})
+
 # Where a thing's extra `use` lines live, if it has any. `use.<id>.N`,
 # joined to the thing's own `use` row rather than replacing it - so the
 # board books' five lines are the one in `thing_text` plus four here,
@@ -957,6 +971,7 @@ def validate(content: Content) -> list[str]:
     problems += _check_toy_refusals(content)
     problems += _check_extra_use_lines(content)
     problems += _check_room_states(content)
+    problems += _check_origin_states(content)
     return problems
 
 
@@ -1980,6 +1995,35 @@ def _check_room_states(content: Content) -> list[str]:
             f"{row.entity_id} has text for state {row.state!r}, which names no "
             "room; nothing would ever hold it, so the row would never be read "
             "and nothing would say so"
+        )
+    return problems
+
+
+def _check_origin_states(content: Content) -> list[str]:
+    """A `from:` row has to name an origin a verb actually passes.
+
+    The same silent failure `_check_room_states` catches one prefix
+    over: a row keyed on `from:flooor` is never read, reads as the
+    thing's ordinary take line, and nothing anywhere says so. Cheaper to
+    check than to find in play, and there is exactly one spelling that
+    works, so a typo is the only way to get this wrong.
+
+    Only `take` is read this way today. A `from:floor` row filling
+    `look` or `use` is not an error - it is a row that will simply never
+    be reached, which is the writers' business - but the state itself
+    has to exist.
+    """
+    problems = []
+    for row in (*content.thing_text, *content.room_text):
+        if not row.state.startswith(ORIGIN_STATE_PREFIX):
+            continue
+        named = row.state[len(ORIGIN_STATE_PREFIX) :]
+        if named in ORIGINS:
+            continue
+        problems.append(
+            f"{row.entity_id} has text for state {row.state!r}, which names no "
+            f"origin; the only one is {FROM_THE_FLOOR!r}, so the row would "
+            "never be read and nothing would say so"
         )
     return problems
 
