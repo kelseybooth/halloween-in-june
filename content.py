@@ -65,6 +65,33 @@ DROP_TRIGGERS = {"date", "event", "manual"}
 # what lets the check below refuse the other.
 NEVER = 99
 
+# `requires` is a list of parts, and a part may be a group of
+# alternatives: `|` is and, `/` is or. Both separators are spelled here
+# rather than at the two places that read them, because a syntax defined
+# twice is a syntax that drifts - and `content` is the module that can
+# hold it, since `states` imports this one and not the other way round.
+REQUIRES_AND = "|"
+REQUIRES_OR = "/"
+
+
+def requires_parts(requires: str | None) -> list[str]:
+    """The parts of a `requires` cell, as written, in the cell's order."""
+    if not requires:
+        return []
+    return [part.strip() for part in requires.split(REQUIRES_AND) if part.strip()]
+
+
+def requires_alternatives(part: str) -> list[str]:
+    """The thing ids one part will accept, any one of which satisfies it."""
+    return [one.strip() for one in part.split(REQUIRES_OR) if one.strip()]
+
+
+def requires_ids(requires: str | None) -> list[str]:
+    """Every thing id a `requires` cell mentions, its groups flattened."""
+    return [
+        one for part in requires_parts(requires) for one in requires_alternatives(part)
+    ]
+
 # A `date` drop whose date is this arrives the moment a server initializes.
 LAUNCH = "launch"
 
@@ -1006,10 +1033,12 @@ def _check_references(
                     f"thing {thing.thing_id}: {column} {target!r} is not a thing"
                 )
         # `requires` is pipe separated, like aliases, and every part has to be
-        # a real thing or the requirement can never be satisfied.
-        for part in (thing.requires or "").split("|"):
-            wanted = part.strip()
-            if wanted and wanted not in things:
+        # a real thing or the requirement can never be satisfied. A part may
+        # also be a `/` group of alternatives, and every id in one is read the
+        # same way: an unsatisfiable alternative is a dead branch of the gate,
+        # which is quieter than a dead gate and no more correct.
+        for wanted in requires_ids(thing.requires):
+            if wanted not in things:
                 problems.append(
                     f"thing {thing.thing_id}: requires {wanted!r}, which is not a thing"
                 )

@@ -107,7 +107,7 @@ library_shelves	library shelves	shelves|bookshelves|books|thrillers|bookshelf|sh
 baby_clothes	baby clothes	baby clothes|clothes|laundry|railing	fixture	UH	1	no	yes	0										40	98					
 bed	unmade bed	bed|unmade bed|pillow|pillows|duvet	fixture	BE	1	no	yes	0										40	99					
 dresser	dresser	dresser|chest of drawers|drawers	fixture	BE	1	no	yes	0										40	100					
-bottle_warmer	bottle warmer	bottle warmer|warmer	fixture	BE	1	no	yes	0										40	101					
+bottle_warmer	bottle warmer	bottle warmer|warmer	fixture	BE	1	no	yes	0		used_baby_bottle/sanitized_baby_bottle								40	101					
 nightstand	nightstand	nightstand|bedside table|night stand	fixture	BE	1	no	yes	0										40	102					
 changing_table	changing table	changing table|change table|table	fixture	NU	1	no	yes	0										40	103					
 nursery_shelf	shelf	shelf|shelves|nursery shelf	fixture	NU	1	no	yes	0										40	104					

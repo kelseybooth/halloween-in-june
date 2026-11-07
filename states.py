@@ -125,15 +125,36 @@ def in_priority_order(
 
 
 def required_things(requires: str | None) -> list[str]:
-    """The thing ids a `requires` cell names, pipe separated as aliases are.
+    """The parts a `requires` cell names, pipe separated as aliases are.
 
     `requires` is not a state and does not produce one. It gates `/use` in
     `bot`: an unmet requirement refuses the whole use and replies with the
     thing's `use_fail`, so there is no text keyed on it and nothing recorded.
+
+    A part is usually one thing id and may be an `any of` group - see
+    `alternatives`. The parts are returned as written, because the
+    caller's refusal text is keyed on what the cell asked for and the
+    cell's own order decides which missing part it is about.
     """
-    if not requires:
-        return []
-    return [part.strip() for part in requires.split("|") if part.strip()]
+    return content.requires_parts(requires)
+
+
+def alternatives(part: str) -> list[str]:
+    """The thing ids one `requires` part will accept, any one of which does.
+
+    `|` is and, `/` is or: `can_opener|cat_bowl` wants both, and
+    `used_baby_bottle/sanitized_baby_bottle` wants either. One part, so
+    the group is still one requirement for ordering and for the refusal.
+
+    **The split exists because a name cannot do it.** A requirement is
+    already met by any thing of the same name, which is how three cat
+    bowls answer one `cat_bowl` - but the two bottles are called
+    different things on purpose, a used one and a sanitized one, and a
+    gate that wanted "a bottle, either kind" had no way to say so.
+    Renaming them to match would have been a lie about the objects to
+    get a lie past the gate.
+    """
+    return content.requires_alternatives(part)
 
 
 def passes(gate: str | None, held: set[str]) -> bool:
