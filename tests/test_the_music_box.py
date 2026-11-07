@@ -35,7 +35,10 @@ import states
 import world
 
 
-THIS_DROP = 40
+# The Nursery was split out of drop 40 on 7 November, and the box is in
+# it, so this file moved with the room rather than staying with the
+# Hallway and the Bedroom.
+THIS_DROP = 45
 
 # Quoted off the content files. Each phrase appears in one row and no other.
 A_LULLABY = "a thin, slow lullaby drifts through the room"
