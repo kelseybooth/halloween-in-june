@@ -86,7 +86,17 @@ async def drop_of(guild_id: int) -> int | None:
 
 
 async def record(guild_id: int, *, action: str, **fields) -> int | None:
-    """One row, with the drop filled in. Returns its id, or None."""
+    """One row, with the drop filled in. Returns its id, or None.
+
+    `**fields` are `log_interaction`'s, unchanged. The one worth naming
+    here is `typed`: a row about a thing a player named should carry the
+    word they used for it, which is `found.typed` and is passed by hand
+    at every site, because this layer cannot see it. The verbs that have
+    a `reach.Found` in scope all do; anything that logs about a thing
+    nobody typed leaves it alone, which is right rather than an
+    oversight - a restock, the nightly recovery, and a throw into the
+    bin, where the thing was picked off a menu.
+    """
     if "drop" not in fields:
         fields["drop"] = await drop_of(guild_id)
     return await database.log_interaction(guild_id, action=action, **fields)
