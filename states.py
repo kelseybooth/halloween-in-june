@@ -48,6 +48,12 @@ PLAYER_STATES = {
     "passage_open",
     "library_found",
     "drawer_unjammed",
+    # The bedroom sash, once a player has rubbed graphite into the
+    # runners. Per player and set once, the same shape as the drawer,
+    # and for a sharper reason: the sentence that opens the window is
+    # the only place the ivy outside it is named, so a window opened
+    # for everybody would be a route nobody was told about.
+    "window_open",
     # Two flags that gate a message rather than a door. The cat's reaction
     # to a dirty diaper is only funny the first time; both are the same
     # shape as `drawer_unjammed` - set once, never cleared - which is why
@@ -80,6 +86,19 @@ PLAYER_STATES = {
 # Unknown states sort last, alphabetically, so a state added here
 # without a thought about priority still resolves the same way twice.
 STATE_PRIORITY = (
+    # **First, over `stairs_repaired`, and the ivy is why.** A player who
+    # has opened the bedroom window holds both, and the courtyard ivy is
+    # written for each: `stairs_repaired` says it climbs to a shut sash
+    # with no catch on the outside, `window_open` says they haul
+    # themselves in over the sill. Ordered the other way round, opening
+    # the window would change nothing a player could see from below -
+    # they would climb up to the window they had just opened and be told
+    # it was shut.
+    #
+    # Consistent with the rule rather than an exception to it: the most
+    # recent thing to have become true is the most specific description
+    # of the world, and the sash moved after the staircase did.
+    "window_open",
     "stairs_repaired",
     "stairs_upper",
     "library_found",
