@@ -71,13 +71,13 @@ welcome_mat	doormat	welcome mat|doormat|mat	fixture	BE	1	no	yes	0								hallowe
 cat_collar	cat collar	collar|cat collar|tag	object	BE	1	yes	yes	1										40	62	yes				6
 dresser_mirror	dresser mirror	dresser mirror|mirror|tall mirror	fixture	BE	1	no	yes	0										40	63					
 laptop	laptop	laptop|computer|notebook	fixture	BE	1	no	yes	0										40	64					
-baby_monitor	baby monitor	baby monitor|monitor	fixture	NU	1	no	yes	0										40	65					
+baby_monitor	baby monitor	baby monitor|monitor	fixture	NU	1	no	yes	0										45	65					
 graphite_powder	graphite powder	graphite|graphite powder|powder	object		0	yes	yes	5										40	66	yes				
-music_box	music box	music box|musicbox|box	object	NU	1	yes	yes	1										40	67					6
-david_note	note from David	note|david's note|note from david	fixture	NU	1	no	yes	0								changing_table		40	68					
-mobile	mobile	mobile|crib mobile	fixture	NU	1	no	yes	0										40	69					
-pacifier	pacifier	pacifier|dummy|soother	fixture	NU	1	no	yes	0										40	70					
-crib	crib	crib|cot|bed	fixture	NU	1	no	yes	0										40	71					
+music_box	music box	music box|musicbox|box	object	NU	1	yes	yes	1										45	67					6
+david_note	note from David	note|david's note|note from david	fixture	NU	1	no	yes	0								changing_table		45	68					
+mobile	mobile	mobile|crib mobile	fixture	NU	1	no	yes	0										45	69					
+pacifier	pacifier	pacifier|dummy|soother	fixture	NU	1	no	yes	0										45	70					
+crib	crib	crib|cot|bed	fixture	NU	1	no	yes	0										45	71					
 coat_rack	coat tree	coat tree|tree|coat stand|coat rack|rack|coats|jackets	fixture	EN	1	no	yes	0										10	72					
 front_door	front door	front door|door|entrance|outside|out|road	exit	EN	1	no	yes	0							CH			10	73					
 ceiling	ceiling	ceiling|water stain|stain	fixture	EN	1	no	yes	0										10	74					
@@ -109,8 +109,8 @@ bed	unmade bed	bed|unmade bed|pillow|pillows|duvet	fixture	BE	1	no	yes	0								
 dresser	dresser	dresser|chest of drawers|drawers	fixture	BE	1	no	yes	0										40	100					
 bottle_warmer	bottle warmer	bottle warmer|warmer	fixture	BE	1	no	yes	0		used_baby_bottle/sanitized_baby_bottle								40	101					
 nightstand	nightstand	nightstand|bedside table|night stand	fixture	BE	1	no	yes	0										40	102					
-changing_table	changing table	changing table|change table|table	fixture	NU	1	no	yes	0										40	103					
-nursery_shelf	shelf	shelf|shelves|nursery shelf	fixture	NU	1	no	yes	0										40	104					
+changing_table	changing table	changing table|change table|table	fixture	NU	1	no	yes	0										45	103					
+nursery_shelf	shelf	shelf|shelves|nursery shelf	fixture	NU	1	no	yes	0										45	104					
 bedroom_window	window	window|windowsill|sill|sash window	fixture	BE	1	no	yes	0		graphite_powder								40	105					
 cat_food_stash_sofa	stash of chicken cat food	chicken cat food|chicken|cat food|cans|stash	source	LI	1	no	yes	0						cat_food_chicken		sofa		30	107					
 cat_food_stash_hall	pack of salmon cat food	salmon cat food|salmon|cat food|cans|flat|stash|pack|pack of cat food	source	EN	1	no	yes	0						cat_food_salmon		coat_rack		10	108					
@@ -138,8 +138,8 @@ SC	library window	window|library window|sill	exit	SE	1	no	yes	0							CO			50	13
 HB	bedroom door	bedroom door|paneled door|bedroom|doorway|door	exit	UH	1	no	yes	0							BE			40	132					
 BH	bedroom door	bedroom door|hallway|door|out|panelled door|paneled door|doorway|hall door|hallway door	exit	BE	1	no	yes	0							UH			40	133					
 BC	ivy	ivy|vines|creeper	exit	BE	1	no	yes	0							CO	bedroom_window		40	167					
-HN	nursery door	nursery door|nursery|green door|sage door|doorway|door	exit	UH	1	no	yes	0							NU			40	134					
-NH	nursery door	nursery door|hallway|door|out|sage door|green door|doorway|hall door|hallway door	exit	NU	1	no	yes	0							UH			40	135					
+HN	nursery door	nursery door|nursery|green door|sage door|doorway|door	exit	UH	1	no	yes	0							NU			45	134					
+NH	nursery door	nursery door|hallway|door|out|sage door|green door|doorway|hall door|hallway door	exit	NU	1	no	yes	0							UH			45	135					
 cake_box	cake box	cake box|white box|bakery box|caramel apple cake|cake	fixture	KI	1	no	yes	0										25	136					
 cat_food_stash_gourmet	cans of gourmet cat food	gourmet cans|two cans|gourmet wet food|gourmet wet cat food|gourmet food|gourmet|gourmet cat food|good cat food|fancy cat food|gold cans	source	KI	1	no	yes	0						cat_food_gourmet		cake_box		25	137					
 cat_bed	cat bed	cat bed|bed|cushion|cat cushion|cooler|icebox|egg cooler|catbed	fixture	CH	1	no	no											1	138		yes			

@@ -562,10 +562,18 @@ async def test_the_ceiling_reaches_the_upstairs(started):
     50 with nothing failing - which is the exact drift that shipped
     twice before.
 
-    So this names four things that exist only in drop 40, one per
-    room it opens plus the bowl that makes the Hallway worth standing
-    in. Lowering the ceiling back below 40 fails here, and so does a
+    So this names things that exist only in drop 40: the Hallway, the
+    Bedroom, and the bowl that makes the Hallway worth standing in.
+    Lowering the ceiling back below 40 fails here, and so does a
     release that raises it to 40 before the rooms are in the files.
+
+    **The Nursery is no longer one of them.** It was split out into
+    drop 45 on 7 November, so the music box and the baby monitor stopped
+    being witnesses for 40 and became the witnesses for 45 -
+    `test_the_nursery_arrives_with_the_ceiling` below, which is the same
+    guard one drop along. The window took the Bedroom's place here
+    because the Bedroom had no witness of its own before: the docstring
+    claimed one per room and named two of the Nursery's.
 
     **The Hallway's witness used to be the crowbar**, which moved to
     drop 99 on 5 November and stopped proving anything about 40. The
@@ -584,8 +592,89 @@ async def test_the_ceiling_reaches_the_upstairs(started):
     visible = await resolve.visible_thing_ids(GUILD_A)
 
     assert {
-        "oak_wardrobe", "music_box", "baby_monitor", "cat_bowl_hallway",
+        "oak_wardrobe", "bedroom_window", "cat_bowl_hallway",
     } <= visible
+
+
+async def test_the_nursery_arrives_with_the_ceiling(started):
+    """Drop 45 is the Nursery, and the ceiling is the only gate on it.
+
+    **Written as one invariant rather than two literals**, because the
+    alternative is a test somebody has to remember to invert. Pinning
+    "the Nursery is absent" would fail the day the ceiling moves, as a
+    chore rather than as a finding; pinning "the Nursery is present"
+    cannot be written until it does. So this asks the question the
+    ceiling is for - is the content there exactly when a server can
+    reach it - and it answers correctly on either side of the release.
+
+    It catches both directions. Raise the ceiling to 45 before the
+    Nursery's rows are in the files and the first branch fails. Leave a
+    nursery row at drop 40 while the ceiling is still 40 and the second
+    one does, which is the leak the split could actually make: ten
+    things and eleven text rows moved by hand, and a single one left
+    behind would be a room half-open.
+
+    `HN` is in the set on purpose, and the validator covers less of
+    this than it first appears to. Leave the door at 40 and move its
+    text, and `_check_nothing_arrives_before_its_prose` names it - that
+    check was written for this exact mistake, because splitting a
+    release is what separates a thing from its sentence. Leave *both*
+    at 40 and the files are internally consistent and validation
+    reports nothing at all; walked both ways before writing this. A
+    door standing open on a room with no description is visible only
+    from here.
+    """
+    await start(started)
+    for _ in range(resolve.LAST_PLAYABLE_DROP):
+        await advance(started)
+
+    visible = await resolve.visible_thing_ids(GUILD_A)
+
+    nursery = {"music_box", "baby_monitor", "crib", "HN"}
+    if resolve.LAST_PLAYABLE_DROP >= 45:
+        assert nursery <= visible
+    else:
+        assert not nursery & visible
+
+
+async def test_the_hallway_does_not_promise_a_door_it_cannot_open(started):
+    """The one cell of the split that is a writer's decision, pinned.
+
+    The Upstairs Hallway's paragraph named both doorways - *"a hum of
+    white noise suggests the other doorway is a nursery"* - and at drop
+    40 that is now a sentence about a room nobody can enter. Prose that
+    names what the world does not have is the same fault as a world
+    that changes without the prose saying so, and the playtesters have
+    already caught the second one.
+
+    So the fragment is written twice. `_best` takes the highest
+    *arrived* `since_drop` within a state, which is what makes the drop
+    45 row supersede the drop 40 row the day the Nursery opens - no
+    deploy, no edit, and the shorter paragraph stops being read.
+
+    **No content check can see this.** `marked_in_room` and the prose
+    checks ask whether a thing is named in *any* row for its room, not
+    in the row a player on drop 40 would actually read, so they are
+    satisfied by the drop 45 copy alone. This is the only thing standing
+    between the two paragraphs and a hallway that offers a door into
+    nothing.
+    """
+    await start(started)
+
+    await resolve.set_current_drop(GUILD_A, 40)
+    before = await resolve.room_look(GUILD_A, "UH")
+
+    await resolve.set_current_drop(GUILD_A, 45)
+    after = await resolve.room_look(GUILD_A, "UH")
+
+    assert "nursery" not in before.lower()
+    assert "single door" in before
+    assert "nursery" in after.lower()
+    assert "two doors" in after
+    # Same room, not two rooms: everything the Hallway is about survives
+    # the shorter version, which is the half a rewrite gets wrong.
+    for kept in ("roll-top desk", "oak wardrobe", "bedroom", "cat bowl", "bad smell"):
+        assert kept in before, kept
 
 
 async def test_advancing_past_the_built_drops_still_refuses(started):

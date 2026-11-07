@@ -144,7 +144,11 @@ def test_the_shipped_content_parses():
     # Ten since 31 October: the ground floor arrives in two halves, and
     # 25 sits below the ceiling rather than above it, which is why
     # nothing else in the suite noticed.
-    assert len(c.drops) == 11     # 0 to 3 built; 10 to 50 named ahead of their content, 31 added for the ladder
+    # Twelve since 7 November: the Nursery was split out of drop 40 into
+    # 45, so the upstairs opens in two halves the way the ground floor
+    # did. Splitting a release is a renumber, not a new mechanism - the
+    # pointer is still one integer and arrival is still `<=`.
+    assert len(c.drops) == 12     # 0 to 3 built; 10 to 50 named ahead of their content, 31 for the ladder and 45 for the Nursery
     assert len(c.restocks) == 4  # the toy channel row joined them
 
 
