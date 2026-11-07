@@ -161,6 +161,50 @@ async def open_the_window(house, who=ALICE) -> str:
 
 
 # ---------------------------------------------------------------------------
+# The words the prose uses are the words the parser takes
+
+
+@pytest.mark.parametrize("word", ["graphite", "powder", "packet", "twist"])
+async def test_the_powder_answers_to_every_word_the_house_calls_it(house, word):
+    """Three names for one object, and now all three are typable.
+
+    The copy calls it three things. The item list and the achievement
+    call it graphite powder; its own `look` calls it "A twist of paper";
+    and its `use` line, as of Kelsey's 7 November pass, says "You
+    untwist the packet". Only the first was a word the parser accepted,
+    so a player who read either of the others and typed it back was told
+    the house had no such thing - the worst shape of refusal there is,
+    because the game chose the word.
+
+    Four aliases rather than two assertions, because the point is the
+    set: whichever noun a future copy pass reaches for, the test that
+    fails should be the one that says the parser has not heard of it.
+
+    Safe to widen here and nowhere else. `_check_aliases` forbids two
+    things in one room answering to the same word, and the powder is
+    roomless - it exists only in a bag - so it is excluded from that
+    check entirely, and nothing else in the files answers to "packet" or
+    "twist". Checked both before adding them.
+
+    **Used in the Kitchen on purpose.** The two rooms the powder is
+    actually for both answer with somebody else's sentence on a first
+    use - the Bedroom borrows the window's line and the Hallway the
+    desk's, which is what `line_from` is for and what #170 fixed the
+    repeat of. Either would have tested the handler rather than the
+    parser, and the first draft of this test asserted the powder's line
+    in the Hallway and read back the drawer's. The Kitchen has no
+    handler, so what comes back is the powder's own row and nothing
+    else.
+    """
+    await carry(house[0], world.GRAPHITE)
+
+    reply = await run(house, bot.use, word, room="KI")
+
+    assert "gets absolutely everywhere" in reply
+    assert "untwist the packet" in reply
+
+
+# ---------------------------------------------------------------------------
 # Point 1: using the window sets the state
 
 

@@ -83,17 +83,27 @@ NO_GAME = None
 # drawer unjams, the five stashes yield and drop 40's public
 # achievements have their triggers - 40 is built, not promised.
 #
-# **Drop 45 is the Nursery, and this number is the only thing holding
-# it.** It was split out of 40 on 7 November so that beta reads two
-# rooms before the third, which is the reasoning that held the ladder
-# back out of drop 30. Nothing else gates it: `HN` waits for 45 like
-# the room does, so there is no door to try until this moves. The two
-# achievements that need what is in there went with it - `baby_talk`
-# wants the monitor and `accompanist` wants the music box - which is
-# why 40 has five public achievements now rather than six. Both
-# triggers stay registered and simply never fire, because the things
-# they ask about do not exist yet.
-LAST_PLAYABLE_DROP = 40
+# **Drop 45 is the Nursery, and this number is what held it.** It was
+# split out of 40 on 7 November so that beta could read two rooms
+# before the third, which is the reasoning that held the ladder back
+# out of drop 30. Nothing else gated it: `HN` waits for 45 like the
+# room does, so there was no door to try until this moved.
+#
+# Checked before this moved, by walking a server to 45 rather than by
+# reading the files: the Nursery's paragraph resolves, the door works
+# in both directions, every thing in the room is visible, and both of
+# the achievements that came across with it have their triggers -
+# `baby_talk` on the monitor, `accompanist` on the music box. 40 keeps
+# five public achievements and 45 carries the sixth. 45 is built, not
+# promised.
+#
+# **What a server reads on arrival is the drop 45 Hallway**, the one
+# that names both doorways again, because `_best` takes the highest
+# *arrived* `since_drop` within a state. The shorter drop 40 paragraph
+# stays in the files, and is still what a server paused at 40 reads -
+# which is the whole reason the fragment was written twice rather than
+# edited in place.
+LAST_PLAYABLE_DROP = 45
 
 
 class UnknownDrop(Exception):

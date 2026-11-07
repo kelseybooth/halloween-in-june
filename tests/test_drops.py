@@ -637,6 +637,46 @@ async def test_the_nursery_arrives_with_the_ceiling(started):
         assert not nursery & visible
 
 
+async def test_a_server_at_the_ceiling_can_walk_into_the_nursery_and_out(started):
+    """What "built, not promised" means, asked of a server rather than the files.
+
+    `test_the_nursery_arrives_with_the_ceiling` asks whether the
+    Nursery's *things* are visible, which is the leak a renumber makes.
+    This asks the other half: that the room a player arrives in has a
+    paragraph to read and a door that works in both directions. A room
+    can pass the first and fail this one - an exit is a thing like any
+    other, and `HN` and `NH` are two separate rows, so a half-moved door
+    is a Nursery you can enter and not leave.
+
+    **And nothing else would say so.** Park `NH` at 99 and the content
+    files validate with zero problems: checked, not assumed.
+    `_check_rooms_are_reachable_at_every_drop` asks whether an arrived
+    room can be *reached* through the exits that have arrived, and NU
+    still can, through `HN`. No check asks whether a player can get
+    back out. A room with a door in and no door out is a content state
+    the validator considers correct.
+
+    Walked to the ceiling rather than set to 45 directly, because the
+    claim in `resolve.py` is about where `/advance-game` can actually
+    take a server, and a pointer written straight into config would
+    prove nothing about the ceiling.
+    """
+    await start(started)
+    for _ in range(resolve.LAST_PLAYABLE_DROP):
+        await advance(started)
+
+    assert "NU" in await resolve.arrived_rooms(GUILD_A)
+    assert await resolve.room_look(GUILD_A, "NU") is not None
+
+    out_of_the_hallway = {e.thing_id: e.destination
+                          for e in await resolve.exits_from(GUILD_A, "UH")}
+    out_of_the_nursery = {e.thing_id: e.destination
+                          for e in await resolve.exits_from(GUILD_A, "NU")}
+
+    assert out_of_the_hallway.get("HN") == "NU"
+    assert out_of_the_nursery.get("NH") == "UH"
+
+
 async def test_the_hallway_does_not_promise_a_door_it_cannot_open(started):
     """The one cell of the split that is a writer's decision, pinned.
 
