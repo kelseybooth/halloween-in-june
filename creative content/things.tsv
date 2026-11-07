@@ -111,6 +111,7 @@ bottle_warmer	bottle warmer	bottle warmer|warmer	fixture	BE	1	no	yes	0		used_bab
 nightstand	nightstand	nightstand|bedside table|night stand	fixture	BE	1	no	yes	0										40	102					
 changing_table	changing table	changing table|change table|table	fixture	NU	1	no	yes	0										45	103					
 nursery_shelf	shelf	shelf|shelves|nursery shelf	fixture	NU	1	no	yes	0										45	104					
+photograph	photograph	photograph|photo	fixture	NU	1	no	yes	0										45	106					
 bedroom_window	window	window|windowsill|sill|sash window	fixture	BE	1	no	yes	0		graphite_powder								40	105					
 cat_food_stash_sofa	stash of chicken cat food	chicken cat food|chicken|cat food|cans|stash	source	LI	1	no	yes	0						cat_food_chicken		sofa		30	107					
 cat_food_stash_hall	pack of salmon cat food	salmon cat food|salmon|cat food|cans|flat|stash|pack|pack of cat food	source	EN	1	no	yes	0						cat_food_salmon		coat_rack		10	108					

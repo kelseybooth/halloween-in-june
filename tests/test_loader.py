@@ -516,7 +516,7 @@ async def test_the_shipped_content_loads(two_servers):
     # ...the house across the road, her bowl, and the key to its door,
     # the ladder's four, and the ground floor's net one fewer: the back
     # stairs out, the bedroom's ivy in.
-    assert report.content_rows["thing_types"] == 168
+    assert report.content_rows["thing_types"] == 169  # the nursery photograph, 7 November
     # 45 joined them on 7 November, when the Nursery was split out of
     # drop 40. This is the second place the drop count is pinned - the
     # first is test_content.py, which counts what the parser read; this
