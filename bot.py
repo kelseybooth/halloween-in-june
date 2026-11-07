@@ -2943,7 +2943,9 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
             )
             return
 
-        swatted = await _the_cat_has_it(guild_id, "use_fail", found.name)
+        swatted = await _the_cat_has_it(
+            guild_id, found.thing_id, "use_fail", found.name
+        )
         if swatted:
             await interaction.followup.send(swatted, ephemeral=True)
             await _turned_away(
@@ -3727,7 +3729,9 @@ async def _hands_full(guild_id: int, user_id: int) -> tuple[str, str] | None:
     return None
 
 
-async def _the_cat_has_it(guild_id: int, column: str, name: str) -> str | None:
+async def _the_cat_has_it(
+    guild_id: int, thing_id: str, column: str, name: str
+) -> str | None:
     """The swat, for the five minutes after she gets to the top first.
 
     Read by id and state together rather than through the state
@@ -3739,7 +3743,20 @@ async def _the_cat_has_it(guild_id: int, column: str, name: str) -> str | None:
     `column` because the two rows say different things. Reaching for
     the ladder gets a paw on the back of the hand; putting a foot on
     the bottom rung gets one on the top of the head.
+
+    **`thing_id` first, because the lock is on one object and not on
+    the server.** Without it this answered for whatever was reached
+    for: the lock lives in `thing_locks` under the ladder's id, but
+    nothing compared that id to the thing in hand, so for five minutes
+    after a cat climb every `/use` and `/take` in the house came back
+    as a paw on the bottom rung. It shipped reading correctly, because
+    both call sites stand where only the ladder seemed reachable and
+    the two written rows name no thing - `{name}` is never filled, so
+    the line about rungs arrives verbatim over a cat bed in another
+    room.
     """
+    if thing_id != world.LADDER:
+        return None
     if not await world.ladder_is_guarded(guild_id):
         return None
     written = await resolve.thing_text_in_state(
@@ -7091,7 +7108,9 @@ async def _cannot_take(
     # hit both - the ladder she is guarding is standing in a room, so
     # nobody is carrying it - and the order is written down anyway, for
     # the day something else gets a lock.
-    swatted = await _the_cat_has_it(guild_id, "take_fail", found.name)
+    swatted = await _the_cat_has_it(
+        guild_id, found.thing_id, "take_fail", found.name
+    )
     if swatted:
         return swatted, telemetry.GUARDED, None
 
