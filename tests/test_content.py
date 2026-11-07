@@ -66,7 +66,10 @@ def test_the_shipped_content_parses():
     # of salmon, so no flavour was lost - salmon comes from the Entryway
     # alone now. In: `pasta`, parked at 99, which exists so the pasta pot
     # can require something that is not there yet.
-    assert len(c.things) == 168
+    # 169 since 7 November: the photograph on the nursery shelf became a
+    # fixture of its own rather than an alias on the shelf, so that taking
+    # it is refused in its own words instead of the shelf's.
+    assert len(c.things) == 169
     # Five out with `/enter`: its three lines, `#welcome`, and the
     # tutorial, which it was the only thing that posted. Five in: the two
     # wrong-place replies, `/go`'s own refusal, and the two hints that

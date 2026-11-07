@@ -248,6 +248,69 @@ async def look_at(house, typed) -> str:
     return "\n".join(text for text, _ in interaction.sent if text)
 
 
+ON_THE_BACK = "D, E & M, 2026"
+TURNED_OVER = "Two people and a baby, squinting"
+PUT_IT_BACK = "exactly the way you found it"
+SCREWED_TO_THE_WALL = "screwed to the wall"
+
+
+async def typed_in_the_nursery(house, command, typed) -> str:
+    db, guild, halloween, rooms = house
+    await db.update_current_room(ALICE, GUILD_A, "NU")
+    thread = next(t for t in halloween.threads if t.name == rooms["NU"])
+    interaction = FakeInteraction(ALICE, GUILD_A, guild=guild, channel=thread)
+    await command.callback(interaction, typed)
+    return "\n".join(text for text, _ in interaction.sent if text)
+
+
+@pytest.mark.parametrize("typed", ["photograph", "photo"])
+async def test_the_photograph_is_its_own_fixture_and_answers_to_both(house, typed):
+    """Why it is a row and not an alias on the shelf, which was the first try.
+
+    As an alias, every verb landed on the shelf - and `/take photograph`
+    answered "It's screwed to the wall, and deliberately high up." about
+    a photo lying loose on it. The refusal was the shelf's and it was
+    nonsense about the photograph, which is the whole reason this is a
+    fixture of its own: a row can refuse in its own words.
+
+    So the take line is the point of the exercise, and it is in
+    `take_fail` rather than `take`. A fixture is `takeable = no`, so
+    `take` would never render; `take_fail` is the only column a player
+    can ever reach, and it now overrides the shelf's.
+    """
+    assert ON_THE_BACK in await typed_in_the_nursery(house, bot.look, typed)
+
+
+async def test_taking_it_is_refused_in_the_photograph_s_own_words(house):
+    """The refusal that made this a fixture. Both halves asserted: the
+    photograph's line arrives, and the shelf's does not come with it."""
+    reply = await typed_in_the_nursery(house, bot.take, "photograph")
+
+    assert PUT_IT_BACK in reply
+    assert SCREWED_TO_THE_WALL not in reply
+
+
+async def test_using_it_turns_it_over_in_the_shelf_s_words(house):
+    """The one line the two rows share, as asked.
+
+    Nothing in the TSVs can point one row's column at another's -
+    `line_from` is an engine mechanism and `/use` on the shelf passes
+    none - so sharing here means the same sentence in both cells. Pinned
+    from both sides, because the next person to edit one of them will
+    not know the other exists.
+    """
+    assert TURNED_OVER in await typed_in_the_nursery(house, bot.use, "photograph")
+    assert TURNED_OVER in await typed_in_the_nursery(house, bot.use, "shelf")
+
+
+async def test_the_shelf_still_answers_to_its_own_names(house):
+    """The photograph did not take the shelf's words with it."""
+    for typed in ("shelf", "shelves", "nursery shelf"):
+        reply = await typed_in_the_nursery(house, bot.look, typed)
+        assert "painted shelf at adult height" in reply, typed
+        assert ON_THE_BACK not in reply, typed
+
+
 @pytest.mark.parametrize(
     "typed",
     ["note in blocky capitals", "note in capitals", "capitals", "note", "david's note"],
