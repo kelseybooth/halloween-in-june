@@ -22,8 +22,20 @@ editing a different cell.
 """
 
 import re
+from types import SimpleNamespace
 
+import pytest
+
+from conftest import ALICE, GUILD_A
+from fake_discord import FakeChannel, FakeGuild, FakeInteraction, FakeMember
+
+import bot
 import content as content_module
+import content_loader
+import database
+import resolve
+import states
+import world
 
 
 def nu_room_look(files) -> str:
@@ -138,3 +150,121 @@ def test_three_sentences_satisfy_the_check_and_only_one_is_a_route():
         "david_note/default",
         "music_box/in:NU",
     }
+
+
+# ---------------------------------------------------------------------------
+# The note, whose one revealing sentence was rewritten
+
+
+def test_the_changing_table_still_reveals_the_note():
+    """The same shape as the monitor, and tighter.
+
+    Three rows name the monitor, so any one of them satisfies the check
+    and the check is loose. **One row names the note** - this one - so
+    here `content.load()` really is the guard, and it fires: rename the
+    note out of the changing table's `look` while leaving "monitor"
+    alone and validation raises "fixture david_note is named nowhere a
+    player in room NU can read".
+
+    That is what made the rename safe to do. "A note from David is
+    tucked under the monitor" became "A note in blocky capitals is
+    tucked under the monitor", which drops the name the narrator had no
+    business knowing and keeps three of the words the note answers to.
+    """
+    files = content_module.load_files()
+    note = files.things_by_id["david_note"]
+
+    assert mentions(thing_text(files, "changing_table")["look"], note)
+    # And nowhere else points at it, the room paragraph included.
+    assert not mentions(nu_room_look(files), note)
+
+
+def test_the_narrator_does_not_know_whose_note_it_is():
+    """A name belongs in the text only where the object discloses it.
+
+    The note discloses "Elena", because Elena is written on it, and it
+    keeps her. What it never says is who wrote it - the writer is "me" -
+    so neither the display name nor any cell of the note may say either.
+
+    `use` used to read "David is clearly keeping score", which is the
+    narrator knowing a name off the object's face, and the display name
+    was "note from David", which is the engine doing the same thing in
+    the one string a player cannot avoid reading.
+    """
+    files = content_module.load_files()
+    note = files.things_by_id["david_note"]
+    cells = thing_text(files, "david_note")
+
+    assert "david" not in note.name.lower()
+    for key in ("look", "use", "take_fail"):
+        assert "david" not in (cells.get(key) or "").lower(), key
+    # Elena stays: the note names her itself.
+    assert "Elena" in cells["look"]
+
+
+# ---------------------------------------------------------------------------
+# The aliases that came in with the rename, played rather than read
+#
+# The Nursery is drop 45, so `rooms_open_at_launch` does not include it and
+# the shipped-nine harness in `test_verbs.py` cannot reach the note. This is
+# the same fixture `test_the_music_box.py` uses, for the same reason.
+
+THIS_DROP = 45
+
+# A phrase from the note's `look` and no other row in the files.
+POOPY_DIAPERS = "4 poopy diapers"
+
+
+@pytest.fixture
+async def house(db, monkeypatch):
+    halloween = FakeChannel(name="halloween")
+    guild = FakeGuild(GUILD_A, channels=[halloween], members=[FakeMember(ALICE)])
+    await db.ensure_user_exists(ALICE, GUILD_A)
+    await db.set_setting(GUILD_A, resolve.DROP_KEY, THIS_DROP)
+    await content_loader.load_content(content_module.load_files(), guild_ids=[GUILD_A])
+    rooms = {rid: name for rid, name in await resolve.all_rooms()}
+    halloween.add_active(*[name for rid, name in rooms.items() if rid != "CH"])
+    await database.set_announcement_channel(GUILD_A, halloween.id)
+    await states.set_server_state(GUILD_A, world.HOUSE_UNLOCKED)
+    await states.set_server_state(GUILD_A, world.STAIRS_UPPER)
+    await states.set_server_state(GUILD_A, world.STAIRS_REPAIRED)
+    await db.start_game(ALICE, GUILD_A, "EN", await resolve.rooms_open_at_launch())
+    monkeypatch.setattr(
+        bot,
+        "bot",
+        SimpleNamespace(
+            guilds=[guild], get_guild=lambda gid: guild if gid == GUILD_A else None
+        ),
+    )
+    return db, guild, halloween, rooms
+
+
+async def look_at(house, typed) -> str:
+    db, guild, halloween, rooms = house
+    await db.update_current_room(ALICE, GUILD_A, "NU")
+    thread = next(t for t in halloween.threads if t.name == rooms["NU"])
+    interaction = FakeInteraction(ALICE, GUILD_A, guild=guild, channel=thread)
+    await bot.look.callback(interaction, typed)
+    return "\n".join(text for text, _ in interaction.sent if text)
+
+
+@pytest.mark.parametrize(
+    "typed",
+    ["note in blocky capitals", "note in capitals", "capitals", "note", "david's note"],
+)
+async def test_every_name_the_note_answers_to_reaches_it(house, typed):
+    """A dud alias is silent, which is the only reason this is played.
+
+    The parser will happily hold a phrase nothing resolves: the cell
+    reads back fine, validation passes, and the first anybody hears of
+    it is a playtester typing the word the text invited them to type and
+    being told there is no such thing. So each of these goes through
+    `/look` for real.
+
+    `david's note` is in the list on purpose. The name came off the
+    text, not out of the aliases - aliases are typed and never
+    displayed, so a player who read the passports in the bedroom and
+    guessed can still get there, and nothing discloses anything by
+    letting them.
+    """
+    assert POOPY_DIAPERS in await look_at(house, typed)
