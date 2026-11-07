@@ -149,7 +149,7 @@ The courtyard's `ivy` changes from a fixture to an exit with destination BE. It 
 
 ### Falling off the ivy (decided 6 November)
 
-**On 5% of climbs down the ivy from the Bedroom window, the player falls, softly, into the herb garden.** Every climb down can fall, the first one included. Climbing up from the Courtyard never does. Nobody is hurt: the fall is a small, funny setback, in keeping with the Story Bible's rule that nobody in this house is in danger.
+**On 10% of climbs down the ivy from the Bedroom window, the player falls, softly, into the herb garden.** Every climb down can fall, the first one included. Climbing up from the Courtyard never does. Nobody is hurt: the fall is a small, funny setback, in keeping with the Story Bible's rule that nobody in this house is in danger.
 
 **What a fall does:**
 
@@ -203,7 +203,7 @@ Earned when a player's shaky state runs out its 30 minutes without being cleared
 
 **For the developer:**
 
-1. **The roll.** On each successful climb down (`BC`, with `window_open`), roll `ivy_fall_percent` (config, default 5). Climbs up (`ivy` from the Courtyard) never roll.
+1. **The roll.** On each successful climb down (`BC`, with `window_open`), roll `ivy_fall_percent` (config, default 10). Climbs up (`ivy` from the Courtyard) never roll.
 2. **The spill.** Move up to 3 randomly chosen carried items, counted one at a time, from the inventory to the Courtyard's room contents. Skip `cat_food_gourmet` and anything with `droppable = no`. If the player carries nothing that can spill, the fall still happens, and the "tumbled out" sentence is harmless.
 3. **The can.** If the watering can is carried at `full`, set it to `empty` and add `ivy.fall.watering_can` to the private reply.
 4. **The shaky state.** Set a per-player state, `shaken`, that expires 30 minutes after the fall. While it holds, `/take` refuses with `shaken.take_fail`. A successful use of `coffee_maker`, `nacho_chips`, `candy`, `frozen_burrito` or `dark_chocolate` clears it and sends that food's `shaken.cleared.<thing_id>` line, or `shaken.cleared` if a food has no line of its own. Expiry clears it silently.
@@ -240,7 +240,16 @@ and both ivy exits are refused without it. Before that the content had been
 complete and inert since 30 October - 29 attempts to climb either ivy by 12
 players, every one refused, not one success. `/use graphite powder` in the
 bedroom now opens it too, reading the window's line rather than the
-powder's. **The fall is not built.**
+powder's.
+
+**The fall is built**, on 6 November, at 10% rather than the 5 above -
+Kelsey raised it before it shipped, on the grounds that the mechanic had
+never existed so nobody had ever fallen. Lazy expiry rather than a sweep
+for the shaky state, also Kelsey's: *Walk It Off* cannot be awarded by
+an expiry that happens silently, because something has to notice the
+time, so the award arrives on the player's next command and the
+left-behind `player_states` row is what tells a state that ran out
+from one somebody ate their way out of.
 
 Point 2 is gated in the content rather than in `exit_refused_by` as written
 above: that path picks its refusal with a state list that has no

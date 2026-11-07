@@ -947,6 +947,48 @@ def _used(thing_id: str):
     return predicate
 
 
+# The shaky hands a fall off the ivy leaves. Named here rather than
+# imported from `world`, which is how this file names everything it
+# matches on - and `drawer_unjammed` is spelled as a bare literal two
+# predicates up, which is the one thing worse than naming it twice.
+SHAKEN = "shaken"
+
+
+async def stuck_the_landing(context: Context) -> bool:
+    """The player has fallen off the ivy at some point.
+
+    **Off the state the fall sets, not off a counter.** Nothing but a
+    fall sets `shaken`, so holding it *is* the record of having fallen,
+    and a counter would be a second copy of a fact that already exists.
+    The award outliving the state is free: `player_achievements` keeps
+    the row, so a player awarded this twenty-nine minutes ago still has
+    it an hour later.
+
+    Hooked on the move rather than the use because a fall is something
+    that happens to a climb, and it is the climb that fires the hook.
+    """
+    return await states.has(context.guild_id, context.user_id, SHAKEN)
+
+
+async def walk_it_off(context: Context) -> bool:
+    """A shaky state ran its half hour out without being cleared by food.
+
+    **The one predicate in this file that cannot ask `states.has`.** By
+    the time this is true the state is out of force, and `states.has`
+    reads `in_force`, whose whole job is to hide a row whose time has
+    run out. So it reads `states.ran_out`, which goes to the table.
+
+    **And the one that needs the row to have been left behind.** Lazy
+    expiry has nothing waking up to notice the clock, so the only
+    difference between a state somebody ate their way out of and one
+    that ended is that food deleted the row and expiry did not. That
+    makes a stale row the durable evidence, and this the question asked
+    of it - on the player's next command, which is when the award
+    arrives rather than at the thirty-minute mark.
+    """
+    return await states.ran_out(context.guild_id, context.user_id, SHAKEN)
+
+
 async def somethings_cooking(context: Context) -> bool:
     """A successful `/use` of the stove, and nothing more.
 
@@ -1340,6 +1382,16 @@ def register_all() -> None:
     # was carrying it and no longer is. A `carried_of` read here would
     # ask whether the thing just spent is still in the bag.
     add("name_tag", "on_use", _used(CAT_COLLAR))
+    # **The fall's two, on the two hooks they have to be on.** *Stuck the
+    # Landing* rides the climb, because a fall is a move that went wrong
+    # and the move is what fires. *Walk It Off* cannot ride anything in
+    # particular: it becomes true when half an hour has passed and
+    # nothing in the game is awake at that moment, so it goes on the
+    # widest hook there is and arrives on whatever the player does next.
+    # That is what choosing lazy expiry over a sweep costs, and it is the
+    # same shape `familiar` already uses for the same reason.
+    add("stuck_the_landing", "on_move", stuck_the_landing)
+    add("walk_it_off", "on_command", walk_it_off)
     add("follow_your_nose", "on_use", follow_your_nose)
     add("baby_talk", "on_use", _used(BABY_MONITOR))
     add("dressed_for_the_season", "on_use", _used(COSTUME))

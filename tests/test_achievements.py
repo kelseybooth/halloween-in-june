@@ -108,9 +108,17 @@ def test_the_shipped_file_parses():
     # row whose thing is destroyed on purpose - `content.SPENT_FOR_GOOD`
     # exempts the collar from the rule that nothing may be consumed
     # unless something puts it back.
-    assert len(parsed.achievements) == 64
+    # And sixty-six the same day, the ivy fall's two: *Stuck the Landing*
+    # for a first fall off the ivy, and *Walk It Off* for a shaky state
+    # that ran its half hour out without being eaten away. Neither needed
+    # a column - the first reads the state the fall sets, which nothing
+    # else sets, and the second reads the `player_states` row that expiry
+    # leaves behind and food deletes. *Walk It Off* is the first award in
+    # the file that cannot ask `states.has`, because by the time it is
+    # true the state is out of force.
+    assert len(parsed.achievements) == 66
     # The ids are a set, so this pair is also the file's duplicate check.
-    assert len(parsed.achievement_ids) == 64
+    assert len(parsed.achievement_ids) == 66
 
 
 def test_the_shipped_file_validates():
@@ -229,7 +237,7 @@ async def test_the_rows_reach_the_database(db):
 async def test_the_whole_shipped_file_loads(db):
     await content_loader.load_content(content_module.load_files())
 
-    assert await row_count(db, "achievements") == 64
+    assert await row_count(db, "achievements") == 66
 
 
 async def test_a_reload_replaces_the_rows(db):
