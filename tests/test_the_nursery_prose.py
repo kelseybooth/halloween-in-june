@@ -97,21 +97,31 @@ def test_but_the_changing_table_names_it_and_the_room_names_the_table():
     assert mentions(thing_text(files, "changing_table")["look"], monitor)
 
 
-def test_three_sentences_satisfy_the_check_and_only_one_is_a_route():
+def test_two_sentences_satisfy_the_check_and_only_one_is_a_route():
     """What is actually holding the validator up, which is not what it looks like.
 
     `_check_unlisted_things_are_named_in_prose` asks whether anything in
-    the room names the thing, by any writer but itself. Three rows do,
-    and any one of them is enough - established by mutation, not by
+    the room names the thing, by any writer but itself. Two rows do, and
+    either one of them is enough - established by mutation, not by
     reading: rename the monitor out of the changing table's two mentions
-    and content still loads, rename it out of David's note as well and it
-    still loads, and only with the music box's `in:NU` line gone does
-    `content.load()` raise and name the monitor.
+    and content still loads, and only with the music box's `in:NU` line
+    gone as well does `content.load()` raise and name the monitor.
 
-    **Four sentences carried it before this room paragraph was rewritten,
-    and three carry it now.** Keep the room's old clause and rename all
-    three of these, and content is clean - so the paragraph alone used to
-    be enough, and what is left holding the monitor up is a lullaby.
+    **Four sentences carried it before the room paragraph was rewritten,
+    three after it, and two now.** The note was the third. It read
+    "tucked under the baby monitor" until the note's own `look` stopped
+    saying where it lies - there is no reason for it to, when the only
+    sentence that reveals the note has just said so - and this set is
+    one writer shorter for it.
+
+    **Two is thinner than the count makes it look**, because the two are
+    not equivalent. The changing table is a fixture that cannot move and
+    is named by the room's own paragraph. The music box's is a `use`
+    line on a thing a player carries off, so somebody standing in the
+    Nursery may well not have it to hand. That leaves
+    `changing_table.look` as the only dependable sentence in the house
+    pointing at a fixture `baby_talk` fires on - worth knowing before
+    that cell is edited again.
 
     Two notes on how to redo this, because both ways of getting it wrong
     look like answers. Mutate by renaming the monitor to a noun nothing
@@ -147,7 +157,6 @@ def test_three_sentences_satisfy_the_check_and_only_one_is_a_route():
 
     assert writers == {
         "changing_table/default",
-        "david_note/default",
         "music_box/in:NU",
     }
 
@@ -166,10 +175,14 @@ def test_the_changing_table_still_reveals_the_note():
     alone and validation raises "fixture david_note is named nowhere a
     player in room NU can read".
 
-    That is what made the rename safe to do. "A note from David is
-    tucked under the monitor" became "A note in blocky capitals is
-    tucked under the monitor", which drops the name the narrator had no
-    business knowing and keeps three of the words the note answers to.
+    That is what made the rename safe to do, twice over. "A note from
+    David is tucked under the monitor" first became "A note in blocky
+    capitals is tucked under the monitor", which dropped the name the
+    narrator had no business knowing. It now reads "an index card wedged
+    under one corner" - an alias rather than the display name, which the
+    check accepts because it asks `thing.names`. The sentence has never
+    once stopped naming the note; it has only stopped naming it the same
+    way the note names itself.
     """
     files = content_module.load_files()
     note = files.things_by_id["david_note"]
@@ -200,6 +213,42 @@ def test_the_narrator_does_not_know_whose_note_it_is():
         assert "david" not in (cells.get(key) or "").lower(), key
     # Elena stays: the note names her itself.
     assert "Elena" in cells["look"]
+
+
+def test_the_table_and_the_note_do_not_open_the_same_way():
+    """The echo the rename left behind.
+
+    Both cells were right on their own and wrong in sequence. Looking at
+    the changing table and then at the note is not one way to reach the
+    note, it is the *only* way - so these two sentences are read back to
+    back nearly every time either is read at all, and after the rename
+    they opened identically:
+
+        changing_table  ... A note in blocky capitals is tucked under
+                        the monitor.
+        david_note      A note in blocky capitals, tucked under the baby
+                        monitor: "Today so far, me: 4 poopy diapers ..."
+
+    **Two phrases repeated, not one** - the noun and then its position -
+    which is why fixing only the name would have left half of it. The
+    table now points at an index card, and the note no longer says where
+    it lies.
+
+    Pinned on the overlap rather than on either wording, so that
+    rewriting either cell stays free and only putting the echo back
+    fails. Four words, because three catches ordinary English - both
+    cells can honestly want "under the monitor" one day - and five lets
+    a whole clause through.
+    """
+    files = content_module.load_files()
+    table = thing_text(files, "changing_table")["look"]
+    note = thing_text(files, "david_note")["look"]
+
+    def runs(text, n=4):
+        words = re.findall(r"[^\W_]+", text.lower())
+        return {" ".join(words[i:i + n]) for i in range(len(words) - n + 1)}
+
+    assert not runs(table) & runs(note)
 
 
 # ---------------------------------------------------------------------------
@@ -313,7 +362,14 @@ async def test_the_shelf_still_answers_to_its_own_names(house):
 
 @pytest.mark.parametrize(
     "typed",
-    ["note in blocky capitals", "note in capitals", "capitals", "note", "david's note"],
+    [
+        "note in blocky capitals",
+        "note in capitals",
+        "capitals",
+        "note",
+        "david's note",
+        "index card",
+    ],
 )
 async def test_every_name_the_note_answers_to_reaches_it(house, typed):
     """A dud alias is silent, which is the only reason this is played.

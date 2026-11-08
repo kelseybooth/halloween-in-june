@@ -74,7 +74,7 @@ laptop	laptop	laptop|computer|notebook	fixture	BE	1	no	yes	0										40	64
 baby_monitor	baby monitor	baby monitor|monitor	fixture	NU	1	no	yes	0										45	65					
 graphite_powder	graphite powder	graphite|graphite powder|powder|packet|twist	object		0	yes	yes	5										40	66	yes				
 music_box	music box	music box|musicbox|box	object	NU	1	yes	yes	1										45	67					6
-david_note	note in blocky capitals	note|david's note|note from david|note in capitals|capitals	fixture	NU	1	no	yes	0								changing_table		45	68					
+david_note	note in blocky capitals	note|david's note|note from david|note in capitals|capitals|index card	fixture	NU	1	no	yes	0								changing_table		45	68					
 mobile	mobile	mobile|crib mobile	fixture	NU	1	no	yes	0										45	69					
 pacifier	pacifier	pacifier|dummy|soother	fixture	NU	1	no	yes	0										45	70					
 crib	crib	crib|cot|bed	fixture	NU	1	no	yes	0										45	71					
