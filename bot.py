@@ -376,22 +376,16 @@ async def load_content_at_startup() -> None:
 
     log.info("Content loaded. %s", report.summary().replace(chr(10), " | "))
 
-    # Date the files, per server, so the interaction log can be read
-    # against them. The config history only sees what lives in config,
-    # and the numbers that move most often - the restock rates, the
-    # relationship deltas when they land, every string - live in TSVs;
-    # one row names the whole set at once.
+    # **Dating the files per server used to happen here, and never
+    # happened at all.** It is `_date_the_content`, called from
+    # `on_ready` and `on_guild_join` - the two places that know which
+    # servers there are. This one does not: it runs inside `setup_hook`,
+    # before the gateway connects, so `bot.guilds` is empty every boot
+    # and a `for guild in bot.guilds` wrote nothing for sixteen days
+    # across three servers without raising anywhere.
     #
-    # Written here rather than at deploy because a content reload that
-    # did not come from a deploy is exactly the change a commit hash
-    # would miss.
-    try:
-        version = content.version()
-        for guild in bot.guilds:
-            if await database.record_content_version(guild.id, version):
-                log.info("Guild %s is now on content %s", guild.id, version)
-    except SQLAlchemyError:
-        log.exception("Could not record the content version")
+    # Loading stays here, because the content has to be in the tables
+    # before any command is served. Only the per-server row moved.
 
     # Positions were stored as room names before 2b and as room ids after. This
     # needs the rooms in place to translate against, so it runs here rather than
@@ -406,6 +400,45 @@ async def load_content_at_startup() -> None:
             "to it; run load_content.py to see who holds it",
             orphan,
         )
+
+
+async def _date_the_content(guild_id: int) -> None:
+    """Record which set of content files this server is running, if it changed.
+
+    The config history only sees what lives in config, and the numbers
+    that move most often - the restock rates, the relationship deltas
+    when they land, every string - live in TSVs instead. One row names
+    the whole set at once, so the interaction log can be read against
+    the content it was written under.
+
+    **Called from where the guilds are**, which is the whole point of
+    this being a function. It was a loop inside
+    `load_content_at_startup`, which runs in `setup_hook` - before the
+    gateway connects, when `bot.guilds` is still empty. So it wrote
+    nothing, on every boot, from 22 October until this was found on
+    7 November: sixteen days, three servers, zero rows. Nothing raised,
+    because nothing was wrong except the moment it ran.
+
+    Silent on both failures it can meet, and for the usual reason:
+    neither is worth a boot. `record_content_version` writes only on a
+    change, so a server that restarts twice an hour collects nothing.
+
+    `content.version()` is a commit hash where Railway provides one and
+    a digest of the files otherwise, which is what makes a reload that
+    did not come from a deploy visible - the case a commit hash alone
+    would miss. Recomputing it per guild is a hash of a dozen small
+    files, and there are three of them.
+    """
+    try:
+        version = content.version()
+    except OSError:
+        log.exception("Could not read the content files to date them")
+        return
+    try:
+        if await database.record_content_version(guild_id, version):
+            log.info("Guild %s is now on content %s", guild_id, version)
+    except SQLAlchemyError:
+        log.exception("Could not record the content version for guild %s", guild_id)
 
 
 # Every command this file defines, by name, captured before any of them is
@@ -564,6 +597,13 @@ class CatBot(commands.Bot):
             except discord.HTTPException:
                 log.exception("Could not register commands in guild %s", guild.id)
 
+            # **Before the `continue` further down**, which skips a server
+            # with no channel yet. Which content a server is running is
+            # true of it whether or not anybody can play there, and a row
+            # that appeared only once the channel existed would date the
+            # files from the wrong day.
+            await _date_the_content(guild.id)
+
             # **Nobody stands in a room that does not exist.** The
             # channel is a location now, and it is the one that is always
             # there - so a player left in a room this server has not
@@ -629,6 +669,13 @@ class CatBot(commands.Bot):
             await register_commands_for(guild)
         except discord.HTTPException:
             log.exception("Could not register commands in new guild %s", guild.id)
+
+        # **Here as well as in `on_ready`, rather than waiting for the next
+        # boot.** The boot would cover it eventually, and "eventually" is
+        # the problem: a server that joins on Tuesday and is restarted on
+        # Friday would have its content dated Friday, and three days of
+        # its rows would read against files it was never running.
+        await _date_the_content(guild.id)
 
     async def close(self) -> None:
         """Graceful shutdown: stop the scheduler, release the pool, then disconnect."""

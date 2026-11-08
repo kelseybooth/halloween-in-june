@@ -686,3 +686,141 @@ async def test_startup_never_wipes_world_state(two_servers, monkeypatch):
     await bot.load_content_at_startup()
 
     assert await row_count(two_servers, "player_inventory") == 1
+
+
+# --------------------------------------------------------------------------
+# Dating the files, per server
+#
+# The row that says which content a server is running. It is in the config
+# history rather than in a table of its own because every number in the
+# interaction log is read against it: the deltas, the restock rates and
+# every string live in the TSVs, so one row dates the lot.
+#
+# **These exist because the feature was dead for sixteen days.** The loop
+# that wrote them sat in `load_content_at_startup`, which runs inside
+# `setup_hook` - before the gateway connects, when `bot.guilds` is empty.
+# It iterated nothing, every boot, on three live servers, and raised
+# nowhere. The database-level writer had a passing test the whole time;
+# what nothing checked was whether anybody called it with a guild. So
+# these drive the handlers rather than the writer.
+# --------------------------------------------------------------------------
+
+
+async def _a_bot_that_is_ready(monkeypatch, guild_ids):
+    """`on_ready` with its neighbours silenced and `self` stood in for.
+
+    Everything else in that loop talks to Discord - registering commands,
+    sweeping threads, finding the channel - and none of it is what these
+    tests are about. `_game_channel` returns None on purpose: that is the
+    branch which `continue`s, and the dating has to have happened before
+    it.
+    """
+    import bot as bot_module
+    from types import SimpleNamespace
+
+    from fake_discord import FakeGuild
+
+    async def nothing(*args, **kwargs):
+        return 0
+
+    monkeypatch.setattr(bot_module, "register_commands_for", nothing)
+    monkeypatch.setattr(bot_module, "_send_everybody_somewhere_real", nothing)
+    monkeypatch.setattr(bot_module, "_sweep_threads", nothing)
+
+    async def no_channel(guild):
+        return None
+
+    monkeypatch.setattr(bot_module, "_game_channel", no_channel)
+
+    me = SimpleNamespace(
+        guilds=[FakeGuild(g) for g in guild_ids],
+        user=SimpleNamespace(id=999, __str__=lambda self: "cat#0001"),
+    )
+    await bot_module.CatBot.on_ready(me)
+
+
+async def _content_versions(db, guild_id):
+    """Every content_version window this server has ever had, oldest first."""
+    async with db._require_session()() as session:
+        rows = await session.scalars(
+            select(database.ConfigHistory.value)
+            .where(
+                database.ConfigHistory.guild_id == guild_id,
+                database.ConfigHistory.key == database.CONFIG_CONTENT_VERSION,
+            )
+            .order_by(database.ConfigHistory.id)
+        )
+        return list(rows)
+
+
+async def test_loading_the_content_does_not_date_it(two_servers, monkeypatch):
+    """Where the dating is *not*, which is the half that was wrong.
+
+    This one passes against the broken code too, and says so rather than
+    pretending otherwise: the old loop lived here and wrote nothing
+    either. What it pins is the division - loading runs before the
+    gateway connects and cannot know which servers there are, so the row
+    has to come from somewhere that does. The four below are the ones
+    that fail without the fix."""
+    import bot
+
+    monkeypatch.setattr(
+        content_module, "load", lambda directory=None: a_world(a_thing("spoon"))
+    )
+    await bot.load_content_at_startup()
+
+    assert await _content_versions(two_servers, GUILD_A) == []
+
+
+async def test_becoming_ready_dates_the_content_for_every_guild(
+    two_servers, monkeypatch
+):
+    """Both servers, and neither of them has a game channel - which is the
+    `continue` the dating has to come before."""
+    await _a_bot_that_is_ready(monkeypatch, [GUILD_A, GUILD_B])
+
+    assert len(await _content_versions(two_servers, GUILD_A)) == 1
+    assert len(await _content_versions(two_servers, GUILD_B)) == 1
+
+
+async def test_restarting_on_the_same_content_adds_no_row(two_servers, monkeypatch):
+    """`on_ready` fires again on a reconnect, and a server that restarts
+    twice an hour must not collect a row an hour saying nothing changed."""
+    await _a_bot_that_is_ready(monkeypatch, [GUILD_A])
+    await _a_bot_that_is_ready(monkeypatch, [GUILD_A])
+
+    assert len(await _content_versions(two_servers, GUILD_A)) == 1
+
+
+async def test_changed_content_opens_a_second_window(two_servers, monkeypatch):
+    """The reason the row exists at all: two versions, dated apart, so the
+    log either side of the change can be told apart."""
+    monkeypatch.setenv("RAILWAY_GIT_COMMIT_SHA", "a" * 40)
+    await _a_bot_that_is_ready(monkeypatch, [GUILD_A])
+    monkeypatch.setenv("RAILWAY_GIT_COMMIT_SHA", "b" * 40)
+    await _a_bot_that_is_ready(monkeypatch, [GUILD_A])
+
+    assert await _content_versions(two_servers, GUILD_A) == [
+        "git:" + "a" * 12,
+        "git:" + "b" * 12,
+    ]
+
+
+async def test_a_server_that_joins_later_is_dated_too(two_servers, monkeypatch):
+    """Not left for the next boot. The boot would date its files from the
+    day of the restart, and every row it wrote before that would read
+    against content it was never running."""
+    import bot as bot_module
+    from types import SimpleNamespace
+
+    from fake_discord import FakeGuild
+
+    async def nothing(*args, **kwargs):
+        return 0
+
+    monkeypatch.setattr(bot_module, "register_commands_for", nothing)
+    await bot_module.CatBot.on_guild_join(
+        SimpleNamespace(), FakeGuild(GUILD_B, name="New Server")
+    )
+
+    assert len(await _content_versions(two_servers, GUILD_B)) == 1
