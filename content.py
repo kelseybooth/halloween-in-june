@@ -534,6 +534,11 @@ class Achievement:
     # `offered` is whether a player is shown it before earning it,
     # `prompt` is the prospective wording, and `requires` is the one
     # achievement they must already hold for it to appear.
+    # And `public` means exactly `offered`: a goal the game shows before
+    # it is earned. Everything else is `secret`, because `kind` is read
+    # nowhere but the `group` branch and an unoffered `public` row was
+    # indistinguishable from a secret to every player who ever had one.
+    # Pinned by test_public_means_offered_and_nothing_else_is_public.
     offered: bool = False
     prompt: str | None = None
     requires: str | None = None
