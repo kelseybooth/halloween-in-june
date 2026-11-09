@@ -8,14 +8,18 @@ quietly - the loader would start overwriting people's games, or two servers woul
 start sharing one.
 """
 
+import logging
 from datetime import datetime
+from types import SimpleNamespace
 
 import pytest
-from sqlalchemy import inspect, select, text, update
+from sqlalchemy import DateTime, inspect, select, text, update
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from conftest import ALICE, BOB, GUILD_A, GUILD_B
 
 import database
+import states
 
 
 CONTENT_TABLES = {
@@ -208,8 +212,17 @@ async def test_world_state_does_not_leak_between_servers(db):
                 db.PlayerInventory(
                     guild_id=GUILD_B, user_id=ALICE, thing_id="candy", count=1
                 ),
-                db.PlayerState(guild_id=GUILD_A, user_id=ALICE, state="has_key"),
-                db.ServerState(guild_id=GUILD_A, state="stairs_repaired"),
+                db.PlayerState(
+                    guild_id=GUILD_A,
+                    user_id=ALICE,
+                    state="has_key",
+                    set_at=datetime(2026, 11, 1),
+                ),
+                db.ServerState(
+                    guild_id=GUILD_A,
+                    state="stairs_repaired",
+                    set_at=datetime(2026, 11, 1),
+                ),
             ]
         )
         await session.commit()
@@ -239,7 +252,14 @@ async def test_world_state_does_not_leak_between_servers(db):
 async def test_a_players_discovery_is_not_another_players(db):
     """drawer_unjammed is per player on purpose: the discovery is the content."""
     async with db._require_session()() as session:
-        session.add(db.PlayerState(guild_id=GUILD_A, user_id=ALICE, state="drawer_unjammed"))
+        session.add(
+            db.PlayerState(
+                guild_id=GUILD_A,
+                user_id=ALICE,
+                state="drawer_unjammed",
+                set_at=datetime(2026, 11, 1),
+            )
+        )
         await session.commit()
 
         theirs = (
@@ -415,6 +435,234 @@ async def test_running_the_migration_twice_is_a_no_op(db):
         await db._add_missing_columns(conn)
         await db._add_missing_columns(conn)
     assert await columns_of(db, "users") == before
+
+
+# --------------------------------------------------------------------------
+# The two stamps the rules subtract
+# --------------------------------------------------------------------------
+#
+# `player_states.set_at` and `server_states.set_at` shipped as
+# `timestamptz NOT NULL DEFAULT now()`, and both halves of that were
+# wrong for a column the game does arithmetic with. The timezone took a
+# playtester's account down on 9 November 2026: naive minus aware raises
+# a `TypeError`, which is not a `SQLAlchemyError`, so it went past every
+# handler that apologises for the database. The default was quieter - it
+# wrote the real time into a column the rules read as server time.
+#
+# **What can and cannot be driven here.** The shape a new database is
+# created in, and the decision the migration makes, are both real tests
+# below. The statements themselves are not: SQLite cannot `ALTER COLUMN`
+# at all and reports every timestamp column naive whatever it was
+# declared as, so there is no way to make the PostgreSQL path run
+# against the backend CI has. They are pinned as text against a stand-in
+# instead, which is worth having for exactly one reason - it is the only
+# review the SQL gets before it runs over live rows.
+
+
+@pytest.mark.parametrize("table", ["player_states", "server_states"])
+async def test_a_state_stamp_is_naive_with_nothing_to_default_it(db, table):
+    """What `thing_states.set_at` always was, and these two now are."""
+    async with db._engine.connect() as conn:
+        reflected = await conn.run_sync(
+            lambda sync: {c["name"]: c for c in inspect(sync).get_columns(table)}
+        )
+    set_at = reflected["set_at"]
+
+    assert getattr(set_at["type"], "timezone", False) is False
+    assert set_at["default"] is None
+    assert set_at["nullable"] is False
+
+
+@pytest.mark.parametrize("table", ["player_states", "server_states"])
+async def test_a_stamp_nobody_wrote_is_an_error_rather_than_an_hour(db, table):
+    """The loud half of having no default, and the point of removing it.
+
+    A writer that forgot the stamp used to get `now()` on the real
+    clock, into a column the rules read as server time - which is a
+    wrong answer that looks like a right one. Now it cannot be written
+    at all.
+    """
+    model = {"player_states": db.PlayerState, "server_states": db.ServerState}[table]
+    row = {"guild_id": GUILD_A, "state": "has_key"}
+    if table == "player_states":
+        row["user_id"] = ALICE
+
+    with pytest.raises(IntegrityError):
+        async with db._require_session()() as session:
+            session.add(model(**row))
+            await session.commit()
+
+
+@pytest.mark.parametrize(
+    "reflected, needs_repair",
+    [
+        ({"type": DateTime(timezone=True), "default": None}, True),
+        ({"type": DateTime(), "default": "now()"}, True),
+        ({"type": DateTime(timezone=True), "default": "now()"}, True),
+        ({"type": DateTime(), "default": None}, False),
+    ],
+)
+def test_what_counts_as_a_stamp_off_the_server_clock(reflected, needs_repair):
+    """Either half is enough, and a column with neither is left alone.
+
+    The shapes are the ones PostgreSQL reflection actually returns -
+    checked against the beta database, where both columns came back as
+    `TIMESTAMP(timezone=True)` with a `now()` default and
+    `thing_states.set_at` came back as `TIMESTAMP()` with none.
+    """
+    assert database._stamp_is_off_the_server_clock(reflected) is needs_repair
+
+
+class _PretendPostgres:
+    """Just enough engine to drive the migration's PostgreSQL path.
+
+    It answers `postgresql`, hands back a canned list of columns to
+    repair instead of reflecting, and records every statement it is
+    given. The reflection it skips is covered by
+    `test_what_counts_as_a_stamp_off_the_server_clock`; what this exists
+    for is the SQL, which is the one part of this change that cannot be
+    rehearsed anywhere else.
+    """
+
+    def __init__(self, pending, refuse=False):
+        self.dialect = SimpleNamespace(name="postgresql")
+        self.pending = pending
+        self.refuse = refuse
+        self.statements: list[str] = []
+
+    def connect(self):
+        return _PretendConnection(self)
+
+    def begin(self):
+        return _PretendConnection(self)
+
+
+class _PretendConnection:
+    def __init__(self, engine):
+        self._engine = engine
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_):
+        return False
+
+    async def run_sync(self, _reflect):
+        return self._engine.pending
+
+    async def execute(self, clause):
+        self._engine.statements.append(str(clause))
+        if self._engine.refuse:
+            raise SQLAlchemyError("could not alter the column")
+
+
+async def test_the_retype_says_exactly_this_to_postgres():
+    """The statements, pinned, because production is where they first run.
+
+    `AT TIME ZONE 'UTC'` rather than a bare cast: a cast would read the
+    stamp in whatever the session timezone happens to be. The default is
+    dropped first so the cast never has to carry the default expression
+    with it.
+    """
+    engine = _PretendPostgres(
+        pending=[("player_states", "set_at", True), ("server_states", "set_at", True)]
+    )
+
+    await database._retype_state_stamps_as_naive(engine)
+
+    assert engine.statements == [
+        "ALTER TABLE player_states ALTER COLUMN set_at DROP DEFAULT",
+        "ALTER TABLE player_states ALTER COLUMN set_at "
+        "TYPE TIMESTAMP USING set_at AT TIME ZONE 'UTC'",
+        "ALTER TABLE server_states ALTER COLUMN set_at DROP DEFAULT",
+        "ALTER TABLE server_states ALTER COLUMN set_at "
+        "TYPE TIMESTAMP USING set_at AT TIME ZONE 'UTC'",
+    ]
+
+
+async def test_a_column_that_only_kept_its_default_is_not_retyped():
+    """Half-repaired is a state a boot can be interrupted into."""
+    engine = _PretendPostgres(pending=[("player_states", "set_at", False)])
+
+    await database._retype_state_stamps_as_naive(engine)
+
+    assert engine.statements == [
+        "ALTER TABLE player_states ALTER COLUMN set_at DROP DEFAULT"
+    ]
+
+
+async def test_a_retype_that_refuses_does_not_stop_the_boot(caplog):
+    """The one migration in this file that is allowed to lose.
+
+    Every other one is a prerequisite: the content load dies without the
+    column, so a failure has to stop the bot rather than let it serve a
+    half-loaded world. This one is a tidy-up - `_on_the_server_clock`
+    already makes the read side correct against the old column - so a
+    database where it cannot run is a database that plays, and taking
+    the beta down over a column type would be the expensive way to be
+    right.
+
+    The second column is still attempted, which is why each one gets its
+    own transaction: a failed statement poisons a PostgreSQL
+    transaction, and one refusal should not abandon the other column.
+    """
+    engine = _PretendPostgres(
+        pending=[("player_states", "set_at", True), ("server_states", "set_at", True)],
+        refuse=True,
+    )
+
+    with caplog.at_level(logging.WARNING):
+        await database._retype_state_stamps_as_naive(engine)
+
+    assert [s for s in engine.statements if "DROP DEFAULT" in s] == [
+        "ALTER TABLE player_states ALTER COLUMN set_at DROP DEFAULT",
+        "ALTER TABLE server_states ALTER COLUMN set_at DROP DEFAULT",
+    ]
+    assert "player_states" in caplog.text
+    assert "server_states" in caplog.text
+
+
+async def test_the_retype_leaves_sqlite_alone(db):
+    """Every local `python bot.py` boots through it, so it has to be safe.
+
+    SQLite stores what it is handed and returns every stamp naive
+    whatever the declared type says, so there is nothing here to repair
+    and no `ALTER COLUMN` to repair it with.
+    """
+    before = await columns_of(db, "player_states")
+
+    await db._retype_state_stamps_as_naive(db._engine)
+    await db._retype_state_stamps_as_naive(db._engine)
+
+    assert await columns_of(db, "player_states") == before
+    await db.ensure_user_exists(ALICE, GUILD_A)
+    assert await states.set_player_state(GUILD_A, ALICE, "drawer_unjammed") is True
+
+
+async def test_the_retype_runs_at_startup(tmp_path, monkeypatch):
+    """A migration nobody calls is the drop 2 failure in a new costume.
+
+    It is called outside the transaction the rest of them share, which
+    is the detail most likely to be lost in a later tidy-up: it owns a
+    transaction per column so that one refusal cannot poison the next.
+    """
+    engines = []
+
+    async def record(engine):
+        engines.append(engine)
+
+    monkeypatch.setattr(database, "_retype_state_stamps_as_naive", record)
+    url = f"sqlite+aiosqlite:///{(tmp_path / 'boot.db').as_posix()}"
+    monkeypatch.setenv("DATABASE_URL", url)
+    monkeypatch.delenv("RAILWAY_ENVIRONMENT", raising=False)
+
+    database._engine = None
+    database._session_factory = None
+    await database.init_db()
+    try:
+        assert engines == [database._engine]
+    finally:
+        await database.close_db()
 
 
 async def test_the_play_ramp_lives_on_the_player(db):

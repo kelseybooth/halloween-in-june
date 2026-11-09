@@ -231,9 +231,20 @@ async def set_server_state(guild_id: int, state: str) -> bool:
         )
         if existing is not None:
             return False
+        # **The stamp is passed, not defaulted.** The column had
+        # `DEFAULT now()` until the day a playtester found out what that
+        # costs: a default cannot know the server's `clock_offset_days`,
+        # so it writes the real time into a column the game reads as
+        # server time. Nothing subtracts this one today, and it goes
+        # through `server_now` anyway - the single-clock rule is cheaper
+        # to keep everywhere than to remember where it matters.
         await session.execute(
             insert(database.ServerState)
-            .values(guild_id=guild_id, state=state)
+            .values(
+                guild_id=guild_id,
+                state=state,
+                set_at=await database.server_now(guild_id),
+            )
             .on_conflict_do_nothing(
                 index_elements=[database.ServerState.guild_id, database.ServerState.state]
             )
@@ -284,9 +295,20 @@ async def set_player_state(guild_id: int, user_id: int, state: str) -> bool:
                 .values(set_at=await database.server_now(guild_id))
             )
         else:
+            # The same `server_now` the update branch above uses, and
+            # that symmetry is the whole of this line: until it, the
+            # insert took the database's `DEFAULT now()` and the update
+            # took the server's clock, so a first fall and a second fall
+            # on a clock-shifted server were stamped in different hours
+            # and only the second could be measured by `states_of`.
             await session.execute(
                 insert(database.PlayerState)
-                .values(guild_id=guild_id, user_id=user_id, state=state)
+                .values(
+                    guild_id=guild_id,
+                    user_id=user_id,
+                    state=state,
+                    set_at=await database.server_now(guild_id),
+                )
                 .on_conflict_do_nothing(
                     index_elements=[
                         database.PlayerState.guild_id,

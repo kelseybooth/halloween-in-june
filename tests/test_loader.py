@@ -422,8 +422,17 @@ async def test_fresh_clears_states_and_tunables_too(two_servers):
     async with two_servers._require_session()() as session:
         session.add_all(
             [
-                database.PlayerState(guild_id=GUILD_A, user_id=ALICE, state="has_key"),
-                database.ServerState(guild_id=GUILD_A, state="stairs_repaired"),
+                database.PlayerState(
+                    guild_id=GUILD_A,
+                    user_id=ALICE,
+                    state="has_key",
+                    set_at=datetime(2026, 11, 1),
+                ),
+                database.ServerState(
+                    guild_id=GUILD_A,
+                    state="stairs_repaired",
+                    set_at=datetime(2026, 11, 1),
+                ),
                 database.ConfigHistory(
                     guild_id=GUILD_A,
                     key="planks_required",
