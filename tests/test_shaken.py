@@ -22,7 +22,7 @@ test that wants a stale row has to write the timestamp.
 import pytest
 from datetime import timedelta
 
-from sqlalchemy import update
+from sqlalchemy import text, update
 
 from conftest import ALICE, BOB, GUILD_A
 
@@ -157,6 +157,75 @@ async def test_the_qa_clock_still_moves_it(db):
     assert await states.has(GUILD_A, ALICE, SHAKEN)
 
     await db.set_setting(GUILD_A, database.CLOCK_KEY, 1)
+
+    assert not await states.has(GUILD_A, ALICE, SHAKEN)
+    assert await states.ran_out(GUILD_A, ALICE, SHAKEN)
+
+
+# ---------------------------------------------------------------------
+# The clock the stamp comes back on
+# ---------------------------------------------------------------------
+#
+# **The one column the game subtracts that carries a timezone.** Every
+# other dated thing the rules read - a toy cooldown, a lock, `taken_at`,
+# a restock - is a naive column, and `server_now` is naive, so the
+# arithmetic matches. `player_states.set_at` is `DateTime(timezone=True)`
+# because it was written alongside the other bookkeeping stamps, back
+# when nobody subtracted it. `shaken` made somebody subtract it.
+#
+# On SQLite that is invisible: the column hands back a naive datetime
+# whatever was put in it, so every test above passes whether or not the
+# arithmetic is right. On Postgres it comes back aware, and naive minus
+# aware is a `TypeError` - which is not a `SQLAlchemyError`, so it goes
+# straight past the handlers that apologise for the database and out to
+# the catch-all, as "Something went wrong. Please try again."
+#
+# It took a playtester falling off the ivy on 9 November to find it: the
+# first fall on the beta server, and `shaken` is the only state that
+# expires, so it was the first row of its kind the game had ever read.
+# Their account stayed broken afterwards rather than recovering, because
+# the subtraction raises before the age it would have compared is ever
+# looked at - so the half hour could not run out, and `/use`, which is
+# how you eat your way out, resolves its noun through the same call.
+#
+# These tests write the stamp the way Postgres returns it, which SQLite
+# parses back as aware. Without that, they pass against the bug.
+
+
+async def stamped_with_a_timezone(db, minutes, who=ALICE, state=SHAKEN):
+    """Back-date the stamp, written as Postgres hands it back: with an offset."""
+    at = await database.server_now(GUILD_A) - timedelta(minutes=minutes)
+    async with db._require_session()() as session:
+        await session.execute(
+            text(
+                "UPDATE player_states SET set_at = :at "
+                "WHERE guild_id = :g AND user_id = :u AND state = :s"
+            ),
+            {
+                "at": at.strftime("%Y-%m-%d %H:%M:%S.%f") + "+00:00",
+                "g": GUILD_A,
+                "u": who,
+                "s": state,
+            },
+        )
+        await session.commit()
+
+
+async def test_a_stamp_that_carries_a_timezone_is_still_in_force(db):
+    """The row Kei's fall wrote: five minutes old, and still shaky."""
+    await db.ensure_user_exists(ALICE, GUILD_A)
+    await states.set_player_state(GUILD_A, ALICE, SHAKEN)
+    await stamped_with_a_timezone(db, 5)
+
+    assert await states.has(GUILD_A, ALICE, SHAKEN)
+    assert not await states.ran_out(GUILD_A, ALICE, SHAKEN)
+
+
+async def test_a_stamp_that_carries_a_timezone_still_runs_out(db):
+    """And the same row half an hour later, which is how a fall ends itself."""
+    await db.ensure_user_exists(ALICE, GUILD_A)
+    await states.set_player_state(GUILD_A, ALICE, SHAKEN)
+    await stamped_with_a_timezone(db, 40)
 
     assert not await states.has(GUILD_A, ALICE, SHAKEN)
     assert await states.ran_out(GUILD_A, ALICE, SHAKEN)

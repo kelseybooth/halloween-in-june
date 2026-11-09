@@ -399,6 +399,41 @@ async def server_now(guild_id: int) -> datetime:
     return _utcnow() + timedelta(days=await clock_offset(guild_id))
 
 
+def _on_the_server_clock(at: datetime) -> datetime:
+    """A stored stamp on the clock `server_now` keeps: naive UTC.
+
+    **Because one column answers in a different one.** Every dated thing
+    the rules subtract is a naive column written through `server_now`, so
+    the arithmetic lines up without anybody having to think about it.
+    `player_states.set_at` is the exception: it is
+    `DateTime(timezone=True)`, written beside the bookkeeping stamps back
+    when nothing subtracted it, and Postgres hands it back aware. Naive
+    minus aware raises `TypeError` - and because that is not a
+    `SQLAlchemyError`, it goes straight past every handler that
+    apologises for the database and out to the catch-all.
+
+    SQLite returns that column naive whatever was put in it, so the suite
+    agreed with the bug, and so did CI, which runs on SQLite by design.
+    The tests that hold this write the stamp the way Postgres returns it.
+
+    **Converted rather than assumed.** The value was written as naive
+    UTC, and the session stores and returns it in UTC, so the offset is
+    `+00:00` today and reading it off would work. Converting costs
+    nothing and keeps this true if that ever stops being so.
+
+    Changing the column instead would be the deeper fix. That is a
+    migration over live rows, and `server_states.set_at` carries the same
+    type without the same need, so it is a decision rather than a repair.
+
+    Already-naive stamps are returned untouched, so this is the identity
+    for every other caller and costs an attribute lookup.
+    """
+    if at.tzinfo is None:
+        return at
+    return at.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+
 async def server_today(guild_id: int) -> date:
     """This server's calendar date, in Pacific time.
 
@@ -4921,7 +4956,8 @@ async def states_of(guild_id: int, user_id: int) -> set[str]:
             held |= {
                 state
                 for state, at in timed
-                if at is not None and now - at <= EXPIRES_AFTER[state]
+                if at is not None
+                and now - _on_the_server_clock(at) <= EXPIRES_AFTER[state]
             }
         return held
 
@@ -4959,7 +4995,8 @@ async def stale_player_states(guild_id: int, user_id: int) -> set[str]:
     return {
         state
         for state, at in rows
-        if at is not None and now - at > EXPIRES_AFTER[state]
+        if at is not None
+        and now - _on_the_server_clock(at) > EXPIRES_AFTER[state]
     }
 
 
