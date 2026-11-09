@@ -856,7 +856,9 @@ async def test_everything_declared_everywhere_is_a_fixture(house):
 
     This started as "alexa is the only one", and caught the cat being added
     in 2f. If a *takeable* thing ever gets `ALL`, the listing rules need
-    reading again before it ships."""
+    reading again before it ships - and so does the typo rule below, which
+    asks the same question of the thing rather than of the copy in reach.
+    """
     parsed = content_module.load_files()
     everywhere = [
         t for t in parsed.things if t.room_id == content_module.EVERYWHERE
@@ -874,3 +876,133 @@ async def test_a_thing_that_is_everywhere_is_still_a_fixture(house):
     parsed = content_module.load_files()
     assert parsed.things_by_id["alexa"].type == "fixture"
     assert parsed.things_by_id["alexa"].takeable is False
+
+
+# --------------------------------------------------------------------------
+# A thing that is everywhere is never what a typo meant
+#
+# **Reported as "I tried to look at the sideboard and got the cat".** The
+# sideboard had worked. Nine seconds earlier, from the beta log:
+#
+#     05:39:13  look  thing=sideboard  typed='sideboard'  success
+#     05:39:22  look  thing=eunoia     typed='mail'       success
+#
+# She read *its top crowded with the things that live on sideboards: the
+# candy bowl, a vase, a stack of unopened mail*, typed the noun, and was
+# told about a cat. There was no `mail` to find, so the typo pass ran, and
+# the cat answers to `tail` from one edit away in every room in the house.
+#
+# Two fixes, and they are not alternatives:
+#
+# - `mail` and `letters` are the sideboard's now, because the exact pass
+#   runs first and a word the prose puts in front of somebody should reach
+#   the thing it describes. That is the reported case and only that case.
+# - **A thing in every room no longer wins a near miss**, which is the
+#   class. The cat owns `tail`, `paws`, `eyes`; four-letter words get one
+#   edit forgiven; and being everywhere made her a candidate for all of
+#   their neighbours in all nine rooms. She had taken 38 of the 343
+#   corrections ever logged in the beta server.
+#
+# `kitchen`->`kitten` was this bug caught small, and ranking the room's own
+# name above a correction fixed that one room. `reach._nearest` carries the
+# rest of the reasoning and the numbers.
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("typed", ["mail", "letters"])
+async def test_a_word_the_sideboard_puts_in_front_of_you_reaches_it(house, typed):
+    """The reported case, and it is an exact match rather than a forgiven
+    one - which is the whole reason the alias settles it, since pass one
+    returns before the cat is ever looked at."""
+    await content_loader.load_content(content_module.load_files())
+
+    result = await reach.find(GUILD_A, ALICE, "DI", typed, Scope.REACH)
+
+    assert isinstance(result, Found)
+    assert result.thing_id == "sideboard"
+    assert result.fuzzy is None
+
+
+async def test_mail_is_still_one_edit_from_the_cat(house):
+    """So the alias is not what fixed the class, and removing the rule would
+    not be caught by the sideboard tests alone. `mail` is settled in the
+    Dining Room by being a word; `rail` is settled everywhere by the rule."""
+    assert reach._distance("mail", "tail", 1) == 1
+    await content_loader.load_content(content_module.load_files())
+
+    hers = await reach.find(GUILD_A, ALICE, "DI", "tail", Scope.REACH)
+    assert hers.thing_id == "eunoia"
+
+
+@pytest.mark.parametrize("typed", ["laws", "jaws", "saws", "cart", "eyed"])
+async def test_a_near_miss_on_a_thing_that_is_everywhere_is_refused(house, typed):
+    """One edit from `paws`, `cat` or `eyes`, and nothing in the Kitchen is
+    any closer - so before the rule each of these described the cat. The
+    refusal is the honest answer: no such thing is here."""
+    await content_loader.load_content(content_module.load_files())
+
+    result = await reach.find(GUILD_A, ALICE, "KI", typed, Scope.REACH)
+
+    assert isinstance(result, NotFound)
+
+
+async def test_she_takes_no_near_miss_in_any_room(house):
+    """The point of the rule rather than a sample of it. Swept in one test
+    rather than parametrized over nine, because the content load is the
+    expensive part and the assertion is cheap."""
+    await content_loader.load_content(content_module.load_files())
+
+    for room in EVERY_ROOM:
+        result = await reach.find(GUILD_A, ALICE, room, "laws", Scope.REACH)
+        assert isinstance(result, NotFound), room
+
+
+@pytest.mark.parametrize("typed", ["tail", "paws", "paw", "eyes"])
+async def test_every_word_she_owns_still_reaches_her(house, typed):
+    """**Nothing she answers to was given up.** These four are the ones the
+    rule puts at risk and that `test_every_name_for_her_resolves` does not
+    cover: the short body-part words, which are hers exactly and were never
+    the problem. `paw` is three letters and so was never fuzzy-matchable at
+    all, which is the shape the other three now have too."""
+    await content_loader.load_content(content_module.load_files())
+
+    result = await reach.find(GUILD_A, ALICE, "LI", typed, Scope.REACH)
+
+    assert isinstance(result, Found)
+    assert result.thing_id == "eunoia"
+
+
+async def test_a_misspelling_of_her_name_is_what_this_costs(house):
+    """**The one real correction in the log that the rule gives up.**
+    `einoia`->`eunoia` fired once, on 8 November, against 37 thefts.
+
+    Written down rather than worked around, and it is the trade
+    `test_crickle_is_the_price_of_trickle` already makes by name: a refusal
+    a player can read and retype costs less than a confident answer about
+    something they never typed. Spelled right she is still reachable from
+    every room in the house, and so are `cat`, `kitty` and `kitten`."""
+    await content_loader.load_content(content_module.load_files())
+
+    result = await reach.find(GUILD_A, ALICE, "DI", "einoia", Scope.REACH)
+    assert isinstance(result, NotFound)
+
+    assert (
+        await reach.find(GUILD_A, ALICE, "DI", "eunoia", Scope.REACH)
+    ).thing_id == "eunoia"
+
+
+async def test_the_flag_is_read_off_the_thing_and_not_off_the_room(house):
+    """What `_nearest` is actually asking, checked directly.
+
+    The rule is about the thing's own `room_id`, not about how this copy
+    came to be in reach, because being declared everywhere is what makes a
+    word a candidate in nine rooms at once. Asserted on both sides: a
+    fixture standing in one room is not flagged, so the rule cannot be
+    quietly excluding everything."""
+    await content_loader.load_content(content_module.load_files())
+
+    here = await reach._gather(GUILD_A, ALICE, "DI", Scope.REACH)
+
+    assert here["eunoia"].everywhere is True
+    assert here["sideboard"].everywhere is False
+    assert here["dining_table"].everywhere is False

@@ -213,6 +213,43 @@ def _nearest(typed: str, candidates) -> tuple[_Candidate, str] | None:
     limit = _tolerance(typed)
     scored = []
     for candidate in candidates:
+        if candidate.everywhere:
+            # **A thing that is in every room is never what a typo meant.**
+            #
+            # Two things are everywhere - the cat and Alexa - and between
+            # them they own `tail`, `paws`, `eyes`, `echo`. Four-letter
+            # words get one edit forgiven, English is thick with the
+            # neighbours of a four-letter word, and a thing in every room
+            # is a candidate for all of them in all ten rooms. So the cat
+            # was the house's default answer to any near miss nothing else
+            # claimed: `mail`, `rail`, `nail`, `sail`, `laws`, `jaws`,
+            # `cart`, twelve words in ten rooms each.
+            #
+            # It was measured before it was changed. In the beta log the
+            # cat had taken 38 of 343 corrections ever logged, and
+            # `mail`→`tail` alone fired 27 times - the second commonest
+            # correction in the whole server, behind only `book`→`books`,
+            # from players who had just read *a stack of unopened mail* on
+            # the sideboard and typed the noun.
+            #
+            # **One of the 38 was a real misspelling** - `einoia`→`eunoia`,
+            # once - and that one is the price of this. It is the same trade
+            # `test_crickle_is_the_price_of_trickle` already makes and names:
+            # a refusal a player can read and retype costs less than an
+            # answer about something they never typed. She is still `cat`,
+            # `kitty`, `kitten` and `eunoia` spelled right, from anywhere.
+            #
+            # `kitchen`→`kitten` was the same bug caught small, and the
+            # fix then was to rank the room's own name above a correction.
+            # That answered `/look kitchen` in the Kitchen and left the cat
+            # winning everywhere else, because a room pass only speaks for
+            # the room you are standing in. This is the general case.
+            #
+            # Raising `FUZZY_MIN_LENGTH` instead would not do it: the
+            # commonest correction in the log is `book`→`books`, typed
+            # four letters, and 29% of every correction ever made starts
+            # from a four-letter word. The length is not what is wrong.
+            continue
         near = [
             (distance, name)
             for name in candidate.names
@@ -261,6 +298,10 @@ class _Candidate:
     # thrown the distinction away by the time it gets there.
     source_names: set[str] = field(default_factory=set)
     yield_names: set[str] = field(default_factory=set)
+    # Whether the files put this thing in *every* room rather than one. Only
+    # the forgiving pass wants to know - see `_nearest`, which is where it is
+    # used and where the reason is written down.
+    everywhere: bool = False
 
 
 async def _gather(
@@ -291,6 +332,7 @@ async def _gather(
                     database.ThingType.present_when,
                     database.ThingType.quantity,
                     database.ThingType.takeable,
+                    database.ThingType.room_id,
                 ).where(
                     # `ALL` is a room nobody stands in: it marks a thing that
                     # is present everywhere. Alexa is the only one, and until
@@ -356,7 +398,13 @@ async def _gather(
 
     candidates: dict[str, _Candidate] = {}
 
-    def entry(key: str, name: str, names: set[str], yields: str | None = None) -> _Candidate:
+    def entry(
+        key: str,
+        name: str,
+        names: set[str],
+        yields: str | None = None,
+        everywhere: bool = False,
+    ) -> _Candidate:
         found = candidates.get(key)
         if found is None:
             found = _Candidate(thing_id=key, name=name, names=set(names), copies={}, yields=yields)
@@ -364,6 +412,10 @@ async def _gather(
         else:
             found.names |= names
             found.yields = found.yields or yields
+        # Sticky, because one row is enough: if any reason this candidate is
+        # in reach is that something is in every room, its words are in reach
+        # in every room, which is the property `_nearest` is asking about.
+        found.everywhere = found.everywhere or everywhere
         return found
 
     include_room = scope in (Scope.ROOM, Scope.REACH)
@@ -392,10 +444,11 @@ async def _gather(
 
         for (
             thing_id, name, aliases, kind, yields, contained_in, gate,
-            quantity, takeable,
+            quantity, takeable, thing_room,
         ) in in_room:
             if thing_id not in visible or not states.passes(gate, held):
                 continue
+            anywhere = thing_room == content.EVERYWHERE
             if kind == "source" and yields:
                 # Filed under what it hands over, so the stash and its cans are
                 # one thing. The source's own names match it too.
@@ -403,7 +456,9 @@ async def _gather(
                 display = target[1] if target else name
                 mine = _names_of(name, aliases)
                 theirs = _names_of(target[1], target[2]) if target else set()
-                candidate = entry(yields, display, mine | theirs, yields=yields)
+                candidate = entry(
+                    yields, display, mine | theirs, yields=yields, everywhere=anywhere
+                )
                 # Merged above, and kept apart here. Both are needed: the
                 # merge is what makes the stash and its cans one thing, and
                 # the split is what lets a word only one of them answers to
@@ -437,9 +492,9 @@ async def _gather(
                 # because falling through is silent - the word is bolded
                 # in the prose, the player types it, and the house says
                 # there is no such thing.
-                entry(thing_id, name, _names_of(name, aliases)).room_copies.setdefault(
-                    contained_in or None, 1
-                )
+                entry(
+                    thing_id, name, _names_of(name, aliases), everywhere=anywhere
+                ).room_copies.setdefault(contained_in or None, 1)
             elif kind == "object" and thing_id not in stock:
                 # An object with a room but no stock row left: taken, and gone.
                 continue
