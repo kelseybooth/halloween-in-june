@@ -378,6 +378,8 @@ A **bonus** achievement is not a fourth kind. It is either of the two earned by 
 
 ### Public achievements
 
+**"Public" here is this Bible's word, not the game's - and as of 9 November every achievement in this table is a secret in `achievements.tsv`.** Nothing in the game lists an achievement a player has not earned, so "listed where players can see them once their drop arrives" above describes a screen that was never built. What does show a goal in advance is a **quest**, and the four quests are the cat ones, which are not in this table and are not in this Bible. These fourteen are found by playing, exactly like the secrets. The split the heading draws is editorial and still worth having: these are the ones the story is built around.
+
 | Achievement | How to earn | Where | Story tie-in |
 | --- | --- | --- | --- |
 | **Passing a Message to David** | Talk to Alexa and remind David to cancel the auto-delivery | Any room (there's an Alexa in every room) | Alexa is shared between dimensions, so a message left with her reaches him. His standing auto-delivery keeps arriving |

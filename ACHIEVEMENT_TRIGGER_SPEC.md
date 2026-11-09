@@ -38,6 +38,8 @@ It does not restate what a command does — that is the **Functional Spec** — 
 
 ## Public achievements (14)
 
+**"Public achievement" is this document's term, not the file's - and as of 9 November every achievement in this table is `secret` in `achievements.tsv`.** `kind` is read nowhere in the code but the `group` branch, so `public` and `secret` only ever differed to a reader of the file: `/stats` lists what a player has earned and nothing else, and every name is announced as it is earned, secrets included. The column that actually shows a goal before it is earned is `offered`, which turns a row into a quest in `/stats` - and the four rows carrying it are the cat goals, which are not in this table and are not in this document at all. So these fourteen were `public` and mentioned nowhere in the game, which is what `secret` means; they now say so. The summary at the top of this document ("14 public, 3 group, 18 secret") and the headings below are the same editorial split, kept as written because it is how this spec has always been organised: the fourteen are the story spine, the eighteen are found by experimenting.
+
 All scope **player** unless noted. "State needed" names anything the check cannot get from the tables the loader already builds.
 
 | Achievement | Trigger | Hook | State needed |
