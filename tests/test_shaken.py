@@ -22,7 +22,7 @@ test that wants a stale row has to write the timestamp.
 import pytest
 from datetime import timedelta
 
-from sqlalchemy import text, update
+from sqlalchemy import select, text, update
 
 from conftest import ALICE, BOB, GUILD_A
 
@@ -151,6 +151,9 @@ async def test_the_qa_clock_still_moves_it(db):
     Half an hour is not a number `clock_offset_days` can hold, but a day
     is - and a day forward has to expire a state set half an hour ago,
     or this is the one behaviour a QA server cannot drive at all.
+
+    The offset arrives *after* the fall here, which is the easy half.
+    For the other order, see below.
     """
     await db.ensure_user_exists(ALICE, GUILD_A)
     await states.set_player_state(GUILD_A, ALICE, SHAKEN)
@@ -160,6 +163,54 @@ async def test_the_qa_clock_still_moves_it(db):
 
     assert not await states.has(GUILD_A, ALICE, SHAKEN)
     assert await states.ran_out(GUILD_A, ALICE, SHAKEN)
+
+
+async def test_a_fall_on_a_shifted_clock_is_stamped_on_that_clock(db):
+    """The clock the row is *written* on, which was a different one.
+
+    `states_of` subtracts through `server_now` and says so. The insert
+    that wrote the row did not: `set_at` carried `DEFAULT now()`, so
+    PostgreSQL - or `CURRENT_TIMESTAMP` on SQLite - stamped it with the
+    real time while the game went on measuring it against the server's.
+    On a server running a day ahead that is a row a day in the past, so
+    a player who had just landed in the herbs was not shaken at all, and
+    *Walk It Off* was sitting there to be collected on the way down.
+
+    **A second fall was right the whole time**, which is what kept this
+    hidden: the update branch stamps through `server_now`, and only the
+    insert took the default. Fall once and nothing happens; fall twice
+    and the game works.
+    """
+    await db.set_setting(GUILD_A, database.CLOCK_KEY, 1)
+    await db.ensure_user_exists(ALICE, GUILD_A)
+
+    assert await states.set_player_state(GUILD_A, ALICE, SHAKEN) is True
+
+    assert await states.has(GUILD_A, ALICE, SHAKEN)
+    assert not await states.ran_out(GUILD_A, ALICE, SHAKEN)
+
+
+async def test_a_discovery_on_a_shifted_clock_is_stamped_on_it_too(db):
+    """Nothing subtracts a discovery's stamp, and it is still the same column.
+
+    Written down because the temptation is to pass the stamp only where
+    the arithmetic happens, and the two behaving differently is exactly
+    how one of these columns got to be wrong for a month.
+    """
+    await db.set_setting(GUILD_A, database.CLOCK_KEY, 2)
+    await db.ensure_user_exists(ALICE, GUILD_A)
+    await states.set_player_state(GUILD_A, ALICE, "drawer_unjammed")
+
+    async with db._require_session()() as session:
+        stamped = await session.scalar(
+            select(database.PlayerState.set_at).where(
+                database.PlayerState.guild_id == GUILD_A,
+                database.PlayerState.user_id == ALICE,
+                database.PlayerState.state == "drawer_unjammed",
+            )
+        )
+
+    assert stamped - database._utcnow() > timedelta(days=1, hours=23)
 
 
 # ---------------------------------------------------------------------

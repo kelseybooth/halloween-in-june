@@ -402,31 +402,36 @@ async def server_now(guild_id: int) -> datetime:
 def _on_the_server_clock(at: datetime) -> datetime:
     """A stored stamp on the clock `server_now` keeps: naive UTC.
 
-    **Because one column answers in a different one.** Every dated thing
-    the rules subtract is a naive column written through `server_now`, so
-    the arithmetic lines up without anybody having to think about it.
-    `player_states.set_at` is the exception: it is
-    `DateTime(timezone=True)`, written beside the bookkeeping stamps back
-    when nothing subtracted it, and Postgres hands it back aware. Naive
-    minus aware raises `TypeError` - and because that is not a
-    `SQLAlchemyError`, it goes straight past every handler that
-    apologises for the database and out to the catch-all.
+    **The guard that outlived the bug it was written for.**
+    `player_states.set_at` and `server_states.set_at` shipped as
+    `DateTime(timezone=True)`, declared beside the bookkeeping stamps
+    back when nothing subtracted them. Postgres hands an aware datetime
+    back, `server_now` is naive, and naive minus aware raises
+    `TypeError` - which is not a `SQLAlchemyError`, so it went straight
+    past every handler that apologises for the database and out to the
+    catch-all. A playtester met that on 9 November 2026, on the first
+    fall off the ivy the beta had ever recorded.
 
-    SQLite returns that column naive whatever was put in it, so the suite
-    agreed with the bug, and so did CI, which runs on SQLite by design.
-    The tests that hold this write the stamp the way Postgres returns it.
+    Both columns are naive now, and `_retype_state_stamps_as_naive` is
+    what makes that true of a database that already existed. **This
+    stays because that migration is allowed to fail.** It runs on
+    PostgreSQL only and it is a tidy-up rather than a prerequisite, so a
+    boot where it does not land has to be a boot where falling off the
+    ivy still works. What keeping it costs is an attribute lookup, on a
+    set of states that is empty almost every time it is asked.
 
-    **Converted rather than assumed.** The value was written as naive
-    UTC, and the session stores and returns it in UTC, so the offset is
-    `+00:00` today and reading it off would work. Converting costs
-    nothing and keeps this true if that ever stops being so.
+    SQLite returns these columns naive whatever was put in them, so the
+    suite agreed with the bug and so did CI, which runs on SQLite by
+    design. The two tests that hold this write the stamp the way
+    Postgres returns it.
 
-    Changing the column instead would be the deeper fix. That is a
-    migration over live rows, and `server_states.set_at` carries the same
-    type without the same need, so it is a decision rather than a repair.
+    **Converted rather than read off.** The value was written as naive
+    UTC and the session stores and returns it in UTC, so dropping the
+    offset would work today. Converting costs nothing and keeps this
+    true if that ever stops being so.
 
     Already-naive stamps are returned untouched, so this is the identity
-    for every other caller and costs an attribute lookup.
+    for every caller that is not reading an unmigrated column.
     """
     if at.tzinfo is None:
         return at
@@ -1239,9 +1244,20 @@ class PlayerState(Base):
     guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
     user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
     state: Mapped[str] = mapped_column(String(64), primary_key=True)
-    set_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
+    # Naive UTC on the clock `server_now` keeps, like every other dated
+    # thing the rules subtract - and unlike what shipped, which was
+    # `DateTime(timezone=True)` and cost a playtester an evening. See
+    # `_retype_state_stamps_as_naive` for the repair and
+    # `_on_the_server_clock` for what it cost.
+    #
+    # **No default, and that is the half that makes the clock true.** A
+    # column default cannot know the server's `clock_offset_days`, so
+    # `now()` wrote the real time into a column the game reads as server
+    # time: a first fall was stamped by the database and a second by
+    # `server_now`, and only the second moved with a QA clock. The
+    # writers pass the stamp now, and one that forgets gets a NOT NULL
+    # violation rather than a silently wrong hour.
+    set_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
 # **The states that stop being true on their own.** Every other player
@@ -1341,9 +1357,12 @@ class ServerState(Base):
 
     guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
     state: Mapped[str] = mapped_column(String(64), primary_key=True)
-    set_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
+    # Written by `set_server_state`, on the same terms as
+    # `player_states.set_at` and for a reason that is about this file
+    # rather than about the staircase: nothing subtracts this column
+    # today, and the two being declared differently is exactly how one
+    # of them got to be wrong for a month without anybody noticing.
+    set_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
 class ServerConfig(Base):
@@ -1940,6 +1959,139 @@ async def _add_missing_columns(conn) -> None:
             log.info("Schema upgrade: added %s.%s", table, column)
 
 
+# The two stamps that shipped as `timestamptz NOT NULL DEFAULT now()`
+# and should not have, as (table, column). `thing_states.set_at` is the
+# one that was declared right from the start, and is what these are
+# being made to look like. Interpolated into DDL below, which is safe
+# for the same reason `_LATER_COLUMNS` is: every name here is a literal
+# in this file and none of it is ever user input.
+_SERVER_CLOCK_STAMPS: tuple[tuple[str, str], ...] = (
+    ("player_states", "set_at"),
+    ("server_states", "set_at"),
+)
+
+
+def _stamp_is_off_the_server_clock(reflected: dict) -> bool:
+    """Whether a reflected stamp column still needs the repair.
+
+    Either half is enough. The timezone is what made the subtraction
+    raise. The `now()` default is the quieter one: it writes the real
+    time into a column the game reads as server time, so a fall on a
+    clock-shifted server was stamped in a different hour from the one it
+    is measured against.
+
+    Its own function so the decision can be tested without a PostgreSQL
+    server, which is the one thing CI does not have - SQLite reports
+    every timestamp column naive whatever it was declared as, so the
+    migration itself cannot be driven there at all.
+    """
+    carries_a_timezone = bool(getattr(reflected["type"], "timezone", False))
+    return carries_a_timezone or reflected.get("default") is not None
+
+
+async def _retype_state_stamps_as_naive(engine: AsyncEngine) -> None:
+    """Put the two state stamps on the clock the rules subtract them on.
+
+    `player_states.set_at` and `server_states.set_at` shipped as
+    `timestamptz NOT NULL DEFAULT now()`, and both halves of that are
+    wrong for a column the game does arithmetic with. The first half
+    took a playtester's account down on 9 November 2026 - Postgres hands
+    an aware datetime back, `server_now` is naive, and naive minus aware
+    raises a `TypeError` that nothing in the game is watching for. The
+    second half is why a first fall and a second fall were stamped by
+    two different clocks: the insert took the database's `now()` and the
+    update took `server_now`, so only the second one moved with
+    `clock_offset_days`.
+
+    **PostgreSQL only, and not because SQLite does not matter.** SQLite
+    cannot `ALTER COLUMN` at all, and has nothing here to alter: it
+    stores what it is handed, returns every stamp naive whatever the
+    declared type says, and fills a `CURRENT_TIMESTAMP` default with
+    naive UTC. A SQLite file written before this keeps a default the
+    model no longer declares, which is harmless now that the writers
+    pass the stamp; a fresh one is created the way the model reads.
+
+    **A warning rather than a refused boot, which is the one way this
+    differs from every other migration in this file.** The others are
+    prerequisites - the content load dies without the column, so a
+    failure has to stop the bot before it serves a half-loaded world.
+    This one is a tidy-up. `_on_the_server_clock` already makes the read
+    side correct against the old column, and a naive stamp is accepted
+    into either type, so a database where this cannot run is a database
+    that plays correctly. Taking the beta down over a column type would
+    be the expensive way to be right.
+
+    **The default goes first.** Dropping it before the retype means the
+    cast never has to carry the default expression with it, which is one
+    fewer thing that can refuse. Both statements are no-ops the second
+    time, so the next boot is one reflection and nothing else.
+
+    One transaction per column, which is why this takes the engine
+    rather than a connection: a failed statement poisons a PostgreSQL
+    transaction, and the second column should not be abandoned because
+    the first one was.
+
+    `AT TIME ZONE 'UTC'` rather than a bare cast, which would read the
+    stamp in whatever the session's timezone happens to be. That is
+    `Etc/UTC` on Railway today and is not a thing to build on.
+    """
+    if engine.dialect.name != "postgresql":
+        return
+
+    def _pending(sync_conn) -> list[tuple[str, str, bool]]:
+        insp = inspect(sync_conn)
+        tables = set(insp.get_table_names())
+        found: list[tuple[str, str, bool]] = []
+        for table, column in _SERVER_CLOCK_STAMPS:
+            if table not in tables:
+                continue
+            for reflected in insp.get_columns(table):
+                if reflected["name"] != column:
+                    continue
+                if _stamp_is_off_the_server_clock(reflected):
+                    found.append(
+                        (
+                            table,
+                            column,
+                            bool(getattr(reflected["type"], "timezone", False)),
+                        )
+                    )
+        return found
+
+    async with engine.connect() as conn:
+        pending = await conn.run_sync(_pending)
+
+    for table, column, carries_a_timezone in pending:
+        try:
+            async with engine.begin() as conn:
+                await conn.execute(
+                    text(f"ALTER TABLE {table} ALTER COLUMN {column} DROP DEFAULT")
+                )
+                if carries_a_timezone:
+                    await conn.execute(
+                        text(
+                            f"ALTER TABLE {table} ALTER COLUMN {column} "
+                            f"TYPE TIMESTAMP USING {column} AT TIME ZONE 'UTC'"
+                        )
+                    )
+        except SQLAlchemyError:
+            log.warning(
+                "Could not put %s.%s on the server's clock. The read side "
+                "handles the old column, so this is left for the next boot "
+                "rather than being a reason to stop",
+                table,
+                column,
+                exc_info=True,
+            )
+        else:
+            log.info(
+                "Schema upgrade: %s.%s is naive UTC with no default, which is "
+                "the clock the rules subtract it on",
+                table,
+                column,
+            )
+
+
 async def _migrate_config_to_history(conn) -> None:
     """Move an old database's settings into the history, once.
 
@@ -2219,6 +2371,10 @@ async def init_db() -> None:
         _engine = None
         _session_factory = None
         raise
+
+    # Outside that block on purpose: it owns a transaction per column and
+    # is allowed to fail without stopping the boot. See the function.
+    await _retype_state_stamps_as_naive(_engine)
 
     log.info("Database ready (%s)", backend)
 
