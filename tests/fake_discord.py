@@ -338,6 +338,22 @@ class FakeFollowup:
         return SimpleNamespace(id=1)
 
 
+class FakeNamespace:
+    """The options Discord filled in, iterating the way discord.py's does.
+
+    `app_commands.Namespace` yields (name, value) pairs rather than
+    names, which is the detail a plain dict gets wrong - and the crash
+    row reads it by unpacking, so a dict here would pass a test that
+    could not work.
+    """
+
+    def __init__(self, **options):
+        self._options = options
+
+    def __iter__(self):
+        return iter(self._options.items())
+
+
 class FakeInteraction:
     """Just enough of discord.Interaction for a command handler to run.
 
@@ -355,6 +371,7 @@ class FakeInteraction:
         roles=(),
         command=None,
         message=None,
+        namespace=None,
     ):
         self.user = SimpleNamespace(
             id=user_id,
@@ -364,8 +381,14 @@ class FakeInteraction:
             roles=[SimpleNamespace(name=r) for r in roles],
             __str__=lambda: f"Player {user_id}",
         )
-        # The QA log line names the command it is recording.
-        self.command = SimpleNamespace(name=command or "unknown")
+        # The QA log line names the command it is recording, and the
+        # crash row names it by `qualified_name` - which is the real
+        # attribute, and differs for a subcommand.
+        self.command = SimpleNamespace(
+            name=command or "unknown", qualified_name=command or "unknown"
+        )
+        # What the player filled the command's options in with.
+        self.namespace = FakeNamespace() if namespace is None else namespace
         self.guild_id = guild_id
         self.guild = guild
         # Where the command was typed. The four world verbs refuse

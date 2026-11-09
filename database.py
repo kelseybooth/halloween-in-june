@@ -115,6 +115,25 @@ CRAVING_GUESS = "craving_guess"
 # what `world` reads to date the last key.
 KEY_DROPPED = "key_dropped"
 UNLOCK = "unlock"
+# A command that died rather than finishing or refusing.
+#
+# **Its own action rather than a third outcome on each verb**, for the
+# same reason `wrong_place` is one: the question it answers is about the
+# machinery and not about the game. Nothing else in this vocabulary
+# describes it, because a crash is not something a player did - it is
+# something that happened to them.
+#
+# It exists because of the one thing this table could not say. Every
+# `telemetry.succeeded` and `telemetry.refused` call is downstream of
+# whatever line raised, so a command that died wrote no row at all, and
+# an absence is the hardest shape there is to read: it looks exactly
+# like a command nobody ran. On 9 November 2026 the only way to find out
+# why a playtester's `/look` was failing was to replay the read path
+# against the live database by hand, one call at a time.
+#
+# `reason` carries the exception's class name and `detail` the command,
+# which between them are the two questions anybody asks first.
+CRASHED = "crashed"
 
 # Why a refusal refused. Open-ended on purpose - a new gate adds a new
 # reason here rather than reusing an approximate one, because the whole
@@ -714,9 +733,11 @@ class InteractionLog(Base):
     action: Mapped[str] = mapped_column(String(32), nullable=False)
     thing_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     outcome: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    # Only on a refusal, and it is the half that says where to fix the
-    # game: a count of refusals tells you players are bouncing off
-    # something, and this tells you off what.
+    # Only on a refusal and on a `crashed` row, and either way it is the
+    # half that says where to fix the game: a count of refusals tells
+    # you players are bouncing off something, and this tells you off
+    # what. On a crash it is the exception's class name, truncated to
+    # fit - the same question, asked of the machinery.
     reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
     # **Null rather than zero where it is unknown**, because zero is a
     # real answer here - a refusal moves nothing - and a row backfilled

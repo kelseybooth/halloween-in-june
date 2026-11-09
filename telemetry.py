@@ -26,6 +26,7 @@ from database import (  # noqa: F401 - the vocabulary, re-exported for call site
     AMBIGUOUS,
     ARMS_FULL,
     COOLDOWN,
+    CRASHED,
     CRAVING_GUESS,
     DROP,
     FEED,
@@ -131,6 +132,53 @@ async def refused(
         relationship_delta=0,
         **fields,
     )
+
+
+async def crashed(
+    guild_id: int,
+    user_id: int | None,
+    *,
+    command: str,
+    error: BaseException,
+    typed: str | None = None,
+) -> int | None:
+    """A command that died rather than finishing or refusing.
+
+    **The row this table could not write.** `succeeded` and `refused`
+    are both downstream of whatever line raised, so a crash was the one
+    thing that happened in the game and left nothing behind - and an
+    absence reads exactly like a command nobody ran. The only way into
+    the 9 November failure was to replay a playtester's `/look` against
+    the live database by hand; one row saying `look`, `TypeError` and
+    what they typed would have been the first thing anybody looked at.
+
+    **Swallows everything, not just `SQLAlchemyError`.** The rest of
+    this module is called from inside a command handler, where a raise
+    would be caught and reported as "something went wrong" for a pet
+    that had already happened. This one is called from the catch-all
+    handler itself, where a raise is a failure inside an error handler -
+    which asyncio reports as *Task exception was never retrieved*, a
+    second traceback for every first one, in a log that is by then
+    already struggling. There is nothing left to escalate to.
+
+    `outcome` is deliberately left null: `success` and `refused` are the
+    two answers a verb can give, and the action is already the answer
+    here.
+    """
+    try:
+        return await record(
+            guild_id,
+            action=CRASHED,
+            user_id=user_id,
+            reason=type(error).__name__[:32],
+            detail=f"command={command}",
+            typed=typed,
+        )
+    except Exception:  # pragma: no cover - see above; there is no caller to tell
+        log.exception(
+            "Could not log the crash in %s for guild %s", command, guild_id
+        )
+        return None
 
 
 async def recoveries(changes) -> None:

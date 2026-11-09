@@ -8552,6 +8552,87 @@ async def on_app_command_completion(
         log.exception("on_command hook failed after %s", getattr(command, "name", "?"))
 
 
+def _what_they_typed(interaction: discord.Interaction) -> str | None:
+    """The options a player filled in, for a crash row to carry.
+
+    `typed` is the word somebody used for a thing, and on a crash row it
+    is every word they used - because which noun it was is exactly what
+    nobody knows yet. A failure that only happens on one of them is the
+    common case and the argument is the whole of what makes the row
+    reproducible.
+
+    None when the command took no options, which is most of them, and
+    `/look` on its own, which is where this started.
+
+    Read inside a guard like everything else on this path: this is
+    called from an error handler, where there is nobody left to report
+    a second failure to.
+    """
+    try:
+        given = {
+            name: value for name, value in interaction.namespace if value is not None
+        }
+    except Exception:  # pragma: no cover - a namespace that will not read is not news
+        return None
+    if not given:
+        return None
+    return " ".join(f"{name}={value}" for name, value in given.items())[:200]
+
+
+async def _record_the_crash(
+    interaction: discord.Interaction, error: BaseException
+) -> None:
+    """Put a row in `interaction_log` for a command that died.
+
+    **An absence is the hardest shape to read.** `telemetry.succeeded`
+    and `telemetry.refused` both sit downstream of whatever line raised,
+    so until this a crash left nothing behind at all - and no row looks
+    exactly like no command. On 9 November 2026 a playtester's `/look`
+    failed twice and the log held nothing for either attempt; finding
+    out why meant replaying the read path against the live database by
+    hand.
+
+    **After the apology, not before.** The player's "thinking..." is
+    worth more than the row, and a crash is very often the database
+    being the broken thing - in which case this write is the one that
+    waits on a connection timeout. Reply first, log second, in that
+    order and for that reason. It is also the order every command
+    handler already uses.
+
+    **Unwrapped first.** discord.py hands a callback's exception back
+    inside a `CommandInvokeError`, so the obvious `type(error).__name__`
+    would record that for every crash in the game and say nothing at
+    all. `.original` is the one worth keeping.
+
+    **A failed check lands here too**, and gets a row for a reason of
+    its own: an admin command with no `.error` handler answers a
+    non-admin with "Something went wrong. Please try again." A row
+    reading `MissingPermissions` is the game saying it apologised where
+    it should have explained, which is worth knowing and is invisible
+    otherwise.
+
+    **No guild means no row.** `guild_id` is NOT NULL and there is no
+    honest value for a command run in a DM - it belongs to no server's
+    numbers. One line in the log and dropped.
+    """
+    command = (
+        getattr(interaction.command, "qualified_name", None)
+        or getattr(interaction.command, "name", None)
+        or "?"
+    )
+    if interaction.guild_id is None:
+        log.warning("Not logging the crash in %s: no guild to log it against", command)
+        return
+
+    await telemetry.crashed(
+        interaction.guild_id,
+        interaction.user.id,
+        command=command,
+        error=getattr(error, "original", error),
+        typed=_what_they_typed(interaction),
+    )
+
+
 @bot.tree.error
 async def on_app_command_error(
     interaction: discord.Interaction, error: app_commands.AppCommandError
@@ -8583,6 +8664,10 @@ async def on_app_command_error(
             interaction.user.id,
             second.__class__.__name__,
         )
+
+    # Last, and reached even when the apology above could not be sent -
+    # a crash nobody could be told about is the one most worth a row.
+    await _record_the_crash(interaction, error)
 
 
 def main() -> None:
