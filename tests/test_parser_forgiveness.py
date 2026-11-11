@@ -203,6 +203,12 @@ async def test_the_cats_kitten_sits_two_edits_from_the_kitchen(channel):
     Hallway and the channel are the three rooms whose names belong to no
     thing, so nothing else would. The end-to-end guard is
     `test_naming_your_own_room_describes_it` in test_verbs.py.
+
+    **And this was the small half of a bigger bug.** The cat is a candidate
+    in every room, so she was winning near misses nothing local claimed -
+    `mail`, `rail`, `laws` - which a room-name pass can do nothing about.
+    A thing that is everywhere is no longer corrected into at all; the
+    section at the end of test_reach.py has it.
     """
     assert reach._distance("kitchen", "kitten", 2) == 2
 
