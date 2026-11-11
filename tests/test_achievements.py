@@ -116,9 +116,9 @@ def test_the_shipped_file_parses():
     # leaves behind and food deletes. *Walk It Off* is the first award in
     # the file that cannot ask `states.has`, because by the time it is
     # true the state is out of force.
-    assert len(parsed.achievements) == 66
+    assert len(parsed.achievements) == 67
     # The ids are a set, so this pair is also the file's duplicate check.
-    assert len(parsed.achievement_ids) == 66
+    assert len(parsed.achievement_ids) == 67
 
 
 def test_the_shipped_file_validates():
@@ -268,7 +268,7 @@ async def test_the_rows_reach_the_database(db):
 async def test_the_whole_shipped_file_loads(db):
     await content_loader.load_content(content_module.load_files())
 
-    assert await row_count(db, "achievements") == 66
+    assert await row_count(db, "achievements") == 67
 
 
 async def test_a_reload_replaces_the_rows(db):

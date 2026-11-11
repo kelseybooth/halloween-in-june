@@ -3871,25 +3871,59 @@ async def somebody_else_just_used(
     about anything but the most recent use, which is all a 60-second
     window wants.
     """
+    # Asked of `others_who_just_used` rather than counted here, so the
+    # filters exist once. This used to count rather than select, because
+    # `scalar` on a `user_id` returns the id and a player whose id is
+    # falsy would have read as nobody; a list has no such edge, and a
+    # row for user 0 is a row.
+    return bool(
+        await others_who_just_used(
+            guild_id, thing_id, room_id, since, except_user=except_user
+        )
+    )
+
+
+async def others_who_just_used(
+    guild_id: int, thing_id: str, room_id: str, since: datetime, *, except_user: int
+) -> list[int]:
+    """Which other players have used this thing here since `since`, newest first.
+
+    The same question `somebody_else_just_used` asks, answered with
+    the players instead of a yes. The band needs the names: an award
+    goes to each of them, and by the time the pair completes most of
+    those people are not the one running the command, so a boolean
+    would say an award was owed without saying to whom.
+
+    **One query, two callers, one copy of the clause.** The filters
+    are subtle - the `is_not(None)` guard carries a bug of its own,
+    described above - and two hand-maintained copies would drift the
+    first time one was fixed. `somebody_else_just_used` is now this
+    with `bool` around it, which is what keeps its own tests honest.
+
+    **Newest first, and the tiebreak is the id.** `thing_uses` keeps
+    one row per player, so these are distinct people and the order is
+    only about whose performance was most recent. Two stamps can still
+    be equal - rows written inside one transaction share a timestamp -
+    and without the tiebreak the same room would report its band in
+    two different orders on two runs.
+    """
     session_factory = _require_session()
     async with session_factory() as session:
-        found = await session.scalar(
-            select(func.count())
-            .select_from(ThingUse)
-            .where(
-                ThingUse.guild_id == guild_id,
-                ThingUse.thing_id == thing_id,
-                ThingUse.user_id != except_user,
-                ThingUse.last_used_room.is_not(None),
-                ThingUse.last_used_room == room_id,
-                ThingUse.last_used_at >= since,
+        rows = (
+            await session.execute(
+                select(ThingUse.user_id)
+                .where(
+                    ThingUse.guild_id == guild_id,
+                    ThingUse.thing_id == thing_id,
+                    ThingUse.user_id != except_user,
+                    ThingUse.last_used_room.is_not(None),
+                    ThingUse.last_used_room == room_id,
+                    ThingUse.last_used_at >= since,
+                )
+                .order_by(ThingUse.last_used_at.desc(), ThingUse.user_id)
             )
-        )
-        # A count rather than selecting the row: `scalar` on a `user_id`
-        # returns the id, and a player whose id is falsy would read as
-        # nobody. No Discord id is 0, which is exactly the kind of thing
-        # that stays true until a test picks its own numbers.
-        return bool(found)
+        ).scalars().all()
+    return list(rows)
 
 
 async def take_from_room(

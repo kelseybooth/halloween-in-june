@@ -254,7 +254,7 @@ async def test_the_content_is_still_loaded(two_games):
     # drop 40 rows too, so like *Accompanist* and *Growth Spurt* they
     # need the ceiling to have moved - a guild held below 40 has the
     # window shut and no way onto the ivy to fall off.
-    assert len(await resolve.achievements(GUILD_A)) == 57
+    assert len(await resolve.achievements(GUILD_A)) == 58
 
 
 async def test_the_art_is_kept_by_default(two_games):
