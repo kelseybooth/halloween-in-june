@@ -69,7 +69,7 @@ def test_the_shipped_content_parses():
     # 169 since 7 November: the photograph on the nursery shelf became a
     # fixture of its own rather than an alias on the shelf, so that taking
     # it is refused in its own words instead of the shelf's.
-    assert len(c.things) == 169
+    assert len(c.things) == 179
     # Five out with `/enter`: its three lines, `#welcome`, and the
     # tutorial, which it was the only thing that posted. Five in: the two
     # wrong-place replies, `/go`'s own refusal, and the two hints that
@@ -151,7 +151,14 @@ def test_the_shipped_content_parses():
     # the reason the three `*_fail.unknown` lines are already separate: a
     # sentence that has to read well after `/use`, `/take` and `/go` ends
     # up saying nothing to any of them.
-    assert len(c.defaults) == 183
+    # And seventeen on 11 November, drop 46's. Fifteen are the copy
+    # deck's own toy refusals - four for the hair tie, three for the
+    # spider ring, two each for the bottle cap, wine cork, acorn and
+    # crumpled receipt - which join the shared twelve rather than
+    # replacing them, so a toy with its own lines draws from both. The
+    # other two are the catnip suffix and the line the cat leaves
+    # behind when she carries a stale toy off.
+    assert len(c.defaults) == 200
     # Ten since 31 October: the ground floor arrives in two halves, and
     # 25 sits below the ceiling rather than above it, which is why
     # nothing else in the suite noticed.
@@ -159,8 +166,8 @@ def test_the_shipped_content_parses():
     # 45, so the upstairs opens in two halves the way the ground floor
     # did. Splitting a release is a renumber, not a new mechanism - the
     # pointer is still one integer and arrival is still `<=`.
-    assert len(c.drops) == 12     # 0 to 3 built; 10 to 50 named ahead of their content, 31 for the ladder and 45 for the Nursery
-    assert len(c.restocks) == 4  # the toy channel row joined them
+    assert len(c.drops) == 13     # 0 to 3 built; 10 to 50 named ahead of their content, 31 for the ladder, 45 for the Nursery and 46 for the toy box
+    assert len(c.restocks) == 5  # the toy channel row joined them, and drop 46's house row joined it
 
 
 def test_the_shipped_content_validates():

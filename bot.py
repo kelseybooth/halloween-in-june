@@ -288,7 +288,9 @@ class Reaction(NamedTuple):
     chance: int
 
 
-def friendly_chance(recent_pets: int, standing: Standing = LEVEL) -> int:
+def friendly_chance(
+    recent_pets: int, standing: Standing = LEVEL, buff: int = 0
+) -> int:
     """Percentage chance of a friendly response, clamped to 0 and 100.
 
     Eight recent pets takes a level player to zero, and the cat is
@@ -299,21 +301,31 @@ def friendly_chance(recent_pets: int, standing: Standing = LEVEL) -> int:
     tenth starts twenty points up. Clamped at the top because those
     two together open at a hundred, and a chance above it would make
     the ramp read as longer than it is.
+
+    `buff` is the catnip mouse, and **it goes in before the floor, not
+    after**. That is the whole of the rule: twenty-five points added to
+    the raw number means a player eight pets deep gets 80 - 80 + 25 =
+    25, while adding it after the clamp would hand them 25 points on
+    top of a zero that the crowding was supposed to have earned them.
+    The mouse makes the cat friendlier; it does not excuse pestering.
     """
     chance = (
-        BASE_FRIENDLY_CHANCE + standing.bonus - standing.decay_per_pet * recent_pets
+        BASE_FRIENDLY_CHANCE
+        + standing.bonus
+        - standing.decay_per_pet * recent_pets
+        + buff
     )
     return max(0, min(100, chance))
 
 
 def choose_response(
-    recent_pets: int, rng=random, standing: Standing = LEVEL
+    recent_pets: int, rng=random, standing: Standing = LEVEL, buff: int = 0
 ) -> Reaction:
     """Pick a response, weighted by how much this user has been pestering the cat.
 
     `rng` is injectable so the weighting can be exercised deterministically.
     """
-    chance = friendly_chance(recent_pets, standing)
+    chance = friendly_chance(recent_pets, standing, buff)
     if rng.random() * 100 < chance:
         return Reaction(rng.choice(FRIENDLY_RESPONSES), True, chance)
     return Reaction(rng.choice(STANDOFFISH_RESPONSES), False, chance)
@@ -646,6 +658,7 @@ class CatBot(commands.Bot):
         restock_sweep.start()
         thread_sweep.start()
         idle_sweep.start()
+        toy_drain.start()
 
         # Nothing is a global command any more. Which commands exist is a
         # per-server question now - two servers can sit on different drops
@@ -1039,6 +1052,70 @@ async def _before_restock() -> None:
 # hour means a forgotten ladder is set down within an hour of becoming
 # forgotten. A tick a minute would ask the same question sixty times
 # for every answer.
+TOY_DRAIN_MINUTES = 60
+
+
+@tasks.loop(minutes=TOY_DRAIN_MINUTES)
+async def toy_drain() -> None:
+    """The cat carries off one settled toy from each spot she has left alone.
+
+    **Its own loop rather than a passenger on `idle_sweep`.** They run
+    at the same cadence and share nothing else: that one takes a named
+    thing off a player and this one takes any toy out of a room, that
+    one owns a list of three ids and this one a whole type, and this
+    one has logging the work order asks for by name. Riding along would
+    have made all of that invisible to whoever reads it next.
+
+    **Hourly granularity on a daily timer**, which is the trade
+    `idle_sweep` already names: a toy can sit for up to twenty-five
+    hours. The number is the rhythm of the house, not a deadline
+    anybody counts down.
+
+    The deciding and the taking are `world.carry_off_stale_toys`. What
+    is here is saying so in the room, which that module has no client
+    to do.
+    """
+    guild_ids = [guild.id for guild in bot.guilds]
+    if not guild_ids:
+        return
+
+    try:
+        taken = await world.carry_off_stale_toys(guild_ids)
+    except SQLAlchemyError:
+        log.exception("Toy drain failed")
+        return
+
+    for gone in taken:
+        row = await phrasing.thing_row(gone.thing_id)
+        await _say_in_room(
+            gone.guild_id,
+            gone.room_id,
+            await phrasing.default_say(
+                "toy.carried_off", name=row.name if row else gone.thing_id
+            ),
+        )
+        # Which toy, where, and how many stale ones she left behind.
+        # The last is what the rotation is really asking - whether a
+        # pile is coming down or standing still - and nothing can
+        # reconstruct it afterwards, because by the time anyone looks
+        # the row has already changed.
+        await telemetry.system(
+            gone.guild_id,
+            telemetry.TOY_CARRIED_OFF,
+            thing_id=gone.thing_id,
+            detail=(
+                f"room={gone.room_id} "
+                f"container={gone.container_id or 'loose'} "
+                f"left={gone.left_behind}"
+            ),
+        )
+
+
+@toy_drain.before_loop
+async def _before_toy_drain() -> None:
+    await bot.wait_until_ready()
+
+
 IDLE_SWEEP_MINUTES = 60
 
 
@@ -1122,6 +1199,44 @@ async def _mention_idle_drops(interaction: discord.Interaction) -> None:
             await interaction.followup.send(line, ephemeral=True)
 
 
+async def _say_in_room(guild_id: int, room_id: str, line: str) -> bool:
+    """Post a line in the thread of the room it is about.
+
+    **The road is the channel itself and has no thread**, which is the
+    one branch every room-addressed line in the game has to carry. It
+    was written out twice the moment the drain wanted it, so it is one
+    function now and `_announce_exhaustion` reads from here.
+
+    Cosmetic, always. Whatever the line describes has already happened
+    in the database by the time this runs, so a channel that will not
+    take the sentence must never undo it - which is why this returns a
+    bool nobody has to check rather than raising.
+    """
+    if not line:
+        return False
+    guild = bot.get_guild(guild_id)
+    if guild is None:
+        return False
+    try:
+        channel = await _game_channel(guild)
+        if channel is None:
+            return False
+        if room_id == content.CHANNEL_ROOM:
+            await _post_quietly(channel, line)
+            return True
+        name = await resolve.room_name(room_id)
+        thread = await house_utils.get_thread_for_room(channel, name)
+        if thread is None:
+            return False
+        await _post_quietly(thread, line)
+        return True
+    except (discord.HTTPException, SQLAlchemyError):
+        log.warning(
+            "Could not post in %s of guild %s", room_id, guild_id, exc_info=True
+        )
+        return False
+
+
 async def _announce_exhaustion(set_down: world.SetDown) -> None:
     """Tell the room something has just been put down in it.
 
@@ -1166,21 +1281,7 @@ async def _announce_exhaustion(set_down: world.SetDown) -> None:
         line = await phrasing.default_say(
             f"{thing_id}.{key}", **tokens
         ) or await phrasing.default_say(key, **tokens)
-        if not line:
-            return
-        channel = await _game_channel(guild)
-        if channel is None:
-            return
-        if room_id == content.CHANNEL_ROOM:
-            # The road is the channel itself and has no thread of its
-            # own, which every other room-addressed line in the game
-            # also has to handle.
-            await _post_quietly(channel, line)
-            return
-        name = await resolve.room_name(room_id)
-        thread = await house_utils.get_thread_for_room(channel, name)
-        if thread is not None:
-            await _post_quietly(thread, line)
+        await _say_in_room(guild_id, room_id, line)
     except (discord.HTTPException, SQLAlchemyError):
         log.warning(
             "Could not say a thing was set down in %s of guild %s",
@@ -2128,7 +2229,17 @@ async def pet(interaction: discord.Interaction) -> None:
         # Read before the meter moves, so it is this player's place
         # coming into the pet rather than the one it leaves them in.
         standing = await standing_of(interaction.guild, user.id)
-        reaction = choose_response(result.recent, standing=standing)
+        # **Read before the roll and spent after it, friendly or not.**
+        # The work order's "three pets, friendly or not" is the whole
+        # reason the charge is spent on the standoffish branch too: a
+        # buff that only ever paid for successes would last until it
+        # produced three of them, which is a different mechanic.
+        buff = await world.catnip_in_force(
+            guild_id, user.id, await database.server_now(guild_id)
+        )
+        reaction = choose_response(result.recent, standing=standing, buff=buff)
+        if buff:
+            await world.spend_catnip(guild_id, user.id)
         delta = RELATIONSHIP_STEP if reaction.friendly else -RELATIONSHIP_STEP
         relationship = await _move_the_meter(user.id, guild_id, delta)
         # The row was opened inside the pet's own transaction, before
@@ -2144,6 +2255,15 @@ async def pet(interaction: discord.Interaction) -> None:
         return
 
     message = reaction.text
+    if buff and reaction.friendly:
+        # **The only sign the player gets**, and only on a friendly pet:
+        # a line on a standoffish one would be the game explaining that
+        # the mouse had failed, which is worse than silence. The public
+        # pet line never changes - the buff is this player's business,
+        # and the room has no way to know a mouse was involved.
+        suffix = await phrasing.default_say("pet.buffed_suffix")
+        if suffix:
+            message = f"{message} {suffix}"
     crowding_begins = _crowding_begins(result.recent, standing)
     if crowding_begins:
         # **The crossing speaks for itself, so it replaces the response on
@@ -4962,7 +5082,7 @@ async def _play_with_toy(interaction, state, found) -> None:
         )
         return
 
-    effect = await world.play_with(guild_id, user.id, now)
+    effect = await world.play_with(guild_id, user.id, now, thing_id=found.thing_id)
     # **Read off the play, not off the score.** Far enough down the
     # day's curve a play pays nothing, and inferring success from the
     # meter moving would turn exactly those plays into refusals: the
@@ -4983,6 +5103,15 @@ async def _play_with_toy(interaction, state, found) -> None:
     if succeeded:
         await database.record_use(
             user.id, guild_id, found.thing_id, room_id=state.current_room
+        )
+        # **Beside it rather than inside it**, because the two answer
+        # different questions: `thing_uses` is cumulative per player and
+        # keeps only the latest room, and *Playgroup* wants every play
+        # by anybody in one room inside a sliding hour. Written before
+        # the achievement hook fires, so the play that completes the
+        # tenth toy is one of the ten the predicate counts.
+        await database.record_toy_play(
+            guild_id, user.id, found.thing_id, state.current_room, now
         )
         # **Every play logged with what it actually paid, zeros
         # included.** A play at the tail of the curve is worth zero,

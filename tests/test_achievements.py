@@ -116,9 +116,9 @@ def test_the_shipped_file_parses():
     # leaves behind and food deletes. *Walk It Off* is the first award in
     # the file that cannot ask `states.has`, because by the time it is
     # true the state is out of force.
-    assert len(parsed.achievements) == 67
+    assert len(parsed.achievements) == 70
     # The ids are a set, so this pair is also the file's duplicate check.
-    assert len(parsed.achievement_ids) == 67
+    assert len(parsed.achievement_ids) == 70
 
 
 def test_the_shipped_file_validates():
@@ -135,11 +135,16 @@ def test_the_group_achievements_are_the_room_ones_and_the_staircase():
     """A group achievement has no earner, so which ones they are is a design
     fact worth pinning rather than a detail of the file.
 
-    *Board Meeting* is the fourth and the odd one out: the three room
+    *Board Meeting* was the fourth and the odd one out: the three room
     achievements go to the server and name nobody, which is what `group`
-    means today, while this one is meant for the players who laid a
-    plank. That award shape does not exist yet, so the row is parked at
-    `NEVER` and drop 30 builds it.
+    meant until drop 30, while that one goes to the players who laid a
+    plank. Drop 30 built the award shape for it - a `group` row with
+    recipients.
+
+    **Drop 46's *Playgroup* is the second of those**, and the first to
+    arrive wanting the shape rather than waiting for it. It is the same
+    distinction: everybody who played a toy in the room that hour earns
+    it, and somebody standing there who never played does not.
     """
     parsed = content_module.load_files()
     assert {a.achievement_id for a in parsed.achievements if a.kind == "group"} == {
@@ -147,6 +152,7 @@ def test_the_group_achievements_are_the_room_ones_and_the_staircase():
         "making_a_mess",
         "the_feline_collection",
         "board_meeting",
+        "playgroup",
     }
 
 
@@ -268,7 +274,7 @@ async def test_the_rows_reach_the_database(db):
 async def test_the_whole_shipped_file_loads(db):
     await content_loader.load_content(content_module.load_files())
 
-    assert await row_count(db, "achievements") == 67
+    assert await row_count(db, "achievements") == 70
 
 
 async def test_a_reload_replaces_the_rows(db):

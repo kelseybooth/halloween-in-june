@@ -94,18 +94,28 @@ async def test_six_a_day_because_it_starts_empty(drop_two):
 
 
 async def test_the_cap_is_still_the_cap(drop_two, monkeypatch):
-    """Six occurrences a day into a room that holds two. The extra four
-    are spent, not banked - the point of the rate is how fresh a taken
-    toy is replaced, not how many pile up.
+    """Six occurrences a day into a channel that holds six. The rate and
+    the cap are different questions - the point of the rate is how fresh
+    a taken toy is replaced, not how many pile up - and the moment there
+    are more occurrences than room, the extra ones are spent rather than
+    banked. That is what `test_the_seventh_occurrence_is_spent` shows now
+    that the two numbers are equal.
 
     **Counted, not listed.** Which toy each occurrence draws from the
     class is a coin toss, so a full channel is sometimes two wands
     rather than one of each - and a list of distinct names reads as
     one toy when that happens.
+
+    **Two until drop 46 and six from it, on every server at once.** The
+    cap is one config default rather than a column on the row, so
+    raising it for the house raised it for the channel too. That was a
+    decision and not a side effect: a server on drop 45 gets a livelier
+    channel a drop early, which is the same direction the drop is
+    taking the whole game.
     """
     await sweep(monkeypatch)
 
-    assert await database.count_of_type(GUILD_A, CHANNEL, "toy") == 2
+    assert await database.count_of_type(GUILD_A, CHANNEL, "toy") == 6
 
 
 # --------------------------------------------------------------------------
@@ -138,7 +148,7 @@ async def test_it_is_the_words_the_cat_bed_arrived_with(drop_two):
 
 
 async def test_two_toys_in_one_sweep_is_one_notice(drop_two, monkeypatch):
-    """The empty channel takes two on the first sweep and says so once.
+    """The empty channel fills on the first sweep and says so once.
     The line never names what came, so it reads the same either way -
     whereas the same sentence twice in a row reads as a bug rather than
     as two toys. The real case for this is a bot that was down for a
@@ -147,7 +157,7 @@ async def test_two_toys_in_one_sweep_is_one_notice(drop_two, monkeypatch):
 
     await sweep(monkeypatch)
 
-    assert await database.count_of_type(GUILD_A, CHANNEL, "toy") == 2
+    assert await database.count_of_type(GUILD_A, CHANNEL, "toy") == 6
     assert len(halloween.posted) == 1
 
 
