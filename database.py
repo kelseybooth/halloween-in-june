@@ -242,6 +242,10 @@ TRASH_EMPTIED = "trash_emptied"
 # a player's: nobody did it, and the question it answers is about the
 # house's circulation rather than about anyone's afternoon.
 TOY_CARRIED_OFF = "toy_carried_off"
+# The catnip buff: started, spent a charge, or lapsed on the clock.
+# One action with the three in `detail`, because the question they
+# answer together is whether the mouse is worth carrying.
+CATNIP = "catnip"
 
 # The two the ladder adds to the refusal vocabulary.
 #
@@ -552,6 +556,13 @@ class User(Base):
     # it: a player with no recorded interaction is not on the board, which
     # is what keeps day one from being a wall of zeroes.
     last_cat_interaction_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # **The catnip buff, in two values that are really one.** The
+    # charges count down with each pet; the stamp carries both clocks -
+    # five minutes until the buff lapses and thirty until another play
+    # may start one - so there is no third column saying when the
+    # cooldown ends, and the two windows cannot drift apart.
+    catnip_charges: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    catnip_buff_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # How willing the cat is to play with this player right now, as the
     # number of refusals since their last success. The chance of a
@@ -1909,6 +1920,8 @@ _LATER_COLUMNS: list[tuple[str, str, str]] = [
     ("users", "last_command_at", "TIMESTAMP"),
     ("player_inventory", "taken_at", "TIMESTAMP"),
     ("thing_uses", "last_used_room", "TEXT"),
+    ("users", "catnip_charges", "INTEGER NOT NULL DEFAULT 0"),
+    ("users", "catnip_buff_at", "TIMESTAMP"),
     # Drop 2 renamed `restocks.container` to `destination` and added
     # `max_present`. A rename is two steps for a live database: the new
     # column is added here, and the old one is left orphaned and
@@ -5354,6 +5367,29 @@ CONFIG_KEYS: dict[str, tuple[int, str]] = {
         "How recently a player must have touched the cat to count when "
         "deciding that everybody already has a toy.",
     ),
+    # **The catnip mouse, which is the first toy that does anything.**
+    # Four numbers rather than one because they are four different
+    # decisions: how much better the odds get, how long that lasts in
+    # pets, how long it lasts on the clock, and how soon a player may
+    # do it again. The last is the one that stops a player with a mouse
+    # from simply never being refused a pet again.
+    "catnip_buff_points": (
+        25,
+        "How many percentage points a catnip play adds to the chance of a "
+        "friendly pet.",
+    ),
+    "catnip_buff_pets": (
+        3,
+        "How many pets a catnip buff covers, friendly or not.",
+    ),
+    "catnip_buff_minutes": (
+        5,
+        "How long a catnip buff lasts, if the pets do not use it up first.",
+    ),
+    "catnip_buff_cooldown_minutes": (
+        30,
+        "How long after a catnip play before another one can buff anything.",
+    ),
     "ivy_fall_percent": (
         10,
         "The percent chance of falling when climbing down the ivy from the "
@@ -5991,6 +6027,78 @@ async def count_of_type(guild_id: int, room_id: str, kind: str) -> int:
             )
         )
     return int(total or 0)
+
+
+async def catnip_state(guild_id: int, user_id: int) -> tuple[int, datetime | None]:
+    """How many pets of buff are left, and when the last play started one."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        row = (
+            await session.execute(
+                select(User.catnip_charges, User.catnip_buff_at).where(
+                    User.id == user_id, User.guild_id == guild_id
+                )
+            )
+        ).first()
+    return (0, None) if row is None else (row[0] or 0, row[1])
+
+
+async def start_catnip_buff(
+    guild_id: int, user_id: int, charges: int, now: datetime
+) -> None:
+    """Set the charges and stamp the clock. The caller owns the cooldown."""
+    await ensure_user_exists(user_id, guild_id)
+    session_factory = _require_session()
+    async with session_factory() as session:
+        await session.execute(
+            update(User)
+            .where(User.id == user_id, User.guild_id == guild_id)
+            .values(catnip_charges=charges, catnip_buff_at=now)
+        )
+        await session.commit()
+
+
+async def spend_catnip_charge(guild_id: int, user_id: int) -> int:
+    """Take one charge off, never below zero. Returns what is left.
+
+    **The stamp is not cleared.** It carries the cooldown as well as the
+    lapse, and a player whose charges run out at four minutes still may
+    not start another buff until thirty are up - so clearing it here
+    would hand them a fresh mouse every three pets.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        await session.execute(
+            update(User)
+            .where(
+                User.id == user_id,
+                User.guild_id == guild_id,
+                User.catnip_charges > 0,
+            )
+            .values(catnip_charges=User.catnip_charges - 1)
+        )
+        await session.commit()
+        return (
+            await session.scalar(
+                select(User.catnip_charges).where(
+                    User.id == user_id, User.guild_id == guild_id
+                )
+            )
+            or 0
+        )
+
+
+async def clear_catnip_charges(guild_id: int, user_id: int) -> None:
+    """Zero the charges on a buff that has run out of time, keeping the
+    stamp - see `spend_catnip_charge` for why the stamp stays."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        await session.execute(
+            update(User)
+            .where(User.id == user_id, User.guild_id == guild_id)
+            .values(catnip_charges=0)
+        )
+        await session.commit()
 
 
 async def start_the_clock_on_unplaced_toys(

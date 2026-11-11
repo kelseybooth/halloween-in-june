@@ -288,7 +288,9 @@ class Reaction(NamedTuple):
     chance: int
 
 
-def friendly_chance(recent_pets: int, standing: Standing = LEVEL) -> int:
+def friendly_chance(
+    recent_pets: int, standing: Standing = LEVEL, buff: int = 0
+) -> int:
     """Percentage chance of a friendly response, clamped to 0 and 100.
 
     Eight recent pets takes a level player to zero, and the cat is
@@ -299,21 +301,31 @@ def friendly_chance(recent_pets: int, standing: Standing = LEVEL) -> int:
     tenth starts twenty points up. Clamped at the top because those
     two together open at a hundred, and a chance above it would make
     the ramp read as longer than it is.
+
+    `buff` is the catnip mouse, and **it goes in before the floor, not
+    after**. That is the whole of the rule: twenty-five points added to
+    the raw number means a player eight pets deep gets 80 - 80 + 25 =
+    25, while adding it after the clamp would hand them 25 points on
+    top of a zero that the crowding was supposed to have earned them.
+    The mouse makes the cat friendlier; it does not excuse pestering.
     """
     chance = (
-        BASE_FRIENDLY_CHANCE + standing.bonus - standing.decay_per_pet * recent_pets
+        BASE_FRIENDLY_CHANCE
+        + standing.bonus
+        - standing.decay_per_pet * recent_pets
+        + buff
     )
     return max(0, min(100, chance))
 
 
 def choose_response(
-    recent_pets: int, rng=random, standing: Standing = LEVEL
+    recent_pets: int, rng=random, standing: Standing = LEVEL, buff: int = 0
 ) -> Reaction:
     """Pick a response, weighted by how much this user has been pestering the cat.
 
     `rng` is injectable so the weighting can be exercised deterministically.
     """
-    chance = friendly_chance(recent_pets, standing)
+    chance = friendly_chance(recent_pets, standing, buff)
     if rng.random() * 100 < chance:
         return Reaction(rng.choice(FRIENDLY_RESPONSES), True, chance)
     return Reaction(rng.choice(STANDOFFISH_RESPONSES), False, chance)
@@ -2217,7 +2229,17 @@ async def pet(interaction: discord.Interaction) -> None:
         # Read before the meter moves, so it is this player's place
         # coming into the pet rather than the one it leaves them in.
         standing = await standing_of(interaction.guild, user.id)
-        reaction = choose_response(result.recent, standing=standing)
+        # **Read before the roll and spent after it, friendly or not.**
+        # The work order's "three pets, friendly or not" is the whole
+        # reason the charge is spent on the standoffish branch too: a
+        # buff that only ever paid for successes would last until it
+        # produced three of them, which is a different mechanic.
+        buff = await world.catnip_in_force(
+            guild_id, user.id, await database.server_now(guild_id)
+        )
+        reaction = choose_response(result.recent, standing=standing, buff=buff)
+        if buff:
+            await world.spend_catnip(guild_id, user.id)
         delta = RELATIONSHIP_STEP if reaction.friendly else -RELATIONSHIP_STEP
         relationship = await _move_the_meter(user.id, guild_id, delta)
         # The row was opened inside the pet's own transaction, before
@@ -2233,6 +2255,15 @@ async def pet(interaction: discord.Interaction) -> None:
         return
 
     message = reaction.text
+    if buff and reaction.friendly:
+        # **The only sign the player gets**, and only on a friendly pet:
+        # a line on a standoffish one would be the game explaining that
+        # the mouse had failed, which is worse than silence. The public
+        # pet line never changes - the buff is this player's business,
+        # and the room has no way to know a mouse was involved.
+        suffix = await phrasing.default_say("pet.buffed_suffix")
+        if suffix:
+            message = f"{message} {suffix}"
     crowding_begins = _crowding_begins(result.recent, standing)
     if crowding_begins:
         # **The crossing speaks for itself, so it replaces the response on
@@ -5051,7 +5082,7 @@ async def _play_with_toy(interaction, state, found) -> None:
         )
         return
 
-    effect = await world.play_with(guild_id, user.id, now)
+    effect = await world.play_with(guild_id, user.id, now, thing_id=found.thing_id)
     # **Read off the play, not off the score.** Far enough down the
     # day's curve a play pays nothing, and inferring success from the
     # meter moving would turn exactly those plays into refusals: the

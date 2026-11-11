@@ -19,12 +19,13 @@ import logging
 import database
 import resolve
 
-from database import (  # noqa: F401 - the vocabulary, re-exported for call sites
+from database import (  # noqa: F401 - the vocabulary, re-exported for call site
     ABSENT,
     ALREADY_ARRIVED,
     ALREADY_DONE,
     AMBIGUOUS,
     ARMS_FULL,
+    CATNIP,
     COOLDOWN,
     CRASHED,
     CRAVING_GUESS,
