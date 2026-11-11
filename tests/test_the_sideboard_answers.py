@@ -20,11 +20,12 @@ just read.
 that is what the sentence says is behind them. `cupboard` already led
 there; `cupboard doors` is the phrase the prose actually uses.
 
-**What this does not fix** is that the bills, the magazine and the card
-exist only in the `use` text. `/use card` is the right answer - it is
-the line that describes the card - but `/look card` can only hand back
-the furniture the mail is lying on. They want their own text or a
-mention in the sideboard's `look`, and that is a writing decision.
+**The bills, the magazine and the card are parked**, deliberately and
+not forgotten - see `Parking lot.md`. They exist only in the `use`
+text, so an alias would give `/use card` the right line and leave
+`/look card` handing back the furniture the mail is lying on. What
+they want is their own text or a mention in the sideboard's `look`,
+which is a writing decision rather than a parsing one.
 """
 
 import pytest
@@ -64,11 +65,6 @@ NOUNS = [
     ("saucer", "sideboard"),
     ("loose change", "sideboard"),
     ("change", "sideboard"),
-    ("utility bills", "sideboard"),
-    ("bills", "sideboard"),
-    ("parenting magazine", "sideboard"),
-    ("magazine", "sideboard"),
-    ("card", "sideboard"),
     ("cupboard doors", "cat_food_tuna"),
     ("cupboard door", "cat_food_tuna"),
     # Already worked, and here so that a rewrite of the row cannot quietly
@@ -94,18 +90,42 @@ async def test_every_noun_on_the_sideboard_reaches_something(
     assert found.fuzzy is None
 
 
-async def test_use_hands_back_the_line_that_names_the_card(real_house):
-    """The payoff for the three nouns that live only in the `use` text.
-    `/use card` is the right answer because the line it reaches is the one
-    that describes the card - which is why these are worth aliasing even
-    though `/look card` can only show the furniture."""
+PARKED = ["card", "bills", "utility bills", "magazine", "parenting magazine"]
+
+
+@pytest.mark.parametrize("typed", PARKED)
+async def test_what_is_inside_the_mail_is_parked_and_not_aliased(
+    dining_room, typed
+):
+    """**Left refusing on purpose**, which is why there is a test for it:
+    the next person to read the sideboard's `use` line and count the
+    refusals would otherwise add these five in good faith.
+
+    They are named only in the `use` text, so an alias would answer
+    `/use card` correctly and hand `/look card` the furniture the mail is
+    lying on - a dead end wearing the clothes of an answer. The decision
+    they are waiting on is whether the card gets its own text or a
+    mention in the sideboard's `look`, and both are writing.
+
+    `Parking lot.md` holds the row, and this is the assertion that says
+    the row is still true.
+    """
+    assert isinstance(await resolves(typed), NotFound)
+
+
+async def test_going_through_the_mail_is_still_what_the_sideboard_does(
+    real_house,
+):
+    """And the line those five come from is reachable the way it always
+    was, so nothing was lost by leaving them out: a player who read about
+    the card gets back to it through the mail, or through the sideboard."""
     db, _ = real_house
     await enter_properly(db, room="DI")
 
-    reply = (await command(bot.use, "card", a_room_thread("Dining Room"))).reply
-
-    assert "You go through the mail." in reply
-    assert "a card addressed to" in reply
+    for typed in ("sideboard", "mail", "unopened mail"):
+        reply = (await command(bot.use, typed, a_room_thread("Dining Room"))).reply
+        assert "You go through the mail." in reply
+        assert "a card addressed to" in reply
 
 
 async def test_looking_at_the_sideboard_reads_exactly_as_it_did(real_house):
@@ -142,14 +162,15 @@ async def test_the_dining_room_marks_what_it_always_did(dining_room):
 
 # `saucer` is left out: three cat bowls already answered to it, so it was
 # a word the house knew before this and the case proves nothing here.
-@pytest.mark.parametrize("typed", ["card", "change", "magazine", "bills"])
+@pytest.mark.parametrize("typed", ["change", "loose change", "unopened mail"])
 async def test_elsewhere_the_house_now_admits_it_knows_the_word(
     dining_room, typed
 ):
     """A side effect worth having. These are words the house knows now, so
-    a player who types one in the Nursery gets *you don't see a card here*
-    instead of *there's not much to look at* - the refusal that says it is
-    somewhere, rather than the one that says it is nothing."""
+    a player who types one in the Nursery gets *you don't see a loose
+    change here* instead of *there's not much to look at* - the refusal
+    that says it is somewhere, rather than the one that says it is
+    nothing."""
     found = await resolves(typed, room="NU")
 
     assert isinstance(found, NotFound)

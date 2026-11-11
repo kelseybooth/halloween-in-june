@@ -71,3 +71,71 @@ which of the seventeen are uses, and what the rest should say instead.
 `use_fail.not_carried` has no plural form, so three things in the house
 produce "The herbs **is** right there" and "The tortilla chips **is**
 right there."
+
+---
+
+## What is inside the mail has no text of its own
+
+**Parked 11 November 2026.** Found while making the rest of the
+sideboard's nouns typeable, after a playtester was shown the cat for
+typing `mail`.
+
+### What happens
+
+The sideboard's `use` line is the only place three objects exist:
+
+> You go through the mail. Two utility bills, a parenting magazine, and
+> a card addressed to Elena, David, and Marcus.
+
+Nothing in the files is a bill, a magazine or a card. Players have
+typed them anyway - `card` seven times across `/look`, `/use` and
+`/take`, `magazine` three, `bills` and `utility bills` three between
+them - and every one of those got *you don't see a card here*, which
+is false. They had just read about it.
+
+### Why an alias was the wrong fix
+
+Everything else the sideboard's prose names was aliased to the
+sideboard in the same change, and these five were taken back out
+before it shipped. An alias sends a word to a thing's whole row, and
+the sideboard's row answers two verbs very differently:
+
+| Typed | What an alias would give back |
+| --- | --- |
+| `/use card` | *You go through the mail... and a card addressed to...* |
+| `/look card` | The sideboard's description, which does not mention a card |
+
+The `use` half is right. The `look` half is a dead end wearing the
+clothes of an answer: the player asked about a card and got a
+paragraph about furniture, with no card in it and nothing to try next.
+A refusal at least ends the sentence.
+
+**The card is the one that matters.** It is addressed to Elena, David
+and Marcus, which is three names disclosed by an object - the way this
+house is allowed to say a name at all - and seven people have reached
+for it.
+
+### What it is waiting on
+
+A copy decision, and there are two shapes of it:
+
+- **Give them their own rows.** A card, and perhaps the magazine, as
+  fixtures in the Dining Room with their own `look` text. Then every
+  verb answers, and the card can carry whatever its own sentence is
+  worth carrying.
+- **Name them in the sideboard's `look` instead of only in its `use`.**
+  Cheaper, and it makes the alias honest in one line - `/look card`
+  would hand back a paragraph that mentions a card.
+
+Either is writing rather than parsing, which is why it is here.
+
+`tests/test_the_sideboard_answers.py` has the assertion that the five
+words are still refused, so this row cannot quietly stop being true.
+
+### Also noticed on the way
+
+The sideboard has one `use`, so every word on it gets the mail:
+`/use saucer` answers *You go through the mail.* That was already true
+of `/use buffet` and is a smaller version of the same question - what
+a fixture's single `use` should say when the fixture is a surface with
+several things on it.

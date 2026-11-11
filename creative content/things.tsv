@@ -86,7 +86,7 @@ plates	plates	plates|plate|dinner plates	fixture	DI	1	no	yes	0										25	76
 high_chair	high chair	high chair|highchair|tray	fixture	DI	1	no	yes	0										25	77					
 chairs	dining chairs	chairs|dining chairs|chair	fixture	DI	1	no	yes	0										25	78					
 wine_glass	wine glass	wine glass|glass|wine	fixture	DI	1	no	yes	0										25	79					
-sideboard	sideboard	sideboard|buffet|mail|letters|unopened mail|saucer|loose change|change|utility bills|bills|parenting magazine|magazine|card	fixture	DI	1	no	yes	0										25	80					
+sideboard	sideboard	sideboard|buffet|mail|letters|unopened mail|saucer|loose change|change	fixture	DI	1	no	yes	0										25	80					
 flowers	vase of flowers	flowers|vase|wilting flowers	fixture	DI	1	no	yes	0										25	81					
 tall_windows	tall windows	windows|window|tall windows	fixture	DI	1	no	yes	0										25	82					
 pantry	pantry	pantry|pantry door|cupboard|larder	fixture	KI	1	no	yes	0										25	83					
