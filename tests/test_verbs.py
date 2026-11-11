@@ -16,6 +16,7 @@ import bot
 import content as content_module
 import content_loader
 import database
+import reach
 import resolve
 from content import TextRow
 from test_loader import a_thing
@@ -1349,3 +1350,111 @@ async def test_a_thing_sharing_a_word_with_a_room_still_wins(real_house):
     reply = (await command(bot.look, "kitchen", a_room_thread("Courtyard"))).reply
 
     assert "back door" in reply.lower()
+
+
+# --------------------------------------------------------------------------
+# ...and naming it at the other three verbs
+#
+# **`/look` had this pass and `/use`, `/take` and `/go` did not.** A player
+# who had just walked into the Kitchen, read it, and typed `kitchen` at
+# `/use` two seconds later was told *You don't see a kitchen here* - by a
+# house that knew exactly which room they were standing in.
+#
+# The false note is in why that line was chosen rather than in the refusal.
+# `kitchen` is a word the two kitchen doorways answer to, so the resolver
+# reports `exists_elsewhere`, and `*_fail.absent` is the line for a thing
+# that is in a different room. A room is not in a different room.
+#
+# Each verb gets its own line rather than sharing one, for the reason the
+# three `*_fail.unknown` lines were split: a single sentence would have to
+# read sensibly after all three verbs and ends up saying nothing to any of
+# them. And each refusal is logged under its own reason, `this_room`, so
+# how often players talk to the house about the room is one query away.
+# --------------------------------------------------------------------------
+
+
+OTHER_VERBS = {"use": bot.use, "take": bot.take, "go": bot.go}
+
+
+@pytest.mark.parametrize("verb", sorted(OTHER_VERBS))
+@pytest.mark.parametrize("room, word", [("KI", "kitchen"), ("UH", "hallway")])
+async def test_the_other_verbs_answer_for_the_room_too(real_house, verb, room, word):
+    """Two rooms rather than nine, because what varies here is the verb.
+    `test_naming_your_own_room_describes_it` above walks every room."""
+    db, guild = real_house
+    await enter_properly(db, room=room)
+    here = await resolve.room_name(room)
+
+    reply = (await command(OTHER_VERBS[verb], word, a_room_thread(here))).reply
+
+    assert here in reply
+    assert "don't see" not in reply
+
+
+async def test_each_verb_says_its_own_thing(real_house):
+    """Written out rather than asserted loosely, because the lines are the
+    point of the change and a reader should be able to see all three."""
+    db, guild = real_house
+    await enter_properly(db, room="KI")
+
+    said = {}
+    for verb, fn in OTHER_VERBS.items():
+        said[verb] = (await command(fn, "kitchen", a_room_thread("Kitchen"))).reply
+
+    assert said["use"] == "There's nothing to do with the Kitchen but look at it."
+    assert said["take"] == "You can't put the Kitchen in your bag."
+    assert said["go"] == "You're already in the Kitchen."
+
+
+async def test_the_room_is_still_asked_after_the_things_in_it(real_house):
+    """The ordering `/look` already had, and the reason the pass is safe to
+    be as loose as it is. In the Courtyard the back door answers to
+    `kitchen`, so resolution never fails and the room is never asked -
+    `test_a_thing_sharing_a_word_with_a_room_still_wins` is the same
+    invariant through `/look`."""
+    db, guild = real_house
+    await enter_properly(db, room="CO")
+
+    found = await reach.find(GUILD_A, ALICE, "CO", "kitchen", reach.Scope.REACH)
+
+    assert isinstance(found, reach.Found)
+    assert found.thing_id == "CK"
+
+
+async def test_the_refusal_is_written_down(real_house):
+    """Its own reason, so the rate is one query away rather than mixed in
+    with every other `absent`."""
+    db, guild = real_house
+    await enter_properly(db, room="KI")
+
+    await command(bot.use, "kitchen", a_room_thread("Kitchen"))
+
+    rows = await database.recent_interactions(GUILD_A, ALICE, limit=5)
+    refused = [r for r in rows if r.reason == database.THIS_ROOM]
+    assert len(refused) == 1
+    assert refused[0].action == database.USE
+    assert refused[0].detail == "kitchen"
+
+
+async def test_no_room_is_given_away_by_this(real_house):
+    """**The Secret Library has to fail the way a room that does not exist
+    fails**, and this pass cannot be the thing that leaks it: it only ever
+    matches the room the player is standing in, so it answers for the
+    Library to somebody already inside it and to nobody else."""
+    db, guild = real_house
+    await enter_properly(db, room="EN")
+
+    reply = (await command(bot.go, "secret library", a_room_thread("Entryway"))).reply
+
+    assert "already in" not in reply
+    assert "You don't see a secret library here." == reply
+
+
+async def test_the_channel_keeps_the_refusal_it_had(real_house):
+    """Left out deliberately: `the channel` does not take the article all
+    three lines put in front of the name, and it is not a room anybody is
+    inside or outside of in the story."""
+    assert await bot._naming_the_room_you_are_in(
+        content_module.CHANNEL_ROOM, "channel", "use_fail.this_room"
+    ) is None
+    assert await bot._is_this_room(content_module.CHANNEL_ROOM, "channel") is True

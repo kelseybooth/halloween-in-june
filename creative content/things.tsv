@@ -86,7 +86,7 @@ plates	plates	plates|plate|dinner plates	fixture	DI	1	no	yes	0										25	76
 high_chair	high chair	high chair|highchair|tray	fixture	DI	1	no	yes	0										25	77					
 chairs	dining chairs	chairs|dining chairs|chair	fixture	DI	1	no	yes	0										25	78					
 wine_glass	wine glass	wine glass|glass|wine	fixture	DI	1	no	yes	0										25	79					
-sideboard	sideboard	sideboard|buffet|mail|letters	fixture	DI	1	no	yes	0										25	80					
+sideboard	sideboard	sideboard|buffet|mail|letters|unopened mail|saucer|loose change|change|utility bills|bills|parenting magazine|magazine|card	fixture	DI	1	no	yes	0										25	80					
 flowers	vase of flowers	flowers|vase|wilting flowers	fixture	DI	1	no	yes	0										25	81					
 tall_windows	tall windows	windows|window|tall windows	fixture	DI	1	no	yes	0										25	82					
 pantry	pantry	pantry|pantry door|cupboard|larder	fixture	KI	1	no	yes	0										25	83					
@@ -118,7 +118,7 @@ cat_food_stash_hall	pack of salmon cat food	salmon cat food|salmon|cat food|cans
 cat_food_stash_drawer	cans of expired cat food	expired cat food|expired|cat food|cans|drawer|stash|drawer of expired cat food|drawer of cat food	source	UH	1	no	yes	0			drawer_unjammed			cat_food_expired		rolltop_desk		40	109					
 graphite_tin	tin of graphite powder	graphite|graphite powder|tin|graphite tin	source	BE	1	no	yes	0						graphite_powder		bedroom_window		40	110					
 cat_food_stash_bed	crate of chicken cat food	chicken cat food|chicken|cat food|cans|crate|stash	source	BE	1	no	yes	0						cat_food_chicken		bed		40	111					
-cat_food_stash_sideboard	cupboard of tuna cat food	tuna cat food|tuna|cat food|cans|cupboard|stash	source	DI	1	no	yes	0						cat_food_tuna		sideboard		25	112					
+cat_food_stash_sideboard	cupboard of tuna cat food	tuna cat food|tuna|cat food|cans|cupboard|cupboard doors|cupboard door|stash	source	DI	1	no	yes	0						cat_food_tuna		sideboard		25	112					
 copper_wire_coil	coil of copper wire	copper wire|wire|copper|coil	source	SE	1	no	yes	0						copper_wire				50	113					
 carving_tool_sleeve	carving tool sets	carving tools|tools|carving kit|sleeve|sets	source	BE	1	no	yes	0						carving_tools		halloween_box		40	114					
 costume_pile	pile of costumes	costumes|costume|costume pile|pile	source	BE	1	no	yes	0						costume		halloween_box		40	115					
