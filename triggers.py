@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict, deque
+from typing import NamedTuple
 from datetime import date, datetime, time, timedelta, timezone
 
 import achievements
@@ -393,42 +394,136 @@ async def captive_audience(context: Context) -> bool:
     return audience >= wanted
 
 
-async def accompanist(context: Context) -> bool:
-    """A rattle shaken within a minute of somebody else's music box.
+class Band(NamedTuple):
+    """Who was playing what, in the room, inside the window."""
 
-    **It listens on the rattle, not the music box.** Either would be a
-    legible reading of "kept time while it played", and only this one is
-    earnable by the person who did it: the rattler is the accompanist,
-    and firing on the music box would hand the achievement to whoever
-    wound it up for having been played *at*. It also means a room where
-    one player winds the box and three shake rattles earns three, which
-    is the right answer.
+    rattlers: tuple[int, ...]
+    box_players: tuple[int, ...]
 
-    **`last_used_room` is read, not `current_room`.** The other player
-    may have wandered off between the two uses, and a check on where
-    they are now would miss a performance that happened or invent one
-    that did not. The pair of columns `record_use` writes together say
-    where that use was, which is the question.
+
+async def _the_band(context: Context) -> Band:
+    """Everyone whose instrument counts, on a use of either one.
+
+    **One rule, stated once, and both achievements read it.** A
+    player earns *Accompanist* if they rattled inside the window and
+    somebody else played the box inside it; a player earns
+    *Bandleader* if they played the box and somebody else rattled.
+    Written that way the two are the same sentence with the
+    instruments swapped, and neither cares which came first - which
+    is what *Bandleader* was asked for and what *Accompanist* only
+    ever managed in one direction.
+
+    **The person acting is on exactly one side.** Their own use is
+    the event being judged, so it is taken from `thing_id` rather
+    than looked up - `record_use` and this hook are not ordered with
+    respect to each other, and a predicate that depended on the
+    write having landed would be reading a race. Everyone else comes
+    out of `thing_uses`, where `except_user` keeps the actor from
+    appearing twice.
+
+    **Which is also how self-accompaniment stays refused.** The
+    filter at the end asks each player whether the other instrument
+    was somebody else's, so one player who winds the box and then
+    shakes the rattle is on both lists and qualifies for neither.
+    Four lines up from a version that tested the two lists for
+    emptiness, which gets that case wrong the moment a third player
+    is in the room.
 
     Sixty seconds is `ACCOMPANIST_SECONDS`, measured off the server
     clock for the same reason *Captive Audience* measures its ten
     minutes there: `last_used_at` is stamped from `server_now`, a QA
     offset moves it, and a window built from the wall clock would be
     comparing two different times.
+
+    **`last_used_room` is read, not `current_room`.** The others may
+    have wandered off between their use and this one, and a check on
+    where they are now would miss a performance that happened or
+    invent one that did not. The pair of columns `record_use` writes
+    together say where that use was, which is the question.
     """
-    if context.thing_id != RATTLE or context.room_id is None:
-        return False
-    if context.user_id is None:
-        return False
+    if context.room_id is None or context.user_id is None:
+        return Band((), ())
+    if context.thing_id not in (RATTLE, MUSIC_BOX):
+        return Band((), ())
+
     now = context.now or await database.server_now(context.guild_id)
-    return await database.somebody_else_just_used(
-        context.guild_id,
-        MUSIC_BOX,
-        context.room_id,
-        now - timedelta(seconds=ACCOMPANIST_SECONDS),
-        except_user=context.user_id,
+    since = now - timedelta(seconds=ACCOMPANIST_SECONDS)
+
+    async def others(thing_id: str) -> tuple[int, ...]:
+        return tuple(
+            await database.others_who_just_used(
+                context.guild_id,
+                thing_id,
+                context.room_id,
+                since,
+                except_user=context.user_id,
+            )
+        )
+
+    mine = (context.user_id,)
+    rattlers = await others(RATTLE)
+    box_players = await others(MUSIC_BOX)
+    if context.thing_id == RATTLE:
+        rattlers = mine + rattlers
+    else:
+        box_players = mine + box_players
+
+    return Band(
+        tuple(r for r in rattlers if any(b != r for b in box_players)),
+        tuple(b for b in box_players if any(r != b for r in rattlers)),
     )
 
+
+async def accompanist(context: Context) -> bool:
+    """A rattle shaken within a minute of somebody else's music box.
+
+    **It listens on both instruments now.** It used to fire on the
+    rattle alone, which read the pairing as something the rattler did
+    to a box that had already played - so a player who rattled first
+    and was joined by a box earned nothing, having done the same
+    thing in the other order. Either use completes the pair and both
+    now check.
+
+    **Still earnable only by the people who shook something.** A room
+    where one player winds the box and three shake rattles earns
+    three, which was the right answer when this listened on the
+    rattle and still is: each of the three rattled while somebody
+    else's box played. What changed is that the three no longer have
+    to be the ones who moved last.
+
+    See `_the_band` for the rule itself.
+    """
+    return bool((await _the_band(context)).rattlers)
+
+
+async def _accompanists(context: Context) -> tuple[int, ...]:
+    """Everyone who kept time. Newest performance first."""
+    return (await _the_band(context)).rattlers
+
+
+async def bandleader(context: Context) -> bool:
+    """A music box played while somebody else was shaking a rattle.
+
+    *Accompanist* read from one side of the same moment and left the
+    other unremarked: the player whose box somebody kept time with
+    was the reason there was anything to keep time to, and the game
+    said nothing to them. This is that half.
+
+    **Both fire together, and both fan out.** Three players winding
+    the box before a rattle and three more after it all earn this,
+    from four separate uses - the rattle's own, which catches the
+    three behind it, and each later box use, which catches itself.
+    The rattler earns one *Accompanist* across all of them, because
+    the insert is idempotent per player.
+
+    See `_the_band` for the rule itself.
+    """
+    return bool((await _the_band(context)).box_players)
+
+
+async def _bandleaders(context: Context) -> tuple[int, ...]:
+    """Everyone whose box was played along to. Newest performance first."""
+    return (await _the_band(context)).box_players
 
 async def bin_looking_for_you(context: Context) -> bool:
     """A dirty diaper carried into the Kitchen, on the first look.
@@ -1471,15 +1566,20 @@ def register_all() -> None:
     # These depend on other people, which is why each is a predicate of
     # its own rather than a thing id and a count. They ask different
     # things of them: *Captive Audience* wants an audience present and
-    # awake, *Accompanist* wants one of them to have played the music box
-    # here in the last minute. Both listen on the rattle.
+    # awake, the band wants somebody else to have been playing the other
+    # instrument here in the last minute.
     #
     # Deliberately not "the two that depend on other people", which is
     # what this said first. A sentence counting the cases is falsified by
     # the next one, and the person adding it is the one person who will
     # not grep for a sentence saying how many there are.
     add("captive_audience", "on_use", captive_audience)
-    add("accompanist", "on_use", accompanist)
+    # The only two awards in the game that go to somebody other than
+    # whoever ran the command, which is what `earners` is for. Both
+    # listen on both instruments: either use can be the one that
+    # completes the pair, and the same use feeds both lists.
+    add("accompanist", "on_use", accompanist, earners=_accompanists)
+    add("bandleader", "on_use", bandleader, earners=_bandleaders)
     add("getting_into_the_spirit", "on_use", _blocked("the ghost system"))
     add("ghostbuster", "on_use", _blocked("the ghost system"))
     add("breaking_into_the_halloween_candy", "on_use", _used(CANDY))

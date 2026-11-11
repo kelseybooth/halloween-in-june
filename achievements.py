@@ -35,9 +35,9 @@ depends on whether an interaction token is in hand.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
-from typing import Awaitable, Callable
+from typing import Awaitable, Callable, Sequence
 
 import database
 import resolve
@@ -140,6 +140,11 @@ class Context:
 
 
 Predicate = Callable[[Context], Awaitable[bool]]
+# Who an award goes to, when that is not the person who acted.
+# Returns the earners in the order they should be announced. An
+# empty sequence awards nobody, which is the same answer a
+# predicate saying no gives and is not treated as a disagreement.
+Earners = Callable[[Context], Awaitable[Sequence[int]]]
 
 
 @dataclass(frozen=True)
@@ -147,6 +152,9 @@ class Trigger:
     achievement_id: str
     hooks: frozenset[str]
     predicate: Predicate
+    # None means the award goes to whoever acted, which is every
+    # achievement but the two the band earns. See `_awards_for`.
+    earners: Earners | None = None
 
 
 @dataclass(frozen=True)
@@ -179,7 +187,13 @@ _TRIGGERS: dict[str, Trigger] = {}
 _BY_HOOK: dict[str, list[Trigger]] = {hook: [] for hook in HOOKS}
 
 
-def register(achievement_id: str, hooks: str | tuple[str, ...], predicate: Predicate) -> None:
+def register(
+    achievement_id: str,
+    hooks: str | tuple[str, ...],
+    predicate: Predicate,
+    *,
+    earners: Earners | None = None,
+) -> None:
     """Register one achievement against one or more hooks.
 
     Several hooks is ordinary rather than a special case: *Green Thumb* listens
@@ -196,7 +210,7 @@ def register(achievement_id: str, hooks: str | tuple[str, ...], predicate: Predi
     if achievement_id in _TRIGGERS:
         raise ValueError(f"{achievement_id} is registered twice")
 
-    trigger = Trigger(achievement_id, frozenset(wanted), predicate)
+    trigger = Trigger(achievement_id, frozenset(wanted), predicate, earners)
     _TRIGGERS[achievement_id] = trigger
     for hook in wanted:
         _BY_HOOK[hook].append(trigger)
@@ -292,7 +306,7 @@ async def fire(context: Context) -> list[Earned]:
         try:
             if not await trigger.predicate(context):
                 continue
-            award = await _award(context, row)
+            awards = await _awards_for(trigger, context, row)
         except Exception:
             # One bad predicate must not cost the player the other thirty-four,
             # nor the command that fired the hook.
@@ -303,9 +317,38 @@ async def fire(context: Context) -> list[Earned]:
                 context.guild_id,
             )
             continue
-        if award is not None:
-            earned.append(award)
+        earned.extend(awards)
     return earned
+
+
+async def _awards_for(
+    trigger: Trigger, context: Context, row: resolve.AchievementRow
+) -> list[Earned]:
+    """Write this trigger's awards. Empty when everyone already had it.
+
+    **Almost always one, for the person who acted.** The exception
+    is the band: *Accompanist* goes to every player who rattled in
+    the window and *Bandleader* to every player who played the box,
+    and on the use that completes the pair most of those people are
+    not the one running the command. So the trigger names its
+    earners and each of them gets this context with their own id.
+
+    One row per earner rather than one award naming several, which
+    is what makes each of them real: `/stats` reads
+    `player_achievements`, the insert is idempotent per player, and
+    somebody who already had it drops out of the list instead of
+    suppressing everybody else's.
+    """
+    if trigger.earners is None:
+        award = await _award(context, row)
+        return [award] if award is not None else []
+
+    awards = []
+    for user_id in await trigger.earners(context):
+        award = await _award(replace(context, user_id=user_id), row)
+        if award is not None:
+            awards.append(award)
+    return awards
 
 
 async def _award(context: Context, row: resolve.AchievementRow) -> Earned | None:

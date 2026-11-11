@@ -965,7 +965,7 @@ def test_what_can_actually_be_earned():
     """
     earnable = achievements.registered_ids() - set(BLOCKED) - set(BY_HAND)
 
-    assert len(earnable) == 57
+    assert len(earnable) == 58
 
 
 # --------------------------------------------------------------------------
@@ -1573,6 +1573,16 @@ async def test_a_crowd_watching_something_other_than_the_rattle(playing):
 # --------------------------------------------------------------------------
 
 
+# Enough players to fill a room. The band is the only thing in the game
+# that pays more than one person for one command, so it is the only
+# thing here that needs more than Alice and Bob.
+CAROL = 100000000000000003
+DAVE = 100000000000000004
+ERIN = 100000000000000005
+FRANK = 100000000000000006
+GRACE = 100000000000000007
+
+
 async def played_the_music_box(db, who: int, room_id: str | None) -> datetime:
     """Another player's music box use, and when the row says it happened."""
     await db.ensure_user_exists(who, GUILD_A)
@@ -1580,6 +1590,35 @@ async def played_the_music_box(db, who: int, room_id: str | None) -> datetime:
     stamped = await db.last_used(who, GUILD_A, "music_box")
     assert stamped is not None
     return stamped
+
+
+async def shook_the_rattle(db, who: int, room_id: str | None) -> datetime:
+    """The same, for the other instrument.
+
+    Needed because the rattle can now be the use that went first, and
+    `fire` does not write `thing_uses` - the handler does, before the
+    hook runs. A test that fired a rattle without recording it would
+    be asking a later music box about a performance the table never
+    heard.
+    """
+    await db.ensure_user_exists(who, GUILD_A)
+    await db.record_use(who, GUILD_A, "rattle", room_id=room_id)
+    stamped = await db.last_used(who, GUILD_A, "rattle")
+    assert stamped is not None
+    return stamped
+
+
+async def who_earned(context) -> dict:
+    """Which players this one hook paid, keyed by achievement.
+
+    `earned` collapses to a set of ids, which is the right shape for
+    every other achievement in this file and loses the only thing the
+    band is about: who got it.
+    """
+    out: dict[str, set[int]] = {}
+    for award in await achievements.fire(context):
+        out.setdefault(award.achievement_id, set()).add(award.user_id)
+    return out
 
 
 async def test_accompanist(playing):
@@ -1601,7 +1640,7 @@ async def test_a_music_box_two_minutes_ago_is_not_accompaniment(playing):
     window is the only thing saying no."""
     when = await played_the_music_box(playing, BOB, "NU")
 
-    assert "accompanist" not in await earned(
+    assert not await who_earned(
         a_context(
             "on_use",
             thing_id="rattle",
@@ -1613,10 +1652,19 @@ async def test_a_music_box_two_minutes_ago_is_not_accompaniment(playing):
 
 async def test_accompanying_yourself_is_not_accompaniment(playing):
     """Alice winds the box and shakes the rattle. One player doing both is
-    the case `except_user` exists for, and it is not a crowd of one."""
+    the case `except_user` exists for, and it is not a crowd of one.
+
+    **Both halves, since there are two now.** A one-player band must
+    not pay her twice over for the same minute.
+
+    What refuses it here is `except_user`, which keeps her
+    off the list of other people playing the other instrument - not
+    the per-player filter, which a mutation run proved this test
+    cannot see. That one needs a third player in the room and is
+    pinned by test_a_player_on_both_instruments_earns_neither."""
     when = await played_the_music_box(playing, ALICE, "NU")
 
-    assert "accompanist" not in await earned(
+    assert not await who_earned(
         a_context(
             "on_use",
             thing_id="rattle",
@@ -1632,7 +1680,7 @@ async def test_a_music_box_in_another_room_is_not_accompaniment(playing):
     alone would say yes and only the room says no."""
     when = await played_the_music_box(playing, BOB, "NU")
 
-    assert "accompanist" not in await earned(
+    assert not await who_earned(
         a_context(
             "on_use",
             thing_id="rattle",
@@ -1682,22 +1730,176 @@ async def test_asking_about_nowhere_does_not_match_everywhere(playing):
     )
 
 
-async def test_the_music_box_does_not_earn_it_for_the_player_winding_it(playing):
-    """It listens on the rattle. Bob rattled a moment ago and Alice is now
-    using the box, which is the same pair of events in the other order and
-    is not somebody keeping time."""
-    await playing.ensure_user_exists(BOB, GUILD_A)
-    await playing.record_use(BOB, GUILD_A, "rattle", room_id="NU")
-    when = await playing.last_used(BOB, GUILD_A, "rattle")
+async def test_either_instrument_can_come_first(playing):
+    """Bob rattled a moment ago and Alice is now using the box.
 
-    assert "accompanist" not in await earned(
+    This asserted the opposite until 11 November, when it was the
+    clearest statement of the old rule: *Accompanist* listened on the
+    rattle, so the same two performances in this order earned nobody
+    anything. The roles are fixed by the instrument and not by who
+    moved last, so Bob keeps time and Alice leads whichever way round
+    they happen."""
+    when = await shook_the_rattle(playing, BOB, "NU")
+
+    assert await who_earned(
         a_context(
             "on_use",
             thing_id="music_box",
             room_id="NU",
             now=when + timedelta(seconds=30),
         )
+    ) == {"accompanist": {BOB}, "bandleader": {ALICE}}
+
+
+async def test_the_rattle_pays_the_box_player_too(playing):
+    """The original pair of events, read from the other side. Bob's box
+    is the reason there was anything to keep time to, and until
+    *Bandleader* the game said nothing to him about it."""
+    when = await played_the_music_box(playing, BOB, "NU")
+
+    assert await who_earned(
+        a_context(
+            "on_use",
+            thing_id="rattle",
+            room_id="NU",
+            now=when + timedelta(seconds=30),
+        )
+    ) == {"accompanist": {ALICE}, "bandleader": {BOB}}
+
+
+async def test_a_player_on_both_instruments_earns_neither(playing):
+    """Bob wound the box and then shook the rattle himself; Alice is
+    rattling now.
+
+    Bob is on both lists, which is the case a rule written as *are
+    there rattlers and are there box players* gets wrong: there are
+    both, so it would pay Bob for accompanying himself. Asked per
+    player, Bob's only box is his own and he earns no *Accompanist*,
+    while Alice's rattle is somebody else's and earns him the
+    *Bandleader* his box is owed."""
+    when = await played_the_music_box(playing, BOB, "NU")
+    await shook_the_rattle(playing, BOB, "NU")
+
+    assert await who_earned(
+        a_context(
+            "on_use",
+            thing_id="rattle",
+            room_id="NU",
+            now=when + timedelta(seconds=30),
+        )
+    ) == {"accompanist": {ALICE}, "bandleader": {BOB}}
+
+
+async def test_one_rattle_pays_every_box_in_the_window(playing):
+    """Three players wind the box, then somebody rattles once.
+
+    The fan-out *Bandleader* needed and the reason an award can go to
+    more than one person. Three rows written from one command, none
+    of them for the player who ran it."""
+    for who in (BOB, CAROL, DAVE):
+        when = await played_the_music_box(playing, who, "NU")
+
+    assert await who_earned(
+        a_context(
+            "on_use",
+            thing_id="rattle",
+            room_id="NU",
+            now=when + timedelta(seconds=30),
+        )
+    ) == {"accompanist": {ALICE}, "bandleader": {BOB, CAROL, DAVE}}
+
+
+async def test_one_box_pays_every_rattle_in_the_window(playing):
+    """The mirror. Three players rattle, then somebody winds the box.
+
+    The old rule gave three *Accompanists* only when the three moved
+    last - each rattle fired its own check. Coming first they used to
+    get nothing; now the box catches all three."""
+    for who in (BOB, CAROL, DAVE):
+        when = await shook_the_rattle(playing, who, "NU")
+
+    assert await who_earned(
+        a_context(
+            "on_use",
+            thing_id="music_box",
+            room_id="NU",
+            now=when + timedelta(seconds=30),
+        )
+    ) == {"accompanist": {BOB, CAROL, DAVE}, "bandleader": {ALICE}}
+
+
+async def test_a_band_of_seven_around_one_rattle(playing):
+    """Three boxes, a rattle, three more boxes, all inside the minute.
+
+    Seven players and seven awards off four commands: the rattle pays
+    itself and the three behind it, and each box after it pays only
+    the player who ran it, because the three before already have
+    theirs and the rattler already has his. That the later three earn
+    anything at all is the whole of the order-independence; that they
+    earn it one at a time is `_award` being idempotent per player
+    rather than anything this had to arrange."""
+    for who in (BOB, CAROL, DAVE):
+        await played_the_music_box(playing, who, "NU")
+    rattled = await shook_the_rattle(playing, ALICE, "NU")
+
+    first = await who_earned(
+        a_context(
+            "on_use",
+            thing_id="rattle",
+            room_id="NU",
+            now=rattled + timedelta(seconds=1),
+        )
     )
+    assert first == {"accompanist": {ALICE}, "bandleader": {BOB, CAROL, DAVE}}
+
+    for who in (ERIN, FRANK, GRACE):
+        when = await played_the_music_box(playing, who, "NU")
+        assert await who_earned(
+            a_context(
+                "on_use",
+                user_id=who,
+                thing_id="music_box",
+                room_id="NU",
+                now=when + timedelta(seconds=1),
+            )
+        ) == {"bandleader": {who}}
+
+    for who in (BOB, CAROL, DAVE, ERIN, FRANK, GRACE):
+        assert "bandleader" in await has(who)
+    assert "accompanist" in await has(ALICE)
+    assert "accompanist" not in await has(BOB)
+
+
+async def test_an_earned_half_does_not_stop_the_other(playing):
+    """Alice already has *Accompanist* from an earlier minute. Bob winds
+    the box now and must still earn *Bandleader*.
+
+    Both halves hang off one condition, so the risk is an
+    implementation that treats the pair as one award and goes quiet
+    once either end of it has been paid."""
+    first = await played_the_music_box(playing, CAROL, "NU")
+    await shook_the_rattle(playing, ALICE, "NU")
+    await who_earned(
+        a_context(
+            "on_use",
+            thing_id="rattle",
+            room_id="NU",
+            now=first + timedelta(seconds=1),
+        )
+    )
+    assert "accompanist" in await has(ALICE)
+
+    when = await played_the_music_box(playing, BOB, "NU")
+
+    assert await who_earned(
+        a_context(
+            "on_use",
+            user_id=BOB,
+            thing_id="music_box",
+            room_id="NU",
+            now=when + timedelta(seconds=1),
+        )
+    ) == {"bandleader": {BOB}}
 
 
 async def test_catproof_cannot_be_farmed_by_dropping_and_re_taking(playing):

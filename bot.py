@@ -4578,7 +4578,20 @@ async def _announce(award, *, interaction=None, guild=None) -> None:
     # whole announcement, which a player not watching the channel will
     # simply miss. Playtest feedback, and the same three cases the no-DM
     # note below is about.
-    ping = award.user_id if interaction is None else None
+    #
+    # **An award can belong to somebody who is not here.** The band is
+    # the case: a rattle completes the pair and *Bandleader* goes to
+    # whoever played the box, who may have left the room and is
+    # certainly not the person this interaction can answer. They are in
+    # the same position as a reaction's earner - the public line is all
+    # they get - so they are pinged by it, and the ephemeral below is
+    # not sent to the player who happened to run the command.
+    mine = (
+        interaction is not None
+        and award.user_id is not None
+        and award.user_id == interaction.user.id
+    )
+    ping = None if mine else award.user_id
 
     if award.user_id is None:
         # A group achievement has no earner, so "somebody earned" is the
@@ -4640,9 +4653,10 @@ async def _announce(award, *, interaction=None, guild=None) -> None:
     # of them. They get the public line only. The cost is that their earner
     # never reads the description, which is acceptable because both are
     # things the player just deliberately did.
-    if interaction is None:
+    if not mine:
         log.info(
-            "No interaction for %s; the public line is the whole announcement",
+            "Nobody here to answer for %s; the public line is the whole "
+            "announcement",
             award.achievement_id,
         )
         return
@@ -4745,10 +4759,17 @@ def _earner_of(award, interaction, guild) -> str | None:
     no interaction, so the guild's member cache is asked instead - and when
     that misses, the public line still posts with a placeholder rather than
     being dropped, because the event matters more than the name.
+
+    **The interaction only knows it when the award is theirs.** It
+    carries the player who ran the command, which is the earner for
+    every achievement but the band's: *Bandleader* goes to whoever
+    played the music box, and reading the name off the interaction
+    would print the rattler's. Asked of the award first, so the
+    member cache answers for everybody else.
     """
     if award.user_id is None:
         return None
-    if interaction is not None:
+    if interaction is not None and award.user_id == interaction.user.id:
         return interaction.user.display_name
     member = guild.get_member(award.user_id)
     return member.display_name if member is not None else None

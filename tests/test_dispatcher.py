@@ -493,6 +493,69 @@ async def test_the_earner_gets_the_name_and_the_description(guild, halloween):
     assert interaction.was_private
 
 
+def a_bandleader(**overrides):
+    """The one award shape that goes to somebody other than the actor."""
+    return an_award(
+        **{
+            "achievement_id": "bandleader",
+            "kind": "secret",
+            "name": "Bandleader",
+            "unlock": "Played the music box, and someone joined in on the rattle.",
+            "user_id": BOB,
+            **overrides,
+        }
+    )
+
+
+async def test_an_award_for_somebody_else_names_them_and_not_the_actor(
+    guild, halloween
+):
+    """Alice's rattle completes the pair; the *Bandleader* is Bob's.
+
+    The public line used to read its name off the interaction, which
+    is the earner for every achievement but this one - so it would
+    have credited Alice, by name, for an award written to Bob. The
+    award carries the id, and that is what the line is built from.
+    """
+    interaction = FakeInteraction(ALICE, GUILD_A, guild=halloween)
+
+    await bot._announce(a_bandleader(), interaction=interaction)
+
+    assert posted(halloween) == [f"<@{BOB}> earned **Bandleader**"]
+    assert f"Player {ALICE}" not in " ".join(posted(halloween))
+
+
+async def test_an_award_for_somebody_else_answers_nobody_privately(
+    guild, halloween
+):
+    """And the private half is not sent to the player who ran the command.
+
+    The ephemeral rides this interaction, so an unguarded one would
+    tell Alice she had earned *Bandleader* - naming a secret she has
+    not found, to the one person it was not written for. Bob is in
+    the same position as a reaction's earner: the public line, which
+    pings him, is the whole announcement.
+    """
+    interaction = FakeInteraction(ALICE, GUILD_A, guild=halloween)
+
+    await bot._announce(a_bandleader(), interaction=interaction)
+
+    assert interaction.sent == []
+    assert [who.id for who in allowed(halloween).users] == [BOB]
+
+
+async def test_the_actor_s_own_award_is_still_answered_privately(guild, halloween):
+    """The guard is "is this award yours", not "is this the band". Bob
+    rattling earns his own *Accompanist* and is told so, as always."""
+    interaction = FakeInteraction(BOB, GUILD_A, guild=halloween)
+
+    await bot._announce(a_bandleader(), interaction=interaction)
+
+    assert interaction.was_private
+    assert "Played the music box" in interaction.reply
+    assert posted(halloween) == [f"Player {BOB} earned **Bandleader**"]
+
+
 async def test_nothing_private_is_sent_without_an_interaction(guild, halloween):
     """Three achievements fire without one - *Met the Craving* on a
     reaction, *Passing a Message to David* on a message, and anything on the
