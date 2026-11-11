@@ -61,6 +61,7 @@ from database import (  # noqa: F401 - the vocabulary, re-exported for call site
     THIS_ROOM,
     THREAD_REMOVED,
     THREW_AWAY,
+    TOY_CARRIED_OFF,
     TRASH_EMPTIED,
     UNKNOWN,
     UNKNOWN_NOUN,

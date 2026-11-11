@@ -47,6 +47,11 @@ import database
 import resolve
 import telemetry
 
+# Read here rather than imported from `world`, which imports `reach` and
+# `states` and would make the scheduler depend on half the game to ask
+# one number. The key is a string in `database.CONFIG_KEYS` either way.
+TOY_ACTIVE_DAYS = "toy_active_days"
+
 log = logging.getLogger(__name__)
 
 # A long outage should cost bounded work, not a month of placements at once.
@@ -626,7 +631,7 @@ async def _deliver(
             break
         room_id, container_id = landing
 
-        thing_id = await _what_to_place(restock, arrived, rng)
+        thing_id = await _what_to_place(guild_id, restock, arrived, rng)
         if thing_id is None:
             # A class with nothing arrived in it yet. Not an error -
             # the toys' row is live from drop 2 and the schedule
@@ -668,7 +673,7 @@ async def _deliver(
             report.announce.append((guild_id, room_id, restock.arrival_notice))
 
 
-async def _what_to_place(restock, arrived: set[int], rng) -> str | None:
+async def _what_to_place(guild_id: int, restock, arrived: set[int], rng) -> str | None:
     """Which thing this occurrence places.
 
     Usually the row's own `thing_id`. A row whose `thing_id` is a class
@@ -683,6 +688,42 @@ async def _what_to_place(restock, arrived: set[int], rng) -> str | None:
         return restock.thing_id
     kind = restock.thing_id[len(content_module.CLASS_PREFIX):]
     pool = await database.stock_of_type(kind, arrived)
+
+    # **Do not hand out what everybody already has.** Thirteen toys and
+    # a cap of six mean a group collecting a set spends days waiting on
+    # a draw, and a draw that keeps offering the acorn four people are
+    # already carrying is the slowest possible version of that. Skipped
+    # only when *every* active player has one - a single holder is not
+    # a reason to withhold it from anybody else.
+    #
+    # Active is a cat interaction inside `toy_active_days`, so somebody
+    # who stopped playing a fortnight ago cannot hold a toy out of the
+    # draw for the people still here.
+    days = await database.get_setting(guild_id, TOY_ACTIVE_DAYS)
+    if pool and days > 0:
+        held = await database.toys_every_active_player_has(
+            guild_id,
+            kind,
+            await database.server_today(guild_id) - timedelta(days=days),
+        )
+        eligible = [thing_id for thing_id in pool if thing_id not in held]
+        if not eligible:
+            # **No fallback to drawing anyway.** The honest answer is
+            # that there is nothing worth placing, and a draw that
+            # ignored the rule when it bit would make the rule a
+            # suggestion. Logged, because a schedule that places
+            # nothing all day is otherwise indistinguishable from one
+            # that is broken.
+            log.info(
+                "Restock drew nothing in guild %s: every active player "
+                "already carries each of the %d arrived %s",
+                guild_id,
+                len(pool),
+                kind,
+            )
+            return None
+        pool = eligible
+
     return rng.choice(pool) if pool else None
 
 

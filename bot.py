@@ -646,6 +646,7 @@ class CatBot(commands.Bot):
         restock_sweep.start()
         thread_sweep.start()
         idle_sweep.start()
+        toy_drain.start()
 
         # Nothing is a global command any more. Which commands exist is a
         # per-server question now - two servers can sit on different drops
@@ -1039,6 +1040,70 @@ async def _before_restock() -> None:
 # hour means a forgotten ladder is set down within an hour of becoming
 # forgotten. A tick a minute would ask the same question sixty times
 # for every answer.
+TOY_DRAIN_MINUTES = 60
+
+
+@tasks.loop(minutes=TOY_DRAIN_MINUTES)
+async def toy_drain() -> None:
+    """The cat carries off one settled toy from each spot she has left alone.
+
+    **Its own loop rather than a passenger on `idle_sweep`.** They run
+    at the same cadence and share nothing else: that one takes a named
+    thing off a player and this one takes any toy out of a room, that
+    one owns a list of three ids and this one a whole type, and this
+    one has logging the work order asks for by name. Riding along would
+    have made all of that invisible to whoever reads it next.
+
+    **Hourly granularity on a daily timer**, which is the trade
+    `idle_sweep` already names: a toy can sit for up to twenty-five
+    hours. The number is the rhythm of the house, not a deadline
+    anybody counts down.
+
+    The deciding and the taking are `world.carry_off_stale_toys`. What
+    is here is saying so in the room, which that module has no client
+    to do.
+    """
+    guild_ids = [guild.id for guild in bot.guilds]
+    if not guild_ids:
+        return
+
+    try:
+        taken = await world.carry_off_stale_toys(guild_ids)
+    except SQLAlchemyError:
+        log.exception("Toy drain failed")
+        return
+
+    for gone in taken:
+        row = await phrasing.thing_row(gone.thing_id)
+        await _say_in_room(
+            gone.guild_id,
+            gone.room_id,
+            await phrasing.default_say(
+                "toy.carried_off", name=row.name if row else gone.thing_id
+            ),
+        )
+        # Which toy, where, and how many stale ones she left behind.
+        # The last is what the rotation is really asking - whether a
+        # pile is coming down or standing still - and nothing can
+        # reconstruct it afterwards, because by the time anyone looks
+        # the row has already changed.
+        await telemetry.system(
+            gone.guild_id,
+            telemetry.TOY_CARRIED_OFF,
+            thing_id=gone.thing_id,
+            detail=(
+                f"room={gone.room_id} "
+                f"container={gone.container_id or 'loose'} "
+                f"left={gone.left_behind}"
+            ),
+        )
+
+
+@toy_drain.before_loop
+async def _before_toy_drain() -> None:
+    await bot.wait_until_ready()
+
+
 IDLE_SWEEP_MINUTES = 60
 
 
@@ -1122,6 +1187,44 @@ async def _mention_idle_drops(interaction: discord.Interaction) -> None:
             await interaction.followup.send(line, ephemeral=True)
 
 
+async def _say_in_room(guild_id: int, room_id: str, line: str) -> bool:
+    """Post a line in the thread of the room it is about.
+
+    **The road is the channel itself and has no thread**, which is the
+    one branch every room-addressed line in the game has to carry. It
+    was written out twice the moment the drain wanted it, so it is one
+    function now and `_announce_exhaustion` reads from here.
+
+    Cosmetic, always. Whatever the line describes has already happened
+    in the database by the time this runs, so a channel that will not
+    take the sentence must never undo it - which is why this returns a
+    bool nobody has to check rather than raising.
+    """
+    if not line:
+        return False
+    guild = bot.get_guild(guild_id)
+    if guild is None:
+        return False
+    try:
+        channel = await _game_channel(guild)
+        if channel is None:
+            return False
+        if room_id == content.CHANNEL_ROOM:
+            await _post_quietly(channel, line)
+            return True
+        name = await resolve.room_name(room_id)
+        thread = await house_utils.get_thread_for_room(channel, name)
+        if thread is None:
+            return False
+        await _post_quietly(thread, line)
+        return True
+    except (discord.HTTPException, SQLAlchemyError):
+        log.warning(
+            "Could not post in %s of guild %s", room_id, guild_id, exc_info=True
+        )
+        return False
+
+
 async def _announce_exhaustion(set_down: world.SetDown) -> None:
     """Tell the room something has just been put down in it.
 
@@ -1166,21 +1269,7 @@ async def _announce_exhaustion(set_down: world.SetDown) -> None:
         line = await phrasing.default_say(
             f"{thing_id}.{key}", **tokens
         ) or await phrasing.default_say(key, **tokens)
-        if not line:
-            return
-        channel = await _game_channel(guild)
-        if channel is None:
-            return
-        if room_id == content.CHANNEL_ROOM:
-            # The road is the channel itself and has no thread of its
-            # own, which every other room-addressed line in the game
-            # also has to handle.
-            await _post_quietly(channel, line)
-            return
-        name = await resolve.room_name(room_id)
-        thread = await house_utils.get_thread_for_room(channel, name)
-        if thread is not None:
-            await _post_quietly(thread, line)
+        await _say_in_room(guild_id, room_id, line)
     except (discord.HTTPException, SQLAlchemyError):
         log.warning(
             "Could not say a thing was set down in %s of guild %s",

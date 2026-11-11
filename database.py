@@ -238,6 +238,10 @@ THREW_AWAY = "threw_away"
 # only record anywhere of where it went. A player's row, not a system
 # one - somebody took the trash out.
 TRASH_EMPTIED = "trash_emptied"
+# The cat taking a settled toy out of a room. A system row rather than
+# a player's: nobody did it, and the question it answers is about the
+# house's circulation rather than about anyone's afternoon.
+TOY_CARRIED_OFF = "toy_carried_off"
 
 # The two the ladder adds to the refusal vocabulary.
 #
@@ -1486,6 +1490,36 @@ class ConfigHistory(Base):
     effective_to: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+
+
+class ToyDrain(Base):
+    """When the cat last carried a toy off from one spot.
+
+    **A spot is a room floor or a container**, which is the same key
+    `room_contents` uses minus the thing - so "the Kitchen floor" and
+    "inside the pantry" are two spots in one room and keep two clocks.
+
+    The whole table exists to make the drain take *one* toy. Without
+    it, "has anything here been still for a day" is true of every toy
+    in a pile at once, and five toys a player dropped together would
+    all go on the same tick. With it, the cat takes the oldest, the
+    spot goes quiet for another `toy_stale_hours`, and the pile comes
+    down one a day - which is what the work order asks for and also the
+    only version that reads as a cat rather than as a bin lorry.
+
+    Rows are never deleted. A spot that has been drained once keeps its
+    row for ever and the row is five short values; there are at most as
+    many as there are rooms times containers.
+    """
+
+    __tablename__ = "toy_drains"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    room_id: Mapped[str] = mapped_column(String(8), primary_key=True)
+    container_id: Mapped[str] = mapped_column(
+        String(64), primary_key=True, default=LOOSE_IN_ROOM, server_default=text("''")
+    )
+    drained_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
 class ThingUse(Base):
@@ -5302,6 +5336,24 @@ CONFIG_KEYS: dict[str, tuple[int, str]] = {
     # at all, so nobody had ever fallen, and it was raised before it
     # shipped on exactly that ground. Tunable because it is the one
     # number here that wants watching against what playtesters do.
+    # **A spot's clock, not a toy's.** The cat takes one toy per spot
+    # per `toy_stale_hours`, so a pile of five dropped in one room
+    # shrinks by one a day rather than vanishing at once - which is the
+    # difference between a world that tidies itself and one that eats
+    # your things.
+    "toy_stale_hours": (
+        24,
+        "How long a toy sits untouched in one place before the cat may "
+        "carry it off, and how long she then leaves that place alone.",
+    ),
+    # **Only toys everybody still playing has already got are skipped.**
+    # A player who stopped a fortnight ago should not be able to hold a
+    # toy out of the draw for the people who are still here.
+    "toy_active_days": (
+        7,
+        "How recently a player must have touched the cat to count when "
+        "deciding that everybody already has a toy.",
+    ),
     "ivy_fall_percent": (
         10,
         "The percent chance of falling when climbing down the ivy from the "
@@ -5939,6 +5991,212 @@ async def count_of_type(guild_id: int, room_id: str, kind: str) -> int:
             )
         )
     return int(total or 0)
+
+
+async def start_the_clock_on_unplaced_toys(
+    guild_id: int, kind: str, now: datetime
+) -> list[tuple[str, str, str]]:
+    """Stamp `placed_at` on anything of this kind that has none.
+
+    **A null timestamp is a trap this project has already fallen into**,
+    and both readings of it are wrong in opposite directions. `taken_at`
+    null exempted a carried thing from the idle sweep for ever, so that
+    rule never fired in production at all. Treating null as *infinitely
+    old* is no better: the first drain tick would sweep every unstamped
+    toy in the house at once, which is exactly the pile-vanishing the
+    per-spot clock exists to prevent.
+
+    So the clock starts on first sight. The row is stamped `now`, which
+    is never below a cutoff derived from `now`, so nothing is stamped
+    and drained on one tick: the toy gets a full `toy_stale_hours` and
+    then the ordinary rule. It is the repair
+    `start_the_clock_on_unstamped_carries` makes for the bag, and it
+    mends itself - a row needs it once.
+
+    Returns what it stamped, so the sweep can say so rather than
+    quietly fixing the evidence it is about to read.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = (
+            await session.execute(
+                select(
+                    RoomContents.room_id,
+                    RoomContents.container_id,
+                    RoomContents.thing_id,
+                )
+                .join(ThingType, ThingType.thing_id == RoomContents.thing_id)
+                .where(
+                    RoomContents.guild_id == guild_id,
+                    RoomContents.count > 0,
+                    RoomContents.placed_at.is_(None),
+                    ThingType.type == kind,
+                )
+            )
+        ).all()
+        if rows:
+            await session.execute(
+                update(RoomContents)
+                .where(
+                    RoomContents.guild_id == guild_id,
+                    RoomContents.placed_at.is_(None),
+                    RoomContents.thing_id.in_({row[2] for row in rows}),
+                )
+                .values(placed_at=now)
+            )
+            await session.commit()
+    return [(row[0], row[1], row[2]) for row in rows]
+
+
+async def stale_toys_by_spot(
+    guild_id: int, kind: str, settled_before: datetime, *, except_container: str
+) -> list[tuple[str, str, str, int]]:
+    """The oldest stale toy in each spot, and how many stale ones it leaves.
+
+    One row per spot, because the cat takes one. The remainder comes
+    back with it so the sweep can log what stayed behind - the number
+    that says whether a pile is coming down or standing still, and the
+    one nothing can reconstruct afterwards.
+
+    `settled_before` is the cutoff, so the caller owns the clock. The
+    bin is excluded by name for the reason it is excluded from the cap:
+    a toy in there belongs to the trash mechanic, not to the cat.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = (
+            await session.execute(
+                select(
+                    RoomContents.room_id,
+                    RoomContents.container_id,
+                    RoomContents.thing_id,
+                    RoomContents.placed_at,
+                )
+                .join(ThingType, ThingType.thing_id == RoomContents.thing_id)
+                .where(
+                    RoomContents.guild_id == guild_id,
+                    RoomContents.count > 0,
+                    RoomContents.container_id != except_container,
+                    RoomContents.placed_at.is_not(None),
+                    RoomContents.placed_at <= settled_before,
+                    ThingType.type == kind,
+                    ThingType.takeable,
+                )
+                .order_by(RoomContents.placed_at.asc(), RoomContents.thing_id.asc())
+            )
+        ).all()
+
+    by_spot: dict[tuple[str, str], list[str]] = {}
+    for room_id, container_id, thing_id, _ in rows:
+        by_spot.setdefault((room_id, container_id), []).append(thing_id)
+    return [
+        (room_id, container_id, things[0], len(things) - 1)
+        for (room_id, container_id), things in by_spot.items()
+    ]
+
+
+async def spots_drained_since(guild_id: int, since: datetime) -> set[tuple[str, str]]:
+    """Spots the cat has taken something from since `since`."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(ToyDrain.room_id, ToyDrain.container_id).where(
+                ToyDrain.guild_id == guild_id, ToyDrain.drained_at > since
+            )
+        )
+    return {(row[0], row[1]) for row in rows}
+
+
+async def carry_off_one_toy(
+    guild_id: int, room_id: str, container_id: str, thing_id: str, now: datetime
+) -> bool:
+    """Take one copy out of a spot and stamp the spot. False if it had gone.
+
+    Conditional on the count still being above zero, like every other
+    decrement here, so a player who picks the toy up between the read
+    and the write keeps it. The spot is stamped only when something
+    actually left, or a lost race would buy that spot a day of quiet
+    for nothing.
+    """
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    async with session_factory() as session:
+        result = await session.execute(
+            update(RoomContents)
+            .where(
+                RoomContents.guild_id == guild_id,
+                RoomContents.room_id == room_id,
+                RoomContents.container_id == container_id,
+                RoomContents.thing_id == thing_id,
+                RoomContents.count > 0,
+            )
+            .values(count=RoomContents.count - 1)
+        )
+        if not result.rowcount:
+            await session.rollback()
+            return False
+        await session.execute(
+            insert(ToyDrain)
+            .values(
+                guild_id=guild_id,
+                room_id=room_id,
+                container_id=container_id,
+                drained_at=now,
+            )
+            .on_conflict_do_update(
+                index_elements=[
+                    ToyDrain.guild_id,
+                    ToyDrain.room_id,
+                    ToyDrain.container_id,
+                ],
+                set_={"drained_at": now},
+            )
+        )
+        await session.commit()
+    return True
+
+
+async def toys_every_active_player_has(
+    guild_id: int, kind: str, active_since: date
+) -> set[str]:
+    """Things of this kind that every active player is already carrying.
+
+    Empty when nobody is active, which is the answer that keeps a quiet
+    server stocked: *every one of nobody carries the acorn* is
+    vacuously true and would skip the entire pool.
+
+    The early return says that out loud and is not what enforces it -
+    an empty `IN ()` matches no rows, so the query below already comes
+    back empty. Deleting the guard changes no behaviour and no test
+    fails, which is worth knowing before somebody reads it as load
+    bearing.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        active = {
+            row[0]
+            for row in await session.execute(
+                select(User.id).where(
+                    User.guild_id == guild_id,
+                    User.last_cat_interaction_date.is_not(None),
+                    User.last_cat_interaction_date >= active_since,
+                )
+            )
+        }
+        if not active:
+            return set()
+        rows = await session.execute(
+            select(PlayerInventory.thing_id, func.count(PlayerInventory.user_id))
+            .join(ThingType, ThingType.thing_id == PlayerInventory.thing_id)
+            .where(
+                PlayerInventory.guild_id == guild_id,
+                PlayerInventory.count > 0,
+                PlayerInventory.user_id.in_(active),
+                ThingType.type == kind,
+            )
+            .group_by(PlayerInventory.thing_id)
+        )
+    return {thing_id for thing_id, holders in rows if holders >= len(active)}
 
 
 async def count_of_type_in_house(

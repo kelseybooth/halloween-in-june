@@ -425,6 +425,13 @@ OAK = "CS"                 # Courtyard -> Secret Library. Usable by anybody.
 CABINET = "LS"             # Living Room -> Secret Library. Needs a key.
 BACK_OF_CABINET = "SL"     # Secret Library -> Living Room. Needs the passage.
 SECRET_LIBRARY = content_module.SECRET_LIBRARY
+
+# What the drain is about, and the two settings it reads. `toy` is the
+# content files' own word for the type, so it is spelled once here
+# rather than quoted at four call sites.
+TOY = "toy"
+TOY_STALE_HOURS = "toy_stale_hours"
+TOY_ACTIVE_DAYS = "toy_active_days"
 SKELETON_KEY = "skeleton_key"
 
 LIBRARY_FOUND = "library_found"
@@ -1116,6 +1123,84 @@ async def ladder_is_guarded(guild_id: int) -> bool:
 # see `set_down_forgotten_things`. Nothing is in both lists today and
 # the guard is there so that a `things.tsv` edit cannot put it there.
 SET_DOWN_WHEN_IDLE = (LADDER,)
+
+
+@dataclass(frozen=True)
+class CarriedOff:
+    """One toy the cat took, and where the room should hear about it."""
+
+    guild_id: int
+    room_id: str
+    container_id: str
+    thing_id: str
+    # How many stale toys she left in that spot. Logged rather than
+    # said: it is the number that tells a pile coming down from one
+    # standing still, and the player only ever sees one toy go.
+    left_behind: int
+
+
+async def carry_off_stale_toys(guild_ids: "list[int]") -> list[CarriedOff]:
+    """Take one settled toy from each spot the cat has not visited lately.
+
+    **A spot is a room floor or one container**, which is `room_contents`
+    minus the thing. Two clocks run against each spot and both have to
+    be out: the toy has to have sat there for `toy_stale_hours`, and the
+    cat must not have taken anything from that spot within the same
+    window. The second is what makes a pile of five shrink by one a day
+    instead of emptying on one tick - which is the difference between a
+    cat and a bin lorry.
+
+    **Only rows that moved are reported**, the rule `set_down_forgotten_
+    things` already follows: a player who picks the toy up between the
+    read and the write keeps it, and the room hears nothing.
+
+    The bin is left alone. A toy in the trash can belongs to the trash
+    mechanic, which is also why it does not count toward the cap - and
+    a carried toy is never touched at all, because the drain only ever
+    reads `room_contents`.
+    """
+    taken: list[CarriedOff] = []
+
+    for guild_id in guild_ids:
+        now = await database.server_now(guild_id)
+
+        # **Start the clock before reading it**, for the reason
+        # `start_the_clock_on_unplaced_toys` argues at length: a null
+        # `placed_at` is either exempt for ever or instantly ancient,
+        # and both are wrong. Stamped with `now`, so nothing is stamped
+        # and drained on the same tick.
+        for room_id, container_id, thing_id in (
+            await database.start_the_clock_on_unplaced_toys(guild_id, TOY, now)
+        ):
+            log.info(
+                "Drain clock started on %s in guild %s at %s/%s: the row had "
+                "no placed_at, so it was never going to settle",
+                thing_id,
+                guild_id,
+                room_id,
+                container_id or "loose",
+            )
+
+        hours = await database.get_setting(guild_id, TOY_STALE_HOURS)
+        if hours < 1:
+            continue
+        window = timedelta(hours=hours)
+        quiet = await database.spots_drained_since(guild_id, now - window)
+
+        for room_id, container_id, thing_id, left in await database.stale_toys_by_spot(
+            guild_id, TOY, now - window, except_container=TRASH_CAN
+        ):
+            if (room_id, container_id) in quiet:
+                continue
+            if not await database.carry_off_one_toy(
+                guild_id, room_id, container_id, thing_id, now
+            ):
+                continue
+            taken.append(
+                CarriedOff(guild_id, room_id, container_id, thing_id, left)
+            )
+
+    return taken
 
 
 @dataclass(frozen=True)
