@@ -134,6 +134,28 @@ UNLOCK = "unlock"
 # `reason` carries the exception's class name and `detail` the command,
 # which between them are the two questions anybody asks first.
 CRASHED = "crashed"
+# A command the database refused, and that said so to the player.
+#
+# **The other half of `crashed`, and a separate word on purpose.**
+# Twenty-two handlers in `bot` catch `SQLAlchemyError`, tell the player
+# some version of "something went wrong reaching the database" and
+# return, and until this none of them wrote a row either - so a
+# command the database refused read, in this table, exactly like a
+# command nobody ran. That is the 9 November blindness one layer in:
+# `crashed` is for the failures nobody saw coming, and this is for
+# the ones we did.
+#
+# **Not folded into `crashed`** because the two are different alarms.
+# A spike of these means the database or the connection pool, and a
+# spike of `crashed` means a bug just shipped; sharing one word would
+# dilute the one that most wants answering, and telling them apart
+# again would mean filtering `reason` against the SQLAlchemy class
+# hierarchy from memory. Counting by action is the cheap query.
+#
+# **The invariant worth keeping**: a row here exists exactly when a
+# player was shown the database apology. `bot` has one function that
+# sends it, and a test holds that nothing else does.
+DB_ERROR = "db_error"
 
 # Why a refusal refused. Open-ended on purpose - a new gate adds a new
 # reason here rather than reusing an approximate one, because the whole
@@ -738,11 +760,13 @@ class InteractionLog(Base):
     action: Mapped[str] = mapped_column(String(32), nullable=False)
     thing_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     outcome: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    # Only on a refusal and on a `crashed` row, and either way it is the
-    # half that says where to fix the game: a count of refusals tells
-    # you players are bouncing off something, and this tells you off
-    # what. On a crash it is the exception's class name, truncated to
-    # fit - the same question, asked of the machinery.
+    # Only on a refusal and on a `crashed` or `db_error` row, and either
+    # way it is the half that says where to fix the game: a count of
+    # refusals tells you players are bouncing off something, and this
+    # tells you off what. On the other two it is the exception's class
+    # name, truncated to fit - the same question, asked of the
+    # machinery. `OperationalError` and `TypeError` want different
+    # people, which is the whole reason it is recorded.
     reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
     # **Null rather than zero where it is unknown**, because zero is a
     # real answer here - a refusal moves nothing - and a row backfilled
