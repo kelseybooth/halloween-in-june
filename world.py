@@ -424,7 +424,14 @@ COLLAR_ON = "collar_on"
 OAK = "CS"                 # Courtyard -> Secret Library. Usable by anybody.
 CABINET = "LS"             # Living Room -> Secret Library. Needs a key.
 BACK_OF_CABINET = "SL"     # Secret Library -> Living Room. Needs the passage.
-SECRET_LIBRARY = "SE"
+SECRET_LIBRARY = content_module.SECRET_LIBRARY
+
+# What the drain is about, and the two settings it reads. `toy` is the
+# content files' own word for the type, so it is spelled once here
+# rather than quoted at four call sites.
+TOY = "toy"
+TOY_STALE_HOURS = "toy_stale_hours"
+TOY_ACTIVE_DAYS = "toy_active_days"
 SKELETON_KEY = "skeleton_key"
 
 LIBRARY_FOUND = "library_found"
@@ -1118,6 +1125,159 @@ async def ladder_is_guarded(guild_id: int) -> bool:
 SET_DOWN_WHEN_IDLE = (LADDER,)
 
 
+CATNIP_MOUSE = "catnip_mouse"
+CATNIP_POINTS = "catnip_buff_points"
+CATNIP_PETS = "catnip_buff_pets"
+CATNIP_MINUTES = "catnip_buff_minutes"
+CATNIP_COOLDOWN = "catnip_buff_cooldown_minutes"
+
+
+async def catnip_takes_hold(guild_id: int, user_id: int, now) -> bool:
+    """Start a catnip buff, unless one was started too recently.
+
+    **One stamp carries both clocks.** `catnip_buff_at` says when the
+    last play buffed anything, and the five-minute lapse and the thirty
+    minute cooldown are both read off it - so a player cannot be given
+    a fresh buff every three pets by burning the charges early. The
+    charges run out; the stamp does not move until the cooldown is up.
+
+    Returns whether anything happened, so the caller can say so in the
+    log. The player is never told either way: the only sign a buff is
+    running is a line on a friendly pet, which is the work order's
+    whole design for it - the mouse is something you notice, not
+    something the game announces.
+    """
+    _, stamped = await database.catnip_state(guild_id, user_id)
+    cooldown = await database.get_setting(guild_id, CATNIP_COOLDOWN)
+    if stamped is not None and now - stamped < timedelta(minutes=cooldown):
+        return False
+    await database.start_catnip_buff(
+        guild_id, user_id, await database.get_setting(guild_id, CATNIP_PETS), now
+    )
+    return True
+
+
+async def catnip_in_force(guild_id: int, user_id: int, now) -> int:
+    """How many points the buff is worth on this pet, and 0 if it is over.
+
+    **Two ways for it to end and this reads both.** The charges are
+    spent by the caller, one per pet; the clock is checked here, and a
+    buff that has run past `catnip_buff_minutes` is zeroed on the spot
+    rather than waiting for three pets that may never come. That is
+    what makes "whichever runs out first" true.
+
+    Clearing on read rather than on a timer, because nothing else is
+    looking: there is no sweep for this and a buff nobody has pet
+    through is harmless until the moment somebody does.
+    """
+    charges, stamped = await database.catnip_state(guild_id, user_id)
+    if charges < 1 or stamped is None:
+        return 0
+
+    minutes = await database.get_setting(guild_id, CATNIP_MINUTES)
+    if now - stamped >= timedelta(minutes=minutes):
+        await database.clear_catnip_charges(guild_id, user_id)
+        await telemetry.system(
+            guild_id,
+            telemetry.CATNIP,
+            thing_id=CATNIP_MOUSE,
+            detail=f"lapsed user={user_id} unspent={charges}",
+        )
+        return 0
+
+    return await database.get_setting(guild_id, CATNIP_POINTS)
+
+
+async def spend_catnip(guild_id: int, user_id: int) -> int:
+    """Take one pet off the buff, friendly or not, and log what is left."""
+    left = await database.spend_catnip_charge(guild_id, user_id)
+    await telemetry.system(
+        guild_id,
+        telemetry.CATNIP,
+        thing_id=CATNIP_MOUSE,
+        detail=f"spent user={user_id} left={left}",
+    )
+    return left
+
+
+@dataclass(frozen=True)
+class CarriedOff:
+    """One toy the cat took, and where the room should hear about it."""
+
+    guild_id: int
+    room_id: str
+    container_id: str
+    thing_id: str
+    # How many stale toys she left in that spot. Logged rather than
+    # said: it is the number that tells a pile coming down from one
+    # standing still, and the player only ever sees one toy go.
+    left_behind: int
+
+
+async def carry_off_stale_toys(guild_ids: "list[int]") -> list[CarriedOff]:
+    """Take one settled toy from each spot the cat has not visited lately.
+
+    **A spot is a room floor or one container**, which is `room_contents`
+    minus the thing. Two clocks run against each spot and both have to
+    be out: the toy has to have sat there for `toy_stale_hours`, and the
+    cat must not have taken anything from that spot within the same
+    window. The second is what makes a pile of five shrink by one a day
+    instead of emptying on one tick - which is the difference between a
+    cat and a bin lorry.
+
+    **Only rows that moved are reported**, the rule `set_down_forgotten_
+    things` already follows: a player who picks the toy up between the
+    read and the write keeps it, and the room hears nothing.
+
+    The bin is left alone. A toy in the trash can belongs to the trash
+    mechanic, which is also why it does not count toward the cap - and
+    a carried toy is never touched at all, because the drain only ever
+    reads `room_contents`.
+    """
+    taken: list[CarriedOff] = []
+
+    for guild_id in guild_ids:
+        now = await database.server_now(guild_id)
+
+        # **Start the clock before reading it**, for the reason
+        # `start_the_clock_on_unplaced_toys` argues at length: a null
+        # `placed_at` is either exempt for ever or instantly ancient,
+        # and both are wrong. Stamped with `now`, so nothing is stamped
+        # and drained on the same tick.
+        for room_id, container_id, thing_id in (
+            await database.start_the_clock_on_unplaced_toys(guild_id, TOY, now)
+        ):
+            log.info(
+                "Drain clock started on %s in guild %s at %s/%s: the row had "
+                "no placed_at, so it was never going to settle",
+                thing_id,
+                guild_id,
+                room_id,
+                container_id or "loose",
+            )
+
+        hours = await database.get_setting(guild_id, TOY_STALE_HOURS)
+        if hours < 1:
+            continue
+        window = timedelta(hours=hours)
+        quiet = await database.spots_drained_since(guild_id, now - window)
+
+        for room_id, container_id, thing_id, left in await database.stale_toys_by_spot(
+            guild_id, TOY, now - window, except_container=TRASH_CAN
+        ):
+            if (room_id, container_id) in quiet:
+                continue
+            if not await database.carry_off_one_toy(
+                guild_id, room_id, container_id, thing_id, now
+            ):
+                continue
+            taken.append(
+                CarriedOff(guild_id, room_id, container_id, thing_id, left)
+            )
+
+    return taken
+
+
 @dataclass(frozen=True)
 class SetDown:
     """One thing the sweep took off one player.
@@ -1506,13 +1666,24 @@ async def _a_key_falls_out(guild_id: int, user_id: int) -> str | None:
     return HOUSE_KEY
 
 
-async def play_with(guild_id: int, user_id: int, now, rng=None) -> Effect:
+async def play_with(
+    guild_id: int, user_id: int, now, rng=None, thing_id: str | None = None
+) -> Effect:
     """Offer a toy, and see whether the cat is in the mood.
 
-    **Not keyed on which toy.** Every row with `type = toy` behaves
-    identically; the ramp, the cooldown and the award all belong to the
-    player. That is what keeps the eleven toys still in the bank a
-    content change rather than an engine one.
+    **Not keyed on which toy, with one exception since drop 46.** Every
+    row with `type = toy` still behaves identically here - the ramp, the
+    cooldown and the award all belong to the player, which is what kept
+    the ten toys in the bank a content change rather than an engine one
+    when they shipped.
+
+    The catnip mouse is the exception and it is named rather than
+    columned. It does something no other toy does, to something no
+    other toy touches: the odds on a later `/pet`. A `catnip` column
+    would be a flag with one row set, and the next toy with a mechanic
+    will not want the same flag - it will want its own function beside
+    this one. `thing_id` is optional so that every caller that does not
+    care may keep ignoring it.
 
     A success pays what `play_value` says the day's nth play is worth,
     resets the ramp and starts the cooldown. A refusal advances the
@@ -1548,6 +1719,17 @@ async def play_with(guild_id: int, user_id: int, now, rng=None) -> Effect:
     # is a function of. `nth` rides along in the tokens so the handler
     # can log where on the curve this play fell - which is the whole
     # question the curve raises: where do players stop.
+    if thing_id == CATNIP_MOUSE:
+        # After the success and before the scoring, because a refused
+        # play buffs nothing: the cat has to actually take the mouse.
+        buffed = await catnip_takes_hold(guild_id, user_id, now)
+        await telemetry.system(
+            guild_id,
+            telemetry.CATNIP,
+            thing_id=CATNIP_MOUSE,
+            detail=f"{'applied' if buffed else 'cooldown'} user={user_id}",
+        )
+
     nth = await database.count_toy_play(
         guild_id, user_id, await database.server_today(guild_id)
     )

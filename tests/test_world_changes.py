@@ -395,10 +395,15 @@ async def test_the_desk_reads_differently_once_it_is_open(house):
 
 
 async def test_everything_capped_is_capped_at_one(house):
-    """Four things nobody may hold two of. The can opener joined them with
+    """The things nobody may hold two of. The can opener joined them with
     the drop that has not arrived - one per player, like the key, because
     the point is that everybody can open a can rather than that one person
-    can hoard the means."""
+    can hoard the means.
+
+    **Listed rather than counted**, which is why drop 46 shows up here as
+    ten lines: a toy written without the cap would otherwise join the
+    file silently, and one player holding two acorns is one fewer in a
+    house that only ever has six toys out."""
     capped = {
         t.thing_id: t.max_per_player
         for t in content_module.load_files().things
@@ -414,9 +419,23 @@ async def test_everything_capped_is_capped_at_one(house):
         # count already says, and says it to the second player who
         # tries rather than letting the first hold a spare.
         "ladder": 1,
-        # Both toys, so one player cannot hold the channel's whole supply.
+        # Every toy, so one player cannot hold the house's whole supply.
+        # Two of them until drop 46 and thirteen after it - and the cap
+        # matters more now, not less: six toys are out at a time and
+        # *Playgroup* wants ten in one room, so a hoarded spare is a
+        # slot nobody else can draw.
         "feather_wand": 1,
         "crinkle_ball": 1,
+        "catnip_mouse": 1,
+        "jingle_ball": 1,
+        "laser_pointer": 1,
+        "spring_coil": 1,
+        "hair_tie": 1,
+        "bottle_cap": 1,
+        "wine_cork": 1,
+        "acorn": 1,
+        "spider_ring": 1,
+        "crumpled_receipt": 1,
         # The brass key, so a spare always goes to somebody new - which
         # is the whole of what a spare is for.
         "house_key": 1,

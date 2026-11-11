@@ -1324,6 +1324,104 @@ async def impressively_bad_luck(context: Context) -> bool:
     return (context.extra.get("ramp") or 0) >= BAD_LUCK_RAMP
 
 
+# --------------------------------------------------------------------------
+# Drop 46's three: the toy box
+#
+# Two collections and a group, and all three read tables that were
+# already there for something else. The collections count rows in
+# `thing_uses`, which is the distinction its own docstring draws - the
+# rows say how many toys and the sum says how many plays, and *Tireless*
+# wants the sum while these two want the rows.
+#
+# *Playgroup* is the one that needed a table, because every other store
+# answers a different question: `thing_uses` is cumulative and keeps one
+# room, `room_deeds` is once-ever, and `interaction_log` has no room at
+# all. `toy_plays` is a row per play with where and when.
+# --------------------------------------------------------------------------
+
+EASILY_AMUSED_TOYS = 5
+
+# **Declared, not counted.** Thirteen is what the house has today, and
+# counting the rows would quietly move the target every time a toy is
+# written - so a player who had collected the set would un-earn nothing
+# but would stop being finished, and the achievement's own text ("every
+# object in this house that she considers a toy") would start meaning
+# something the player cannot see. A toy added later is a decision
+# about this number, taken on purpose.
+TOY_SET_TOTAL = 13
+
+PLAYGROUP_TOYS = "playgroup_toys"
+PLAYGROUP_WINDOW = timedelta(minutes=60)
+
+
+async def easily_amused(context: Context) -> bool:
+    """Five different toys, ever.
+
+    "At least five and not held", never "exactly the fifth", which is
+    the shape every counted achievement here uses and for the reason
+    *Tireless* gives: a check that can only fire on one exact play is
+    lost for good if that play races or the bot is down for it.
+    """
+    return (
+        await database.distinct_toys_played(context.guild_id, context.user_id)
+        >= EASILY_AMUSED_TOYS
+    )
+
+
+async def whole_toy_box(context: Context) -> bool:
+    """Every toy in the house, the shipping box included.
+
+    The box is the awkward one and deliberately counted: it is a toy to
+    the cat and furniture to everybody else, it never leaves the
+    Entryway, and a player who has played with the other twelve has to
+    go and find it. That is the last step of the collection rather than
+    an oversight.
+    """
+    return (
+        await database.distinct_toys_played(context.guild_id, context.user_id)
+        >= TOY_SET_TOTAL
+    )
+
+
+async def _playgroup_hour(context: Context) -> list[tuple[int, str]]:
+    """Every successful toy play in this room in the last hour."""
+    if context.room_id is None:
+        return []
+    return await database.toy_plays_in_room_since(
+        context.guild_id, context.room_id, context.when - PLAYGROUP_WINDOW
+    )
+
+
+async def playgroup(context: Context) -> bool:
+    """Ten different toys, one room, one hour, any number of players.
+
+    **It slides, which is the whole of why late joiners earn it.** The
+    check runs on every successful toy play and looks back sixty
+    minutes from that play, so somebody who arrives twenty minutes
+    after the first award and plays one toy earns it too - as long as
+    the last hour still covers ten. Nothing is latched and nothing is
+    reset; the window is the only state.
+    """
+    plays = await _playgroup_hour(context)
+    wanted = await database.get_setting(context.guild_id, PLAYGROUP_TOYS)
+    return len({thing_id for _, thing_id in plays}) >= wanted
+
+
+async def _playgroup_players(context: Context) -> tuple[int, ...]:
+    """Everybody who played a toy in that room in that hour.
+
+    **Contributors, not occupants.** This is the shape *Board Meeting*
+    established: a `group` row with recipients goes to the people who
+    did the work and still announces once, so a player standing in the
+    room who never played is not handed it and a player who played a
+    toy somebody else had already played is.
+
+    Sorted, so the announcement order does not depend on what the
+    database happened to return.
+    """
+    return tuple(sorted({user_id for user_id, _ in await _playgroup_hour(context)}))
+
+
 async def tireless(context: Context) -> bool:
     """Twenty-five successful plays, any toy, cumulative.
 
@@ -1504,6 +1602,13 @@ def register_all() -> None:
     add("making_first_contact", "on_pet", making_first_contact)
     add("fluffed_to_perfection", "on_use", _used(CAT_BED))
     add("tireless", "on_use", tireless)
+    # Drop 46: two collections and a group. `playgroup` names its
+    # earners for the reason `board_meeting` does - the award goes to
+    # the people who played rather than to the server or to whoever
+    # happened to run the last command.
+    add("easily_amused", "on_use", easily_amused)
+    add("whole_toy_box", "on_use", whole_toy_box)
+    add("playgroup", "on_use", playgroup, earners=_playgroup_players)
     # Drop 2 and drop 3. Final copy, no content yet - registered for the
     # same reason the letter and the doorbell are, so that building the
     # toy is a registration change rather than a reopened phase.

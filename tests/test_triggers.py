@@ -946,6 +946,13 @@ def test_what_can_actually_be_earned():
     cat takes. Had the columns been left for later, all five would have
     gone to `BLOCKED` and this number would not have moved at all.
 
+    **Sixty-one with the toy box**, and all three arrive earnable
+    because the tables they read were already there. *Easily Amused* and
+    *Whole Toy Box* count rows in `thing_uses`, which `/use` has written
+    since drop 2; *Playgroup* reads `toy_plays`, which is new, but it is
+    written on the same successful play the predicate fires on, so there
+    is no release in which the row exists and the reader does not.
+
     **Fifty-five with the collar**, which needed storage of a kind none
     of the others did: a server state rather than a count. *Name Tag*
     is earned by the one player who buckles it on, and the state it
@@ -965,7 +972,7 @@ def test_what_can_actually_be_earned():
     """
     earnable = achievements.registered_ids() - set(BLOCKED) - set(BY_HAND)
 
-    assert len(earnable) == 58
+    assert len(earnable) == 61
 
 
 # --------------------------------------------------------------------------

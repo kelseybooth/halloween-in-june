@@ -238,6 +238,14 @@ THREW_AWAY = "threw_away"
 # only record anywhere of where it went. A player's row, not a system
 # one - somebody took the trash out.
 TRASH_EMPTIED = "trash_emptied"
+# The cat taking a settled toy out of a room. A system row rather than
+# a player's: nobody did it, and the question it answers is about the
+# house's circulation rather than about anyone's afternoon.
+TOY_CARRIED_OFF = "toy_carried_off"
+# The catnip buff: started, spent a charge, or lapsed on the clock.
+# One action with the three in `detail`, because the question they
+# answer together is whether the mouse is worth carrying.
+CATNIP = "catnip"
 
 # The two the ladder adds to the refusal vocabulary.
 #
@@ -548,6 +556,13 @@ class User(Base):
     # it: a player with no recorded interaction is not on the board, which
     # is what keeps day one from being a wall of zeroes.
     last_cat_interaction_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # **The catnip buff, in two values that are really one.** The
+    # charges count down with each pet; the stamp carries both clocks -
+    # five minutes until the buff lapses and thirty until another play
+    # may start one - so there is no third column saying when the
+    # cooldown ends, and the two windows cannot drift apart.
+    catnip_charges: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    catnip_buff_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # How willing the cat is to play with this player right now, as the
     # number of refusals since their last success. The chance of a
@@ -1488,6 +1503,65 @@ class ConfigHistory(Base):
     )
 
 
+class ToyPlay(Base):
+    """One successful toy play, with where and when.
+
+    **The one question `thing_uses` and `room_deeds` both cannot
+    answer.** `thing_uses` is cumulative per player and keeps only the
+    latest room; `room_deeds` is idempotent and once-ever, so a second
+    play of the same toy in the same room writes nothing. *Playgroup*
+    needs every play, by anybody, in one room, inside a sliding hour -
+    which is three facts none of those tables keeps together.
+
+    `interaction_log` has the time and the thing and no room at all, so
+    it cannot answer it either without a column on the busiest write
+    path in the game and a backfill nobody can do.
+
+    So: a row per play, written beside the `record_use` that already
+    happens. Rows are never read outside the last hour and never
+    deleted; a play a week old costs five short values.
+    """
+
+    __tablename__ = "toy_plays"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    thing_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    room_id: Mapped[str] = mapped_column(String(8), nullable=False)
+    played_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class ToyDrain(Base):
+    """When the cat last carried a toy off from one spot.
+
+    **A spot is a room floor or a container**, which is the same key
+    `room_contents` uses minus the thing - so "the Kitchen floor" and
+    "inside the pantry" are two spots in one room and keep two clocks.
+
+    The whole table exists to make the drain take *one* toy. Without
+    it, "has anything here been still for a day" is true of every toy
+    in a pile at once, and five toys a player dropped together would
+    all go on the same tick. With it, the cat takes the oldest, the
+    spot goes quiet for another `toy_stale_hours`, and the pile comes
+    down one a day - which is what the work order asks for and also the
+    only version that reads as a cat rather than as a bin lorry.
+
+    Rows are never deleted. A spot that has been drained once keeps its
+    row for ever and the row is five short values; there are at most as
+    many as there are rooms times containers.
+    """
+
+    __tablename__ = "toy_drains"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    room_id: Mapped[str] = mapped_column(String(8), primary_key=True)
+    container_id: Mapped[str] = mapped_column(
+        String(64), primary_key=True, default=LOOSE_IN_ROOM, server_default=text("''")
+    )
+    drained_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
 class ThingUse(Base):
     """One row per (player, thing): when they last used it, and how often.
 
@@ -1875,6 +1949,8 @@ _LATER_COLUMNS: list[tuple[str, str, str]] = [
     ("users", "last_command_at", "TIMESTAMP"),
     ("player_inventory", "taken_at", "TIMESTAMP"),
     ("thing_uses", "last_used_room", "TEXT"),
+    ("users", "catnip_charges", "INTEGER NOT NULL DEFAULT 0"),
+    ("users", "catnip_buff_at", "TIMESTAMP"),
     # Drop 2 renamed `restocks.container` to `destination` and added
     # `max_present`. A rename is two steps for a live database: the new
     # column is added here, and the old one is left orphaned and
@@ -5287,15 +5363,73 @@ CONFIG_KEYS: dict[str, tuple[int, str]] = {
         8,
         "How many used baby bottles are scattered through the house each day.",
     ),
+    # **Two until drop 46, six from it**, and the number moved because
+    # the space did: two toys were the right number for one channel
+    # floor and are a rounding error across sixteen containers and nine
+    # rooms. Raised here rather than per row, so a server retunes it in
+    # one place - and a server that has already stored a value keeps it.
     "toys_present": (
-        2,
-        "How many cat toys the channel is kept topped up to.",
+        6,
+        "How many cat toys are kept out in the house at once, counting "
+        "every floor and every container but the trash can.",
     ),
     # **Ten, not the five the design proposed**, and the difference is
     # evidence rather than taste: the mechanic turned out not to be built
     # at all, so nobody had ever fallen, and it was raised before it
     # shipped on exactly that ground. Tunable because it is the one
     # number here that wants watching against what playtesters do.
+    # **A spot's clock, not a toy's.** The cat takes one toy per spot
+    # per `toy_stale_hours`, so a pile of five dropped in one room
+    # shrinks by one a day rather than vanishing at once - which is the
+    # difference between a world that tidies itself and one that eats
+    # your things.
+    "toy_stale_hours": (
+        24,
+        "How long a toy sits untouched in one place before the cat may "
+        "carry it off, and how long she then leaves that place alone.",
+    ),
+    # **Only toys everybody still playing has already got are skipped.**
+    # A player who stopped a fortnight ago should not be able to hold a
+    # toy out of the draw for the people who are still here.
+    "toy_active_days": (
+        7,
+        "How recently a player must have touched the cat to count when "
+        "deciding that everybody already has a toy.",
+    ),
+    # **The catnip mouse, which is the first toy that does anything.**
+    # Four numbers rather than one because they are four different
+    # decisions: how much better the odds get, how long that lasts in
+    # pets, how long it lasts on the clock, and how soon a player may
+    # do it again. The last is the one that stops a player with a mouse
+    # from simply never being refused a pet again.
+    "catnip_buff_points": (
+        25,
+        "How many percentage points a catnip play adds to the chance of a "
+        "friendly pet.",
+    ),
+    "catnip_buff_pets": (
+        3,
+        "How many pets a catnip buff covers, friendly or not.",
+    ),
+    "catnip_buff_minutes": (
+        5,
+        "How long a catnip buff lasts, if the pets do not use it up first.",
+    ),
+    "catnip_buff_cooldown_minutes": (
+        30,
+        "How long after a catnip play before another one can buff anything.",
+    ),
+    # **Ten, and the group is the point.** A play starts a ten-minute
+    # toy cooldown, so one player can manage at most six successful
+    # plays in an hour and the ramp costs some of those. At ten, two
+    # players can do it with misses to spare; at twelve, two would need
+    # a perfect hour. Tunable because a quiet server has to be able to
+    # reach it at all - the same argument as `captive_audience_size`.
+    "playgroup_toys": (
+        10,
+        "How many different toys have to be played with in one room within "
+        "an hour for everybody who played to earn Playgroup.",
+    ),
     "ivy_fall_percent": (
         10,
         "The percent chance of falling when climbing down the ivy from the "
@@ -5935,6 +6069,334 @@ async def count_of_type(guild_id: int, room_id: str, kind: str) -> int:
     return int(total or 0)
 
 
+async def catnip_state(guild_id: int, user_id: int) -> tuple[int, datetime | None]:
+    """How many pets of buff are left, and when the last play started one."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        row = (
+            await session.execute(
+                select(User.catnip_charges, User.catnip_buff_at).where(
+                    User.id == user_id, User.guild_id == guild_id
+                )
+            )
+        ).first()
+    return (0, None) if row is None else (row[0] or 0, row[1])
+
+
+async def start_catnip_buff(
+    guild_id: int, user_id: int, charges: int, now: datetime
+) -> None:
+    """Set the charges and stamp the clock. The caller owns the cooldown."""
+    await ensure_user_exists(user_id, guild_id)
+    session_factory = _require_session()
+    async with session_factory() as session:
+        await session.execute(
+            update(User)
+            .where(User.id == user_id, User.guild_id == guild_id)
+            .values(catnip_charges=charges, catnip_buff_at=now)
+        )
+        await session.commit()
+
+
+async def spend_catnip_charge(guild_id: int, user_id: int) -> int:
+    """Take one charge off, never below zero. Returns what is left.
+
+    **The stamp is not cleared.** It carries the cooldown as well as the
+    lapse, and a player whose charges run out at four minutes still may
+    not start another buff until thirty are up - so clearing it here
+    would hand them a fresh mouse every three pets.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        await session.execute(
+            update(User)
+            .where(
+                User.id == user_id,
+                User.guild_id == guild_id,
+                User.catnip_charges > 0,
+            )
+            .values(catnip_charges=User.catnip_charges - 1)
+        )
+        await session.commit()
+        return (
+            await session.scalar(
+                select(User.catnip_charges).where(
+                    User.id == user_id, User.guild_id == guild_id
+                )
+            )
+            or 0
+        )
+
+
+async def clear_catnip_charges(guild_id: int, user_id: int) -> None:
+    """Zero the charges on a buff that has run out of time, keeping the
+    stamp - see `spend_catnip_charge` for why the stamp stays."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        await session.execute(
+            update(User)
+            .where(User.id == user_id, User.guild_id == guild_id)
+            .values(catnip_charges=0)
+        )
+        await session.commit()
+
+
+async def start_the_clock_on_unplaced_toys(
+    guild_id: int, kind: str, now: datetime
+) -> list[tuple[str, str, str]]:
+    """Stamp `placed_at` on anything of this kind that has none.
+
+    **A null timestamp is a trap this project has already fallen into**,
+    and both readings of it are wrong in opposite directions. `taken_at`
+    null exempted a carried thing from the idle sweep for ever, so that
+    rule never fired in production at all. Treating null as *infinitely
+    old* is no better: the first drain tick would sweep every unstamped
+    toy in the house at once, which is exactly the pile-vanishing the
+    per-spot clock exists to prevent.
+
+    So the clock starts on first sight. The row is stamped `now`, which
+    is never below a cutoff derived from `now`, so nothing is stamped
+    and drained on one tick: the toy gets a full `toy_stale_hours` and
+    then the ordinary rule. It is the repair
+    `start_the_clock_on_unstamped_carries` makes for the bag, and it
+    mends itself - a row needs it once.
+
+    Returns what it stamped, so the sweep can say so rather than
+    quietly fixing the evidence it is about to read.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = (
+            await session.execute(
+                select(
+                    RoomContents.room_id,
+                    RoomContents.container_id,
+                    RoomContents.thing_id,
+                )
+                .join(ThingType, ThingType.thing_id == RoomContents.thing_id)
+                .where(
+                    RoomContents.guild_id == guild_id,
+                    RoomContents.count > 0,
+                    RoomContents.placed_at.is_(None),
+                    ThingType.type == kind,
+                )
+            )
+        ).all()
+        if rows:
+            await session.execute(
+                update(RoomContents)
+                .where(
+                    RoomContents.guild_id == guild_id,
+                    RoomContents.placed_at.is_(None),
+                    RoomContents.thing_id.in_({row[2] for row in rows}),
+                )
+                .values(placed_at=now)
+            )
+            await session.commit()
+    return [(row[0], row[1], row[2]) for row in rows]
+
+
+async def stale_toys_by_spot(
+    guild_id: int, kind: str, settled_before: datetime, *, except_container: str
+) -> list[tuple[str, str, str, int]]:
+    """The oldest stale toy in each spot, and how many stale ones it leaves.
+
+    One row per spot, because the cat takes one. The remainder comes
+    back with it so the sweep can log what stayed behind - the number
+    that says whether a pile is coming down or standing still, and the
+    one nothing can reconstruct afterwards.
+
+    `settled_before` is the cutoff, so the caller owns the clock. The
+    bin is excluded by name for the reason it is excluded from the cap:
+    a toy in there belongs to the trash mechanic, not to the cat.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = (
+            await session.execute(
+                select(
+                    RoomContents.room_id,
+                    RoomContents.container_id,
+                    RoomContents.thing_id,
+                    RoomContents.placed_at,
+                )
+                .join(ThingType, ThingType.thing_id == RoomContents.thing_id)
+                .where(
+                    RoomContents.guild_id == guild_id,
+                    RoomContents.count > 0,
+                    RoomContents.container_id != except_container,
+                    RoomContents.placed_at.is_not(None),
+                    RoomContents.placed_at <= settled_before,
+                    ThingType.type == kind,
+                    ThingType.takeable,
+                )
+                .order_by(RoomContents.placed_at.asc(), RoomContents.thing_id.asc())
+            )
+        ).all()
+
+    by_spot: dict[tuple[str, str], list[str]] = {}
+    for room_id, container_id, thing_id, _ in rows:
+        by_spot.setdefault((room_id, container_id), []).append(thing_id)
+    return [
+        (room_id, container_id, things[0], len(things) - 1)
+        for (room_id, container_id), things in by_spot.items()
+    ]
+
+
+async def spots_drained_since(guild_id: int, since: datetime) -> set[tuple[str, str]]:
+    """Spots the cat has taken something from since `since`."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(ToyDrain.room_id, ToyDrain.container_id).where(
+                ToyDrain.guild_id == guild_id, ToyDrain.drained_at > since
+            )
+        )
+    return {(row[0], row[1]) for row in rows}
+
+
+async def carry_off_one_toy(
+    guild_id: int, room_id: str, container_id: str, thing_id: str, now: datetime
+) -> bool:
+    """Take one copy out of a spot and stamp the spot. False if it had gone.
+
+    Conditional on the count still being above zero, like every other
+    decrement here, so a player who picks the toy up between the read
+    and the write keeps it. The spot is stamped only when something
+    actually left, or a lost race would buy that spot a day of quiet
+    for nothing.
+    """
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    async with session_factory() as session:
+        result = await session.execute(
+            update(RoomContents)
+            .where(
+                RoomContents.guild_id == guild_id,
+                RoomContents.room_id == room_id,
+                RoomContents.container_id == container_id,
+                RoomContents.thing_id == thing_id,
+                RoomContents.count > 0,
+            )
+            .values(count=RoomContents.count - 1)
+        )
+        if not result.rowcount:
+            await session.rollback()
+            return False
+        await session.execute(
+            insert(ToyDrain)
+            .values(
+                guild_id=guild_id,
+                room_id=room_id,
+                container_id=container_id,
+                drained_at=now,
+            )
+            .on_conflict_do_update(
+                index_elements=[
+                    ToyDrain.guild_id,
+                    ToyDrain.room_id,
+                    ToyDrain.container_id,
+                ],
+                set_={"drained_at": now},
+            )
+        )
+        await session.commit()
+    return True
+
+
+async def toys_every_active_player_has(
+    guild_id: int, kind: str, active_since: date
+) -> set[str]:
+    """Things of this kind that every active player is already carrying.
+
+    Empty when nobody is active, which is the answer that keeps a quiet
+    server stocked: *every one of nobody carries the acorn* is
+    vacuously true and would skip the entire pool.
+
+    The early return says that out loud and is not what enforces it -
+    an empty `IN ()` matches no rows, so the query below already comes
+    back empty. Deleting the guard changes no behaviour and no test
+    fails, which is worth knowing before somebody reads it as load
+    bearing.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        active = {
+            row[0]
+            for row in await session.execute(
+                select(User.id).where(
+                    User.guild_id == guild_id,
+                    User.last_cat_interaction_date.is_not(None),
+                    User.last_cat_interaction_date >= active_since,
+                )
+            )
+        }
+        if not active:
+            return set()
+        rows = await session.execute(
+            select(PlayerInventory.thing_id, func.count(PlayerInventory.user_id))
+            .join(ThingType, ThingType.thing_id == PlayerInventory.thing_id)
+            .where(
+                PlayerInventory.guild_id == guild_id,
+                PlayerInventory.count > 0,
+                PlayerInventory.user_id.in_(active),
+                ThingType.type == kind,
+            )
+            .group_by(PlayerInventory.thing_id)
+        )
+    return {thing_id for thing_id, holders in rows if holders >= len(active)}
+
+
+async def count_of_type_in_house(
+    guild_id: int, kind: str, *, except_container: str | None = None
+) -> int:
+    """How many of one kind are out in the house, anywhere a player sees.
+
+    **The cap used to be per room and the question was never per room.**
+    `toys_present` reads *how many toys are out*, and while the only
+    place a toy could be was the channel floor those were the same
+    sentence. Drop 46 scatters them through sixteen containers, and a
+    per-room count would allow six in every one of them.
+
+    Three exclusions, and each is a different reason:
+
+    - **A player's bag does not count.** Collecting toys is how the
+      drop is played - *Playgroup* needs ten in one room - and a cap
+      that counted them would stop the draw for whoever played hardest.
+    - **The bin does not count.** A toy in the trash can is on its way
+      out of the world; the trash mechanic owns it and the drain leaves
+      it alone, so counting it would hold a slot nobody can free. The
+      caller names it, because this module knows about rows and not
+      about which container is the bin.
+    - **Only what can be carried.** The shipping box is a toy to the
+      cat and furniture to everyone else. It is bolted to the Entryway,
+      it is never placed and never drained, and counting it would spend
+      one of the six forever.
+
+    Player placement is still exempt in the sense that matters: nothing
+    here tidies a dropped toy away. It counts, which is the point - six
+    on the floor of one room is six toys out, however they got there.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        total = await session.scalar(
+            select(func.sum(RoomContents.count))
+            .select_from(RoomContents)
+            .join(ThingType, ThingType.thing_id == RoomContents.thing_id)
+            .where(
+                RoomContents.guild_id == guild_id,
+                ThingType.type == kind,
+                ThingType.takeable,
+                *(
+                    [RoomContents.container_id != except_container]
+                    if except_container
+                    else []
+                ),
+            )
+        )
+    return int(total or 0)
+
+
 async def stock_of_type(kind: str, arrived: set[int]) -> list[str]:
     """Every thing of one kind that can be delivered, in a stable order.
 
@@ -5984,6 +6446,74 @@ async def present_of_type(guild_id: int, room_id: str, kind: str) -> list[str]:
             .order_by(ThingType.sort_order, ThingType.thing_id)
         )
     return [row[0] for row in rows]
+
+
+async def record_toy_play(
+    guild_id: int, user_id: int, thing_id: str, room_id: str, now: datetime
+) -> None:
+    """Note one successful play, for *Playgroup* to read back by room."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        session.add(
+            ToyPlay(
+                guild_id=guild_id,
+                user_id=user_id,
+                thing_id=thing_id,
+                room_id=room_id,
+                played_at=now,
+            )
+        )
+        await session.commit()
+
+
+async def toy_plays_in_room_since(
+    guild_id: int, room_id: str, since: datetime
+) -> list[tuple[int, str]]:
+    """Every successful toy play in one room since `since`, as (who, what).
+
+    Every play, not one per toy: a player whose toy somebody else has
+    already played still earns *Playgroup*, so the list has to keep the
+    repeats and the caller takes the distinct set of things and the
+    distinct set of people from it separately.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(ToyPlay.user_id, ToyPlay.thing_id).where(
+                ToyPlay.guild_id == guild_id,
+                ToyPlay.room_id == room_id,
+                ToyPlay.played_at > since,
+            )
+        )
+    return [(row[0], row[1]) for row in rows]
+
+
+async def distinct_toys_played(guild_id: int, user_id: int) -> int:
+    """How many different toys this player has ever got the cat to play with.
+
+    Rows rather than the sum of `use_count`, which is the distinction
+    `toy_plays` names: the rows answer *how many toys* and the sum
+    answers *how many plays*. Both collection achievements want the
+    rows, and neither needs a counter of its own.
+
+    **The shipping box counts** and is reachable only in the Entryway,
+    which is what makes thirteen a real target rather than twelve plus
+    a fixture nobody thinks of.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        total = await session.scalar(
+            select(func.count())
+            .select_from(ThingUse)
+            .join(ThingType, ThingType.thing_id == ThingUse.thing_id)
+            .where(
+                ThingUse.guild_id == guild_id,
+                ThingUse.user_id == user_id,
+                ThingUse.use_count > 0,
+                ThingType.type == "toy",
+            )
+        )
+    return int(total or 0)
 
 
 async def toy_plays(guild_id: int, user_id: int) -> int:

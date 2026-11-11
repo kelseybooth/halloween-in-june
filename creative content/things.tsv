@@ -119,7 +119,7 @@ cat_food_stash_drawer	cans of expired cat food	expired cat food|expired|cat food
 graphite_tin	tin of graphite powder	graphite|graphite powder|tin|graphite tin	source	BE	1	no	yes	0						graphite_powder		bedroom_window		40	110					
 cat_food_stash_bed	crate of chicken cat food	chicken cat food|chicken|cat food|cans|crate|stash	source	BE	1	no	yes	0						cat_food_chicken		bed		40	111					
 cat_food_stash_sideboard	cupboard of tuna cat food	tuna cat food|tuna|cat food|cans|cupboard|cupboard doors|cupboard door|stash	source	DI	1	no	yes	0						cat_food_tuna		sideboard		25	112					
-copper_wire_coil	coil of copper wire	copper wire|wire|copper|coil	source	SE	1	no	yes	0						copper_wire				50	113					
+copper_wire_spool	spool of copper wire	copper wire|wire|copper|spool|wire spool|spool of wire	source	SE	1	no	yes	0						copper_wire				50	113					
 carving_tool_sleeve	carving tool sets	carving tools|tools|carving kit|sleeve|sets	source	BE	1	no	yes	0						carving_tools		halloween_box		40	114					
 costume_pile	pile of costumes	costumes|costume|costume pile|pile	source	BE	1	no	yes	0						costume		halloween_box		40	115					
 ED	arched doorway	arch|arched doorway|doorway|dining room|dining	exit	EN	1	no	yes	0							DI			25	116					
@@ -146,6 +146,16 @@ cat_food_stash_gourmet	cans of gourmet cat food	gourmet cans|two cans|gourmet we
 cat_bed	cat bed	cat bed|bed|cushion|cat cushion|cooler|icebox|egg cooler|catbed	fixture	CH	1	no	no											1	138		yes			
 feather_wand	feather wand	wand|feather|feathers|feather toy|cat toy|toy|featherwand|ribbon|stick	toy	CH	0	yes	yes	1	1									2	148					
 crinkle_ball	crinkle ball	ball|foil ball|crinkle|crinkle toy|cat toy|toy	toy	CH	0	yes	yes	1	1									2	158					
+catnip_mouse	catnip mouse	mouse|felt mouse|catnip|cat toy|toy	toy		0	yes	yes	1	1									46	169					
+jingle_ball	jingle ball	bell ball|bell|cat toy|toy	toy		0	yes	yes	1	1									46	170					
+laser_pointer	laser pointer	laser|pointer|red dot|dot|cat toy|toy	toy		0	yes	yes	1	1									46	171					
+spring_coil	spring coil	spring|coil|spiral|cat toy|toy	toy		0	yes	yes	1	1									46	172					
+hair_tie	hair tie	hairtie|elastic|hair elastic|bobble|cat toy|toy	toy		0	yes	yes	1	1									46	173					
+bottle_cap	bottle cap	cap|metal cap|crown cap|cat toy|toy	toy		0	yes	yes	1	1									46	174					
+wine_cork	wine cork	cork|stopper|cat toy|toy	toy		0	yes	yes	1	1									46	175					
+acorn	acorn	nut|oak nut|cat toy|toy	toy		0	yes	yes	1	1									46	176					
+spider_ring	plastic spider ring	spider ring|spider|ring|plastic spider|cat toy|toy	toy		0	yes	yes	1	1									46	177					
+crumpled_receipt	crumpled receipt	receipt|paper ball|paper|cat toy|toy	toy		0	yes	yes	1	1									46	178					
 road	road	dirt road|lane|dirt	terrain	CH	1	no	no	1										1	140					
 fog	fog	mist|haze|middle distance	terrain	CH	1	no	no	1										1	141					
 branches	branches	branch|limb|limbs|bough|boughs|canopy|trees|tree	scenery	CH	1	no	no	1										1	142					

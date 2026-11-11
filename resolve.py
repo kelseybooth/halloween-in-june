@@ -103,7 +103,7 @@ NO_GAME = None
 # stays in the files, and is still what a server paused at 40 reads -
 # which is the whole reason the fragment was written twice rather than
 # edited in place.
-LAST_PLAYABLE_DROP = 45
+LAST_PLAYABLE_DROP = 46
 
 
 class UnknownDrop(Exception):
