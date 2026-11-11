@@ -191,6 +191,95 @@ GENERIC_ERROR_MESSAGE = "An error occurred. Try again."
 MOVE_ERROR_MESSAGE = "An error occurred while moving between rooms. Try again."
 
 
+def _which_command(interaction: discord.Interaction) -> str:
+    """What to call a command in a row about it going wrong.
+
+    One definition for both kinds of failure row, because a `crashed`
+    and a `db_error` about the same command have to agree on its name.
+    Counting the two together is the first thing anybody does with
+    them, and two spellings would make that a join nobody gets right.
+
+    A component callback has no `interaction.command` at all, which is
+    what the fallback is for - the two button sites pass a name
+    themselves rather than settle for it.
+    """
+    return (
+        getattr(interaction.command, "qualified_name", None)
+        or getattr(interaction.command, "name", None)
+        or "?"
+    )
+
+
+async def _the_database_refused(
+    interaction: discord.Interaction,
+    error: BaseException,
+    *,
+    doing: str,
+    command: str | None = None,
+    message: str = DB_ERROR_MESSAGE,
+    deferred: bool = True,
+) -> None:
+    """Apologise for a database failure, and write down that it happened.
+
+    **Twenty-two handlers in this file did the first half and none
+    did the second.** Each caught `SQLAlchemyError`, told the player some
+    version of "something went wrong reaching the database" and
+    returned - so the failure the game handled *politely* was the one
+    that left no trace at all, while a crash it handled badly at least
+    got a traceback. In `interaction_log` a refused command read
+    exactly like a command nobody ran, which is the shape that cost an
+    evening on 9 November 2026.
+
+    **The log line, the apology and the row, in that order**, and the
+    order is the argument for putting all three here. The log is local
+    and instant, so it goes first and survives whatever happens next.
+    The apology crosses the network. The row crosses the database,
+    which is the thing we already know is broken - so it goes last,
+    where its failing costs the least.
+
+    **The apology is allowed to fail.** If Discord refuses it too, the
+    row is what is left, and it is the case the row matters most in.
+    Letting that raise would hand the whole thing to the catch-all,
+    which would write a `crashed` row instead - the wrong alarm, for a
+    command that did not crash.
+
+    `doing` is the bespoke half of the log line, so it still says which
+    read failed rather than only which command. Six of these sites
+    logged nothing whatsoever before this - no row *and* no traceback -
+    which is how a `/stats` and a `/leaderboard` could fail all evening
+    in silence.
+    """
+    log.error("Could not %s in guild %s", doing, interaction.guild_id, exc_info=error)
+
+    try:
+        if deferred:
+            await interaction.followup.send(message, ephemeral=True)
+        else:
+            await interaction.response.send_message(message, ephemeral=True)
+    except discord.HTTPException:
+        log.warning(
+            "Could not send the database apology in guild %s",
+            interaction.guild_id,
+            exc_info=True,
+        )
+
+    named = command or _which_command(interaction)
+    if interaction.guild_id is None:
+        log.warning(
+            "Not logging the database refusal in %s: no guild to log it against",
+            named,
+        )
+        return
+
+    await telemetry.db_error(
+        interaction.guild_id,
+        interaction.user.id,
+        command=named,
+        error=error,
+        typed=_what_they_typed(interaction),
+    )
+
+
 class Reaction(NamedTuple):
     """A chosen response plus the weighting that produced it."""
 
@@ -2050,8 +2139,8 @@ async def pet(interaction: discord.Interaction) -> None:
         await database.close_interaction(
             result.log_id, relationship_delta=delta, score_after=relationship
         )
-    except SQLAlchemyError:
-        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+    except SQLAlchemyError as error:
+        await _the_database_refused(interaction, error, doing="finish the pet")
         return
 
     message = reaction.text
@@ -2231,9 +2320,10 @@ async def start_game(
     try:
         current = await resolve.current_drop(guild.id)
         existing = await database.announcement_channel(guild.id)
-    except SQLAlchemyError:
-        log.exception("Could not read the game's state in %s", guild.id)
-        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+    except SQLAlchemyError as error:
+        await _the_database_refused(
+            interaction, error, doing="read the game's state"
+        )
         return
 
     if current is not None:
@@ -2260,7 +2350,20 @@ async def start_game(
         await database.set_announcement_channel(guild.id, channel.id)
         await resolve.set_current_drop(guild.id, FIRST_DROP)
         await content_loader.place_arrived(guild.id)
-    except (resolve.UnknownDrop, SQLAlchemyError, content.ContentError) as exc:
+    except SQLAlchemyError as error:
+        # Split from the content half below, which is a different alarm:
+        # bad content files are a release that needs fixing, and this is
+        # the database. Both keep the copy they always sent, including
+        # the exception text - an admin wants the detail, and changing
+        # what they read is not this change's business.
+        await _the_database_refused(
+            interaction,
+            error,
+            doing="start the game",
+            message=f"The game did not open: {error}",
+        )
+        return
+    except (resolve.UnknownDrop, content.ContentError) as exc:
         log.exception("Could not start the game in %s", guild.id)
         await interaction.followup.send(
             f"The game did not open: {exc}", ephemeral=True
@@ -2351,9 +2454,8 @@ async def advance_game(interaction: discord.Interaction, confirm: bool = False) 
 
     try:
         current = await resolve.current_drop(guild.id)
-    except SQLAlchemyError:
-        log.exception("Could not read the drop in %s", guild.id)
-        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+    except SQLAlchemyError as error:
+        await _the_database_refused(interaction, error, doing="read the drop")
         return
 
     if current is None:
@@ -2368,9 +2470,10 @@ async def advance_game(interaction: discord.Interaction, confirm: bool = False) 
     # admin on drop 3 could never reach drop 10.
     try:
         target = await resolve.next_drop_after(current)
-    except SQLAlchemyError:
-        log.exception("Could not read the drop calendar in %s", guild.id)
-        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+    except SQLAlchemyError as error:
+        await _the_database_refused(
+            interaction, error, doing="read the drop calendar"
+        )
         return
 
     if target is None or target > resolve.LAST_PLAYABLE_DROP:
@@ -2395,7 +2498,20 @@ async def advance_game(interaction: discord.Interaction, confirm: bool = False) 
     try:
         await resolve.set_current_drop(guild.id, target)
         placed = await content_loader.place_arrived(guild.id)
-    except (resolve.UnknownDrop, SQLAlchemyError, content.ContentError) as exc:
+    except SQLAlchemyError as error:
+        # Split from the content half below, which is a different alarm:
+        # bad content files are a release that needs fixing, and this is
+        # the database. Both keep the copy they always sent, including
+        # the exception text - an admin wants the detail, and changing
+        # what they read is not this change's business.
+        await _the_database_refused(
+            interaction,
+            error,
+            doing=f"advance to drop {target}",
+            message=f"The drop did not open: {error}",
+        )
+        return
+    except (resolve.UnknownDrop, content.ContentError) as exc:
         log.exception("Could not advance %s to drop %s", guild.id, target)
         await interaction.followup.send(
             f"The drop did not open: {exc}", ephemeral=True
@@ -2541,9 +2657,10 @@ async def reset_haunted_house(
     try:
         current = await resolve.current_drop(guild.id)
         channel_id = await database.announcement_channel(guild.id)
-    except SQLAlchemyError:
-        log.exception("Could not read the game's state before resetting %s", guild.id)
-        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+    except SQLAlchemyError as error:
+        await _the_database_refused(
+            interaction, error, doing="read the game's state before resetting it"
+        )
         return
 
     landing = current
@@ -2584,7 +2701,23 @@ async def reset_haunted_house(
             await database.set_announcement_channel(guild.id, channel_id)
         for art_id, url in keeping.items():
             await database.record_art(guild.id, art_id, url)
-    except (content.ContentError, SQLAlchemyError) as exc:
+    except SQLAlchemyError as error:
+        # Split from the content half below, which is a different alarm:
+        # bad content files are a release that needs fixing, and this is
+        # the database. Both keep the copy they always sent, including
+        # the exception text - an admin wants the detail, and changing
+        # what they read is not this change's business.
+        await _the_database_refused(
+            interaction,
+            error,
+            doing="reset the server",
+            message=(
+                f"The reset did not finish: {error}. Nothing partial has been "
+                "left behind - the whole thing is one transaction."
+            ),
+        )
+        return
+    except content.ContentError as exc:
         log.exception("Reset failed for %s", guild.id)
         await interaction.followup.send(
             f"The reset did not finish: {exc}. Nothing partial has been left "
@@ -2681,8 +2814,10 @@ async def initialize_haunted_house(
             )
             if room_id in names_by_id
         ]
-    except SQLAlchemyError:
-        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+    except SQLAlchemyError as error:
+        await _the_database_refused(
+            interaction, error, doing="read the rooms and where everybody is"
+        )
         return
 
     if not rooms:
@@ -3343,9 +3478,8 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
             return
 
         await _finish_use(interaction, state, found)
-    except SQLAlchemyError:
-        log.exception("Failed to use %r in guild %s", thing, guild_id)
-        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+    except SQLAlchemyError as error:
+        await _the_database_refused(interaction, error, doing=f"use {thing!r}")
 
 
 async def _a_feed_refusal(interaction, found, missing: list[str]) -> bool:
@@ -5692,7 +5826,18 @@ async def _use_exit(interaction, state, found, row) -> None:
         origin_name = await resolve.room_name(origin)
         destination_place = await _place_for(channel, destination, destination_name)
         origin_place = await _place_for(channel, origin, origin_name)
-    except (discord.HTTPException, SQLAlchemyError):
+    except SQLAlchemyError as error:
+        await _the_database_refused(
+            interaction,
+            error,
+            doing="look up where this move happens",
+            message=MOVE_ERROR_MESSAGE,
+        )
+        return
+    except discord.HTTPException:
+        # Split from the database half above on purpose. Discord failing
+        # to hand back a thread is not the database refusing us, and a
+        # `db_error` row reading `NotFound` would be the wrong alarm.
         log.exception("Could not look up where this move happens")
         await interaction.followup.send(MOVE_ERROR_MESSAGE, ephemeral=True)
         return
@@ -5888,7 +6033,7 @@ async def _use_exit(interaction, state, found, row) -> None:
         # described by the state it produced - but a discovery is the opposite
         # case. The long text is the reveal and is written to be read once;
         # the state it sets is what makes every later use read the short one.
-    except SQLAlchemyError:
+    except SQLAlchemyError as error:
         # The arrival line goes as well as the membership: it announced a move
         # that did not happen, and it is the thing that let them in.
         if arrival_message is not None:
@@ -5904,7 +6049,12 @@ async def _use_exit(interaction, state, found, row) -> None:
                 await house_utils.remove_player_from_thread(destination_place, user.id)
             except discord.HTTPException:
                 log.exception("Rollback failed: %s left in %s", user.id, destination)
-        await interaction.followup.send(MOVE_ERROR_MESSAGE, ephemeral=True)
+        await _the_database_refused(
+            interaction,
+            error,
+            doing="finish the move",
+            message=MOVE_ERROR_MESSAGE,
+        )
         return
 
     # The move has happened. What is left is presentational, so a failure is
@@ -6159,9 +6309,8 @@ async def go(interaction: discord.Interaction, where: str) -> None:
             return
 
         await _use_exit(interaction, state, found, row)
-    except SQLAlchemyError:
-        log.exception("Failed to go to %r in guild %s", where, guild_id)
-        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+    except SQLAlchemyError as error:
+        await _the_database_refused(interaction, error, doing=f"go to {where!r}")
 
 
 GENERIC_ROOM_DESCRIPTION = "You see a room."
@@ -6256,9 +6405,10 @@ async def look(interaction: discord.Interaction, thing: str | None = None) -> No
             return
 
         await _look_at_one_thing(interaction, guild_id, user.id, room_id, thing)
-    except SQLAlchemyError:
-        log.exception("Failed to look at %r in guild %s", thing, guild_id)
-        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+    except SQLAlchemyError as error:
+        await _the_database_refused(
+            interaction, error, doing=f"look at {thing!r}"
+        )
 
 
 # Where "this player has read this room" is written down, one notice
@@ -6864,8 +7014,13 @@ async def inventory(interaction: discord.Interaction) -> None:
 
     try:
         items = await database.get_carried(interaction.user.id, interaction.guild_id)
-    except SQLAlchemyError:
-        await interaction.followup.send(INVENTORY_ERROR_MESSAGE, ephemeral=True)
+    except SQLAlchemyError as error:
+        await _the_database_refused(
+            interaction,
+            error,
+            doing="read the bag",
+            message=INVENTORY_ERROR_MESSAGE,
+        )
         return
 
     # Recorded whether or not the bag has anything in it: the lesson is
@@ -7203,9 +7358,8 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
             ),
             interaction=interaction,
         )
-    except SQLAlchemyError:
-        log.exception("Failed to take %r in guild %s", thing, guild_id)
-        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+    except SQLAlchemyError as error:
+        await _the_database_refused(interaction, error, doing=f"take {thing!r}")
 
 
 async def _take_refusal(guild_id: int, found: reach.NotFound, typed: str) -> str:
@@ -7477,9 +7631,8 @@ async def drop(interaction: discord.Interaction, thing: str) -> None:
             ),
             interaction=interaction,
         )
-    except SQLAlchemyError:
-        log.exception("Failed to drop %r in guild %s", thing, guild_id)
-        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+    except SQLAlchemyError as error:
+        await _the_database_refused(interaction, error, doing=f"drop {thing!r}")
 
 
 @bot.tree.command(
@@ -7531,9 +7684,8 @@ async def admin_config(interaction: discord.Interaction, key: str, value: int) -
     try:
         previous = await database.get_setting(interaction.guild_id, name)
         await database.set_setting(interaction.guild_id, name, value)
-    except SQLAlchemyError:
-        log.exception("Could not set %s in guild %s", name, interaction.guild_id)
-        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+    except SQLAlchemyError as error:
+        await _the_database_refused(interaction, error, doing=f"set {name}")
         return
 
     note = ""
@@ -7674,7 +7826,23 @@ async def qa_reset_server(interaction: discord.Interaction, confirm: str) -> Non
         # with everything else, and nothing is written back.
         cleared = await content_loader.reset_guild(guild.id, drop=None)
         await qa.clear_forced(guild.id)
-    except (content.ContentError, SQLAlchemyError) as exc:
+    except SQLAlchemyError as error:
+        # Split from the content half below, which is a different alarm:
+        # bad content files are a release that needs fixing, and this is
+        # the database. Both keep the copy they always sent, including
+        # the exception text - an admin wants the detail, and changing
+        # what they read is not this change's business.
+        await _the_database_refused(
+            interaction,
+            error,
+            doing="un-start the server",
+            message=(
+                f"The reset did not finish: {error}. It is one transaction, so "
+                "nothing partial has been left behind."
+            ),
+        )
+        return
+    except content.ContentError as exc:
         log.exception("qa-reset-server failed for %s", guild.id)
         await interaction.followup.send(
             f"The reset did not finish: {exc}. It is one transaction, so "
@@ -8087,8 +8255,14 @@ class _MyStats(
             embed = await _stats_embed(
                 interaction.guild, interaction.user, interaction.user
             )
-        except SQLAlchemyError:
-            await interaction.response.send_message(DB_ERROR_MESSAGE, ephemeral=True)
+        except SQLAlchemyError as error:
+            await _the_database_refused(
+                interaction,
+                error,
+                doing="read the stats",
+                command="stats",
+                deferred=False,
+            )
             return
         await interaction.response.edit_message(embed=embed, view=StatsView())
 
@@ -8114,8 +8288,14 @@ async def _show_leaderboard(interaction: discord.Interaction, page: int) -> None
         pages = await leaderboard.pages(interaction.guild)
         page = max(0, min(page, pages - 1))
         body = await leaderboard.lines(interaction.guild, interaction.user.id, page)
-    except SQLAlchemyError:
-        await interaction.response.send_message(DB_ERROR_MESSAGE, ephemeral=True)
+    except SQLAlchemyError as error:
+        await _the_database_refused(
+            interaction,
+            error,
+            doing="read the leaderboard",
+            command="leaderboard",
+            deferred=False,
+        )
         return
 
     embed = discord.Embed(
@@ -8179,8 +8359,8 @@ async def stats(
 
     try:
         embed = await _stats_embed(interaction.guild, interaction.user, subject)
-    except SQLAlchemyError:
-        await interaction.followup.send(DB_ERROR_MESSAGE, ephemeral=True)
+    except SQLAlchemyError as error:
+        await _the_database_refused(interaction, error, doing="read the stats")
         return
 
     await interaction.followup.send(
@@ -8636,11 +8816,7 @@ async def _record_the_crash(
     honest value for a command run in a DM - it belongs to no server's
     numbers. One line in the log and dropped.
     """
-    command = (
-        getattr(interaction.command, "qualified_name", None)
-        or getattr(interaction.command, "name", None)
-        or "?"
-    )
+    command = _which_command(interaction)
     if interaction.guild_id is None:
         log.warning("Not logging the crash in %s: no guild to log it against", command)
         return

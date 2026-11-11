@@ -1,5 +1,5 @@
 """A log line has a ceiling, the catch-all survives a silent Discord, and
-a command that dies says so in the log.
+a command that dies - or is refused - says so in the log.
 
 Both rules here were written the morning after an outage, and both are
 about the same failure: **the logging made the problem harder to see
@@ -27,6 +27,14 @@ table is written downstream of the line that raised, so a crash was the
 one thing that could happen in the game and leave no trace - and no row
 reads exactly like no command. Finding out why meant replaying the read
 path against the live database by hand, one call at a time.
+
+The fourth is the same silence one layer in, and the more embarrassing
+half of it. Twenty-two handlers caught `SQLAlchemyError`, told the
+player in so many words that the database was the problem, and
+returned without writing anything down - so the failure the game
+handled *politely* left less behind than the one it handled badly,
+and six of those handlers did not even log a traceback. A `/stats`
+could fail all evening in total silence.
 """
 
 import logging
@@ -36,12 +44,18 @@ import discord
 import pytest
 from discord import app_commands
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 
 from conftest import ALICE, GUILD_A
 from fake_discord import FakeInteraction, FakeNamespace, FakeResponse
 
+import ast
+import inspect
+from pathlib import Path
+
 import bot
 import database
+import telemetry
 
 
 # --------------------------------------------------------------------------
@@ -372,3 +386,322 @@ async def test_the_crash_row_carries_the_servers_drop(db):
 
     (row,) = await crash_rows(db)
     assert row.drop is not None
+
+
+# --------------------------------------------------------------------------
+# The row a database refusal leaves behind
+# --------------------------------------------------------------------------
+#
+# `crashed` covers the failures nobody saw coming. These are the ones we
+# did: a handler catches `SQLAlchemyError`, says something true and kind
+# about the database, and returns. Until this they returned silently, so
+# the better-behaved failure was the more invisible one.
+
+
+def refused_on(command="inventory", *, guild_id=GUILD_A, user_id=ALICE, **options):
+    """An interaction for a command the database is about to refuse."""
+    return FakeInteraction(
+        user_id, guild_id, command=command, namespace=FakeNamespace(**options)
+    )
+
+
+def pool_exhausted(message="pool exhausted"):
+    """A real `OperationalError`, which is what this looks like in life.
+
+    Built rather than faked so `reason` is checked against the class
+    name SQLAlchemy actually raises - the row is only worth anything if
+    the word in it is the word somebody would grep for.
+    """
+    return OperationalError("SELECT 1", {}, Exception(message))
+
+
+def database_down(monkeypatch, name, error=None):
+    async def refuse(*args, **kwargs):
+        raise error or pool_exhausted()
+
+    monkeypatch.setattr(database, name, refuse)
+
+
+async def refusal_rows(db):
+    async with db._require_session()() as session:
+        return (
+            (
+                await session.execute(
+                    select(database.InteractionLog).where(
+                        database.InteractionLog.action == database.DB_ERROR
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+
+async def test_a_refused_command_leaves_a_row_naming_it_and_the_failure(
+    db, monkeypatch
+):
+    """`/inventory` is one of the five that logged nothing whatsoever.
+
+    No row, no traceback: a player saying "my bag won't open" left the
+    log with nothing to agree or disagree with.
+    """
+    database_down(monkeypatch, "get_carried")
+
+    await bot.inventory.callback(refused_on("inventory"))
+
+    (row,) = await refusal_rows(db)
+    assert row.action == database.DB_ERROR
+    assert row.reason == "OperationalError"
+    assert row.detail == "command=inventory"
+    assert row.user_id == ALICE
+    assert row.guild_id == GUILD_A
+    assert row.drop is not None
+
+
+async def test_the_player_still_gets_the_apology_in_its_own_words(db, monkeypatch):
+    """The row is added to the handler, not swapped in for what it said.
+
+    `/inventory` has copy of its own rather than the database sentence,
+    and a change that tidied every site into one message would have
+    quietly rewritten the game.
+
+    **This one passes with the change reverted**, and is here for that
+    reason: it is a guard on what the change must *not* do, not
+    evidence that it does anything. Nine of the eleven tests in this
+    section fail without it; this is not one of them.
+    """
+    database_down(monkeypatch, "get_carried")
+
+    interaction = refused_on("inventory")
+    await bot.inventory.callback(interaction)
+
+    (content, kwargs) = interaction.sent[-1]
+    assert content == bot.INVENTORY_ERROR_MESSAGE
+    assert kwargs["ephemeral"] is True
+
+
+async def test_a_refusal_is_not_filed_as_a_crash(db, monkeypatch):
+    """**The whole argument for a second word.**
+
+    A spike of these means the database or the pool; a spike of
+    `crashed` means a bug just shipped. They are different alarms and
+    want different people out of bed, and one word would have made the
+    louder one impossible to see.
+    """
+    database_down(monkeypatch, "get_carried")
+
+    await bot.inventory.callback(refused_on("inventory"))
+
+    assert len(await refusal_rows(db)) == 1
+    assert await crash_rows(db) == []
+
+
+async def test_the_refusal_row_carries_what_they_typed(db, monkeypatch):
+    """Which setting it was, for a command whose whole content is its options.
+
+    Named apart from the crash row's version of this deliberately: the
+    first draft gave both the same name, and the second definition
+    silently replaced the first - a test deleted by a collision, which
+    the count caught and nothing else would have.
+    """
+    database_down(monkeypatch, "get_setting")
+
+    await bot.admin_config.callback(
+        refused_on("admin_config", key="staircase_planks", value=5),
+        "staircase_planks",
+        5,
+    )
+
+    (row,) = await refusal_rows(db)
+    assert row.detail == "command=admin_config"
+    assert row.typed == "key=staircase_planks value=5"
+
+
+async def test_the_refusal_row_lands_even_when_the_apology_could_not_be_sent(
+    db, caplog, monkeypatch
+):
+    """Cloudflare and a refused connection at once, which is not far-fetched.
+
+    An apology that could not be delivered is exactly when the row is
+    the only thing left - and letting that raise would have handed the
+    command to the catch-all, which would have filed it as a crash.
+    """
+    database_down(monkeypatch, "get_carried")
+
+    interaction = refused_on("inventory")
+    interaction.followup = RefusingFollowup()
+    interaction.deferred = True
+
+    with caplog.at_level(logging.WARNING):
+        await bot.inventory.callback(interaction)
+
+    assert "Could not send the database apology" in caplog.text
+    (row,) = await refusal_rows(db)
+    assert row.reason == "OperationalError"
+    assert await crash_rows(db) == []
+
+
+async def test_a_failed_write_does_not_turn_a_refusal_into_a_crash(
+    db, caplog, monkeypatch
+):
+    """The row's own failure mode, and the one that would do real harm.
+
+    A raise here escapes a handler that has already apologised, reaches
+    the catch-all, and is written down as a `crashed` row for a command
+    that did not crash. The one row this exists to write would become a
+    row that lies.
+    """
+    database_down(monkeypatch, "get_carried")
+
+    async def explode(*args, **kwargs):
+        raise RuntimeError("the log is on fire")
+
+    monkeypatch.setattr(telemetry, "record", explode)
+
+    interaction = refused_on("inventory")
+    with caplog.at_level(logging.ERROR):
+        await bot.inventory.callback(interaction)
+
+    assert interaction.sent[-1][0] == bot.INVENTORY_ERROR_MESSAGE
+    assert "Could not log the database refusal" in caplog.text
+
+
+async def test_a_refusal_with_no_guild_is_dropped_but_still_apologised_for(
+    db, caplog, monkeypatch
+):
+    """`guild_id` is NOT NULL and a DM belongs to no server's numbers.
+
+    The row is skipped rather than attributed to a server that was not
+    involved - and the player is told either way, because the apology
+    is not what the guild is needed for.
+    """
+    database_down(monkeypatch, "get_carried")
+
+    interaction = refused_on("inventory")
+    interaction.guild_id = None
+
+    with caplog.at_level(logging.WARNING):
+        await bot.inventory.callback(interaction)
+
+    assert "no guild to log it against" in caplog.text
+    assert interaction.sent[-1][0] == bot.INVENTORY_ERROR_MESSAGE
+    assert await refusal_rows(db) == []
+
+
+async def test_a_button_is_named_by_hand_because_it_has_no_command(db, monkeypatch):
+    """A component callback carries no `interaction.command` at all.
+
+    Left to derive it the row would read `command=?`, which is the one
+    answer that helps nobody - so the two button sites pass the name
+    themselves.
+    """
+
+    async def refuse(*args, **kwargs):
+        raise pool_exhausted()
+
+    monkeypatch.setattr(bot, "_stats_embed", refuse)
+
+    interaction = FakeInteraction(ALICE, GUILD_A)
+    interaction.command = None
+
+    await bot._MyStats().callback(interaction)
+
+    (row,) = await refusal_rows(db)
+    assert row.detail == "command=stats"
+    assert interaction.sent[-1][0] == bot.DB_ERROR_MESSAGE
+
+
+async def test_both_kinds_of_failure_row_spell_the_command_the_same_way(
+    db, monkeypatch
+):
+    """Counting the two together is the first thing anybody does.
+
+    One `_which_command` for both, so a `crashed` and a `db_error`
+    about `/inventory` are a `GROUP BY detail` rather than a join
+    somebody has to get right.
+    """
+    database_down(monkeypatch, "get_carried")
+    await bot.inventory.callback(refused_on("inventory"))
+    await bot.on_app_command_error(
+        crashed_on("inventory"), raised_inside(TypeError(), command="inventory")
+    )
+
+    (refused,) = await refusal_rows(db)
+    (crashed,) = await crash_rows(db)
+    assert refused.detail == crashed.detail == "command=inventory"
+
+
+# --------------------------------------------------------------------------
+# Two things about the shape of bot.py, because the next handler is the risk
+# --------------------------------------------------------------------------
+
+
+def _handlers_catching_the_database():
+    """Every `except` clause in bot.py that catches `SQLAlchemyError`."""
+    tree = ast.parse(Path(inspect.getsourcefile(bot)).read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ExceptHandler) or node.type is None:
+            continue
+        caught = {n.attr for n in ast.walk(node.type) if isinstance(n, ast.Attribute)}
+        caught |= {n.id for n in ast.walk(node.type) if isinstance(n, ast.Name)}
+        if "SQLAlchemyError" in caught:
+            yield node, caught
+
+
+def test_nothing_else_answers_a_database_failure_on_its_own():
+    """**The guard, and the reason it is worth a source-reading test.**
+
+    Every one of these handlers was written separately and each one
+    separately forgot. The failure mode is not that the helper breaks -
+    it is the twenty-third handler, written next month by someone who
+    copies the one above it. So the invariant is structural: a handler
+    that catches the database does not get to answer the player itself.
+    """
+    offenders = []
+    for handler, _ in _handlers_catching_the_database():
+        sends = any(
+            isinstance(n, ast.Call)
+            and isinstance(n.func, ast.Attribute)
+            and n.func.attr in ("send", "send_message")
+            for n in ast.walk(handler)
+        )
+        routed = any(
+            isinstance(n, ast.Name) and n.id == "_the_database_refused"
+            for n in ast.walk(handler)
+        )
+        if sends and not routed:
+            offenders.append(handler.lineno)
+
+    assert offenders == [], f"bot.py lines {offenders} answer without logging"
+
+
+def test_a_handler_that_writes_a_row_catches_the_database_and_nothing_else():
+    """A mixed `except` cannot say which alarm the row is.
+
+    Five handlers used to catch `SQLAlchemyError` alongside
+    `ContentError`, `UnknownDrop` or `HTTPException` *and* answer the
+    player - bad content files, a missing thread and a broken database,
+    all behind one sentence. Those are split now, because a `db_error`
+    row reading `ContentError` is the wrong word for the wrong
+    audience, and only one of the three is worth paging anybody about
+    at two in the morning.
+
+    Handlers that answer nobody are left mixed on purpose: there is no
+    row for the word to be wrong on, and splitting them would be
+    churn.
+
+    **Passes vacuously with the change reverted** - nothing routes, so
+    nothing can route wrongly. It earns its place against the next
+    handler rather than against this one.
+    """
+    mixed = [
+        (handler.lineno, sorted(caught - {"SQLAlchemyError"}))
+        for handler, caught in _handlers_catching_the_database()
+        if caught - {"SQLAlchemyError"}
+        and any(
+            isinstance(n, ast.Name) and n.id == "_the_database_refused"
+            for n in ast.walk(handler)
+        )
+    ]
+
+    assert mixed == [], f"bot.py would file these under the wrong word: {mixed}"

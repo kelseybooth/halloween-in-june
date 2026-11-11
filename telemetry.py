@@ -28,6 +28,7 @@ from database import (  # noqa: F401 - the vocabulary, re-exported for call site
     COOLDOWN,
     CRASHED,
     CRAVING_GUESS,
+    DB_ERROR,
     DROP,
     FEED,
     FULL_HANDS,
@@ -177,6 +178,54 @@ async def crashed(
     except Exception:  # pragma: no cover - see above; there is no caller to tell
         log.exception(
             "Could not log the crash in %s for guild %s", command, guild_id
+        )
+        return None
+
+
+async def db_error(
+    guild_id: int,
+    user_id: int | None,
+    *,
+    command: str,
+    error: BaseException,
+    typed: str | None = None,
+) -> int | None:
+    """A command the database refused, which apologised and gave up.
+
+    **The silence `crashed` did not cover.** The handlers that catch
+    `SQLAlchemyError` do the decent thing by the player - a sentence
+    saying the database is the problem, rather than the catch-all's
+    shrug - and then returned without writing anything down. So the
+    better-behaved failure was the more invisible one, and six of
+    those handlers did not even log a traceback.
+
+    `reason` is the SQLAlchemy exception's class name, which is the
+    difference between a pool that is exhausted and a statement that
+    is wrong. `outcome` is left null for the same reason `crashed`
+    leaves it null: `success` and `refused` are answers a verb gives,
+    and this is not the verb answering.
+
+    **Swallows everything, and this one has a reason `crashed` does
+    not.** It is called from inside a handler that has already decided
+    what the player is told and has already told them. A raise here
+    would escape that handler, reach the catch-all, and be written
+    down as a `crashed` row for a command that did not crash - so the
+    failure mode of the row this exists to write is a row that lies.
+    """
+    try:
+        return await record(
+            guild_id,
+            action=DB_ERROR,
+            user_id=user_id,
+            reason=type(error).__name__[:32],
+            detail=f"command={command}",
+            typed=typed,
+        )
+    except Exception:
+        log.exception(
+            "Could not log the database refusal in %s for guild %s",
+            command,
+            guild_id,
         )
         return None
 
