@@ -143,7 +143,15 @@ def test_the_shipped_content_parses():
     # being steadied, and one per food, because the Keurig and a frozen
     # burrito are not the same recovery. The general `shaken.cleared`
     # stays for whatever clears it next.
-    assert len(c.defaults) == 180
+    #
+    # And three on 11 November, one per verb, for naming the room you are
+    # standing in. `/look` has read the room back since the rooms shipped
+    # and the other three said *you don't see a kitchen here* to somebody
+    # standing in the Kitchen. Three keys rather than one shared line, for
+    # the reason the three `*_fail.unknown` lines are already separate: a
+    # sentence that has to read well after `/use`, `/take` and `/go` ends
+    # up saying nothing to any of them.
+    assert len(c.defaults) == 183
     # Ten since 31 October: the ground floor arrives in two halves, and
     # 25 sits below the ceiling rather than above it, which is why
     # nothing else in the suite noticed.

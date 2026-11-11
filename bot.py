@@ -3154,6 +3154,17 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
             return
 
         if isinstance(found, reach.NotFound):
+            said = await _naming_the_room_you_are_in(
+                state.current_room, thing, "use_fail.this_room"
+            )
+            if said is not None:
+                await interaction.followup.send(said, ephemeral=True)
+                await _turned_away(
+                    interaction, telemetry.USE, telemetry.THIS_ROOM,
+                    detail=thing.strip(),
+                )
+                return
+
             key = "use_fail.absent" if found.exists_elsewhere else "use_fail.unknown"
             await interaction.followup.send(
                 await phrasing.default_say(key, name=thing.strip()), ephemeral=True
@@ -6240,6 +6251,17 @@ async def go(interaction: discord.Interaction, where: str) -> None:
                 )
 
         if not isinstance(found, reach.Found):
+            said = await _naming_the_room_you_are_in(
+                state.current_room, where, "go_fail.this_room"
+            )
+            if said is not None:
+                await interaction.followup.send(said, ephemeral=True)
+                await _turned_away(
+                    interaction, telemetry.MOVE, telemetry.THIS_ROOM,
+                    detail=where.strip(),
+                )
+                return
+
             await interaction.followup.send(
                 await phrasing.default_say("use_fail.absent", name=where.strip()),
                 ephemeral=True,
@@ -6609,6 +6631,47 @@ async def _current_state(guild_id: int, user_id: int) -> tuple[str, ...] | str:
     """
     held = await database.states_of(guild_id, user_id)
     return states.in_priority_order(held) if held else resolve.DEFAULT_STATE
+
+
+async def _naming_the_room_you_are_in(
+    room_id: str, typed: str, key: str
+) -> str | None:
+    """The refusal for naming the room you are standing in, or None.
+
+    **`/look kitchen` in the Kitchen has always read the room, and the
+    other three verbs said *you don't see a kitchen here* to somebody
+    standing in it.** `/look` grew a pass for this when the rooms
+    shipped, because players ask for a room by name; `/use`, `/take` and
+    `/go` never did, and their refusal is worse than unhelpful - the
+    house knows exactly where the player is and tells them it does not.
+
+    It reads as "the word is not known" because of how `exists_elsewhere`
+    is decided: `kitchen` is a word two doorways answer to, so the house
+    does know it, and `*_fail.absent` is the line for a thing that is
+    somewhere else. A room is not somewhere else.
+
+    Asked only after resolution has already failed, which is the same
+    rule `/look` follows and safe for the same reason: a thing sharing a
+    word with the room wins, so in the Courtyard `/use kitchen` is still
+    the back door.
+
+    **The channel is left out.** Its name is `the channel`, which does
+    not take the article every one of these lines puts in front of it,
+    and it is not a room anybody is in or out of in the fiction. It
+    keeps the refusal it has.
+
+    No room is revealed by this. `_is_this_room` only ever matches the
+    room the player is standing in, so the Secret Library answers here
+    only to somebody already inside it - `/go secret library` from
+    anywhere else still fails exactly the way `/go dungeon` does.
+    """
+    if room_id == content.CHANNEL_ROOM:
+        return None
+    if not await _is_this_room(room_id, typed):
+        return None
+    return await phrasing.default_say(
+        key, name=await resolve.room_name(room_id)
+    )
 
 
 async def _is_this_room(room_id: str, typed: str) -> bool:
@@ -7109,6 +7172,17 @@ async def take(interaction: discord.Interaction, thing: str) -> None:
             return
 
         if isinstance(found, reach.NotFound):
+            said = await _naming_the_room_you_are_in(
+                room_id, thing, "take_fail.this_room"
+            )
+            if said is not None:
+                await interaction.followup.send(said, ephemeral=True)
+                await _turned_away(
+                    interaction, telemetry.TAKE, telemetry.THIS_ROOM,
+                    detail=thing.strip(),
+                )
+                return
+
             await interaction.followup.send(
                 await _take_refusal(guild_id, found, thing), ephemeral=True
             )

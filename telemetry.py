@@ -58,6 +58,7 @@ from database import (  # noqa: F401 - the vocabulary, re-exported for call site
     STAIRS_UPPER_REACHED,
     SYSTEM,
     TAKE,
+    THIS_ROOM,
     THREAD_REMOVED,
     THREW_AWAY,
     TRASH_EMPTIED,

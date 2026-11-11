@@ -180,6 +180,13 @@ NOT_TAKEABLE = "not_takeable"
 RAMP = "ramp"
 NOT_HELD = "not_held"
 FULL_HANDS = "full_hands"
+# Naming the room you are standing in, at a verb that cannot act on a
+# room. `/look` has answered this since the Entryway shipped - it reads
+# the room, which is what the player meant - and the other three told
+# them *you don't see a kitchen here* while they stood in the Kitchen.
+# Its own reason because the whole question it answers is how often
+# players talk to the house about the room rather than about a thing.
+THIS_ROOM = "this_room"
 # `/go` at something that is not a way out. Its own refusal is what the
 # player reads, which is what keeps a disguised exit disguised - so the
 # only place the difference is visible at all is this column.
