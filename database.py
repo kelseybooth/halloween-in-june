@@ -1503,6 +1503,35 @@ class ConfigHistory(Base):
     )
 
 
+class ToyPlay(Base):
+    """One successful toy play, with where and when.
+
+    **The one question `thing_uses` and `room_deeds` both cannot
+    answer.** `thing_uses` is cumulative per player and keeps only the
+    latest room; `room_deeds` is idempotent and once-ever, so a second
+    play of the same toy in the same room writes nothing. *Playgroup*
+    needs every play, by anybody, in one room, inside a sliding hour -
+    which is three facts none of those tables keeps together.
+
+    `interaction_log` has the time and the thing and no room at all, so
+    it cannot answer it either without a column on the busiest write
+    path in the game and a backfill nobody can do.
+
+    So: a row per play, written beside the `record_use` that already
+    happens. Rows are never read outside the last hour and never
+    deleted; a play a week old costs five short values.
+    """
+
+    __tablename__ = "toy_plays"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    thing_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    room_id: Mapped[str] = mapped_column(String(8), nullable=False)
+    played_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
 class ToyDrain(Base):
     """When the cat last carried a toy off from one spot.
 
@@ -5390,6 +5419,17 @@ CONFIG_KEYS: dict[str, tuple[int, str]] = {
         30,
         "How long after a catnip play before another one can buff anything.",
     ),
+    # **Ten, and the group is the point.** A play starts a ten-minute
+    # toy cooldown, so one player can manage at most six successful
+    # plays in an hour and the ramp costs some of those. At ten, two
+    # players can do it with misses to spare; at twelve, two would need
+    # a perfect hour. Tunable because a quiet server has to be able to
+    # reach it at all - the same argument as `captive_audience_size`.
+    "playgroup_toys": (
+        10,
+        "How many different toys have to be played with in one room within "
+        "an hour for everybody who played to earn Playgroup.",
+    ),
     "ivy_fall_percent": (
         10,
         "The percent chance of falling when climbing down the ivy from the "
@@ -6406,6 +6446,74 @@ async def present_of_type(guild_id: int, room_id: str, kind: str) -> list[str]:
             .order_by(ThingType.sort_order, ThingType.thing_id)
         )
     return [row[0] for row in rows]
+
+
+async def record_toy_play(
+    guild_id: int, user_id: int, thing_id: str, room_id: str, now: datetime
+) -> None:
+    """Note one successful play, for *Playgroup* to read back by room."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        session.add(
+            ToyPlay(
+                guild_id=guild_id,
+                user_id=user_id,
+                thing_id=thing_id,
+                room_id=room_id,
+                played_at=now,
+            )
+        )
+        await session.commit()
+
+
+async def toy_plays_in_room_since(
+    guild_id: int, room_id: str, since: datetime
+) -> list[tuple[int, str]]:
+    """Every successful toy play in one room since `since`, as (who, what).
+
+    Every play, not one per toy: a player whose toy somebody else has
+    already played still earns *Playgroup*, so the list has to keep the
+    repeats and the caller takes the distinct set of things and the
+    distinct set of people from it separately.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(ToyPlay.user_id, ToyPlay.thing_id).where(
+                ToyPlay.guild_id == guild_id,
+                ToyPlay.room_id == room_id,
+                ToyPlay.played_at > since,
+            )
+        )
+    return [(row[0], row[1]) for row in rows]
+
+
+async def distinct_toys_played(guild_id: int, user_id: int) -> int:
+    """How many different toys this player has ever got the cat to play with.
+
+    Rows rather than the sum of `use_count`, which is the distinction
+    `toy_plays` names: the rows answer *how many toys* and the sum
+    answers *how many plays*. Both collection achievements want the
+    rows, and neither needs a counter of its own.
+
+    **The shipping box counts** and is reachable only in the Entryway,
+    which is what makes thirteen a real target rather than twelve plus
+    a fixture nobody thinks of.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        total = await session.scalar(
+            select(func.count())
+            .select_from(ThingUse)
+            .join(ThingType, ThingType.thing_id == ThingUse.thing_id)
+            .where(
+                ThingUse.guild_id == guild_id,
+                ThingUse.user_id == user_id,
+                ThingUse.use_count > 0,
+                ThingType.type == "toy",
+            )
+        )
+    return int(total or 0)
 
 
 async def toy_plays(guild_id: int, user_id: int) -> int:

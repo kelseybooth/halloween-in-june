@@ -5104,6 +5104,15 @@ async def _play_with_toy(interaction, state, found) -> None:
         await database.record_use(
             user.id, guild_id, found.thing_id, room_id=state.current_room
         )
+        # **Beside it rather than inside it**, because the two answer
+        # different questions: `thing_uses` is cumulative per player and
+        # keeps only the latest room, and *Playgroup* wants every play
+        # by anybody in one room inside a sliding hour. Written before
+        # the achievement hook fires, so the play that completes the
+        # tenth toy is one of the ten the predicate counts.
+        await database.record_toy_play(
+            guild_id, user.id, found.thing_id, state.current_room, now
+        )
         # **Every play logged with what it actually paid, zeros
         # included.** A play at the tail of the curve is worth zero,
         # and that is known rather than unknown - null is reserved for
