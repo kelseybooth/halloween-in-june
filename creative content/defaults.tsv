@@ -35,6 +35,7 @@ pet.public.standoffish	{player} pets the cat. The cat does not seem pleased.
 pet.public.continues	{player} continues to pet the cat.
 pet.crowding.friendly	The cat seems to enjoy it, despite the risk you're taking petting so much so quickly.
 pet.crowding.standoffish	She flattens her ears and slides out from under your hand. She has had enough of this for now; come back in a while and she will have forgotten about it.
+pet.buffed_suffix	She seems more blissful than usual.
 achievement.private	You earned **{achievement}**: {description}
 achievement.public	{player} earned **{achievement}**
 achievement.public.group	{server} earned **{achievement}**: {description}
@@ -109,6 +110,22 @@ use_fail.toy.shipping_box.1	You fold the flaps back. The cat crosses the room to
 use_fail.toy.shipping_box.2	You pick the box up and give it a heft, for no reason you could name. The cat watches you do it with real interest.
 use_fail.toy.shipping_box.3	You spin the box on the floor. It makes one full turn before coming to a halt. The cat side-eyes it from where she is.
 use_fail.toy.shipping_box.4	You push the box a few inches to the left, which improves nothing. The cat tracks it the whole way.
+use_fail.toy.hair_tie.1	You stretch the hair tie between two fingers and let it snap. It would have looked fun, if the cat had been facing this way.
+use_fail.toy.hair_tie.2	You dangle the hair tie and set it swinging. The cat glances up at the movement, and then away.
+use_fail.toy.hair_tie.3	You twirl the hair tie around your finger until it flies off. The cat watches the whole performance and stays put.
+use_fail.toy.hair_tie.4	You flick the hair tie so that it lands a foot away. The cat leans over, sniffs it once, and settles back down.
+use_fail.toy.bottle_cap.1	You flick the cap. It skitters beautifully. The cat watches it go without moving.
+use_fail.toy.bottle_cap.2	The cat watches you flip the cap in the air.
+use_fail.toy.wine_cork.1	The cat sniffs the cork, considers it for a moment, and leaves it where it is.
+use_fail.toy.wine_cork.2	The cork rolls up against the cat, who lets it.
+use_fail.toy.acorn.1	The acorn rolls. The cat watches it roll.
+use_fail.toy.acorn.2	The cat puts one paw on the acorn and holds it there a while, then lets it go without explanation.
+use_fail.toy.spider_ring.1	The cat studies the spider for a long moment, apparently unconvinced, and does not get up.
+use_fail.toy.spider_ring.2	The spider advances. The cat waits. The spider advances further. She yawns at it, which you did not know was available as a response.
+use_fail.toy.spider_ring.3	The cat looks at the spider, then at you, with the specific patience of someone waiting for a joke to finish.
+use_fail.toy.crumpled_receipt.1	The paper ball lands near the cat, who looks at it, then past it, then at nothing in particular.
+use_fail.toy.crumpled_receipt.2	The cat bats it once from where she is lying, and does not follow it up.
+toy.carried_off	The cat trots off with the {name} and doesn't come back with it.
 hint.look_toy	You can look at this new item. Try /look {name}.
 hint.take_toy	This toy can be picked up. Try /take {name}.
 hint.use_toy	Give this toy a shake. Try /use {name}.

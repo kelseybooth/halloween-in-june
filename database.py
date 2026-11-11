@@ -5287,9 +5287,15 @@ CONFIG_KEYS: dict[str, tuple[int, str]] = {
         8,
         "How many used baby bottles are scattered through the house each day.",
     ),
+    # **Two until drop 46, six from it**, and the number moved because
+    # the space did: two toys were the right number for one channel
+    # floor and are a rounding error across sixteen containers and nine
+    # rooms. Raised here rather than per row, so a server retunes it in
+    # one place - and a server that has already stored a value keeps it.
     "toys_present": (
-        2,
-        "How many cat toys the channel is kept topped up to.",
+        6,
+        "How many cat toys are kept out in the house at once, counting "
+        "every floor and every container but the trash can.",
     ),
     # **Ten, not the five the design proposed**, and the difference is
     # evidence rather than taste: the mechanic turned out not to be built
@@ -5930,6 +5936,56 @@ async def count_of_type(guild_id: int, room_id: str, kind: str) -> int:
                 RoomContents.guild_id == guild_id,
                 RoomContents.room_id == room_id,
                 ThingType.type == kind,
+            )
+        )
+    return int(total or 0)
+
+
+async def count_of_type_in_house(
+    guild_id: int, kind: str, *, except_container: str | None = None
+) -> int:
+    """How many of one kind are out in the house, anywhere a player sees.
+
+    **The cap used to be per room and the question was never per room.**
+    `toys_present` reads *how many toys are out*, and while the only
+    place a toy could be was the channel floor those were the same
+    sentence. Drop 46 scatters them through sixteen containers, and a
+    per-room count would allow six in every one of them.
+
+    Three exclusions, and each is a different reason:
+
+    - **A player's bag does not count.** Collecting toys is how the
+      drop is played - *Playgroup* needs ten in one room - and a cap
+      that counted them would stop the draw for whoever played hardest.
+    - **The bin does not count.** A toy in the trash can is on its way
+      out of the world; the trash mechanic owns it and the drain leaves
+      it alone, so counting it would hold a slot nobody can free. The
+      caller names it, because this module knows about rows and not
+      about which container is the bin.
+    - **Only what can be carried.** The shipping box is a toy to the
+      cat and furniture to everyone else. It is bolted to the Entryway,
+      it is never placed and never drained, and counting it would spend
+      one of the six forever.
+
+    Player placement is still exempt in the sense that matters: nothing
+    here tidies a dropped toy away. It counts, which is the point - six
+    on the floor of one room is six toys out, however they got there.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        total = await session.scalar(
+            select(func.sum(RoomContents.count))
+            .select_from(RoomContents)
+            .join(ThingType, ThingType.thing_id == RoomContents.thing_id)
+            .where(
+                RoomContents.guild_id == guild_id,
+                ThingType.type == kind,
+                ThingType.takeable,
+                *(
+                    [RoomContents.container_id != except_container]
+                    if except_container
+                    else []
+                ),
             )
         )
     return int(total or 0)

@@ -108,6 +108,13 @@ CHANNEL_ROOM = "CH"
 # mechanics live and which imports `reach` itself.
 TRASH_CAN = "trash_can"
 
+# The Secret Library, for the same reason and with the same shape: a
+# room found per player, so anything scattered into it before somebody
+# has found it is out of play. `restocking` needs it to keep drop 46's
+# toys out and cannot import `world` either. `world.SECRET_LIBRARY`
+# reads from here, so the two cannot drift.
+SECRET_LIBRARY = "SE"
+
 # Conditions an `event` drop may name. Release 1 ships none; the registry exists so
 # the second one needs no migration, and so a typo in the file is caught at load
 # rather than becoming a drop that never arrives.
@@ -159,7 +166,12 @@ SCRIPTED_CRAVINGS = ("mouse", "cut of meat", "broccoli", "fish", "egg")
 # probability. The column that names the target is `destination` - it was
 # `container` until drop 2, and stopped being accurate the moment a restock
 # could target a room.
-RESTOCK_PLACEMENTS = {"container", "room", "random"}
+# `any_container` is `random` with the room floors taken out: a toy
+# turns up *inside* something, never loose in the middle of a room,
+# because a toy on a floor reads as one somebody dropped. Drop 46 is
+# the only row that uses it. `restocking._container_slots` holds which
+# containers qualify and why.
+RESTOCK_PLACEMENTS = {"container", "room", "random", "any_container"}
 
 # A restock's `thing_id` may name a class rather than a thing: `type:toy`
 # means draw uniformly among the things of that type that are eligible to

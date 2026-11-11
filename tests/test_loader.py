@@ -525,14 +525,14 @@ async def test_the_shipped_content_loads(two_servers):
     # ...the house across the road, her bowl, and the key to its door,
     # the ladder's four, and the ground floor's net one fewer: the back
     # stairs out, the bedroom's ivy in.
-    assert report.content_rows["thing_types"] == 169  # the nursery photograph, 7 November
+    assert report.content_rows["thing_types"] == 179  # drop 46's ten toys, 11 November
     # 45 joined them on 7 November, when the Nursery was split out of
     # drop 40. This is the second place the drop count is pinned - the
     # first is test_content.py, which counts what the parser read; this
     # one counts what reached the database, and the split found it by
     # failing here after that one had been updated.
-    assert report.content_rows["drops"] == 12  # 0 to 3 built, 10 to 50 named, 31 for the ladder, 45 for the Nursery
-    assert report.content_rows["restocks"] == 4  # the toy channel row joined them
+    assert report.content_rows["drops"] == 13  # 0 to 3 built, 10 to 50 named, 31 for the ladder, 45 for the Nursery, 46 for the toy box
+    assert report.content_rows["restocks"] == 5  # the toy channel row joined them, and drop 46's house row joined it
 
 
 async def test_the_shipped_content_places_seven_things_per_server(two_servers):

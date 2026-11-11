@@ -424,7 +424,7 @@ COLLAR_ON = "collar_on"
 OAK = "CS"                 # Courtyard -> Secret Library. Usable by anybody.
 CABINET = "LS"             # Living Room -> Secret Library. Needs a key.
 BACK_OF_CABINET = "SL"     # Secret Library -> Living Room. Needs the passage.
-SECRET_LIBRARY = "SE"
+SECRET_LIBRARY = content_module.SECRET_LIBRARY
 SKELETON_KEY = "skeleton_key"
 
 LIBRARY_FOUND = "library_found"

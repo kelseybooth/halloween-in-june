@@ -268,6 +268,64 @@ async def _slots(guild_id: int) -> tuple[list[tuple[str, str]], dict[str, str]]:
     return slots, by_container
 
 
+async def _container_slots(guild_id: int) -> list[tuple[str, str]]:
+    """The containers a drop-46 toy may turn up in.
+
+    `any_container` is `random` with the room floors taken out, and with
+    three more questions asked of what is left. A container qualifies if:
+
+    - **its room has arrived.** `random` does not ask this and does not
+      need to - `clear_unreachable_room_contents` sweeps what lands in a
+      room nobody can open, on the tick after. That is fine for a bottle
+      and wrong for a toy, because the toy cap counts what is out: six
+      toys scattered into the Secret Library would stop the draw for
+      good while the player sees an empty house.
+    - **it is a scatter target.** The same flag `_slots` already reads,
+      and the shipping box is still the only `no` - David's spice order
+      arriving with a hair tie in it reads as a bug.
+    - **it is not in the Secret Library, and not behind a gate.** Both
+      are the same rule said twice: a toy a player cannot reach is a
+      toy that is out of play and holding a slot. No container carries
+      a `present_when` today; the clause is here so that the first one
+      written does not quietly start swallowing toys.
+
+    An empty list is a real answer - a server early enough that no room
+    with a container has opened - and the caller places nothing rather
+    than falling back to the floor.
+    """
+    open_rooms = await resolve.arrived_rooms(guild_id)
+    session_factory = database._require_session()
+    async with session_factory() as session:
+        containers = {
+            row[0]
+            for row in await session.execute(
+                select(database.ThingType.contained_in).where(
+                    database.ThingType.contained_in.is_not(None)
+                ).distinct()
+            )
+        }
+        rows = (
+            await session.execute(
+                select(
+                    database.ThingType.thing_id,
+                    database.ThingType.room_id,
+                    database.ThingType.scatter_target,
+                    database.ThingType.present_when,
+                ).where(database.ThingType.thing_id.in_(containers or {""}))
+            )
+        ).all()
+
+    return sorted(
+        (room_id, thing_id)
+        for thing_id, room_id, scatter, gate in rows
+        if room_id
+        and room_id in open_rooms
+        and room_id != content_module.SECRET_LIBRARY
+        and scatter
+        and not gate
+    )
+
+
 async def _room_of(thing_id: str) -> str | None:
     session_factory = database._require_session()
     async with session_factory() as session:
@@ -429,6 +487,7 @@ async def run_for_guild(
     slots, container_rooms = await _slots(guild_id)
     if not slots:
         return report
+    container_slots = await _container_slots(guild_id)
 
     # A container a restock row names is a real destination even when nothing
     # is statically inside it - the row is what declares it.
@@ -439,7 +498,29 @@ async def run_for_guild(
                 if room:
                     container_rooms[restock.destination] = room
 
+    # **Two rows drawing from the same selector are not two schedules.**
+    # Drop 46 moves the toys off the road and into the house, and it does
+    # it by writing a second `type:toy` row rather than by editing the
+    # first - so that a server still on drop 45 keeps the behaviour it
+    # has. Both rows have arrived on a drop-46 server, and running both
+    # would mean two draws a tick against one cap. The later row wins,
+    # which is the only reading that makes "row 4 stays as it is for
+    # drops 2-45" true.
+    superseded = {
+        restock.restock_id
+        for restock in rows
+        if restock.since_drop in arrived
+        and any(
+            other.thing_id == restock.thing_id
+            and other.since_drop in arrived
+            and other.since_drop > restock.since_drop
+            for other in rows
+        )
+    }
+
     for restock in rows:
+        if restock.restock_id in superseded:
+            continue
         if restock.since_drop not in arrived:
             # **The column the row has always carried, finally read.**
             # `restocks.tsv` has had `since_drop` since September; it was
@@ -481,7 +562,8 @@ async def run_for_guild(
             ]
             if due:
                 await _deliver(
-                    guild_id, restock, due, slots, container_rooms, rng, arrived, report
+                    guild_id, restock, due, slots, container_rooms, rng, arrived,
+                    report, container_slots,
                 )
                 await _record_progress(guild_id, restock.restock_id, max(due))
             continue
@@ -514,7 +596,8 @@ async def run_for_guild(
             continue
 
         await _deliver(
-            guild_id, restock, due, slots, container_rooms, rng, arrived, report
+            guild_id, restock, due, slots, container_rooms, rng, arrived, report,
+            container_slots,
         )
         await _record_progress(guild_id, restock.restock_id, max(due))
 
@@ -527,7 +610,8 @@ async def run_for_guild(
 
 
 async def _deliver(
-    guild_id: int, restock, due, slots, container_rooms, rng, arrived, report
+    guild_id, restock, due, slots, container_rooms, rng, arrived, report,
+    container_slots=(),
 ) -> None:
     """Place one occurrence per moment in `due`.
 
@@ -537,7 +621,7 @@ async def _deliver(
     the arrival notice are all easy to get subtly different twice.
     """
     for _ in sorted(due):
-        landing = _destination(restock, slots, container_rooms, rng)
+        landing = _destination(restock, slots, container_rooms, rng, container_slots)
         if landing is None:
             break
         room_id, container_id = landing
@@ -569,6 +653,12 @@ async def _deliver(
                 f"container={container_id or 'loose'} "
                 f"added={amount} "
                 f"now={await database.how_many_in_container(guild_id, room_id, container_id, thing_id)}"
+                # Which toy, which container, and how many places it
+                # could have gone - the third is the one a reader
+                # cannot reconstruct afterwards, because the eligible
+                # set moves with the drop pointer and with what the
+                # content files say is a scatter target.
+                + (f" of={len(container_slots)}" if restock.placement == "any_container" else "")
             ),
         )
         if restock.arrival_notice:
@@ -638,7 +728,13 @@ async def _room_for(
 
     if restock.thing_id.startswith(content_module.CLASS_PREFIX):
         kind = restock.thing_id[len(content_module.CLASS_PREFIX):]
-        present = await database.count_of_type(guild_id, room_id, kind)
+        # **Counted across the house, not the room it is about to land
+        # in.** While the toys lived on one floor those were the same
+        # number; from drop 46 they are not, and a per-room count would
+        # permit six toys in every container in the house.
+        present = await database.count_of_type_in_house(
+            guild_id, kind, except_container=content_module.TRASH_CAN
+        )
     else:
         present = await database.how_many_in_container(
             guild_id, room_id, container_id, restock.thing_id
@@ -646,7 +742,9 @@ async def _room_for(
     return max(0, min(restock.amount, cap - present))
 
 
-def _destination(restock, slots, container_rooms, rng) -> tuple[str, str] | None:
+def _destination(
+    restock, slots, container_rooms, rng, container_slots=()
+) -> tuple[str, str] | None:
     """Where one occurrence lands, or None if it cannot land anywhere.
 
     A `container` row always goes to its named container, looked up by the
@@ -673,6 +771,13 @@ def _destination(restock, slots, container_rooms, rng) -> tuple[str, str] | None
         # one today, and the reason this placement exists: neither
         # `container` nor `random` can say "into that room".
         return restock.destination, database.LOOSE_IN_ROOM
+    if restock.placement == "any_container":
+        # **No floors, and no fallback to one.** An empty list means
+        # every container is shut to this server right now, and the
+        # honest answer is to place nothing: a toy loose in a room is
+        # one a player dropped, and the drop's whole premise is that
+        # they turn up inside things.
+        return rng.choice(container_slots) if container_slots else None
     return rng.choice(slots)
 
 
