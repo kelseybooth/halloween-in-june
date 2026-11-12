@@ -171,7 +171,7 @@ def test_the_shipped_content_parses():
     # is part 2's code - and the file is content with that. A default
     # nobody asks for prints nothing; it is the other direction, a
     # key a caller wants and the file has not got, that fails.
-    assert len(c.defaults) == 223
+    assert len(c.defaults) == 225
     # Ten since 31 October: the ground floor arrives in two halves, and
     # 25 sits below the ceiling rather than above it, which is why
     # nothing else in the suite noticed.

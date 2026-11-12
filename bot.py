@@ -3631,6 +3631,19 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
             await _pull_the_sheet_over(interaction, state, found)
             return
 
+        if found.thing_id == ghosts.SPIRIT_BOARD:
+            # The third of these, and the same shape: the board's `use`
+            # cell is empty from this release on, because what `/use`
+            # on it does is open two buttons rather than print a line.
+            #
+            # **Nothing here asks whether the player may use it.** The
+            # board is a fixture in the Secret Library, so getting this
+            # far already means standing in a room only a player who
+            # has found it can be in - and `reach` refused anybody else
+            # long before the branch on type.
+            await _consult_the_board(interaction, state, found)
+            return
+
         if found.thing_id == world.TRASH_CAN:
             # Its own branch, beside the toy's, because `/use` on the
             # trash can opens a menu rather than producing a line. The
@@ -4243,6 +4256,143 @@ async def _pull_the_sheet_over(interaction, state, found) -> None:
         ephemeral=True,
     )
 
+
+BOARD_TIMEOUT = 180
+
+
+async def _consult_the_board(interaction, state, found) -> None:
+    """`/use spirit board`: the two buttons, and nothing recorded yet.
+
+    **Opening the board is not using it**, like the trash can's lid and
+    the sheet going over a head. A player who presses nothing has asked
+    the house nothing, so neither the day's clue nor the day's guess is
+    spent and no row is written - which is what keeps both once-a-day
+    limits meaning *you got an answer* rather than *you opened a menu*.
+    """
+    prompt = await phrasing.default_say(ghosts.MENU)
+    await interaction.followup.send(
+        prompt or "The planchette shivers under your fingertips.",
+        view=_BoardMenu(),
+        ephemeral=True,
+    )
+
+
+class _BoardMenu(discord.ui.View):
+    """The board's two halves, which are two separate days' worth.
+
+    Separate limits rather than one, because they are different
+    questions: a letter is evidence and a guess is a commitment, and a
+    player who spent their guess on Tuesday should still be able to
+    collect Tuesday's letter.
+    """
+
+    def __init__(self):
+        super().__init__(timeout=BOARD_TIMEOUT)
+        self.add_item(_AskTheBoard())
+        self.add_item(_NameTheGhost())
+
+
+class _AskTheBoard(discord.ui.Button):
+    def __init__(self):
+        super().__init__(
+            label="Ask the board", style=discord.ButtonStyle.primary
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _the_planchette_moves(
+            interaction,
+            await ghosts.ask_the_board(interaction.guild_id, interaction.user.id),
+        )
+
+
+class _NameTheGhost(discord.ui.Button):
+    """The second button, which does not guess - it opens the picker.
+
+    **The refusals are checked here, before the list of names.** A
+    player told *nothing has stirred in the house today* after choosing
+    a suspect would have spent the one interesting decision of their
+    day on a question the board was never going to answer; told first,
+    they can go and wait for a noise. All three are checked again when
+    the name comes back, because the picker can sit open.
+    """
+
+    def __init__(self):
+        super().__init__(
+            label="Name the ghost", style=discord.ButtonStyle.secondary
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        refusal = await ghosts.ready_to_name(
+            interaction.guild_id, interaction.user.id
+        )
+        if refusal is not None:
+            await _the_planchette_moves(interaction, refusal)
+            return
+        await _instead(
+            interaction,
+            await phrasing.default_say(ghosts.NAME_WHO) or "Who was it?",
+            view=_WhoIsIt(),
+        )
+
+
+class _WhoIsIt(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=BOARD_TIMEOUT)
+        self.add_item(_Suspect())
+
+
+class _Suspect(discord.ui.UserSelect):
+    """Discord's own member picker, which is why two refusals are free.
+
+    It lists everybody in the server and cannot be told to leave out
+    the player themselves or somebody who has never entered the house.
+    So the board answers both without spending the day's guess - the
+    design's rule, and the only fair one: a player cannot avoid an
+    option the picker would not hide.
+    """
+
+    def __init__(self):
+        super().__init__(placeholder="Who do you think it is?", max_values=1)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _the_planchette_moves(
+            interaction,
+            await ghosts.name_the_ghost(
+                interaction.guild_id,
+                interaction.user.id,
+                self.values[0].id,
+            ),
+        )
+
+
+async def _the_planchette_moves(interaction, answer) -> None:
+    """Say what the board said, and fire the hook if it said YES.
+
+    One exit for every one of the board's eleven lines, so the private
+    reply, the removal of the buttons and the award all happen in the
+    same place. `answer.earned` is set by `ghosts` on a right guess
+    alone, which is the contract *Ghostbuster* rests on: the hook is
+    fired here and nowhere else in the board's flow, so any `on_use` of
+    the board is a YES.
+
+    The buttons go when the answer arrives. A board that left them
+    sitting there would be a board offering a turn that is already
+    spent.
+    """
+    line = await phrasing.default_say(answer.key, **answer.args)
+    await _instead(interaction, line or "The planchette does not move.")
+    if not answer.earned:
+        return
+    await _fire(
+        achievements.Context(
+            guild_id=interaction.guild_id,
+            hook="on_use",
+            user_id=interaction.user.id,
+            thing_id=ghosts.SPIRIT_BOARD,
+            room_id=ghosts.LIBRARY,
+        ),
+        interaction=interaction,
+    )
 
 async def _open_the_trash(interaction, state, found) -> None:
     """`/use trash can`: the lid goes up and the bag is offered.

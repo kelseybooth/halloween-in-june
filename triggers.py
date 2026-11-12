@@ -80,6 +80,9 @@ CANDY = "candy"
 # would make the trigger registry depend on the module whose awards
 # it holds.
 BEDSHEET = "bedsheet"
+
+# The board the guessing is done on, named here for the same reason.
+SPIRIT_BOARD = "spirit_board"
 PUMPKINS = "pumpkins"
 CARVING_TOOLS = "carving_tools"
 CAT_COLLAR = "cat_collar"
@@ -1698,7 +1701,20 @@ def register_all() -> None:
     # own, and *the first* haunting is free: the award is idempotent
     # per player, so the second one announces nothing.
     add("getting_into_the_spirit", "on_use", _used(BEDSHEET))
-    add("ghostbuster", "on_use", _blocked("the ghost system"))
+    # **Off the blocked list with the spirit board**, and the predicate
+    # is as bare as the haunting's for a reason that is a contract
+    # rather than a coincidence: `bot` fires `on_use` for the board on
+    # a right guess and on nothing else. Opening the two buttons fires
+    # nothing, asking for a letter fires nothing, and a wrong guess
+    # fires nothing - so *any* use of the board that reaches here is a
+    # YES.
+    #
+    # It is the cheapest version and the most fragile one. A later
+    # change that fired `on_use` for *Ask the board* would hand this
+    # award out for pressing the other button, which is why
+    # `test_asking_the_board_earns_nothing` exists: the guard against
+    # that is a test, because the predicate cannot tell the two apart.
+    add("ghostbuster", "on_use", _used(SPIRIT_BOARD))
     # **`on_midnight`, and the first thing to listen there.** The other
     # two ghost rows are earned by a command - a first haunting, a first
     # right guess - but *Boo Who?* asks about a day that is over:
