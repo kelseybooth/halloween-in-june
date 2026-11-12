@@ -249,7 +249,7 @@ Three things follow:
 | Key | Text | Status |
 | --- | --- | --- |
 | `look` | A receipt balled up tight. Flattened out it would be half a foot of things nobody needed, but balled up it is perfect. | Final |
-| `use` — success | {player} tosses a crumpled receipt. The cat snags it out of the air with both paws, carries it to the floor, and shreds one corner off it with real purpose. The receipt is now illegible, which is an improvement. | Final |
+| `use` — success | {player} tosses a crumpled receipt. The cat snags it out of the air with both paws, carries it to the floor, and shreds one corner off it with real purpose. | Final |
 | `use_fail.1` | The paper ball lands near the cat, who looks at it, then past it, then at nothing in particular. | Final |
 | `use_fail.2` | The cat bats it once from where she is lying, and does not follow it up. | Final |
 
