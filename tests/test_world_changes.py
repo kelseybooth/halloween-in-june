@@ -443,6 +443,13 @@ async def test_everything_capped_is_capped_at_one(house):
         # the cap is what the second player to reach for it hears
         # instead of watching the first hold a spare.
         "watering_can": 1,
+        # The bedsheet, one per player because there is one ghost. No
+        # take stands in front of it - `place_in_hands` is the
+        # only way it arrives - so the cap is not a refusal anybody
+        # reads.
+        # It is the guard on the handover running twice, which is a
+        # thing a restart or two commands finishing together could do.
+        "bedsheet": 1,
     }
 
 

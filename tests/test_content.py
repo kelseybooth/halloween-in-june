@@ -69,7 +69,12 @@ def test_the_shipped_content_parses():
     # 169 since 7 November: the photograph on the nursery shelf became a
     # fixture of its own rather than an alias on the shelf, so that taking
     # it is refused in its own words instead of the shelf's.
-    assert len(c.things) == 179
+    # 180 on 12 November, with part 2: the bedsheet. The second thing
+    # in the game that no file places - it is in no room, nothing
+    # yields it and no restock puts it anywhere, so
+    # `content.PLACED_BY_CODE` is the only reason the loader
+    # calls it reachable at all. The brass key was the first.
+    assert len(c.things) == 180
     # Five out with `/enter`: its three lines, `#welcome`, and the
     # tutorial, which it was the only thing that posted. Five in: the two
     # wrong-place replies, `/go`'s own refusal, and the two hints that
