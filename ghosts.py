@@ -44,6 +44,7 @@ from datetime import date, datetime, timedelta
 
 import database
 import resolve
+import states
 import telemetry
 
 log = logging.getLogger(__name__)
@@ -53,8 +54,21 @@ log = logging.getLogger(__name__)
 # settable but unread, or read with a different default than the
 # command reports.
 MIN_PLAYERS = "ghost_min_players"
+MAX_CHARS = "haunt_max_chars"
 
 BEDSHEET = "bedsheet"
+
+# The one room that arrives for a server and not for a player, which
+# is why the picker has to ask about it separately.
+LIBRARY = "SE"
+
+# **And the state is not the room.** Asking whether `SE` is in force
+# for a player is a question that is always answered no, so the first
+# draft of this dropped the library from every picker - including the
+# picker of a ghost who had climbed the oak. Two names, because they
+# are two things: a room this player can reach, and the per-player
+# state that says they found it.
+LIBRARY_FOUND = "library_found"
 
 # The drop the whole system belongs to. **The gate `pick_for` was
 # missing**: without it a server on drop 20 picks a ghost every night,
@@ -242,3 +256,65 @@ async def hand_over(
         await database.take_from_hands(guild_id, user_id, BEDSHEET)
         return GONE
     return None
+
+
+async def rooms_to_haunt(guild_id: int, user_id: int) -> list[str]:
+    """The rooms this ghost could drift into, in the house's own order.
+
+    **Where the ghost could be, not where they are.** A haunting is
+    not a move: the sheet goes over their head and the shape appears
+    somewhere, so standing in the Kitchen is no reason to be unable to
+    haunt the Nursery. What it is not is a way to see rooms that do
+    not exist yet.
+
+    So: every room that has arrived on this server, and the Secret
+    Library only if this player has found it. The library is the one
+    room in the house that arrives for a server and not for a player,
+    and putting it in the list for a ghost who has never climbed the
+    oak would be the game telling them it is there.
+    """
+    arrived = await resolve.arrived_rooms(guild_id)
+    if LIBRARY_FOUND not in await states.in_force(guild_id, user_id):
+        arrived.discard(LIBRARY)
+    order = [room_id for room_id, _ in await resolve.all_rooms()]
+    return [room_id for room_id in order if room_id in arrived]
+
+
+def trimmed(whisper: str, limit: int) -> str:
+    """The whisper as it will be posted.
+
+    Trimmed rather than refused. Discord's own text box takes a
+    `max_length`, so a player cannot submit an over-long whisper
+    through the modal at all - this is the server-side half, and the
+    only way to reach it is a client that ignored the box's limit.
+    Answering that with a refusal would mean writing a line nobody
+    will ever read; cutting it is the same decision the modal already
+    made, applied twice.
+    """
+    return whisper.strip()[:limit]
+
+
+async def record_haunting(
+    guild_id: int,
+    user_id: int,
+    room_id: str,
+    whisper: str,
+) -> None:
+    """Write the haunting down: the author, the room and the words.
+
+    Two writes, and they answer different questions. The log row is
+    the admin's copy and the count *Boo Who?* and the spirit board
+    both read. `record_use` is what makes this a use of the bedsheet,
+    which is what *Getting into the Spirit* fires on - and it keeps
+    the sheet in the same bookkeeping as everything else a player
+    uses, rather than inventing a second idea of what using a thing
+    means.
+    """
+    await database.record_use(user_id, guild_id, BEDSHEET, room_id=room_id)
+    await telemetry.succeeded(
+        guild_id,
+        user_id,
+        telemetry.HAUNTED,
+        thing_id=BEDSHEET,
+        detail=whisper,
+    )

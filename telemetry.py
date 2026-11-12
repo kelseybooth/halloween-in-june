@@ -35,6 +35,7 @@ from database import (  # noqa: F401 - the vocabulary, re-exported for call site
     FULL_HANDS,
     GHOST_PICKED,
     GUARDED,
+    HAUNTED,
     HINT,
     KEY_DROPPED,
     ABANDONED,

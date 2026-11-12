@@ -58,6 +58,11 @@ class FakeThread:
         self.members: list[int] = []
         self.deleted = False
         self.posted: list[str] = []
+        # The `allowed_mentions` each of those went out with, the same
+        # record `FakeChannel` keeps and for the same reason: a room
+        # thread is where most public lines land, so a mention that
+        # pings has to be tellable from one that is only text.
+        self.mentions: list = []
         self.messages: list["FakeMessage"] = []
         self.mention = f"<#{self.id}>"
 
@@ -76,6 +81,7 @@ class FakeThread:
         if self.name in getattr(self._channel, "thread_send_fails", ()):
             raise http_error(message=f"cannot post in {self.name}")
         self.posted.append(content)
+        self.mentions.append(kwargs.get("allowed_mentions"))
         message = FakeMessage(self, content)
         self.messages.append(message)
         return message
