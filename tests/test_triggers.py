@@ -777,6 +777,11 @@ BLOCKED = [
     "it_takes_a_village",
     "getting_into_the_spirit",
     "ghostbuster",
+    # *Boo Who?* joined the ghosts on 11 November, with drop 50's
+    # content. It is the first row here registered on `on_midnight`,
+    # which until now had no listeners at all - the award is for a day
+    # that ended a particular way, so there is no command to hang it on.
+    "boo_who",
     "signed_sealed_delivered",
     "forwarding_address",
     # Three more on 30 October, when the ground floor's content shipped

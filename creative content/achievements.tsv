@@ -32,10 +32,11 @@ green_thumb	secret	Green Thumb	Watered the garden, picked the herbs and carved a
 nacho_average_ghost	secret	Nacho Average Ghost	Snacked on the nacho chips.	25	120				Not date-gated since 30 October: any successful /use of the nacho chips
 clean_plate_club	secret	Clean Plate Club	Licked a dirty plate. Nobody asked you to.	25	125				Added 30 October from playtesting: any successful /use of the plates.
 using_your_noodle	secret	Using Your Noodle	Put a pot on.	99	130				Parked at 99 on 30 October: the pot now requires pasta, which does not exist yet, so a successful use is unreachable until the pasta ships.
-getting_into_the_spirit	secret	Getting into the Spirit	Put on a ghost costume and haunted your friends.	99	140				Blocked: the ghost system is not built
+getting_into_the_spirit	secret	Getting into the Spirit	Put on a ghost costume and haunted your friends.	50	140				Drop 50, Part 2. The ghost's first haunting: the first whisper posted with /use bedsheet.
 accompanist	secret	Accompanist	Kept time on the rattle while the music box played.	45	145				Added 2 November: a successful /use of the rattle within ACCOMPANIST_SECONDS (60) of another player's /use of the music box in the same room. Reads thing_uses.last_used_room, which shipped with it.
 bandleader	secret	Bandleader	Played the music box, and someone joined in on the rattle.	45	147				Added 11 November, as Accompanist's other half. Either instrument may come first: on any qualifying use, every player who rattled in the room inside ACCOMPANIST_SECONDS earns Accompanist and every player who played the box earns this, provided the other instrument was somebody else's.
-ghostbuster	secret	Ghostbuster	Guessed the day's ghost correctly.	99	150				Blocked: the ghost system is not built
+ghostbuster	secret	Ghostbuster	Guessed the day's ghost correctly.	50	150				Drop 50, Part 2. The first time a player names the day's ghost correctly on the spirit board (a YES).
+boo_who	secret	Boo Who?	Haunted the house all day, and nobody guessed it was you.	50	305				Drop 50, Part 2. Checked at changeover: the ghost haunted at least 3 times that day and nobody named them.
 captive_audience	secret	Captive Audience	Gave a rattle performance to a live audience. Reviews are mixed.	30	155				Decided 2 November, renamed from Opening Act: a rattle played with at least captive_audience_size other active players in the room.
 breaking_into_the_halloween_candy	secret	Breaking into the Halloween Candy	Got into the Halloween candy. It was always going to happen.	25	160				
 curbside_pickup	secret	Curbside Pickup	Took the trash out on a Tuesday, like a responsible adult.	25	170				Earned on /take trash can (taking the bag out to the curb) on a Tuesday, Pacific time. Was /use trash can until 30 October
