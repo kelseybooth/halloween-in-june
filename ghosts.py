@@ -29,17 +29,25 @@ anybody, so a day that picked one would be a day nobody could win.
 running; the design says so, and a pick that avoided yesterday's ghost
 would itself be a clue on a quiet server.
 
-What this does not do yet: the bedsheet, the haunting, the spirit board
-and the reveal. The pick is the half that has to be right first,
-because every one of those reads the row it writes. See the drop 50
-work order, part 2.
+**And the board is the other half of the same row.** The pick stores a
+name so that the clues can be spelled from it all day; everything under
+*the spirit board* below spells them. Nobody is told who the ghost is -
+the board gives one letter and one yes-or-no a day, per player - so the
+only way to the name is several players comparing what they were each
+given.
+
+What this does not do yet: the reveal at the changeover and *Boo Who?*,
+which are both about a day that has ended rather than a command
+somebody ran. See the drop 50 work order, part 2.
 """
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import random
-from dataclasses import dataclass
+import unicodedata
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 
 import database
@@ -87,6 +95,45 @@ FROM_DROP = 50
 # ghost's next command after they stop being it.
 ARRIVED = "ghost.new"
 GONE = "ghost.gone"
+
+# The fixture the other half of the day is played on. It stands in the
+# Secret Library and is not takeable, so `/use spirit board` already
+# asks the only two questions that matter - are you in the library, and
+# has the library arrived - before this module sees it. Nothing here
+# checks again.
+SPIRIT_BOARD = "spirit_board"
+
+# **The most places the planchette will circle**, and so the most
+# letters of the name the board will ever spell. A clue is one letter
+# and the count of circles is where in the name it sits, which only
+# works as a shared puzzle if the count is a small number two players
+# can compare out loud. Eight is the design's cap.
+MAX_PLACES = 8
+
+# Every line the board can say, by defaults key. Named here rather than
+# spelled at each site because two of them are said from more than one
+# place and all of them are the writers' copy: a key that drifts is a
+# board that silently answers nothing.
+ASK_CLUE = "board.ask.clue"
+ASK_GHOST = "board.ask.ghost"
+ASK_NO_LETTERS = "board.ask.no_letters"
+ASK_ALREADY = "board.ask.already"
+NAME_YES = "board.name.yes"
+NAME_NO = "board.name.no"
+NAME_SELF = "board.name.self"
+NAME_NON_PLAYER = "board.name.non_player"
+NAME_ALREADY = "board.name.already"
+NAME_NOT_YET = "board.name.not_yet"
+NO_GHOST = "board.no_ghost"
+
+# The two lines nobody wrote for this. The design gives the board's
+# look, both answers and every refusal, but not the sentence the
+# buttons arrive under or the one above the member picker - and a
+# Discord message cannot be only controls. Both are placeholders in
+# the house's voice, in `defaults.tsv` where a writer can replace them
+# without touching code.
+MENU = "board.menu"
+NAME_WHO = "board.name.who"
 
 
 @dataclass(frozen=True)
@@ -318,3 +365,327 @@ async def record_haunting(
         thing_id=BEDSHEET,
         detail=whisper,
     )
+# --------------------------------------------------------------------------
+# The spirit board
+# --------------------------------------------------------------------------
+
+# **Letters that carry their stroke inside the codepoint.** Folding is
+# `NFKD` and then dropping the combining marks, which turns E-acute into
+# E and handles every accent anybody is likely to have - but a slashed
+# o and a barred l do not decompose at all, so without this they would
+# read as non-letters and end the word. Bjorn would be spelled BJ.
+#
+# Only the one-for-one ones are here. A-E, O-E and sharp s are
+# deliberately left out: each would turn one place in the name into two,
+# and the count of circles is the player's only evidence of where in the
+# name they are, so a letter that silently costs two places is worse
+# than a word that ends early.
+_FOLDED = str.maketrans(
+    {
+        "ø": "o", "Ø": "O",  # slashed o
+        "ł": "l", "Ł": "L",  # barred l
+        "đ": "d", "Đ": "D",  # barred d
+        "ħ": "h", "Ħ": "H",  # barred h
+        "ŧ": "t", "Ŧ": "T",  # barred t
+        "ı": "i", "İ": "I",  # dotless and dotted i
+    }
+)
+
+# Skipped inside a word instead of ending it, which is the design's one
+# exception and the reason it exists: Mary-Beth is one name and so is
+# O'Brien, and a board that stopped at MARY would be giving a clue to a
+# name nobody has. Both the typewriter and the curly apostrophe, because
+# phones produce the curly one.
+_JOINERS = "-‐‑'‘’ʼ"
+
+# Written out, because the line says *circles the board three times*
+# rather than *3 times*. One entry per place, which is why `MAX_PLACES`
+# and this tuple are checked against each other in the tests rather
+# than merely both being eight.
+_CIRCLES = (
+    "once",
+    "twice",
+    "three times",
+    "four times",
+    "five times",
+    "six times",
+    "seven times",
+    "eight times",
+)
+
+
+def circles(place: int) -> str:
+    """How the line says a number of times round the board."""
+    return _CIRCLES[place - 1]
+
+
+def _folded(name: str) -> str:
+    """The name with its accents taken off."""
+    decomposed = unicodedata.normalize("NFKD", name.translate(_FOLDED))
+    return "".join(ch for ch in decomposed if unicodedata.category(ch) != "Mn")
+
+
+def _first_word(name: str) -> str:
+    """The spellable first word of one name, in capitals, at most eight.
+
+    Three rules, in this order, and the order is the whole function:
+
+    * **Before the first letter, nothing counts.** A leading emoji, a
+      bracket, a space are all skipped, so a crescent moon in front of
+      Jess does not make the name unspellable.
+    * **A joiner is skipped**, so Mary-Beth and O'Brien stay one word.
+    * **Anything else ends the word**, once there is a word to end. A
+      space, a pipe, an underscore, a digit - the name is over, which is
+      what makes *Kate (Ollie's mom)* spell KATE and not KATEOLLIESMOM.
+
+    And it stops at `MAX_PLACES` whatever comes next, so the planchette
+    never circles more than eight times.
+    """
+    letters: list[str] = []
+    for ch in _folded(name):
+        if ch.isascii() and ch.isalpha():
+            letters.append(ch.upper())
+            if len(letters) == MAX_PLACES:
+                break
+        elif ch in _JOINERS:
+            continue
+        elif letters:
+            break
+    return "".join(letters)
+
+
+def letters_of(display_name: str | None, username: str | None) -> str:
+    """What the board can spell, from the names stored at the pick.
+
+    The display name first, and the username only if the display name
+    has no A-to-Z letters in it at all - an all-emoji name, or one
+    written in a script this board has no letters for. Discord
+    usernames are letters, digits, dots and underscores, so the same
+    three rules applied to one gives *kate_s.92* as KATE.
+
+    Returns "" when neither spells anything, which is a real answer
+    rather than an error: the board has a line for a name that does not
+    spell, and the day still had a ghost.
+    """
+    for name in (display_name, username):
+        if not name:
+            continue
+        word = _first_word(name)
+        if word:
+            return word
+    return ""
+
+
+def place_for(day: date, guild_id: int, user_id: int, places: int) -> int:
+    """Which place in the name this player is given today, from 1.
+
+    **A hash, so it cannot be rerolled and does not have to be
+    stored.** Three things go in - the day, the server and the player -
+    and the same three always come out at the same place, so pressing
+    the button again after a bot restart, or on a day the row was
+    rewritten, gives the player the letter they already had. Storing a
+    draw instead would mean a row per player per day whose only job is
+    to repeat itself.
+
+    `sha256` rather than `hash()`, which is salted per process: the
+    built-in would hand the same player a different letter after a
+    deploy, which is the one thing this must not do.
+
+    Different players usually land on different places, and sometimes
+    two land on the same one. That is not a flaw to fix - the game is
+    comparing notes, and a collision costs a pair of players one letter
+    between them, not the day.
+    """
+    seed = f"{day.isoformat()}:{guild_id}:{user_id}".encode()
+    digest = hashlib.sha256(seed).digest()
+    return int.from_bytes(digest[:8], "big") % places + 1
+
+
+@dataclass(frozen=True)
+class Answer:
+    """One thing the board says, and whether it was worth an award.
+
+    `key` is a defaults key and `args` its format arguments, so the
+    board's whole vocabulary stays in the content files and this module
+    decides only which line is true. `earned` is set on a right guess
+    alone: it is what tells the caller to fire the hook *Ghostbuster*
+    listens on, and keeping it here rather than re-deriving it in `bot`
+    means the award and the YES cannot disagree.
+    """
+
+    key: str
+    args: dict = field(default_factory=dict)
+    earned: bool = False
+
+
+async def _ghost_today(guild_id: int):
+    """The day, and the row if there is a ghost in it.
+
+    Returns `(day, row)` with the row None when there is nobody to ask
+    about - which covers two different servers that look the same to a
+    player. One has not picked yet; the other picked nobody because too
+    few were eligible. Both get GOODBYE. The difference is kept in the
+    pick's own log row, where an admin can see it.
+
+    The day comes back with the row because every caller needs both and
+    `server_today` is a config read: asking twice in one button press
+    is two reads to answer one question.
+    """
+    today = await database.server_today(guild_id)
+    row = await database.daily_ghost(guild_id, today)
+    if row is None or row.user_id is None:
+        return today, None
+    return today, row
+
+
+async def _answered(guild_id: int, user_id: int, action: str, **fields) -> None:
+    """Write down that the board answered this player today.
+
+    Two writes, like a haunting. `record_use` makes it a use of the
+    board - which is what keeps it in the same bookkeeping as every
+    other thing a player uses - and the log row is what the once-a-day
+    limit is counted from.
+
+    **The limit is derived rather than stored**, which is safe here for
+    the reason it usually is not: a board use has never existed before
+    this release, so there is no incomplete past to count across. Every
+    clue the board has ever given is a row.
+    """
+    await database.record_use(user_id, guild_id, SPIRIT_BOARD, room_id=LIBRARY)
+    await telemetry.succeeded(
+        guild_id, user_id, action, thing_id=SPIRIT_BOARD, **fields
+    )
+
+
+async def ask_the_board(guild_id: int, user_id: int) -> Answer:
+    """*Ask the board*: one letter of the ghost's name, once a day.
+
+    The order of the refusals is the design's. A day with no ghost is
+    answered before the day's turn is looked at, because there is
+    nothing to spend it on; after that, a player who has already asked
+    is told so whoever the ghost is.
+
+    **The ghost asking gets the joke line and spends their turn.** They
+    could not have learnt anything from a letter of their own name, but
+    a board that let them press it all day would be a board that
+    behaved differently for the ghost, and anybody watching over a
+    shoulder would notice.
+    """
+    today, row = await _ghost_today(guild_id)
+    if row is None:
+        return Answer(NO_GHOST)
+
+    if await database.player_actions_on(
+        guild_id, user_id, today, telemetry.BOARD_ASK
+    ):
+        return Answer(ASK_ALREADY)
+
+    if user_id == row.user_id:
+        await _answered(guild_id, user_id, telemetry.BOARD_ASK, detail="the ghost")
+        return Answer(ASK_GHOST)
+
+    letters = letters_of(row.display_name, row.username)
+    if not letters:
+        await _answered(
+            guild_id, user_id, telemetry.BOARD_ASK, detail="nothing to spell"
+        )
+        return Answer(ASK_NO_LETTERS)
+
+    place = place_for(today, guild_id, user_id, len(letters))
+    letter = letters[place - 1]
+    await _answered(
+        guild_id,
+        user_id,
+        telemetry.BOARD_ASK,
+        detail=f"place={place}/{len(letters)} letter={letter}",
+    )
+    return Answer(ASK_CLUE, {"count": circles(place), "letter": letter})
+
+
+async def _turn_to_name(guild_id: int, user_id: int):
+    """The row to guess against, and the refusal if there is one.
+
+    Returns `(row, refusal)`, exactly one of which is useful. Both
+    halves of *Name the ghost* go through here - the button, which
+    checks before opening the picker, and the picker's own callback,
+    which checks again - so there is one place that decides whether a
+    guess is possible and one list of reasons it is not.
+
+    **Checked twice on purpose.** A picker can sit open for minutes: a
+    player who is told *nothing has stirred* and waits for a noise must
+    be able to come back, and a player who guessed in another window
+    meanwhile must not get a second turn.
+    """
+    today, row = await _ghost_today(guild_id)
+    if row is None:
+        return None, Answer(NO_GHOST)
+
+    if await database.player_actions_on(
+        guild_id, user_id, today, telemetry.BOARD_GUESS
+    ):
+        return row, Answer(NAME_ALREADY)
+
+    # The *nothing has stirred* line, and the turn is not spent. Until
+    # the ghost has haunted, naming them would be guessing at a day
+    # nobody has played yet.
+    if not await database.hauntings_on(guild_id, row.user_id, today):
+        return row, Answer(NAME_NOT_YET)
+    return row, None
+
+
+async def ready_to_name(guild_id: int, user_id: int) -> Answer | None:
+    """The refusal to give before the member picker opens, or None.
+
+    What this saves is a player choosing a suspect out of a list of
+    everybody they know and then being told the board was never going
+    to answer today.
+    """
+    _, refusal = await _turn_to_name(guild_id, user_id)
+    return refusal
+
+
+async def name_the_ghost(guild_id: int, user_id: int, suspect_id: int) -> Answer:
+    """*Name the ghost*: one yes-or-no a day, and YES earns the award.
+
+    **Two refusals here that spend nothing**, and they are here rather
+    than in `_turn_to_name` because they are about the name that came
+    back: Discord's picker lists everybody in the server, so it cannot
+    hide the player themselves or somebody who has never entered the
+    house. Being unable to leave them out of the list is exactly why
+    picking one costs nothing.
+
+    Everything else is a guess: it is written down right or wrong, and
+    only one a day. A right one does not end the ghost's day - they
+    keep the sheet and can keep haunting, and everybody else can still
+    guess - because the thing being rewarded is working it out, not
+    getting there first.
+    """
+    row, refusal = await _turn_to_name(guild_id, user_id)
+    if refusal is not None:
+        return refusal
+
+    if suspect_id == user_id:
+        return Answer(NAME_SELF)
+    if await database.get_game_state(suspect_id, guild_id) is None:
+        return Answer(NAME_NON_PLAYER)
+
+    right = suspect_id == row.user_id
+    detail = f"named={suspect_id}"
+    if right:
+        await _answered(guild_id, user_id, telemetry.BOARD_GUESS, detail=detail)
+        return Answer(NAME_YES, earned=True)
+
+    # A wrong guess is a refusal in the log and a use of the board in
+    # the bookkeeping, the same split the cat's craving makes: the row
+    # that says what the player tried is the one worth tuning on, and
+    # `outcome` is the column that says whether it worked.
+    await database.record_use(user_id, guild_id, SPIRIT_BOARD, room_id=LIBRARY)
+    await telemetry.refused(
+        guild_id,
+        user_id,
+        telemetry.BOARD_GUESS,
+        reason="wrong",
+        thing_id=SPIRIT_BOARD,
+        detail=detail,
+    )
+    return Answer(NAME_NO)

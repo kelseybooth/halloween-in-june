@@ -284,6 +284,25 @@ GHOST_PICKED = "ghost_picked"
 # for exactly this shape of question.
 HAUNTED = "haunted"
 
+# The two halves of the spirit board, and **the rows the once-a-day
+# limits are counted from**. There is no stored "asked today" flag:
+# asking is a row, guessing is a row, and the limit is one filter on
+# `ix_interaction_log_player` - which is only safe because neither has
+# ever existed before this release, so a count across the log cannot
+# be short.
+#
+# `BOARD_ASK` is always a success; the clue the board gave is in
+# `detail`, which is what says whether the places are spread the way
+# the hash is meant to spread them.
+#
+# `BOARD_GUESS` uses `outcome` for right and wrong, the same split the
+# craving guess makes, because the reveal has to count the players who
+# named the ghost correctly and a count that had to read `detail` would
+# be a count with a LIKE in it. `detail` carries who was named, so an
+# admin can see a wrong guess without it being a second column.
+BOARD_ASK = "board_ask"
+BOARD_GUESS = "board_guess"
+
 # One row per restock placement. `detail` says what landed where and how
 # much of it is now there, which answers both of the questions the
 # scatter raises: whether the spice box fills and drains at a rate
@@ -6923,25 +6942,33 @@ async def record_daily_ghost(
         raise
 
 
-async def hauntings_on(guild_id: int, user_id: int, day: date) -> int:
-    """How many times this player haunted on one Pacific day.
+async def player_actions_on(
+    guild_id: int, user_id: int, day: date, action: str
+) -> int:
+    """How many rows of one action this player wrote on one Pacific day.
 
     **A read of `interaction_log` to decide something**, which this
-    file otherwise allows only the mood roll. It is safe here for a
-    reason the general case is not: a haunting has never existed
-    before this release, so there is no incomplete past to count
-    across - every haunting there has ever been is a row.
+    file otherwise allows only the mood roll. It is safe for the three
+    actions that call it - a haunting, a board clue and a board guess -
+    for a reason the general case is not: none of them existed before
+    drop 50, so there is no incomplete past to count across. Every one
+    there has ever been is a row.
+
+    **Which is why the action is a parameter and not a guess.** Pointed
+    at an older action it would be a count of a log that was written
+    generously but not completely, and the answer would be a number
+    that looks right. The three callers are the three that may.
 
     One filter on `ix_interaction_log_player`, which is
-    `(guild_id, user_id, action, created_at)` - the index the mood
-    roll already uses for the same shape of question.
+    `(guild_id, user_id, action, created_at)` - the index the mood roll
+    already uses for the same shape of question.
     """
     session_factory = _require_session()
     start, end = pacific_day_bounds_utc(day)
     stmt = select(func.count()).where(
         InteractionLog.guild_id == guild_id,
         InteractionLog.user_id == user_id,
-        InteractionLog.action == HAUNTED,
+        InteractionLog.action == action,
         InteractionLog.created_at >= start,
         InteractionLog.created_at < end,
     )
@@ -6950,9 +6977,20 @@ async def hauntings_on(guild_id: int, user_id: int, day: date) -> int:
             return (await session.execute(stmt)).scalar_one()
     except SQLAlchemyError:
         log.exception(
-            "Failed to count hauntings by %s in guild %s", user_id, guild_id
+            "Failed to count %s by %s in guild %s", action, user_id, guild_id
         )
         raise
+
+
+async def hauntings_on(guild_id: int, user_id: int, day: date) -> int:
+    """How many times this player haunted on one Pacific day.
+
+    Named, rather than left as a call with a constant in it, because it
+    is asked in three voices: *has the ghost haunted at all today*,
+    which is what the spirit board refuses on, *how many times*, which
+    is *Boo Who?*, and the admin's count. All three are this number.
+    """
+    return await player_actions_on(guild_id, user_id, day, HAUNTED)
 
 
 async def place_in_hands(

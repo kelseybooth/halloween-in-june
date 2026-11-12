@@ -25,6 +25,8 @@ from database import (  # noqa: F401 - the vocabulary, re-exported for call site
     ALREADY_DONE,
     AMBIGUOUS,
     ARMS_FULL,
+    BOARD_ASK,
+    BOARD_GUESS,
     CATNIP,
     COOLDOWN,
     CRASHED,
