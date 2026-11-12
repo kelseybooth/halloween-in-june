@@ -103,7 +103,28 @@ NO_GAME = None
 # stays in the files, and is still what a server paused at 40 reads -
 # which is the whole reason the fragment was written twice rather than
 # edited in place.
-LAST_PLAYABLE_DROP = 46
+#
+# **Drop 50 is the Secret Library, and part 2 is deliberately not in
+# it.** What a server on 50 finds is the room, its twelve rows, the
+# ring of keys, both doors out - and a spirit board whose use line
+# still says it is not ready, because the ghost and the board are
+# part 2's code. That is drop 30's arrangement again rather than a
+# regression: content that works, with one mechanic named in the room
+# and visibly waiting for its release.
+#
+# Checked before this moved, by walking a server to the ceiling
+# rather than by reading the files: every drop 50 row arrives, both
+# of the library's own exits among them. See
+# `test_the_library_arrives_with_the_ceiling`, which is the Nursery's
+# guard one drop along - and the library is the first room with two
+# ways in, so a half-moved door is a thing that can go wrong here in
+# a way it could not in the Nursery.
+#
+# **46 is skipped over, not skipped.** This is a cap on
+# `/advance-game`, not a position: a server still walks through 46 to
+# get to 50, and drop 46 is being tested on the test server before
+# anybody advances it past that.
+LAST_PLAYABLE_DROP = 50
 
 
 class UnknownDrop(Exception):
