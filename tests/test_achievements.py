@@ -116,9 +116,14 @@ def test_the_shipped_file_parses():
     # leaves behind and food deletes. *Walk It Off* is the first award in
     # the file that cannot ask `states.has`, because by the time it is
     # true the state is out of force.
-    assert len(parsed.achievements) == 70
+    # And seventy-one on 11 November, drop 50's *Boo Who?*, for the ghost
+    # who haunted all day and was named by nobody. The other two ghost
+    # rows moved from 99 to 50 the same day and are not in this number,
+    # because they were already in the file: the drop a row waits for is
+    # not what this counts.
+    assert len(parsed.achievements) == 71
     # The ids are a set, so this pair is also the file's duplicate check.
-    assert len(parsed.achievement_ids) == 70
+    assert len(parsed.achievement_ids) == 71
 
 
 def test_the_shipped_file_validates():
@@ -274,7 +279,7 @@ async def test_the_rows_reach_the_database(db):
 async def test_the_whole_shipped_file_loads(db):
     await content_loader.load_content(content_module.load_files())
 
-    assert await row_count(db, "achievements") == 70
+    assert await row_count(db, "achievements") == 71
 
 
 async def test_a_reload_replaces_the_rows(db):

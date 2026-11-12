@@ -232,7 +232,7 @@ reading everything below.
 | Bedroom | **superseded** | A different description shipped on 6 November. It drops the bottle warmer, the mat, the web, the costumes and the tin; all of them are still reachable one look deeper, and the ivy is deliberately not named at all. |
 | Upstairs Hallway | **no** | Still the pre-rewrite text, and the draft is outdated in its own right: the crowbar was moved to drop 99 after it was written, so the sentence naming it describes a thing that is not there at 40. The shipped text has a second row parked at 99 that puts the crowbar back when it arrives. |
 | Nursery | **no** | The shipped text is a *later* revision than this draft, not an earlier one - it has the nursery door painted the same soft sage, which the draft does not. |
-| Secret Library | **no** | Still the pre-rewrite text. |
+| Secret Library | **yes, verbatim** | At 50, approved 11 November. |
 
 **The window and the ivy.** *For the developer* points 1 and 2 shipped on 6
 November: a successful use of the window sets a per-player `window_open`,
@@ -264,7 +264,7 @@ who types either word is answered. Decided, applied, and revised - which
 is what a ticked box in this document can mean.
 ## Open questions
 
-- [x] **Approve or edit the remaining four drafts.** The four drop 30 rooms are approved and in the files. The Upstairs Hallway, Bedroom, Nursery and Secret Library are still waiting, and the Upstairs Hallway's interim bowl sentence comes out when its draft goes in.
+- [x] **Approve or edit the remaining four drafts.** The four drop 30 rooms are approved and in the files. The Secret Library was approved on 11 November and is in the files. The Upstairs Hallway, Bedroom and Nursery are still waiting, and the Upstairs Hallway's interim bowl sentence comes out when its draft goes in.
 - [x] **Delete the back stairs?** If yes, I'll make the cuts listed above and keep only the repaired Upstairs Hallway text.
 - [x] **Rename the upstairs end of the staircase** to "grand staircase"?
 - [x] **One paragraph or fragments?** ~~These drafts are single paragraphs.~~ **Answered for the Kitchen on 31 October**, and in the direction the Entryway already went: the back-door clause became fragment 1 at drop 30 so the Kitchen could open at 25 without a way out into the Courtyard. It cost nothing, because the clause was already the last thing in the paragraph. The question stands open for every other room — these are still single paragraphs, and the Kitchen is a split made for a drop boundary rather than for pacing.

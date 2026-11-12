@@ -254,7 +254,15 @@ async def test_the_content_is_still_loaded(two_games):
     # drop 40 rows too, so like *Accompanist* and *Growth Spurt* they
     # need the ceiling to have moved - a guild held below 40 has the
     # window shut and no way onto the ivy to fall off.
-    assert len(await resolve.achievements(GUILD_A)) == 61
+    # Sixty-four on 11 November, the three ghost rows, which came off 99
+    # with drop 50's content. They arrive here for the same reason the
+    # two trails above do - this fixture loads a guild at the last drop,
+    # and 50 is in `drops.tsv` - and all three are blocked, so a guild
+    # that has been handed them still cannot earn one. That gap is what
+    # separates this number from `test_triggers`'s earnable count, which
+    # is also 61 today and does not move: this one counts what arrived,
+    # that one counts what the engine can answer for.
+    assert len(await resolve.achievements(GUILD_A)) == 64
 
 
 async def test_the_art_is_kept_by_default(two_games):

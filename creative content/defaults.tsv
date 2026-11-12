@@ -199,3 +199,26 @@ shaken.cleared.nacho_chips	A few chips and a bit of salt, and your hands are ste
 shaken.cleared.candy	The sugar hits all at once. Your hands stop shaking almost immediately, and you feel about six years old.
 shaken.cleared.frozen_burrito	It's still half frozen, but it's food, and it works. Your hands have stopped shaking. Aunt Sue would be proud.
 shaken.cleared.dark_chocolate	One square of dark chocolate, and the world settles back into place. Your hands have stopped shaking.
+ghost.new	Something soft and faintly musty has appeared in your bag. It's a bedsheet with two eyeholes cut in it. You feel oddly… translucent.
+ghost.first	As you climb in, something soft slides off a shelf and into your bag. It's a bedsheet with two eyeholes cut in it. You feel oddly… translucent.
+ghost.gone	The bedsheet is gone from your bag. You feel a little more solid than you did yesterday.
+ghost.haunt.picker	You pull the bedsheet over your head. Will anyone guess who you are? Which room will you haunt? Everyone there will see: A sheet-draped shape drifts through the door and whispers "…" (you'll write the whisper next).
+ghost.haunt.modal.title	Haunt the {room}
+ghost.haunt.modal.label	What do you whisper?
+ghost.haunt.modal.placeholder	Players will see: A sheet-draped shape drifts through the door and whispers "…"
+ghost.haunt.public	A sheet-draped shape drifts through the door and whispers "{whisper}"
+ghost.haunt.private	You drift into the {room} and whisper "{whisper}".
+board.ask.clue	You rest your fingertips on the planchette. It circles the board {count}, slowly, then slides to {letter} and stops.
+board.ask.ghost	You rest your fingertips on the planchette. It slides to Y, then O, then U, and stops. You could swear the board is laughing.
+board.ask.no_letters	The planchette circles and circles and won't settle on anything. Whoever the ghost is today, their name doesn't spell.
+board.ask.already	The planchette won't move again. The board has said all it's going to say today.
+board.name.yes	The planchette slides slowly across the board… and stops on YES.
+board.name.no	The planchette slides slowly across the board… and stops on NO.
+board.name.self	The planchette won't point back at you. Try someone else.
+board.name.non_player	The planchette doesn't move. That name means nothing to this house.
+board.name.already	The planchette won't move. The board seems tired. Try again tomorrow.
+board.name.not_yet	You rest your fingers on the planchette, but it won't budge. Nothing has stirred in the house today.
+board.no_ghost	The planchette rests on GOODBYE and won't move. The house is quiet today.
+ghost.reveal.named	The planchette spells out a name: {name}. Yesterday's ghost has slipped out of their sheet. {count} of you named them.
+ghost.reveal.nobody	The planchette spells out a name: {name}. Yesterday's ghost has slipped out of their sheet, and nobody named them.
+ghost.reveal.quiet	Yesterday slipped by without a single haunting. The spirit board is keeping the name of whoever held the white sheet to itself.

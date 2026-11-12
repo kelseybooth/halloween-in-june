@@ -158,7 +158,15 @@ def test_the_shipped_content_parses():
     # replacing them, so a toy with its own lines draws from both. The
     # other two are the catnip suffix and the line the cat leaves
     # behind when she carries a stale toy off.
-    assert len(c.defaults) == 200
+    # And twenty-three on 11 November, drop 50 part 2's ghost and
+    # board lines: three for the bedsheet arriving and going, six for
+    # a haunting from the room picker to the whisper, eleven for the
+    # board's two buttons and the GOODBYE line they share, and three
+    # for the changeover reveal. Nothing reads any of them yet - that
+    # is part 2's code - and the file is content with that. A default
+    # nobody asks for prints nothing; it is the other direction, a
+    # key a caller wants and the file has not got, that fails.
+    assert len(c.defaults) == 223
     # Ten since 31 October: the ground floor arrives in two halves, and
     # 25 sits below the ceiling rather than above it, which is why
     # nothing else in the suite noticed.

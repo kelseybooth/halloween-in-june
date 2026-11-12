@@ -30,10 +30,11 @@ Three families do most of the work and are written once:
   achievements check a date at all
 - **the three group achievements** share one per-room read, because all three
   are the same `GROUP BY room_id` with a different `HAVING`
-- **the seven blocked** share `_blocked`, which is a predicate that says no.
+- **the blocked ones** share `_blocked`, which is a predicate that says no.
   They are registered anyway: the loader's both-directions check stays
   meaningful, and cat crossing arriving after launch turns three of them on
-  without reopening this phase
+  without reopening this phase. Uncounted on purpose: the number was
+  already a row out of date when drop 50 added one
 
 Everything else is a singleton, and most are two lines.
 """
@@ -1687,6 +1688,14 @@ def register_all() -> None:
     add("bandleader", "on_use", bandleader, earners=_bandleaders)
     add("getting_into_the_spirit", "on_use", _blocked("the ghost system"))
     add("ghostbuster", "on_use", _blocked("the ghost system"))
+    # **`on_midnight`, and the first thing to listen there.** The other
+    # two ghost rows are earned by a command - a first haunting, a first
+    # right guess - but *Boo Who?* asks about a day that is over:
+    # haunted at least three times and named by nobody. Nothing a
+    # player types can be the moment it comes true, because the thing
+    # being rewarded is what nobody did, so it waits for the changeover
+    # that ends the day.
+    add("boo_who", "on_midnight", _blocked("the ghost system"))
     add("breaking_into_the_halloween_candy", "on_use", _used(CANDY))
     # **`on_take`, not `on_use`.** `/use trash can` opens the menu for
     # throwing something away; taking the trash out is `/take trash

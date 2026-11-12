@@ -802,8 +802,10 @@ async def nightly_job() -> None:
     threshold still climbs back toward neutral, whether or not that
     player turned up. See `database.apply_daily_recovery`.
 
-    Nothing listens on `on_midnight` yet. The hook fires anyway,
-    because the bottle scatter and the craving roll are both meant to.
+    The only thing listening on `on_midnight` is *Boo Who?*, and it is
+    blocked until the ghost system is built, so nothing is awarded here
+    yet. The hook fires anyway, because the bottle scatter and the
+    craving roll are both meant to.
     """
     try:
         settled = await database.run_pending_recovery()
