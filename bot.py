@@ -3618,6 +3618,19 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
             )
             return
 
+        if found.thing_id == ghosts.BEDSHEET:
+            # Its own branch, beside the trash can's, and for the
+            # same reason: the sheet has no `use` line, so without
+            # this it would fall through to the house's "you turn it
+            # over in your hands" and count as a use of it.
+            #
+            # **After the not-carried refusal above**, which is the
+            # whole of the permission check. Only the ghost holds
+            # the sheet, so only the ghost reaches here, and nothing
+            # has to ask separately whether this player is one.
+            await _pull_the_sheet_over(interaction, state, found)
+            return
+
         if found.thing_id == world.TRASH_CAN:
             # Its own branch, beside the toy's, because `/use` on the
             # trash can opens a menu rather than producing a line. The
@@ -4067,6 +4080,168 @@ async def _threw_it_away(
     channel = interaction.channel
     if line and channel is not None and hasattr(channel, "send"):
         await _post_quietly(channel, line)
+
+
+HAUNT_TIMEOUT = 180
+
+
+class _HauntWhere(discord.ui.Select):
+    """Step one: which room the shape drifts into.
+
+    Rooms, not exits. A haunting is not a move - the ghost does not go
+    anywhere - so this offers every room they could have been in,
+    rather than the ones they could walk to from where they are.
+    """
+
+    def __init__(self, rooms):
+        self._rooms = dict(rooms)
+        super().__init__(
+            placeholder="Which room?",
+            options=[
+                discord.SelectOption(label=name, value=room_id)
+                for room_id, name in rooms
+            ],
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Build the box here, where there is somewhere to await.
+
+        A modal's title and labels are constructor arguments and
+        `__init__` cannot await, so every line the box shows is
+        resolved in this callback and handed over already written.
+        """
+        room_id = self.values[0]
+        room_name = self._rooms[room_id]
+        await interaction.response.send_modal(
+            _WhatToWhisper(
+                room_id,
+                room_name,
+                limit=await database.get_setting(
+                    interaction.guild_id, ghosts.MAX_CHARS
+                ),
+                title=await phrasing.default_say(
+                    "ghost.haunt.modal.title", room=room_name
+                ),
+                label=await phrasing.default_say("ghost.haunt.modal.label"),
+                placeholder=await phrasing.default_say(
+                    "ghost.haunt.modal.placeholder"
+                ),
+            )
+        )
+
+
+class _HauntMenu(discord.ui.View):
+    def __init__(self, rooms):
+        super().__init__(timeout=HAUNT_TIMEOUT)
+        self.add_item(_HauntWhere(rooms))
+
+
+class _WhatToWhisper(discord.ui.Modal):
+    """Step two: the words, in a box that shows the frame around them.
+
+    `max_length` is the config value, so Discord's own box refuses an
+    over-long whisper before it can be submitted. `ghosts.trimmed` is
+    the server-side half of the same rule, for a client that ignored
+    it.
+
+    Discord caps a title and a label at 45 characters and raises on a
+    longer one, so both are cut - a writer lengthening the line should
+    get a short title, not a command that fails to open.
+    """
+
+    def __init__(
+        self, room_id, room_name, *, limit, title=None, label=None,
+        placeholder=None,
+    ):
+        self._where = (room_id, room_name)
+        self._limit = limit
+        super().__init__(
+            title=(title or f"Haunt the {room_name}")[:45],
+            timeout=HAUNT_TIMEOUT,
+        )
+        self.whisper = discord.ui.TextInput(
+            label=(label or "What do you whisper?")[:45],
+            placeholder=placeholder or None,
+            style=discord.TextStyle.paragraph,
+            max_length=limit,
+            required=True,
+        )
+        self.add_item(self.whisper)
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        room_id, room_name = self._where
+        await _the_shape_drifts_in(
+            interaction,
+            room_id,
+            room_name,
+            ghosts.trimmed(self.whisper.value, self._limit),
+        )
+
+
+async def _the_shape_drifts_in(
+    interaction, room_id: str, room_name: str, whisper: str
+) -> None:
+    """Post the whisper in the room, and tell the ghost it landed.
+
+    **The public line carries no name and no mention.** It goes out
+    through `_say_in_room`, which posts with `_post_quietly` - every
+    mention class off, and only an id the caller names let back in - so
+    a whisper containing `@everyone` or somebody's name stays plain
+    text. That is the design's *a whisper cannot ping anyone*, and it
+    needed no new code: the house has posted this way since the first
+    public line that printed a player's name.
+
+    **Written down before it is posted.** `record_haunting` is what
+    *Boo Who?* and the spirit board both count, and a Discord failure
+    after a recorded haunting costs a line in a thread. The other
+    order would cost a haunting the ghost watched themselves do.
+    """
+    guild_id, user = interaction.guild_id, interaction.user
+    await ghosts.record_haunting(guild_id, user.id, room_id, whisper)
+
+    public = await phrasing.default_say("ghost.haunt.public", whisper=whisper)
+    if public:
+        await _say_in_room(guild_id, room_id, public)
+
+    private = await phrasing.default_say(
+        "ghost.haunt.private", room=room_name, whisper=whisper
+    )
+    if private:
+        await _instead(interaction, private)
+
+    await _fire(
+        achievements.Context(
+            guild_id=guild_id,
+            hook="on_use",
+            user_id=user.id,
+            thing_id=ghosts.BEDSHEET,
+            room_id=room_id,
+        ),
+        interaction=interaction,
+    )
+
+
+async def _pull_the_sheet_over(interaction, state, found) -> None:
+    """`/use bedsheet`: the sheet goes over their head and a list opens.
+
+    **A use that records nothing here**, like the trash can's lid and a
+    toy's play. Pulling the sheet on is not haunting; the whisper is,
+    and `record_haunting` writes it once it exists. A ghost who opens
+    the picker and walks away has not haunted - which the spirit
+    board's *nothing has stirred in the house today* has to keep being
+    true of.
+    """
+    guild_id, user = interaction.guild_id, interaction.user
+    rooms = [
+        (room_id, await resolve.room_name(room_id) or room_id)
+        for room_id in await ghosts.rooms_to_haunt(guild_id, user.id)
+    ]
+    prompt = await phrasing.default_say("ghost.haunt.picker")
+    await interaction.followup.send(
+        prompt or "Which room will you haunt?",
+        view=_HauntMenu(rooms),
+        ephemeral=True,
+    )
 
 
 async def _open_the_trash(interaction, state, found) -> None:
