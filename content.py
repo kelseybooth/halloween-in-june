@@ -166,11 +166,14 @@ SCRIPTED_CRAVINGS = ("mouse", "cut of meat", "broccoli", "fish", "egg")
 # probability. The column that names the target is `destination` - it was
 # `container` until drop 2, and stopped being accurate the moment a restock
 # could target a room.
-# `any_container` is `random` with the room floors taken out: a toy
-# turns up *inside* something, never loose in the middle of a room,
-# because a toy on a floor reads as one somebody dropped. Drop 46 is
-# the only row that uses it. `restocking._container_slots` holds which
-# containers qualify and why.
+# `any_spot` is `random` with the road taken out: a toy turns up
+# anywhere in the house, on a room's floor or inside one of its
+# containers, every spot as likely as every other. It was
+# `any_container` for the eleven hours drop 46 drew containers only,
+# and the rename is the point - the old name would now be a lie.
+# Drop 46 is the only row that uses it. `restocking._scatter_spots`
+# holds which spots qualify and why, and `restocking._in_the_open`
+# holds which of them the room is told about.
 RESTOCK_PLACEMENTS = {"container", "room", "random", "any_spot"}
 
 # A restock's `thing_id` may name a class rather than a thing: `type:toy`
