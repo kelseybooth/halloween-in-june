@@ -637,6 +637,47 @@ async def test_the_nursery_arrives_with_the_ceiling(started):
         assert not nursery & visible
 
 
+async def test_the_library_arrives_with_the_ceiling(started):
+    """Drop 50 is the Secret Library, and the ceiling is the only gate.
+
+    The Nursery's guard one drop along, and written the same way round:
+    one invariant rather than two literals, so it answers correctly on
+    either side of the release instead of being a chore somebody has to
+    remember to invert.
+
+    **Both of the library's exits are in the set, and that is the part
+    the Nursery could not test.** `HN` was one door; the library has
+    two ways in - the oak from the Courtyard and the cabinet from the
+    Living Room - so `SL` and `SC` are separate rows that a renumber
+    can separate. Leave one at 99 and a player who climbed the oak can
+    get out through the cabinet but not back down the tree, or the
+    reverse, depending which one was left. The validator would report
+    nothing: `_check_rooms_are_reachable_at_every_drop` asks whether an
+    arrived room can be reached, and `SE` still can be, through
+    whichever door did move.
+
+    `spirit_board` is in the set although its game is part 2's code. The
+    board is a fixture in the room from the day the room opens, and its
+    use line says so; what part 2 changes is the line, not whether the
+    thing arrives. A release that left it behind would open a library
+    with nothing on the floorboards to find.
+    """
+    await start(started)
+    for _ in range(resolve.LAST_PLAYABLE_DROP):
+        await advance(started)
+
+    visible = await resolve.visible_thing_ids(GUILD_A)
+
+    library = {
+        "library_shelves", "scorch_circle", "spirit_board", "key_nail",
+        "SL", "SC",
+    }
+    if resolve.LAST_PLAYABLE_DROP >= 50:
+        assert library <= visible
+    else:
+        assert not library & visible
+
+
 async def test_a_server_at_the_ceiling_can_walk_into_the_nursery_and_out(started):
     """What "built, not promised" means, asked of a server rather than the files.
 
