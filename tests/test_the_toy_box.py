@@ -20,13 +20,11 @@ on every server at once. That was the call rather than an oversight -
 drop 2 and says why.
 """
 
-from types import SimpleNamespace
-
 import pytest
 from sqlalchemy import select
 
 from conftest import ALICE, GUILD_A
-from fake_discord import FakeChannel, FakeGuild, FakeMember
+from fake_discord import FakeBot, FakeChannel, FakeGuild, FakeMember
 from test_restocking import end_of_day
 from test_world import carry
 
@@ -52,7 +50,7 @@ async def toy_box(db, monkeypatch):
     await database.set_announcement_channel(GUILD_A, halloween.id)
     await resolve.set_current_drop(GUILD_A, 46)
     await db.ensure_user_exists(ALICE, GUILD_A)
-    monkeypatch.setattr(bot, "bot", SimpleNamespace(guilds=[guild]))
+    monkeypatch.setattr(bot, "bot", FakeBot(guild))
     return guild, halloween
 
 
@@ -97,19 +95,24 @@ async def how_many_out():
 # --------------------------------------------------------------------------
 
 
-async def test_a_toy_turns_up_inside_something(toy_box, monkeypatch):
-    """The drop in one assertion: nothing loose on a floor. A toy on a
-    floor is one somebody dropped, which is a different sentence from
-    one that was waiting in a cupboard."""
+async def test_a_toy_turns_up_somewhere_in_the_house(toy_box, monkeypatch):
+    """Anywhere a player can reach, which is the drop in one assertion.
+
+    **This test used to say the opposite** - that nothing lands loose
+    on a floor, because a toy on a floor was one somebody dropped. That
+    held for the eleven hours drop 46 ran container-only on the two QA
+    servers, and then the call was made the other way: floors are
+    spots too, at the same odds as a cupboard. `test_toys_in_the_open`
+    is the file that holds the new half; what is left here is the part
+    that did not change, which is that every toy lands in a room of the
+    house rather than on the road.
+    """
     await sweep(monkeypatch)
 
     placed = await toys_out()
     assert placed
-    for room_id, container_id, _, _ in placed:
-        assert container_id not in (None, database.LOOSE_IN_ROOM), (
-            room_id,
-            container_id,
-        )
+    for room_id, _, _, _ in placed:
+        assert room_id not in (CHANNEL, content_module.SECRET_LIBRARY), room_id
 
 
 async def test_the_road_stops_getting_them(toy_box, monkeypatch):
@@ -142,7 +145,7 @@ async def test_the_eligible_containers_are_the_ones_a_player_can_open(toy_box):
     library shelves are out because the Secret Library is found per
     player, so a toy in there is out of play and holding a slot.
     """
-    slots = await restocking._container_slots(GUILD_A)
+    slots = await restocking._scatter_spots(GUILD_A)
     containers = {container for _, container in slots}
 
     assert "shipping_box" not in containers
@@ -158,7 +161,7 @@ async def test_a_room_that_has_not_opened_holds_none_of_them(toy_box):
     there, and six would stop the draw while the player saw nothing."""
     await resolve.set_current_drop(GUILD_A, 25)
 
-    rooms = {room for room, _ in await restocking._container_slots(GUILD_A)}
+    rooms = {room for room, _ in await restocking._scatter_spots(GUILD_A)}
 
     assert rooms <= await resolve.arrived_rooms(GUILD_A)
     assert "BE" not in rooms

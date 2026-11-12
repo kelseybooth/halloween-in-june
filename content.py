@@ -171,7 +171,7 @@ SCRIPTED_CRAVINGS = ("mouse", "cut of meat", "broccoli", "fish", "egg")
 # because a toy on a floor reads as one somebody dropped. Drop 46 is
 # the only row that uses it. `restocking._container_slots` holds which
 # containers qualify and why.
-RESTOCK_PLACEMENTS = {"container", "room", "random", "any_container"}
+RESTOCK_PLACEMENTS = {"container", "room", "random", "any_spot"}
 
 # A restock's `thing_id` may name a class rather than a thing: `type:toy`
 # means draw uniformly among the things of that type that are eligible to

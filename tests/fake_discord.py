@@ -295,6 +295,24 @@ class FakeGuild:
         return member
 
 
+class FakeBot:
+    """The client the loops reach for, with the two things they ask of it.
+
+    `restock_sweep` walks `bot.guilds` and `_announce_deliveries` looks
+    one up by id, and a `SimpleNamespace(guilds=[...])` answered only
+    the first - so the half of the sweep that posts into a room's
+    thread could not be driven from a test at all. Drop 46 is the first
+    row whose notice fires on a scattered placement, which is what made
+    that gap matter rather than merely exist.
+    """
+
+    def __init__(self, *guilds):
+        self.guilds = list(guilds)
+
+    def get_guild(self, guild_id):
+        return next((g for g in self.guilds if g.id == guild_id), None)
+
+
 class FakeResponse:
     def __init__(self, interaction):
         self._interaction = interaction
