@@ -200,7 +200,7 @@ shaken.cleared.candy	The sugar hits all at once. Your hands stop shaking almost 
 shaken.cleared.frozen_burrito	It's still half frozen, but it's food, and it works. Your hands have stopped shaking. Aunt Sue would be proud.
 shaken.cleared.dark_chocolate	One square of dark chocolate, and the world settles back into place. Your hands have stopped shaking.
 ghost.new	Something soft and faintly musty has appeared in your bag. It's a bedsheet with two eyeholes cut in it. You feel oddly… translucent.
-ghost.first	As you climb in, something soft slides off a shelf and into your bag. It's a bedsheet with two eyeholes cut in it. You feel oddly… translucent.
+ghost.first	Something soft slides off a shelf behind you and into your bag. It's a bedsheet with two eyeholes cut in it. You feel oddly… translucent.
 ghost.gone	The bedsheet is gone from your bag. You feel a little more solid than you did yesterday.
 ghost.haunt.picker	You pull the bedsheet over your head. Will anyone guess who you are? Which room will you haunt? Everyone there will see: A sheet-draped shape drifts through the door and whispers "…" (you'll write the whisper next).
 ghost.haunt.modal.title	Haunt the {room}

@@ -105,19 +105,16 @@ FROM_DROP = 50
 # that happened at midnight - the sheet slides off a shelf in front of
 # them.
 #
-# It is written for the oak: *as you climb in*. The climb is still what
-# brings them - on a test server and on beta the skeleton keys hang
-# inside the library, so the only way to a first entry is up the tree -
-# but the line lands on their first command from *inside* the library
-# rather than on the climb itself, because that is the first reply that
-# can appear in the room it is about. So it reads a beat later than its
-# tense suggests, and on QA a tester who came through the cabinet reads
-# about a climb they did not make.
+# It used to open *as you climb in*, which was written for the oak and
+# then stopped being true twice over. The line lands on the ghost's
+# first command from *inside* the library rather than on the climb that
+# brought them, because that is the first reply that can appear in the
+# room the sentence is about; and a QA tester who came through the
+# cabinet never climbed anything in the first place.
 #
-# Both flagged rather than rewritten. The copy is the writers' and
-# `ghost.first` is one row to change if they want it; the alternative
-# was telling the ghost about the library's shelf while they are
-# standing under a tree in the Courtyard.
+# It opens *behind you* now, which covers both doors and the beat in
+# between - something behind you could have happened a moment ago. The
+# design tab's copy table still carries the older wording.
 FIRST = "ghost.first"
 
 # Said on the ghost's next command after the pick, and on the old
