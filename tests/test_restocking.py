@@ -749,17 +749,28 @@ async def test_the_delivery_is_announced_in_the_room(server):
     assert (GUILD_A, "EN", "delivery.arrived.public") in report.announce
 
 
-async def test_a_scattered_row_announces_nothing(server):
-    """Only the spice order has a notice. Eight bottles a day with a
-    line each would be the room talking over the players."""
+async def test_the_bottles_and_the_diapers_announce_nothing(server):
+    """Eight bottles a day with a line each would be the room talking
+    over the players, so rows 2 and 3 carry no notice at all.
+
+    **Narrowed from "a scattered row announces nothing"**, which was
+    true of every scattered row until drop 46's toy row was given
+    `channel.arrival`. The rule it was reaching for is per row rather
+    than per placement: a row says whether it speaks. Read on drop 25,
+    where the bottles, the diapers and the road toys are all arriving
+    and not one of the three has anything to say - which is a stronger
+    assertion than the one it replaces, because it can ask for silence
+    outright instead of listing the keys allowed to break it.
+    """
     await content_loader.load_content(content_module.load_files())
+    await resolve.set_current_drop(GUILD_A, 25)
     await started(days_ago=4)
 
     report = await restocking.run_for_guild(GUILD_A)
-    bottles = [row for row in report.placed if row[3] == "used_baby_bottle"]
+    scattered = {row[3] for row in report.placed}
 
-    assert bottles
-    assert all(key == "delivery.arrived.public" for _, _, key in report.announce)
+    assert {"used_baby_bottle", "dirty_diaper"} <= scattered
+    assert report.announce == []
 
 
 async def test_the_box_is_empty_until_day_two(server):

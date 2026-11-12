@@ -1011,7 +1011,7 @@ async def restock_sweep() -> None:
 
 
 async def _announce_deliveries(report) -> None:
-    """Tell each room what landed in it, once per delivery.
+    """Tell each room what landed in it, once per room per sweep.
 
     **Everybody in the thread hears it, fed or not.** A player who has
     not fed the cat cannot see the shipping box in their room text yet,
@@ -1019,10 +1019,28 @@ async def _announce_deliveries(report) -> None:
     notice is the first they know of it. The line is deliberately vague
     about what arrived, which turns that from a leak into a tease.
 
+    **Once per room, however much landed there**, which is the rule
+    `_announce_arrival` has always used for the channel and the reason
+    it gives: the line never names what came, so it reads the same for
+    one toy or three - whereas three identical sentences in a row read
+    as a bug rather than as three toys. Drop 46 is what makes that
+    reachable. Six occurrences now draw from twenty-two spots, and two
+    of them landing on the same floor in one sweep is ordinary; a
+    catch-up sweep after an outage is where it is certain.
+
+    **No thread means nobody is standing there**, and this line is
+    about something coming into view in front of people. Losing it is
+    the correct outcome rather than a gap to fill: the toy is on the
+    floor either way, and the next `/look` finds it.
+
     Cosmetic, like every other public line: a delivery that has already
     landed is not undone by failing to mention it.
     """
+    said: set[tuple[int, str, str]] = set()
     for guild_id, room_id, key in report.announce:
+        if (guild_id, room_id, key) in said:
+            continue
+        said.add((guild_id, room_id, key))
         guild = bot.get_guild(guild_id)
         if guild is None:
             continue

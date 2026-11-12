@@ -10,12 +10,10 @@ clock pinned. Building the report is `test_restocking`'s half; what is
 here is the decision the sweep makes about one.
 """
 
-from types import SimpleNamespace
-
 import pytest
 
 from conftest import ALICE, GUILD_A
-from fake_discord import FakeChannel, FakeGuild, FakeMember
+from fake_discord import FakeBot, FakeChannel, FakeGuild, FakeMember
 from test_restocking import end_of_day
 
 import bot
@@ -46,7 +44,7 @@ async def drop_two(db, monkeypatch):
     guild = FakeGuild(GUILD_A, channels=[halloween], members=[FakeMember(ALICE)])
     await database.set_announcement_channel(GUILD_A, halloween.id)
     await resolve.set_current_drop(GUILD_A, 2)
-    monkeypatch.setattr(bot, "bot", SimpleNamespace(guilds=[guild]))
+    monkeypatch.setattr(bot, "bot", FakeBot(guild))
     return guild, halloween
 
 

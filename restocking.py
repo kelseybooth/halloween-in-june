@@ -273,11 +273,17 @@ async def _slots(guild_id: int) -> tuple[list[tuple[str, str]], dict[str, str]]:
     return slots, by_container
 
 
-async def _container_slots(guild_id: int) -> list[tuple[str, str]]:
-    """The containers a drop-46 toy may turn up in.
+# The two rooms a scattered toy never reaches, for the two unrelated
+# reasons `_scatter_spots` sets out: the road has a row of its own, and
+# the library is found per player.
+NOT_SCATTERED_INTO = (content_module.CHANNEL_ROOM, content_module.SECRET_LIBRARY)
 
-    `any_container` is `random` with the room floors taken out, and with
-    three more questions asked of what is left. A container qualifies if:
+
+async def _scatter_spots(guild_id: int) -> list[tuple[str, str]]:
+    """The spots a drop-46 toy may turn up in: house floors and containers.
+
+    `any_spot` is `random` with the road taken out and three more
+    questions asked of what is left. A spot qualifies if:
 
     - **its room has arrived.** `random` does not ask this and does not
       need to - `clear_unreachable_room_contents` sweeps what lands in a
@@ -285,18 +291,35 @@ async def _container_slots(guild_id: int) -> list[tuple[str, str]]:
       and wrong for a toy, because the toy cap counts what is out: six
       toys scattered into the Secret Library would stop the draw for
       good while the player sees an empty house.
-    - **it is a scatter target.** The same flag `_slots` already reads,
-      and the shipping box is still the only `no` - David's spice order
-      arriving with a hair tie in it reads as a bug.
+    - **it is not the road.** Drop 46's first promise is that the
+      channel stops getting new toys, and row 4 is still there to stock
+      it for a server that has not reached 46 yet. Leaving its floor in
+      would also announce one arrival twice, because
+      `_slid_into_the_channel` already speaks for anything that lands
+      there.
     - **it is not in the Secret Library, and not behind a gate.** Both
       are the same rule said twice: a toy a player cannot reach is a
       toy that is out of play and holding a slot. No container carries
       a `present_when` today; the clause is here so that the first one
       written does not quietly start swallowing toys.
 
+    A container has one more question of its own: **it must be a
+    scatter target**, the same flag `_slots` reads, and the shipping
+    box is still the only `no` - David's spice order arriving with a
+    hair tie in it reads as a bug. **A floor has no such flag to
+    read.** `rooms.tsv` carries four columns and none of them is this
+    one, so every arrived room's floor is in. A room that ever has to
+    be held back wants a column of its own rather than a name in here.
+
+    **One entry per spot, which is the whole of "no weighting".** A
+    floor is exactly as likely as a container, the way `_slots` already
+    draws a whole room against a single cupboard, and a weighted
+    version of this would be the same spot listed twice. Eight floors
+    against fourteen containers today, so a toy lands in the open a
+    little over a third of the time.
+
     An empty list is a real answer - a server early enough that no room
-    with a container has opened - and the caller places nothing rather
-    than falling back to the floor.
+    has opened - and the caller places nothing rather than falling back.
     """
     open_rooms = await resolve.arrived_rooms(guild_id)
     session_factory = database._require_session()
@@ -320,15 +343,21 @@ async def _container_slots(guild_id: int) -> list[tuple[str, str]]:
             )
         ).all()
 
-    return sorted(
+    floors = [
+        (room_id, database.LOOSE_IN_ROOM)
+        for room_id in open_rooms
+        if room_id not in NOT_SCATTERED_INTO
+    ]
+    inside = [
         (room_id, thing_id)
         for thing_id, room_id, scatter, gate in rows
         if room_id
         and room_id in open_rooms
-        and room_id != content_module.SECRET_LIBRARY
+        and room_id not in NOT_SCATTERED_INTO
         and scatter
         and not gate
-    )
+    ]
+    return sorted(floors + inside)
 
 
 async def _room_of(thing_id: str) -> str | None:
@@ -492,7 +521,7 @@ async def run_for_guild(
     slots, container_rooms = await _slots(guild_id)
     if not slots:
         return report
-    container_slots = await _container_slots(guild_id)
+    scatter_spots = await _scatter_spots(guild_id)
 
     # A container a restock row names is a real destination even when nothing
     # is statically inside it - the row is what declares it.
@@ -568,7 +597,7 @@ async def run_for_guild(
             if due:
                 await _deliver(
                     guild_id, restock, due, slots, container_rooms, rng, arrived,
-                    report, container_slots,
+                    report, scatter_spots,
                 )
                 await _record_progress(guild_id, restock.restock_id, max(due))
             continue
@@ -602,7 +631,7 @@ async def run_for_guild(
 
         await _deliver(
             guild_id, restock, due, slots, container_rooms, rng, arrived, report,
-            container_slots,
+            scatter_spots,
         )
         await _record_progress(guild_id, restock.restock_id, max(due))
 
@@ -616,7 +645,7 @@ async def run_for_guild(
 
 async def _deliver(
     guild_id, restock, due, slots, container_rooms, rng, arrived, report,
-    container_slots=(),
+    scatter_spots=(),
 ) -> None:
     """Place one occurrence per moment in `due`.
 
@@ -626,7 +655,7 @@ async def _deliver(
     the arrival notice are all easy to get subtly different twice.
     """
     for _ in sorted(due):
-        landing = _destination(restock, slots, container_rooms, rng, container_slots)
+        landing = _destination(restock, slots, container_rooms, rng, scatter_spots)
         if landing is None:
             break
         room_id, container_id = landing
@@ -663,14 +692,36 @@ async def _deliver(
                 # cannot reconstruct afterwards, because the eligible
                 # set moves with the drop pointer and with what the
                 # content files say is a scatter target.
-                + (f" of={len(container_slots)}" if restock.placement == "any_container" else "")
+                + (f" of={len(scatter_spots)}" if restock.placement == "any_spot" else "")
             ),
         )
-        if restock.arrival_notice:
+        if restock.arrival_notice and _in_the_open(restock, container_id):
             # The room hears the delivery land. Collected rather than
             # posted here: `restocking` has no Discord client, and the
             # sweep that calls it does.
             report.announce.append((guild_id, room_id, restock.arrival_notice))
+
+
+def _in_the_open(restock, container_id: str) -> bool:
+    """Whether this landing is one the room can see without opening anything.
+
+    **A scattered row announces its floors and not its drawers.** The
+    toy row's notice is the cat swatting something across the floor,
+    and that sentence is simply false of a hair tie that turned up
+    inside the sideboard. It is also the half of drop 46 that is meant
+    to be found rather than announced: a toy in a cupboard is the
+    reward for `/look sideboard`, and a line in the thread would spend
+    it.
+
+    **A row that named its own container announces either way.** The
+    spice order's line is about a delivery arriving, not about a thing
+    coming into view, and it has been true of a closed box since drop
+    20. Reading the placement rather than the container is what keeps
+    that from changing here.
+    """
+    if restock.placement == "container":
+        return True
+    return container_id == database.LOOSE_IN_ROOM
 
 
 async def _what_to_place(guild_id: int, restock, arrived: set[int], rng) -> str | None:
@@ -784,7 +835,7 @@ async def _room_for(
 
 
 def _destination(
-    restock, slots, container_rooms, rng, container_slots=()
+    restock, slots, container_rooms, rng, scatter_spots=()
 ) -> tuple[str, str] | None:
     """Where one occurrence lands, or None if it cannot land anywhere.
 
@@ -812,13 +863,12 @@ def _destination(
         # one today, and the reason this placement exists: neither
         # `container` nor `random` can say "into that room".
         return restock.destination, database.LOOSE_IN_ROOM
-    if restock.placement == "any_container":
-        # **No floors, and no fallback to one.** An empty list means
-        # every container is shut to this server right now, and the
-        # honest answer is to place nothing: a toy loose in a room is
-        # one a player dropped, and the drop's whole premise is that
-        # they turn up inside things.
-        return rng.choice(container_slots) if container_slots else None
+    if restock.placement == "any_spot":
+        # **No fallback.** An empty list means the house is shut to this
+        # server right now, and the honest answer is to place nothing: a
+        # toy somewhere a player cannot reach is a toy holding one of
+        # the six until the drain comes for it.
+        return rng.choice(scatter_spots) if scatter_spots else None
     return rng.choice(slots)
 
 
