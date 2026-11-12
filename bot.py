@@ -842,7 +842,19 @@ async def _pick_the_ghost(guild: discord.Guild) -> None:
 
 
 async def _reveal_the_ghost(guild: discord.Guild) -> bool:
-    """Tell the channel who yesterday's ghost was. True if it posted.
+    """Tell the channel who yesterday's ghost was.
+
+    **Returns whether the night may go on to name the ghost**, which is
+    not the same as whether anything posted. Three cases and two
+    answers:
+
+    * **It posted.** True, and *Boo Who?* may follow it.
+    * **There was nothing to post** - no row for yesterday, no ghost in
+      the row, or the reveal already claimed. True: a night with no name
+      in it has no name to give away, and the hook has to keep firing on
+      quiet nights or it would only ever run on interesting ones.
+    * **A name was due and did not go out** - no channel, no line, or
+      the read raised. False, and the hook is skipped.
 
     **First of the three things a changeover does**, ahead of the
     `on_midnight` hook and today's pick, and the order matters in both
@@ -850,6 +862,26 @@ async def _reveal_the_ghost(guild: discord.Guild) -> bool:
     congratulates, by name, the ghost nobody worked out - which lands
     as a spoiler if it goes out ahead of the line that spells the name
     out.
+
+    **Order was not enough on its own.** Running first stops the award
+    overtaking the reveal; it does not stop the award going out on a
+    night the reveal never managed to. `reveal_for` takes the claim
+    before it hands the line back - deliberately, and its own docstring
+    says so - so a server with no announcement channel spent the
+    night's reveal, posted nothing, and then had `achievements.fire`
+    write the row and `_announce_all` try to say *Alice earned Boo
+    Who?* into the same missing channel. The award was granted with the
+    name never announced and the reveal burned, which is the thing the
+    ordering exists to prevent, reached by the one route the ordering
+    could not see.
+
+    **Withholding costs the award rather than deferring it.** The
+    predicate reads *yesterday*, so a night that skips the hook does
+    not come back to it - tomorrow is a different yesterday. That is
+    the right way round: the award is a public congratulation, and one
+    nobody can be congratulated for is worth less than a silent row in
+    a table. Both failures that reach here are already logged loudly
+    and both are deployment problems rather than game states.
 
     **No ping, and the name as plain text.** The design asks for the
     display name and not the mention: somebody is being named in public
@@ -869,7 +901,8 @@ async def _reveal_the_ghost(guild: discord.Guild) -> bool:
         log.error("Could not reveal yesterday's ghost in guild %s", guild.id)
         return False
     if reveal is None:
-        return False
+        # Nothing to say, which is not a failure to say it.
+        return True
 
     line = await phrasing.default_say(reveal.key, **reveal.args)
     channel = await _game_channel(guild)
@@ -908,9 +941,14 @@ async def nightly_job() -> None:
     names the ghost nobody guessed, which is a spoiler if it goes out
     ahead of the reveal.
 
-    All three run for every server whether or not they have anything to
-    say, and each swallows its own database failures, so one bad server
-    cannot cost the rest of them the night.
+    **And the hook is skipped outright on a night the reveal was due
+    and could not post**, because being second is no protection when
+    the first thing never happened. `_reveal_the_ghost` draws that
+    line; a quiet night with no ghost in it still fires.
+
+    The reveal and the pick run for every server whether or not they
+    have anything to say, and each swallows its own database failures,
+    so one bad server cannot cost the rest of them the night.
     """
     try:
         settled = await database.run_pending_recovery()
@@ -930,13 +968,20 @@ async def nightly_job() -> None:
         log.error("Nightly recovery failed; will retry at the next midnight")
 
     for guild in bot.guilds:
-        await _reveal_the_ghost(guild)
-        # No player and no interaction: whatever listens here is looking at the
-        # server rather than at somebody's action.
-        await _fire(
-            achievements.Context(guild_id=guild.id, hook="on_midnight"),
-            guild=guild,
-        )
+        # Skipped only when a name was due and did not go out, which
+        # `_reveal_the_ghost` sets out. Awarding into a channel the
+        # reveal could not reach would name the ghost by way of the
+        # achievement and never by way of the board.
+        if await _reveal_the_ghost(guild):
+            # No player and no interaction: whatever listens here is looking
+            # at the server rather than at somebody's action.
+            await _fire(
+                achievements.Context(guild_id=guild.id, hook="on_midnight"),
+                guild=guild,
+            )
+        # Today's pick is owed either way. It reads a different day from
+        # the reveal, so a reveal that failed is no reason for a server
+        # to spend today without a ghost.
         await _pick_the_ghost(guild)
 
 
