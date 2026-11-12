@@ -6900,6 +6900,71 @@ async def record_daily_ghost(
         raise
 
 
+async def place_in_hands(
+    guild_id: int, user_id: int, thing_id: str, *, now: datetime | None = None
+) -> None:
+    """Put one of this in a player's hands, with no take behind it.
+
+    **The fourth way anything reaches an inventory**, after a take, a
+    source and a hand-off - and the only one with no player action in
+    front of it. `content.PLACED_BY_CODE` is the files' side of the same
+    fact: a thing that arrives this way is in no room and nothing
+    yields it, so the loader would otherwise call it unobtainable.
+
+    `taken_at` is set like everybody else's, which matters even for a
+    thing no sweep can take: a null stamp reads as *not idle* forever,
+    and the next thing placed this way might not be exempt.
+    """
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    taken_at = _on_the_server_clock(
+        now if now is not None else await server_now(guild_id)
+    )
+    try:
+        async with session_factory() as session:
+            await session.execute(
+                _add_to_inventory(
+                    insert, user_id, guild_id, thing_id, 1, taken_at=taken_at
+                )
+            )
+            await session.commit()
+    except SQLAlchemyError:
+        log.exception(
+            "Failed to place %s in the hands of %s in guild %s",
+            thing_id, user_id, guild_id,
+        )
+        raise
+
+
+async def take_from_hands(guild_id: int, user_id: int, thing_id: str) -> bool:
+    """Take one of this back out of a player's hands. True if it was there.
+
+    The counterpart of `place_in_hands`, and it reports rather than
+    assumes: the caller is reconciling a hand against a row, so
+    *there was nothing to take* is an answer and not a failure.
+    """
+    session_factory = _require_session()
+    try:
+        async with session_factory() as session:
+            result = await session.execute(
+                update(PlayerInventory)
+                .where(
+                    PlayerInventory.guild_id == guild_id,
+                    PlayerInventory.user_id == user_id,
+                    PlayerInventory.thing_id == thing_id,
+                    PlayerInventory.count > 0,
+                )
+                .values(count=PlayerInventory.count - 1)
+            )
+            await session.commit()
+            return result.rowcount > 0
+    except SQLAlchemyError:
+        log.exception(
+            "Failed to take %s from %s in guild %s", thing_id, user_id, guild_id
+        )
+        raise
+
+
 async def get_setting(guild_id: int, key: str) -> int:
     """A server's value for a numeric setting, or its default.
 

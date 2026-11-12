@@ -1360,7 +1360,11 @@ def _check_rooms_are_reachable_at_every_drop(content: Content) -> list[str]:
 # most once a day while the front door is still locked, in
 # `world.dislodge_from_bed`. It has no room because it has no home: until
 # somebody fluffs the bed there is no key anywhere.
-PLACED_BY_CODE = frozenset({"house_key"})
+# `bedsheet` joins it in drop 50: the ghost of the day finds one in
+# their bag at the changeover and loses it at the next, and no row in
+# any file could say so - it is in no room, nothing yields it and no
+# restock schedule places it.
+PLACED_BY_CODE = frozenset({"house_key", "bedsheet"})
 
 
 def _check_obtainable_things(content: Content, things: dict[str, Thing]) -> list[str]:

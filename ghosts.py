@@ -43,6 +43,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
 import database
+import resolve
 import telemetry
 
 log = logging.getLogger(__name__)
@@ -52,6 +53,26 @@ log = logging.getLogger(__name__)
 # settable but unread, or read with a different default than the
 # command reports.
 MIN_PLAYERS = "ghost_min_players"
+
+BEDSHEET = "bedsheet"
+
+# The drop the whole system belongs to. **The gate `pick_for` was
+# missing**: without it a server on drop 20 picks a ghost every night,
+# which is invisible while nothing reads the rows and wrong the moment
+# the bedsheet exists - a sheet handed to somebody thirty drops before
+# the library it comes off a shelf in.
+#
+# A constant, like `world.HOUSE_FROM_DROP` beside the key it gates,
+# rather than a read of the bedsheet's own `since_drop`. The two could
+# drift, so they are pinned against each other in
+# `test_the_gate_matches_the_bedsheet_s_own_drop` - cheaper than an
+# async content lookup on a path that runs after every command.
+FROM_DROP = 50
+
+# Said on the ghost's next command after the pick, and on the old
+# ghost's next command after they stop being it.
+ARRIVED = "ghost.new"
+GONE = "ghost.gone"
 
 
 @dataclass(frozen=True)
@@ -98,6 +119,9 @@ async def pick_for(
     racing cannot both come away believing they picked, which they
     could if the read were the only thing in the way.
     """
+    drop = await resolve.current_drop(guild_id)
+    if drop is resolve.NO_GAME or drop is None or drop < FROM_DROP:
+        return None
     if await database.daily_ghost(guild_id, day) is not None:
         return None
 
@@ -171,3 +195,50 @@ async def pick_for(
             pick.eligible,
         )
     return pick
+
+
+async def hand_over(
+    guild_id: int, user_id: int, *, now: datetime | None = None
+) -> str | None:
+    """Reconcile one player's hands against today's row.
+
+    Returns the defaults key to say to them, or None if nothing moved.
+
+    **Lazy, on their next command, rather than pushed at the
+    changeover.** The design asks for exactly that - *the ghost's next
+    command after the pick* - and it is also the only version that
+    works: at midnight the bot has a guild and a row, not an
+    interaction, so there is nowhere to put the sentence. A player who
+    is the ghost and never runs a command never learns it, which is
+    correct, because they were never going to haunt either.
+
+    It is self-healing for the same reason. A night the pick did not
+    run, a bot restarted mid-evening, a sheet left in the hands of
+    somebody who stopped being the ghost three days ago - every one of
+    those is repaired by the next command that player runs, because
+    this compares the hand against the row rather than trusting a
+    handover that was supposed to have happened.
+
+    **Two directions, never both.** Being today's ghost without the
+    sheet means it arrives; holding the sheet without being today's
+    ghost means it goes. A player who is the ghost two days running
+    matches neither and keeps it without a word, which is right: they
+    were not told anything, because nothing changed.
+    """
+    drop = await resolve.current_drop(guild_id)
+    if drop is resolve.NO_GAME or drop is None or drop < FROM_DROP:
+        return None
+
+    row = await database.daily_ghost(
+        guild_id, await database.server_today(guild_id)
+    )
+    theirs = row is not None and row.user_id == user_id
+    holding = await database.carried_of(user_id, guild_id, BEDSHEET) > 0
+
+    if theirs and not holding:
+        await database.place_in_hands(guild_id, user_id, BEDSHEET, now=now)
+        return ARRIVED
+    if holding and not theirs:
+        await database.take_from_hands(guild_id, user_id, BEDSHEET)
+        return GONE
+    return None

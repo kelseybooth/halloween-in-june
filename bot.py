@@ -1210,6 +1210,29 @@ async def idle_sweep() -> None:
         await _announce_exhaustion(set_down)
 
 
+async def _hand_over_the_bedsheet(interaction: discord.Interaction) -> None:
+    """Give today's ghost their sheet, or take yesterday's away.
+
+    **Off the completion hook, beside the idle-drop notice**, and for
+    the same reason that one is there: the news belongs to no verb.
+    The ghost should hear it on their next anything, `/stats`
+    included, because the thing that happened to them happened at
+    midnight while they were asleep.
+
+    Ephemeral, always. Who is wearing the sheet is the whole game, so
+    a line in a room thread would end it - and the two sentences are
+    written in the second person for one reader.
+    """
+    if interaction.guild_id is None:
+        return
+    key = await ghosts.hand_over(interaction.guild_id, interaction.user.id)
+    if key is None:
+        return
+    line = await phrasing.default_say(key)
+    if line:
+        await interaction.followup.send(line, ephemeral=True)
+
+
 async def _mention_idle_drops(interaction: discord.Interaction) -> None:
     """Tell a player, once, about anything the sweep took off them.
 
@@ -8997,6 +9020,14 @@ async def on_app_command_completion(
         await database.stamp_command(interaction.user.id, interaction.guild_id)
     except SQLAlchemyError:
         log.exception("Could not stamp a command in guild %s", interaction.guild_id)
+    try:
+        await _hand_over_the_bedsheet(interaction)
+    except (discord.HTTPException, SQLAlchemyError):
+        log.warning(
+            "Could not hand the bedsheet over in guild %s",
+            interaction.guild_id,
+            exc_info=True,
+        )
     try:
         await _mention_idle_drops(interaction)
     except (discord.HTTPException, SQLAlchemyError):
