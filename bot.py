@@ -1300,6 +1300,19 @@ async def _hand_over_the_bedsheet(interaction: discord.Interaction) -> None:
     ghost has nobody holding a sheet to reconcile - so whichever one
     answers is the only line there is to say, and a player can never
     be told two things about the same sheet in one command.
+
+    **Only the first ghost's line is tied to a room**, and the tie is
+    this layer's to supply: an ephemeral reply appears in the channel
+    the command was asked from, so `ghosts` is handed a way to ask
+    which room that was and refuses the moment unless it is the
+    library. It is a callable because answering is two reads, and
+    every command on a server that already has its ghost would
+    otherwise pay for them.
+
+    The two nightly lines are deliberately not gated that way. They
+    are news from midnight rather than news about a room, and a ghost
+    who hears about their sheet while reading `/stats` in the channel
+    has still heard about it.
     """
     if interaction.guild_id is None:
         return
@@ -1308,6 +1321,7 @@ async def _hand_over_the_bedsheet(interaction: discord.Interaction) -> None:
         interaction.user.id,
         display_name=interaction.user.display_name,
         username=interaction.user.name,
+        typed_in=lambda: _room_of_thread(interaction.channel, interaction.guild),
     )
     if key is None:
         key = await ghosts.hand_over(interaction.guild_id, interaction.user.id)

@@ -55,6 +55,7 @@ import hashlib
 import logging
 import random
 import unicodedata
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 
@@ -104,12 +105,19 @@ FROM_DROP = 50
 # that happened at midnight - the sheet slides off a shelf in front of
 # them.
 #
-# It is written for the oak: *as you climb in*. On a test server and on
-# beta that is always true, because the skeleton keys hang inside the
-# library and the only way to a first entry is up the tree. On QA a
-# tester who got in through the cabinet during Part 1 and walks back
-# through it reads a line about climbing. Flagged rather than rewritten,
-# because the writers' line is right for every server players will see.
+# It is written for the oak: *as you climb in*. The climb is still what
+# brings them - on a test server and on beta the skeleton keys hang
+# inside the library, so the only way to a first entry is up the tree -
+# but the line lands on their first command from *inside* the library
+# rather than on the climb itself, because that is the first reply that
+# can appear in the room it is about. So it reads a beat later than its
+# tense suggests, and on QA a tester who came through the cabinet reads
+# about a climb they did not make.
+#
+# Both flagged rather than rewritten. The copy is the writers' and
+# `ghost.first` is one row to change if they want it; the alternative
+# was telling the ghost about the library's shelf while they are
+# standing under a tree in the Courtyard.
 FIRST = "ghost.first"
 
 # Said on the ghost's next command after the pick, and on the old
@@ -423,12 +431,17 @@ async def first_ghost(
     *,
     display_name: str,
     username: str,
+    typed_in: Callable[[], Awaitable[str | None]],
     now: datetime | None = None,
 ) -> str | None:
     """The one pick that is not random: whoever reaches the library first.
 
     Returns the defaults key to say to them, or None if this is not
     that moment. The sheet is in their hands by the time it returns.
+
+    `typed_in` answers which room the command was typed in, and is a
+    callable rather than a value because answering costs reads that
+    almost every caller must not pay - see the gate itself below.
 
     **The condition is "has this server ever had a ghost", not "has
     anybody found the library".** Those are the same question on every
@@ -448,6 +461,22 @@ async def first_ghost(
     It also means a player standing in the library when the drop
     advances starts it on their next command, which is the same
     sentence and the same truth.
+
+    **And it asks where the command was typed, not only where the
+    player is.** Those agree for every command in the game except the
+    one that matters here: a player climbing the oak types under the
+    tree and arrives in the library, so at the moment this first has
+    an answer their body is inside and their window is the Courtyard.
+    The line is ephemeral - it has to be, because who is wearing the
+    sheet is the whole game - and Discord puts an ephemeral reply in
+    the channel it was asked from. Told on the climb, the library's
+    one unmissable moment arrives under a tree.
+
+    So the sheet waits for their first command from inside, which is
+    the first reply that can land in the room the sentence is about.
+    They are already there and already pinged: the arrival line is
+    what admits them to the thread, so the next thing they type is
+    almost always typed in it.
 
     A day the nightly pick skipped is taken over rather than left
     alone, because a day with nobody in it is a day with no ghost -
@@ -470,6 +499,27 @@ async def first_ghost(
 
     state = await database.get_game_state(user_id, guild_id)
     if state is None or state.current_room != LIBRARY:
+        return None
+
+    # **Asked last, because it is the expensive one.** Which room a
+    # command was typed in is a channel lookup and the whole room list,
+    # on the hook that runs after every command in the game - so it is
+    # a callable, and nothing above this line has had to pay for it.
+    # Everything that gets this far is a command run from inside the
+    # library on a server that has never had a ghost, which is a
+    # handful of commands once per server.
+    #
+    # A window that is not the library leaves the moment unspent rather
+    # than failing it. That is the whole difference between late and
+    # missed, and the server only has one of these.
+    window = await typed_in()
+    if window != LIBRARY:
+        log.info(
+            "Guild %s: %s is in the library but typed in %s, so the sheet waits",
+            guild_id,
+            user_id,
+            window,
+        )
         return None
 
     today = await database.server_today(guild_id)
