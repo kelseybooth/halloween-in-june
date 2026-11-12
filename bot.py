@@ -28,6 +28,7 @@ import content_loader
 import craving
 import database
 import gating
+import ghosts
 import hints
 import leaderboard
 import house_utils
@@ -793,6 +794,54 @@ bot = CatBot()
 
 # discord.py handles the timezone maths, waking the loop at 00:00 Pacific whether
 # that is currently PST or PDT.
+def _names_in(guild: discord.Guild):
+    """A `name_of` for `ghosts.pick_for`, over this guild's member cache.
+
+    None means the player has left, which is what keeps them out of
+    the eligible set. The cache is authoritative here because the bot
+    runs with the members intent - the same reason `_announce` and the
+    thread sweep both read `get_member` rather than fetching.
+    """
+
+    def name_of(user_id: int) -> tuple[str, str] | None:
+        member = guild.get_member(user_id)
+        if member is None:
+            return None
+        return (member.display_name, member.name)
+
+    return name_of
+
+
+async def _pick_the_ghost(guild: discord.Guild) -> None:
+    """Today's ghost for one server, at that server's changeover.
+
+    **Swallows its own database failures.** A server whose pick raises
+    must not stop the loop reaching the next server, and the pick is
+    not a prerequisite for anything else the night does: a day with no
+    row is a day with no ghost, which is a state the design already
+    has a line for.
+
+    The reveal of *yesterday's* ghost goes in front of this call when
+    it is built - the work order's change 13. The two read different
+    rows, because this picks for the day beginning and the reveal reads
+    the day that ended, but the order is in the work order and keeping
+    to it means the reveal cannot be written against a row this has
+    already replaced.
+    """
+    try:
+        picked = await ghosts.pick_for(
+            guild.id,
+            await database.server_today(guild.id),
+            name_of=_names_in(guild),
+        )
+    except SQLAlchemyError:
+        # Already logged with a traceback by the database layer.
+        log.error("Could not pick a ghost in guild %s; today has none", guild.id)
+        return
+    if picked is None:
+        log.info("Guild %s had already picked a ghost for today", guild.id)
+
+
 @tasks.loop(time=dt_time(hour=0, minute=0, tzinfo=database.PACIFIC))
 async def nightly_job() -> None:
     """Midnight, Pacific. Softens grudges, then fires `on_midnight`.
@@ -806,6 +855,11 @@ async def nightly_job() -> None:
     blocked until the ghost system is built, so nothing is awarded here
     yet. The hook fires anyway, because the bottle scatter and the
     craving roll are both meant to.
+
+    **The ghost is picked here too**, one server at a time, after the
+    hook. Nothing a player can see changes yet: the pick writes a row,
+    and the bedsheet that would tell somebody about it is part 2's next
+    piece.
     """
     try:
         settled = await database.run_pending_recovery()
@@ -831,6 +885,7 @@ async def nightly_job() -> None:
             achievements.Context(guild_id=guild.id, hook="on_midnight"),
             guild=guild,
         )
+        await _pick_the_ghost(guild)
 
 
 @nightly_job.before_loop
@@ -8176,6 +8231,11 @@ async def qa_midnight(interaction: discord.Interaction) -> None:
         guild=interaction.guild,
         announce=False,
     )
+    # The whole point of this command is that the night happens on
+    # demand, so it has to pick too - a QA server that advanced its
+    # clock and triggered midnight by hand and still had no ghost would
+    # be untestable.
+    await _pick_the_ghost(interaction.guild)
     await qa.record(interaction, f"midnight: {len(mine)} score(s) recovered")
     lines = [f"Settled {len(mine)} recovering score(s) here."]
     lines += [f"- `{c.user_id}` {c.before} -> {c.after} on {c.day}" for c in mine[:10]]
