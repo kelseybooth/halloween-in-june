@@ -1679,11 +1679,41 @@ async def play_with(
 
     The catnip mouse is the exception and it is named rather than
     columned. It does something no other toy does, to something no
-    other toy touches: the odds on a later `/pet`. A `catnip` column
-    would be a flag with one row set, and the next toy with a mechanic
-    will not want the same flag - it will want its own function beside
-    this one. `thing_id` is optional so that every caller that does not
-    care may keep ignoring it.
+    other toy touches: the odds on a later `/pet`.
+
+    **The copy deck asked for the opposite, and this is the answer
+    to it.** *Drop 2 copy deck - toys* section 3 set three conditions
+    on the buff, the first being "a column, not a special case": a
+    `pet_buff_minutes` on the thing row, set only on `catnip_mouse`,
+    because keying on `thing_id` breaks the section 7 rule that a
+    toy's identity is nothing but a row. That section calls the rule
+    the one line worth being emphatic about, and it is right - but the
+    rule is about the toy mechanic every row shares, and that rule is
+    kept. The ramp, the cooldown and the award are still the player's,
+    which is why the ten bank toys arrived as TSV rows and changed no
+    code.
+
+    **What the column could not carry is the reason it is not here.**
+    Every mechanic column in `things.tsv` hands the generic code
+    something it cannot otherwise know: `transforms_to` names the thing
+    to become, `present_when` names the gating state, and even the
+    yes/no ones - `use_cooldown_daily`, `to_hand_in_room` - pick between
+    two behaviours the engine already implements for any row. Two of
+    those columns are set on a single row today, so one user is no
+    objection. But the buff's four numbers are server config, settled
+    that way by the same deck: points, charges, minutes and cooldown are
+    admin-tunable and read from the config, so a `pet_buff_minutes` cell
+    would be consulted by nothing. Its only job would be to say "this is
+    the toy that buffs pets", which is what `thing_id` says. That makes
+    it the one column in the file carrying identity instead of data.
+
+    So the mechanic sits here, in the shape this codebase already uses
+    for a behaviour one thing owns: fourteen named `thing_id` branches
+    in this module - the oak, the cabinet, the graphite, the collar, the
+    ladder, the watering can - and this is the fifteenth. The next toy
+    with a mechanic wants its own function beside this one, not this
+    flag. `thing_id` is optional so that every caller that does not care
+    may keep ignoring it.
 
     A success pays what `play_value` says the day's nth play is worth,
     resets the ramp and starts the cooldown. A refusal advances the
