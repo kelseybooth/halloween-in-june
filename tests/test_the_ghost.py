@@ -452,3 +452,191 @@ async def test_the_eligible_set_reads_rows_a_real_command_wrote(server):
     today = await database.server_today(GUILD_A)
 
     assert await database.players_active_on(GUILD_A, today) == [ALICE]
+
+
+# --------------------------------------------------------------------------
+# The drop the whole system belongs to
+# --------------------------------------------------------------------------
+
+
+def test_the_gate_matches_the_bedsheet_s_own_drop():
+    """`ghosts.FROM_DROP` is a constant beside the row it gates, which
+    is `world.HOUSE_FROM_DROP`'s arrangement and has the same failure
+    mode: the file moves and the constant does not. Pinned here rather
+    than read with an async content lookup on a path that runs after
+    every command in the game."""
+    bedsheet = [
+        thing
+        for thing in content_module.load_files().things
+        if thing.thing_id == ghosts.BEDSHEET
+    ]
+
+    assert len(bedsheet) == 1
+    assert bedsheet[0].since_drop == ghosts.FROM_DROP
+
+
+async def test_a_server_below_the_drop_picks_nobody(server):
+    """The gate `pick_for` shipped without.
+
+    Three active players on a server at drop 45 is a server with no
+    library, no spirit board and no bedsheet in its files - and it
+    would have picked a ghost every night regardless, because nothing
+    in the pick asked what drop it was. Invisible while nothing read
+    the rows, and a sheet handed out thirty drops early the moment
+    something did.
+    """
+    await resolve.set_current_drop(GUILD_A, 45)
+    await in_the_house(ALICE, BOB, CAROL)
+    for who in (ALICE, BOB, CAROL):
+        await played(who)
+
+    pick = await ghosts.pick_for(GUILD_A, TODAY, name_of=everyone)
+
+    assert pick is None
+    assert await database.daily_ghost(GUILD_A, TODAY) is None
+
+
+# --------------------------------------------------------------------------
+# The sheet follows the row
+# --------------------------------------------------------------------------
+
+
+async def holds(user_id=ALICE, guild_id=GUILD_A):
+    return await database.carried_of(user_id, guild_id, ghosts.BEDSHEET)
+
+
+async def is_the_ghost(user_id, *, day, guild_id=GUILD_A):
+    await database.record_daily_ghost(
+        guild_id, day,
+        user_id=user_id, display_name="Alice", username="alice", eligible=3,
+    )
+
+
+async def test_the_sheet_arrives_on_the_ghost_s_next_command(server):
+    """Which is where the design puts it: *the ghost's next command
+    after the pick*. At midnight the bot has a guild and a row and
+    nowhere to put a sentence."""
+    today = await database.server_today(GUILD_A)
+    await is_the_ghost(ALICE, day=today)
+
+    said = await ghosts.hand_over(GUILD_A, ALICE)
+
+    assert said == ghosts.ARRIVED
+    assert await holds() == 1
+
+
+async def test_a_second_command_the_same_day_says_nothing_more(server):
+    """The notice is the change, not the state. A ghost who runs ten
+    commands is told once."""
+    today = await database.server_today(GUILD_A)
+    await is_the_ghost(ALICE, day=today)
+
+    await ghosts.hand_over(GUILD_A, ALICE)
+    again = await ghosts.hand_over(GUILD_A, ALICE)
+
+    assert again is None
+    assert await holds() == 1
+
+
+async def test_the_sheet_goes_when_the_day_has_moved_on(server):
+    """Yesterday's ghost, on their next command, with somebody else
+    wearing it today."""
+    today = await database.server_today(GUILD_A)
+    # Placed directly rather than through a hand_over for yesterday:
+    # that call reads *today*, so it would have done nothing and left
+    # the setup describing a sheet nobody held.
+    await database.place_in_hands(GUILD_A, ALICE, ghosts.BEDSHEET)
+    await is_the_ghost(BOB, day=today)
+
+    said = await ghosts.hand_over(GUILD_A, ALICE)
+
+    assert said == ghosts.GONE
+    assert await holds() == 0
+
+
+async def test_a_day_with_no_ghost_still_takes_the_sheet_back(server):
+    """A skipped day is a day nobody is the ghost, so the sheet goes
+    even though nobody is getting it. The row exists and says so,
+    which is the reason a skip is a row."""
+    today = await database.server_today(GUILD_A)
+    await database.place_in_hands(GUILD_A, ALICE, ghosts.BEDSHEET)
+    await database.record_daily_ghost(
+        GUILD_A, today,
+        user_id=None, display_name=None, username=None, eligible=1,
+    )
+
+    said = await ghosts.hand_over(GUILD_A, ALICE)
+
+    assert said == ghosts.GONE
+    assert await holds() == 0
+
+
+async def test_a_ghost_two_days_running_is_told_nothing(server):
+    """They keep it without a word, because nothing changed - and a
+    second "something has appeared in your bag" would tell them the
+    pick had repeated, which is a clue about the one thing the game is
+    hiding."""
+    today = await database.server_today(GUILD_A)
+    await database.place_in_hands(GUILD_A, ALICE, ghosts.BEDSHEET)
+    await is_the_ghost(ALICE, day=today)
+
+    said = await ghosts.hand_over(GUILD_A, ALICE)
+
+    assert said is None
+    assert await holds() == 1
+
+
+async def test_somebody_who_is_not_the_ghost_hears_nothing(server):
+    today = await database.server_today(GUILD_A)
+    await is_the_ghost(ALICE, day=today)
+
+    assert await ghosts.hand_over(GUILD_A, BOB) is None
+    assert await holds(BOB) == 0
+
+
+async def test_a_sheet_left_over_from_a_missed_night_is_repaired(server):
+    """The argument for reconciling rather than handing over.
+
+    A bot that was down at midnight, or a night the pick raised, leaves
+    a sheet in the hands of somebody who stopped being the ghost days
+    ago and no row saying it should be taken. Because this compares the
+    hand against today's row rather than trusting a handover that was
+    supposed to have happened, the next command that player runs fixes
+    it - and a day with no row at all is still a day they are not the
+    ghost.
+    """
+    await database.place_in_hands(GUILD_A, ALICE, ghosts.BEDSHEET)
+
+    said = await ghosts.hand_over(GUILD_A, ALICE)
+
+    assert said == ghosts.GONE
+    assert await holds() == 0
+
+
+async def test_the_sheet_does_not_move_below_the_drop(server):
+    """Belt as well as braces. The gate on the pick means a row should
+    not exist below drop 50, and this is the other half: a row that
+    exists anyway - written before the gate, or by a server walked
+    backwards - does not put a thing in somebody's hands that their
+    drop has no text for."""
+    today = await database.server_today(GUILD_A)
+    await is_the_ghost(ALICE, day=today)
+    await resolve.set_current_drop(GUILD_A, 45)
+
+    assert await ghosts.hand_over(GUILD_A, ALICE) is None
+    assert await holds() == 0
+
+
+async def test_the_sheet_cannot_be_dropped(server):
+    """`droppable` no in the file, which is what the copy promises:
+    *The bedsheet clings to you. It isn't done with you yet.*"""
+    bedsheet = [
+        thing
+        for thing in content_module.load_files().things
+        if thing.thing_id == ghosts.BEDSHEET
+    ][0]
+
+    assert bedsheet.droppable is False
+    assert bedsheet.takeable is False
+    assert bedsheet.max_per_player == 1
+
