@@ -104,13 +104,15 @@ NO_GAME = None
 # which is the whole reason the fragment was written twice rather than
 # edited in place.
 #
-# **Drop 50 is the Secret Library, and part 2 is deliberately not in
-# it.** What a server on 50 finds is the room, its twelve rows, the
-# ring of keys, both doors out - and a spirit board whose use line
-# still says it is not ready, because the ghost and the board are
-# part 2's code. That is drop 30's arrangement again rather than a
-# regression: content that works, with one mechanic named in the room
-# and visibly waiting for its release.
+# **Drop 50 is the Secret Library, and part 2 is in it now.** What a
+# server on 50 finds is the room, its twelve rows, the ring of keys,
+# both doors out - and the ghost of the day: a sheet somebody wakes up
+# wearing, a board that spells one letter of their name a day, and a
+# changeover that says who it was. The content shipped a release ahead
+# of the code, which was drop 30's arrangement rather than a
+# regression - the board's own use line said it was not ready until
+# the buttons behind it existed, and stopped saying so in the release
+# that built them.
 #
 # Checked before this moved, by walking a server to the ceiling
 # rather than by reading the files: every drop 50 row arrives, both

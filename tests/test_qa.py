@@ -12,9 +12,11 @@ drop has to be visibly forced, or somebody spends an afternoon debugging
 a server that is simply not where they think it is.
 """
 
+from datetime import timedelta
+
 import pytest
 
-from conftest import ALICE, BOB, GUILD_A, HOUSE_DROP
+from conftest import ALICE, BOB, GUILD_A, HOUSE_DROP, LAST_DROP
 from fake_discord import FakeChannel, FakeGuild, FakeInteraction, FakeMember
 
 import achievements
@@ -351,6 +353,60 @@ async def test_midnight_leaves_a_positive_score_alone(testing):
     await bot.qa_midnight.callback(qa_call(guild, "qa-midnight"))
 
     assert await database.get_relationship(BOB, TEST_GUILD) == 100
+
+
+async def a_ghost_yesterday(who=BOB, *, hauntings=1, named_by=()):
+    """Yesterday's ghost on the test server, and the day they had.
+
+    Drop 50, because the reveal is gated on the library being open -
+    the fixture starts every test server at drop 1.
+    """
+    await database.set_setting(TEST_GUILD, resolve.DROP_KEY, LAST_DROP)
+    day = await database.server_today(TEST_GUILD) - timedelta(days=1)
+    await database.record_daily_ghost(
+        TEST_GUILD, day, user_id=who, display_name="Bob",
+        username="bob_b", eligible=3,
+    )
+    start, _ = database.pacific_day_bounds_utc(day)
+    for n in range(hauntings):
+        await database.log_interaction(
+            TEST_GUILD, user_id=who, action=database.HAUNTED,
+            outcome=database.SUCCESS, now=start + timedelta(hours=9 + n),
+        )
+    for guesser in named_by:
+        await database.log_interaction(
+            TEST_GUILD, user_id=guesser, action=database.BOARD_GUESS,
+            outcome=database.SUCCESS, now=start + timedelta(hours=13),
+        )
+    return day
+
+
+async def test_midnight_reveals_yesterdays_ghost(testing):
+    """A changeover a tester triggers by hand has to be the same event
+    as the one that arrives at midnight: the acceptance tests for the
+    reveal and for *Boo Who?* are both written against this command."""
+    _, guild, halloween, _ = testing
+    await a_ghost_yesterday()
+
+    await bot.qa_midnight.callback(qa_call(guild, "qa-midnight"))
+
+    assert any("slipped out of their sheet" in line for line in halloween.posted)
+
+
+async def test_midnight_announces_what_it_awarded(testing):
+    """**`announce=False` here used to be free.** Nothing listened on
+    `on_midnight`, so holding the list back and dropping it cost
+    nothing at all. *Boo Who?* listens now, and an award the nightly
+    job would post about has to be posted about here too, or the one
+    server it can be tested on cannot watch it happen.
+    """
+    _, guild, halloween, _ = testing
+    await a_ghost_yesterday(hauntings=3)
+
+    await bot.qa_midnight.callback(qa_call(guild, "qa-midnight"))
+
+    assert "boo_who" in await database.player_achievements_of(TEST_GUILD, BOB)
+    assert any("Boo Who?" in line for line in halloween.posted)
 
 
 async def test_clearing_cooldowns_lets_the_bed_be_fluffed_again(testing):

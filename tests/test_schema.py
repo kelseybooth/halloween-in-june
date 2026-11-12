@@ -9,7 +9,7 @@ start sharing one.
 """
 
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -426,6 +426,37 @@ async def test_the_log_gains_the_typed_column_in_place(db):
     assert await db.log_interaction(
         GUILD_A, action=database.USE, thing_id="cat_bed", typed="bed"
     )
+
+
+async def test_the_ghost_row_gains_its_reveal_stamp_in_place(db):
+    """**The migration into a table that is one release old.**
+
+    `daily_ghosts` shipped with the pick, so it is already in the live
+    database and `create_all` will not look at it again. Which makes
+    this the drop 2 failure waiting in a new table instead of an old
+    one - and a worse version of it, because the column *is* the
+    protection: without the stamp there is nothing to stop a second
+    changeover telling the channel yesterday's name all over again.
+
+    Checked against a database that has the table without the column,
+    because that is the live beta's shape.
+    """
+    async with db._engine.begin() as conn:
+        await conn.execute(text("ALTER TABLE daily_ghosts DROP COLUMN revealed_at"))
+    assert "revealed_at" not in await columns_of(db, "daily_ghosts")
+
+    async with db._engine.begin() as conn:
+        await db._add_missing_columns(conn)
+    assert "revealed_at" in await columns_of(db, "daily_ghosts")
+
+    # And the claim the reveal is built on works against it, which is
+    # the thing that would actually have been broken.
+    await db.record_daily_ghost(
+        GUILD_A, date(2026, 11, 11), user_id=ALICE,
+        display_name="Alice", username="alice", eligible=3,
+    )
+    assert await db.claim_the_reveal(GUILD_A, date(2026, 11, 11)) is True
+    assert await db.claim_the_reveal(GUILD_A, date(2026, 11, 11)) is False
 
 
 async def test_running_the_migration_twice_is_a_no_op(db):

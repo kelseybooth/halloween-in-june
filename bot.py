@@ -821,12 +821,11 @@ async def _pick_the_ghost(guild: discord.Guild) -> None:
     row is a day with no ghost, which is a state the design already
     has a line for.
 
-    The reveal of *yesterday's* ghost goes in front of this call when
-    it is built - the work order's change 13. The two read different
-    rows, because this picks for the day beginning and the reveal reads
-    the day that ended, but the order is in the work order and keeping
-    to it means the reveal cannot be written against a row this has
-    already replaced.
+    `_reveal_the_ghost` runs in front of this, which is the work
+    order's order. The two read different rows - this picks for the day
+    beginning and the reveal reads the day that ended - so the order is
+    not protecting against an overwrite. Keeping to it means the reveal
+    can never be written against a row this call has already decided.
     """
     try:
         picked = await ghosts.pick_for(
@@ -842,6 +841,56 @@ async def _pick_the_ghost(guild: discord.Guild) -> None:
         log.info("Guild %s had already picked a ghost for today", guild.id)
 
 
+async def _reveal_the_ghost(guild: discord.Guild) -> bool:
+    """Tell the channel who yesterday's ghost was. True if it posted.
+
+    **First of the three things a changeover does**, ahead of the
+    `on_midnight` hook and today's pick, and the order matters in both
+    directions. The reveal reads the day that ended. And *Boo Who?*
+    congratulates, by name, the ghost nobody worked out - which lands
+    as a spoiler if it goes out ahead of the line that spells the name
+    out.
+
+    **No ping, and the name as plain text.** The design asks for the
+    display name and not the mention: somebody is being named in public
+    for a day they spent in a sheet, and the one thing that should not
+    happen is their phone going off about it. `_post_quietly` with no
+    `ping` is exactly that, and it is also what keeps a display name
+    with an `@everyone` in it inert.
+
+    **Swallows its own failures**, like the pick: a server whose reveal
+    raises must not stop the loop reaching the next server, and a night
+    with no reveal is a missing line rather than a broken game.
+    """
+    try:
+        reveal = await ghosts.reveal_for(guild.id)
+    except SQLAlchemyError:
+        # Already logged with a traceback by the database layer.
+        log.error("Could not reveal yesterday's ghost in guild %s", guild.id)
+        return False
+    if reveal is None:
+        return False
+
+    line = await phrasing.default_say(reveal.key, **reveal.args)
+    channel = await _game_channel(guild)
+    if channel is None or not line:
+        # The stamp is already taken, so this night is spent either
+        # way. Logged loudly because both halves are a deployment
+        # problem rather than a game state: a server with no channel
+        # has not been initialized, and a missing line is a content
+        # file that shipped without one.
+        log.warning(
+            "Guild %s cannot be told about yesterday's ghost: channel=%s line=%s",
+            guild.id,
+            channel is not None,
+            reveal.key if line else "missing",
+        )
+        return False
+
+    await _post_quietly(channel, line)
+    return True
+
+
 @tasks.loop(time=dt_time(hour=0, minute=0, tzinfo=database.PACIFIC))
 async def nightly_job() -> None:
     """Midnight, Pacific. Softens grudges, then fires `on_midnight`.
@@ -851,15 +900,17 @@ async def nightly_job() -> None:
     threshold still climbs back toward neutral, whether or not that
     player turned up. See `database.apply_daily_recovery`.
 
-    The only thing listening on `on_midnight` is *Boo Who?*, and it is
-    blocked until the ghost system is built, so nothing is awarded here
-    yet. The hook fires anyway, because the bottle scatter and the
-    craving roll are both meant to.
+    **Three things per server, in this order**: the reveal of
+    yesterday's ghost, the `on_midnight` hook, and today's pick. The
+    order is the design's and it is load-bearing. The reveal reads the
+    day that ended, and *Boo Who?* - the only thing listening on
+    `on_midnight`, and the reason that hook has a listener at all -
+    names the ghost nobody guessed, which is a spoiler if it goes out
+    ahead of the reveal.
 
-    **The ghost is picked here too**, one server at a time, after the
-    hook. Nothing a player can see changes yet: the pick writes a row,
-    and the bedsheet that would tell somebody about it is part 2's next
-    piece.
+    All three run for every server whether or not they have anything to
+    say, and each swallows its own database failures, so one bad server
+    cannot cost the rest of them the night.
     """
     try:
         settled = await database.run_pending_recovery()
@@ -879,6 +930,7 @@ async def nightly_job() -> None:
         log.error("Nightly recovery failed; will retry at the next midnight")
 
     for guild in bot.guilds:
+        await _reveal_the_ghost(guild)
         # No player and no interaction: whatever listens here is looking at the
         # server rather than at somebody's action.
         await _fire(
@@ -8607,20 +8659,31 @@ async def qa_midnight(interaction: discord.Interaction) -> None:
     changes = await database.run_pending_recovery()
     await telemetry.recoveries(changes)
     mine = [c for c in changes if c.guild_id == interaction.guild_id]
-    await _fire(
+    # **The same three things the nightly job does, in the same order.**
+    # The whole point of this command is that the night happens on
+    # demand, so a changeover a tester triggers by hand and one that
+    # arrives at midnight have to be the same event - the acceptance
+    # tests for the reveal and for *Boo Who?* are both written against
+    # this command, and a QA server that advanced its clock and
+    # triggered midnight and still had no ghost would be untestable.
+    await _reveal_the_ghost(interaction.guild)
+    earned = await _fire(
         achievements.Context(guild_id=interaction.guild_id, hook="on_midnight"),
         guild=interaction.guild,
         announce=False,
     )
-    # The whole point of this command is that the night happens on
-    # demand, so it has to pick too - a QA server that advanced its
-    # clock and triggered midnight by hand and still had no ghost would
-    # be untestable.
     await _pick_the_ghost(interaction.guild)
     await qa.record(interaction, f"midnight: {len(mine)} score(s) recovered")
     lines = [f"Settled {len(mine)} recovering score(s) here."]
     lines += [f"- `{c.user_id}` {c.before} -> {c.after} on {c.day}" for c in mine[:10]]
     await interaction.followup.send(chr(10).join(lines), ephemeral=True)
+    # **Announced after the admin's reply, not instead of it.**
+    # `announce=False` cost nothing while `on_midnight` had no
+    # listeners; now *Boo Who?* is one, and an award the nightly job
+    # would post about has to be posted about here too or the QA server
+    # cannot see it happen. Held until the reply has gone out, which is
+    # the order `_fire`'s own note asks for.
+    await _announce_all(earned, guild=interaction.guild)
 
 
 @bot.tree.command(

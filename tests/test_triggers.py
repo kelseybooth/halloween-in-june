@@ -775,17 +775,14 @@ BLOCKED = [
     "unsticking_the_situation",
     "return_to_sender",
     "it_takes_a_village",
-    # *Getting into the Spirit* left on 12 November with the haunting
-    # and *Ghostbuster* with the spirit board, one release later: a
-    # first whisper is a use of the bedsheet and a right guess is a use
-    # of the board, so neither needed a predicate of its own. Getting
-    # away with it is the one still waiting, because it is the one that
-    # asks about a day rather than a command.
-    # *Boo Who?* joined the ghosts on 11 November, with drop 50's
-    # content. It is the first row here registered on `on_midnight`,
-    # which until now had no listeners at all - the award is for a day
-    # that ended a particular way, so there is no command to hang it on.
-    "boo_who",
+    # **All three ghost rows have gone**, the last of them on 12
+    # November with the reveal. *Getting into the Spirit* left with the
+    # haunting and *Ghostbuster* with the spirit board, neither needing
+    # a predicate of its own: a first whisper is a use of the bedsheet
+    # and a right guess is a use of the board. *Boo Who?* needed one,
+    # and took `on_midnight` from having no listeners at all to having
+    # exactly this - an award for how a day ended rather than for
+    # anything a player typed.
     "signed_sealed_delivered",
     "forwarding_address",
     # Three more on 30 October, when the ground floor's content shipped
@@ -980,21 +977,24 @@ def test_what_can_actually_be_earned():
     the way the ladder's five are exercised in `test_the_ladder`.
 
     **Sixty-three with the spirit board.** *Getting into the Spirit*
-    left the blocked list with the haunting and *Ghostbuster* leaves it
-    here, both for the same reason: what each asks about is a
+    left the blocked list with the haunting and *Ghostbuster* with the
+    board, both for the same reason: what each asks about is a
     successful use of a thing, and the code writes one. The sheet's use
     is the whisper being posted; the board's is a YES, and the board's
     other answers fire no hook at all - which is the contract that lets
     both predicates be `_used` with no condition of their own.
 
-    *Boo Who?* stays blocked, and is the last of the three. It asks
-    about a day that ended a particular way rather than about anything
-    a player did, so no use of anything can be the moment it comes
-    true.
+    **Sixty-four with the reveal**, and *Boo Who?* is unlike every row
+    above it. The other sixty-three become true inside a command, so
+    something is awake to notice. This one is true because of what
+    nobody did, which no command can be the moment of - so it listens
+    on `on_midnight`, which had no listeners at all until this, and it
+    is the only award in the game that names its earner through
+    `earners` because there is no actor to fall back to.
     """
     earnable = achievements.registered_ids() - set(BLOCKED) - set(BY_HAND)
 
-    assert len(earnable) == 63
+    assert len(earnable) == 64
 
 
 # --------------------------------------------------------------------------

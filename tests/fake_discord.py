@@ -255,7 +255,9 @@ class FakeMember:
     the player the award it was announcing.
     """
 
-    def __init__(self, user_id, *, dms_open=True, display_name=None, roles=()):
+    def __init__(
+        self, user_id, *, dms_open=True, display_name=None, username=None, roles=()
+    ):
         self.id = user_id
         self.mention = f"<@{user_id}>"
         # Only the QA commands read these, and they read the name only.
@@ -263,6 +265,14 @@ class FakeMember:
         # What a public line prints. Never the mention: a display name has to
         # be able to contain something mention-shaped without pinging.
         self.display_name = display_name or f"Player {user_id}"
+        # The Discord username, which the real object has and the ghost
+        # pick stores beside the display name: it is what the spirit
+        # board spells from when a display name has no A-Z in it at all.
+        # Read off a member rather than off an interaction, because the
+        # pick happens at midnight with nobody holding one - which is
+        # why nothing noticed this was missing until the changeover was
+        # driven end to end.
+        self.name = username or f"player{user_id}"
         self.dms_open = dms_open
         self.dms: list[str] = []
 
