@@ -1820,6 +1820,13 @@ class DailyGhost(Base):
     username: Mapped[str | None] = mapped_column(String(64), nullable=True)
     eligible: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     picked_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    # Null until the changeover has posted about this day, and the whole
+    # of the reveal's idempotence. The nightly job can run twice and
+    # `/qa-midnight` settles every night a server owes, so "have we
+    # already said who this was" has to be a question the database can
+    # answer - the same argument that makes a day with no ghost a row.
+    # Claimed in one statement by `claim_the_reveal`.
+    revealed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class Art(Base):
@@ -2056,6 +2063,14 @@ _LATER_COLUMNS: list[tuple[str, str, str]] = [
     # there is nothing to backfill: what those players typed was never
     # recorded anywhere.
     ("interaction_log", "typed", "TEXT"),
+    # The reveal's stamp, 12 November, and the first entry here for a
+    # table one release old. `daily_ghosts` shipped with the pick, so it
+    # is already in the live database and `create_all` will not look at
+    # it again - which is the drop 2 failure waiting in a new table
+    # rather than an old one. Nullable with no default, because null is
+    # what it means on every row already there: none of those days was
+    # revealed, and yesterday's is meant to be.
+    ("daily_ghosts", "revealed_at", "TIMESTAMP"),
 ]
 
 # `room_text.fragment` is deliberately *not* in that list. It joined the
@@ -6993,6 +7008,49 @@ async def claim_first_ghost(
         raise
 
 
+async def claim_the_reveal(
+    guild_id: int, day: date, *, now: datetime | None = None
+) -> bool:
+    """Take the right to post about `day`, once. True if this call got it.
+
+    **One statement, for the reason the first ghost's claim is.** The
+    nightly job can run twice and `/qa-midnight` settles every night a
+    server owes, so the only thing between a server and hearing
+    yesterday's name twice cannot be a read followed by a write:
+    `WHERE revealed_at IS NULL` is what makes the second caller come
+    away knowing it lost.
+
+    False for a day with no row at all, which is a day this server
+    never picked for and so has nothing to say about.
+
+    `now` is the server's clock rather than the wall clock, like every
+    other stamp in this file, so a QA server running a week ahead
+    stamps the day it thinks it is.
+    """
+    session_factory = _require_session()
+    stamped = _on_the_server_clock(
+        now if now is not None else await server_now(guild_id)
+    )
+    stmt = (
+        update(DailyGhost)
+        .where(
+            DailyGhost.guild_id == guild_id,
+            DailyGhost.day == day,
+            DailyGhost.revealed_at.is_(None),
+        )
+        .values(revealed_at=stamped)
+        .returning(DailyGhost.day)
+    )
+    try:
+        async with session_factory() as session:
+            claimed = (await session.execute(stmt)).scalar_one_or_none()
+            await session.commit()
+    except SQLAlchemyError:
+        log.exception("Failed to claim the reveal for %s in guild %s", day, guild_id)
+        raise
+    return claimed is not None
+
+
 async def record_daily_ghost(
     guild_id: int,
     day: date,
@@ -7077,6 +7135,43 @@ async def player_actions_on(
     except SQLAlchemyError:
         log.exception(
             "Failed to count %s by %s in guild %s", action, user_id, guild_id
+        )
+        raise
+
+
+async def named_the_ghost_on(guild_id: int, day: date) -> int:
+    """How many players named the ghost right on one Pacific day.
+
+    **The whole server rather than one player**, which is what makes
+    this a different query from `player_actions_on` and not an argument
+    to it: the reveal counts everybody who worked it out, and *Boo
+    Who?* is the same number being zero.
+
+    **Distinct players, not rows.** One guess a day each means the two
+    are the same number today, and the line the reveal posts counts
+    people - *{count} of you named them* - so a later change that let
+    somebody guess twice must not inflate it.
+
+    Rides `ix_interaction_log_server`, which is `(guild_id,
+    created_at)`. The player index starts with a `user_id` this
+    question does not have, and one server's rows for one day is a
+    small enough band to filter an action out of.
+    """
+    session_factory = _require_session()
+    start, end = pacific_day_bounds_utc(day)
+    stmt = select(func.count(InteractionLog.user_id.distinct())).where(
+        InteractionLog.guild_id == guild_id,
+        InteractionLog.action == BOARD_GUESS,
+        InteractionLog.outcome == SUCCESS,
+        InteractionLog.created_at >= start,
+        InteractionLog.created_at < end,
+    )
+    try:
+        async with session_factory() as session:
+            return (await session.execute(stmt)).scalar_one()
+    except SQLAlchemyError:
+        log.exception(
+            "Failed to count who named the ghost on %s in guild %s", day, guild_id
         )
         raise
 

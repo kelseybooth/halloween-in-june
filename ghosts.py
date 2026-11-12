@@ -36,9 +36,17 @@ the board gives one letter and one yes-or-no a day, per player - so the
 only way to the name is several players comparing what they were each
 given.
 
-What this does not do yet: the reveal at the changeover and *Boo Who?*,
-which are both about a day that has ended rather than a command
-somebody ran. See the drop 50 work order, part 2.
+**And the day gets an ending.** At the next changeover, before the new
+pick, `reveal_for` says what the channel should be told about the day
+that just closed: who the ghost was and how many players named them, or
+- for a ghost who never haunted - that somebody wore the sheet and
+nobody is going to be told who. A day nobody wore it is not mentioned
+at all, because there would be no name for the board to keep.
+
+*Boo Who?*, the award for haunting all day and getting away with it, is
+the other thing that reads a day rather than a command. It is not here:
+it lives in `triggers` with every other predicate, reads these rows
+through `database`, and asks this module for nothing.
 """
 
 from __future__ import annotations
@@ -108,6 +116,17 @@ FIRST = "ghost.first"
 # ghost's next command after they stop being it.
 ARRIVED = "ghost.new"
 GONE = "ghost.gone"
+
+# What the channel is told at the changeover about the day that ended,
+# and the difference between the three is the whole of the reveal's
+# judgement. A ghost who haunted is named, with the number of players
+# who worked it out. A ghost who never haunted is not named: the quiet
+# line says somebody wore the sheet and the board is keeping it to
+# itself, which is also why a day *nobody* wore it says nothing at all
+# - there would be no name to keep.
+REVEAL_NAMED = "ghost.reveal.named"
+REVEAL_NOBODY = "ghost.reveal.nobody"
+REVEAL_QUIET = "ghost.reveal.quiet"
 
 # The fixture the other half of the day is played on. It stands in the
 # Secret Library and is not takeable, so `/use spirit board` already
@@ -269,6 +288,86 @@ async def pick_for(
             pick.eligible,
         )
     return pick
+
+
+@dataclass(frozen=True)
+class Reveal:
+    """One line for the channel, as a defaults key and its arguments.
+
+    Shaped like `Answer` and deliberately not the same class. An answer
+    is private, goes to the player who pressed a button, and can be
+    worth an award. This is the server's, goes out with no interaction
+    behind it, and can never earn anybody anything.
+    """
+
+    key: str
+    args: dict = field(default_factory=dict)
+
+
+async def reveal_for(guild_id: int, *, now: datetime | None = None) -> Reveal | None:
+    """What to post about the day that just ended, or None to say nothing.
+
+    **Runs before `pick_for`, every changeover.** The two read
+    different rows - this one yesterday's, the pick today's - so the
+    order is not protecting against an overwrite today. It is the
+    design's order, and keeping to it means the reveal can never be
+    written against a row the pick has just decided.
+
+    Three silences, and they are three different things:
+
+    * **No row for yesterday.** This server was not playing part 2
+      then. Nothing happened, so nothing is announced.
+    * **A row with no ghost.** The pick looked and found too few
+      eligible players. Nobody wore the sheet, so the quiet line would
+      be untrue - it says the board is keeping a name to itself, and
+      there is no name.
+    * **Already revealed.** `claim_the_reveal` lost the race, and the
+      stamp is what stops a second changeover telling the channel the
+      same thing twice.
+
+    Past those: a ghost who never haunted gets the quiet line and is
+    not named, amended into the design on 11 November so that nobody is
+    called out for a day they did not play. A ghost who did haunt is
+    named, with the count of players who named them right or with the
+    line that says nobody did.
+
+    **The claim is taken before the line is handed back**, so a caller
+    that then fails to post has spent the night's reveal. That is the
+    cheaper failure. The other order loses the stamp instead of the
+    post, and the next changeover names yesterday's ghost again, a day
+    after the day it was about.
+    """
+    drop = await resolve.current_drop(guild_id)
+    if drop is resolve.NO_GAME or drop is None or drop < FROM_DROP:
+        return None
+
+    yesterday = await database.server_today(guild_id) - timedelta(days=1)
+    row = await database.daily_ghost(guild_id, yesterday)
+    if row is None or row.user_id is None:
+        return None
+    if not await database.claim_the_reveal(guild_id, yesterday, now=now):
+        log.info("Guild %s had already revealed the ghost for %s", guild_id, yesterday)
+        return None
+
+    if not await database.hauntings_on(guild_id, row.user_id, yesterday):
+        log.info(
+            "Guild %s: the ghost for %s never haunted, so the name is kept",
+            guild_id,
+            yesterday,
+        )
+        return Reveal(REVEAL_QUIET)
+
+    named = await database.named_the_ghost_on(guild_id, yesterday)
+    log.info(
+        "Guild %s: revealing %s as the ghost for %s, named by %d",
+        guild_id,
+        row.user_id,
+        yesterday,
+        named,
+    )
+    if not named:
+        return Reveal(REVEAL_NOBODY, {"name": row.display_name})
+    return Reveal(REVEAL_NAMED, {"name": row.display_name, "count": named})
 
 
 async def hand_over(

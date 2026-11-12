@@ -172,6 +172,13 @@ SECOND_PLACE_CAT_CLIMBS = 3
 HEAVY_LIFTING_MOVES = 4
 HEAD_FOR_HEIGHTS_CLIMBS = 25
 
+# *Boo Who?*: haunting this many times in a day and still not being
+# named. Three is the design's, and it is a fact about the game rather
+# than about the server - unlike `ghost_min_players`, which is a knob
+# because how many people a server can muster is not something the
+# design gets to decide.
+BOO_WHO_HAUNTS = 3
+
 
 # --------------------------------------------------------------------------
 # The 43-hour day
@@ -999,7 +1006,74 @@ the_feline_collection = _group(
 
 
 # --------------------------------------------------------------------------
-# The blocked seven
+# Boo Who?
+#
+# The only condition in this file about a day rather than about an
+# action, and the only listener `on_midnight` has. What is being
+# rewarded is what nobody else did, so there is no command a player
+# could type that is the moment it comes true.
+# --------------------------------------------------------------------------
+
+
+async def _yesterdays_quiet_ghost(guild_id: int) -> int | None:
+    """Yesterday's ghost, if they haunted all day and nobody named them.
+
+    **Both halves of the award in one place**, because the predicate
+    and `earners` ask the same question and must not be able to
+    disagree: one saying the award is due while the other hands back
+    nobody is a row written for the wrong player, or for none.
+
+    **Yesterday is `server_today` minus a day, not `context.when`.**
+    The context carries `server_now`, which is naive UTC - and a UTC
+    date and a Pacific date are the same date for only sixteen hours
+    out of twenty-four. Read off the context, `/qa-midnight` run at
+    five in the afternoon would ask about a day that has not happened
+    yet and award nothing, on a server whose whole purpose is testing
+    this by hand.
+
+    It asks `database` for three things and `ghosts` for nothing, which
+    is the boundary this file keeps everywhere: the trigger registry
+    does not depend on the module whose awards it holds.
+    """
+    day = await database.server_today(guild_id) - timedelta(days=1)
+    row = await database.daily_ghost(guild_id, day)
+    if row is None or row.user_id is None:
+        return None
+    if await database.hauntings_on(guild_id, row.user_id, day) < BOO_WHO_HAUNTS:
+        return None
+    if await database.named_the_ghost_on(guild_id, day):
+        return None
+    return row.user_id
+
+
+async def boo_who(context: Context) -> bool:
+    """Haunted at least three times yesterday, and named by nobody.
+
+    A right guess by one player is enough to lose it. That is the
+    design: the sheet is a disguise and the award is for keeping it on,
+    so being worked out once is being worked out.
+    """
+    return (await _yesterdays_quiet_ghost(context.guild_id)) is not None
+
+
+async def _the_quiet_ghost(context: Context) -> tuple[int, ...]:
+    """Who it goes to: yesterday's ghost, who is nobody's actor.
+
+    `earners` here for a different reason from the band's two. Theirs
+    name players who are not the one running the command; this hook has
+    no command and no player at all - `on_midnight` fires with
+    `user_id` None - so without this the award would be written against
+    a null id, which is the error `_award` logs and refuses.
+    """
+    ghost = await _yesterdays_quiet_ghost(context.guild_id)
+    return (ghost,) if ghost is not None else ()
+
+
+# --------------------------------------------------------------------------
+# The blocked ones
+#
+# Uncounted, like the list in the module docstring: the number has been
+# a row out of date twice now, most recently when *Boo Who?* left.
 # --------------------------------------------------------------------------
 
 
@@ -1715,14 +1789,19 @@ def register_all() -> None:
     # `test_asking_the_board_earns_nothing` exists: the guard against
     # that is a test, because the predicate cannot tell the two apart.
     add("ghostbuster", "on_use", _used(SPIRIT_BOARD))
-    # **`on_midnight`, and the first thing to listen there.** The other
-    # two ghost rows are earned by a command - a first haunting, a first
-    # right guess - but *Boo Who?* asks about a day that is over:
+    # **`on_midnight`, and the only thing that listens there.** The
+    # other two ghost rows are earned by a command - a first haunting, a
+    # first right guess - and this one asks about a day that is over:
     # haunted at least three times and named by nobody. Nothing a
     # player types can be the moment it comes true, because the thing
-    # being rewarded is what nobody did, so it waits for the changeover
-    # that ends the day.
-    add("boo_who", "on_midnight", _blocked("the ghost system"))
+    # being rewarded is what nobody else did, so it waits for the
+    # changeover that ends the day.
+    #
+    # **The only award in the game with `earners` and no actor.** The
+    # band's two go to players who are not the one running the command;
+    # this hook has no command at all, so `_the_quiet_ghost` is not an
+    # alternative to the actor but the only way there is one.
+    add("boo_who", "on_midnight", boo_who, earners=_the_quiet_ghost)
     add("breaking_into_the_halloween_candy", "on_use", _used(CANDY))
     # **`on_take`, not `on_use`.** `/use trash can` opens the menu for
     # throwing something away; taking the trash out is `/take trash
