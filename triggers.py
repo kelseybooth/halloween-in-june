@@ -74,6 +74,12 @@ READING_GLASSES = "reading_glasses"
 BABY_MONITOR = "baby_monitor"
 COSTUME = "costume"
 CANDY = "candy"
+
+# The ghost's costume. Named here like every other thing this
+# file matches on, rather than imported from `ghosts` - which
+# would make the trigger registry depend on the module whose awards
+# it holds.
+BEDSHEET = "bedsheet"
 PUMPKINS = "pumpkins"
 CARVING_TOOLS = "carving_tools"
 CAT_COLLAR = "cat_collar"
@@ -1686,7 +1692,12 @@ def register_all() -> None:
     # completes the pair, and the same use feeds both lists.
     add("accompanist", "on_use", accompanist, earners=_accompanists)
     add("bandleader", "on_use", bandleader, earners=_bandleaders)
-    add("getting_into_the_spirit", "on_use", _blocked("the ghost system"))
+    # **Off the blocked list with the haunting.** A successful
+    # `/use bedsheet` is a use of the bedsheet like any other, because
+    # `record_haunting` writes one - so this needs no predicate of its
+    # own, and *the first* haunting is free: the award is idempotent
+    # per player, so the second one announces nothing.
+    add("getting_into_the_spirit", "on_use", _used(BEDSHEET))
     add("ghostbuster", "on_use", _blocked("the ghost system"))
     # **`on_midnight`, and the first thing to listen there.** The other
     # two ghost rows are earned by a command - a first haunting, a first

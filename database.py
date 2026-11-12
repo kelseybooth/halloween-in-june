@@ -270,6 +270,20 @@ GUARDED = "guarded"
 # history.
 GHOST_PICKED = "ghost_picked"
 
+# One row per haunting, and the only place a whisper is kept. The
+# design trades the Story Bible's no-moderation for this: players
+# never learn who posted a whisper, and an admin can find out, so
+# somebody who uses an anonymous line to be unkind is not anonymous
+# to the people who have to deal with it. `detail` carries the text
+# and `user_id` the author.
+#
+# **Also the count two later pieces read.** *Boo Who?* wants three
+# hauntings in a day and the spirit board wants to know whether the
+# ghost has haunted at all, which is one filter on
+# `ix_interaction_log_player` - the index the mood roll already uses
+# for exactly this shape of question.
+HAUNTED = "haunted"
+
 # One row per restock placement. `detail` says what landed where and how
 # much of it is now there, which answers both of the questions the
 # scatter raises: whether the spice box fills and drains at a rate
@@ -5479,6 +5493,15 @@ CONFIG_KEYS: dict[str, tuple[int, str]] = {
     # not you - so the day is skipped rather than given away. A test
     # server with two testers lowers this to see the system at all,
     # which is exactly what `captive_audience_size` exists for too.
+    # **Three hundred characters, where Discord would allow four
+    # thousand.** A whisper is a frame somebody else reads in a room
+    # thread - *a sheet-draped shape drifts through the door and
+    # whispers "..."* - and the frame stops being readable long before
+    # Discord stops accepting it.
+    "haunt_max_chars": (
+        300,
+        "The longest whisper a ghost may leave in a room.",
+    ),
     "ghost_min_players": (
         3,
         "How many players must have been active the day before for a "
@@ -6897,6 +6920,38 @@ async def record_daily_ghost(
             return wrote
     except SQLAlchemyError:
         log.exception("Failed to record the ghost for %s in guild %s", day, guild_id)
+        raise
+
+
+async def hauntings_on(guild_id: int, user_id: int, day: date) -> int:
+    """How many times this player haunted on one Pacific day.
+
+    **A read of `interaction_log` to decide something**, which this
+    file otherwise allows only the mood roll. It is safe here for a
+    reason the general case is not: a haunting has never existed
+    before this release, so there is no incomplete past to count
+    across - every haunting there has ever been is a row.
+
+    One filter on `ix_interaction_log_player`, which is
+    `(guild_id, user_id, action, created_at)` - the index the mood
+    roll already uses for the same shape of question.
+    """
+    session_factory = _require_session()
+    start, end = pacific_day_bounds_utc(day)
+    stmt = select(func.count()).where(
+        InteractionLog.guild_id == guild_id,
+        InteractionLog.user_id == user_id,
+        InteractionLog.action == HAUNTED,
+        InteractionLog.created_at >= start,
+        InteractionLog.created_at < end,
+    )
+    try:
+        async with session_factory() as session:
+            return (await session.execute(stmt)).scalar_one()
+    except SQLAlchemyError:
+        log.exception(
+            "Failed to count hauntings by %s in guild %s", user_id, guild_id
+        )
         raise
 
 
