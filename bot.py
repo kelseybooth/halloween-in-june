@@ -1240,10 +1240,25 @@ async def _hand_over_the_bedsheet(interaction: discord.Interaction) -> None:
     Ephemeral, always. Who is wearing the sheet is the whole game, so
     a line in a room thread would end it - and the two sentences are
     written in the second person for one reader.
+
+    **The first ghost is asked about first**, on the same hook and for
+    the same reason: it is news about the sheet and it belongs to no
+    verb. It is also why this is one function rather than two. The two
+    questions are mutually exclusive - a server that has never had a
+    ghost has nobody holding a sheet to reconcile - so whichever one
+    answers is the only line there is to say, and a player can never
+    be told two things about the same sheet in one command.
     """
     if interaction.guild_id is None:
         return
-    key = await ghosts.hand_over(interaction.guild_id, interaction.user.id)
+    key = await ghosts.first_ghost(
+        interaction.guild_id,
+        interaction.user.id,
+        display_name=interaction.user.display_name,
+        username=interaction.user.name,
+    )
+    if key is None:
+        key = await ghosts.hand_over(interaction.guild_id, interaction.user.id)
     if key is None:
         return
     line = await phrasing.default_say(key)
