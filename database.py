@@ -262,6 +262,14 @@ CATNIP = "catnip"
 ARMS_FULL = "arms_full"
 GUARDED = "guarded"
 
+# One row per changeover that decided who the ghost is, including the
+# days it decided nobody is. `detail` carries the eligible count and the
+# minimum beside it, because the two are only interesting together: a
+# run of skipped days is either a quiet server or a minimum set too
+# high, and the row has to say which without a join to the config
+# history.
+GHOST_PICKED = "ghost_picked"
+
 # One row per restock placement. `detail` says what landed where and how
 # much of it is now there, which answers both of the questions the
 # scatter raises: whether the spice box fills and drains at a rate
@@ -1743,6 +1751,42 @@ class CravingTally(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
     days: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_credited_day: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+
+class DailyGhost(Base):
+    """Who the ghost was on one day, on one server, and who could have been.
+
+    **Stored rather than derived**, for the reason `craving_days` is:
+    a derived ghost would move under the players if the eligible set
+    changed mid-day, and the one thing this game cannot survive is the
+    answer moving while people guess. Here it is worse than the
+    craving, because the ghost is a person who has already been told
+    they are the ghost.
+
+    **The names are columns, not a join.** Every clue the spirit board
+    gives out is spelled from the ghost's display name, and a player
+    who renames themselves at noon must not scramble the letters the
+    board has already handed out. `username` is the fallback for a
+    display name with no A-Z in it at all.
+
+    **A day with no ghost is a row.** `user_id` null means the
+    changeover looked and found too few eligible players, which is a
+    decision worth keeping: it is what makes the pick idempotent, and
+    `eligible` is what says whether the minimum wants lowering.
+    """
+
+    __tablename__ = "daily_ghosts"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # Discord caps a display name at 32 characters and a username at
+    # 32; the column is wider so that a future cap cannot truncate a
+    # name the board then spells wrongly.
+    display_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    username: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    eligible: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    picked_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
 class Art(Base):
@@ -5430,6 +5474,16 @@ CONFIG_KEYS: dict[str, tuple[int, str]] = {
         "How many different toys have to be played with in one room within "
         "an hour for everybody who played to earn Playgroup.",
     ),
+    # **Three, and a quiet server is the whole reason it is tunable.**
+    # With two eligible players the guess answers itself - whoever is
+    # not you - so the day is skipped rather than given away. A test
+    # server with two testers lowers this to see the system at all,
+    # which is exactly what `captive_audience_size` exists for too.
+    "ghost_min_players": (
+        3,
+        "How many players must have been active the day before for a "
+        "ghost to be picked at all. Below this, the day has no ghost.",
+    ),
     "ivy_fall_percent": (
         10,
         "The percent chance of falling when climbing down the ivy from the "
@@ -6710,6 +6764,140 @@ async def get_config_raw(guild_id: int, key: str) -> str | None:
     session_factory = _require_session()
     async with session_factory() as session:
         return await session.scalar(_live_value(guild_id, key))
+
+
+async def players_active_on(guild_id: int, day: date) -> list[int]:
+    """Everyone who was in the house and ran a command on one Pacific day.
+
+    **Three conditions, and the join is the third.** A row in
+    `interaction_log` says somebody did something; `actor` says it was
+    a player rather than the world; and the join to `player_game_state`
+    says they have entered the house, which a log row alone does not -
+    `/start` and a refusal both write one.
+
+    Refusals count. A player who spent the evening being told the
+    cabinet is locked was here, and the question this answers is who
+    was here.
+
+    **The second read of `interaction_log` the game makes to decide
+    anything**, after the mood roll's count of recent pets - and the
+    first that would be wrong if the log were incomplete rather than
+    merely short. It is safe because it only ever asks about
+    yesterday: the log has been written generously since long before
+    drop 50, and a day with no rows yields nobody, which the caller
+    reads as a day with too few players and skips.
+    """
+    session_factory = _require_session()
+    start, end = pacific_day_bounds_utc(day)
+    stmt = (
+        select(InteractionLog.user_id)
+        .join(
+            PlayerGameState,
+            (PlayerGameState.user_id == InteractionLog.user_id)
+            & (PlayerGameState.guild_id == InteractionLog.guild_id),
+        )
+        .where(
+            InteractionLog.guild_id == guild_id,
+            InteractionLog.actor == PLAYER,
+            InteractionLog.user_id.is_not(None),
+            InteractionLog.created_at >= start,
+            InteractionLog.created_at < end,
+        )
+        .distinct()
+    )
+    try:
+        async with session_factory() as session:
+            rows = await session.execute(stmt)
+            return sorted(row[0] for row in rows)
+    except SQLAlchemyError:
+        log.exception("Failed to read who was active on %s in guild %s", day, guild_id)
+        raise
+
+
+class GhostOfTheDay(NamedTuple):
+    """One row of `daily_ghosts`. `user_id` is None on a day with none."""
+
+    day: date
+    user_id: int | None
+    display_name: str | None
+    username: str | None
+    eligible: int
+
+
+async def daily_ghost(guild_id: int, day: date) -> GhostOfTheDay | None:
+    """This server's ghost row for one day, or None if it has not picked yet.
+
+    A row whose `user_id` is None is not None: it is the server having
+    decided there is no ghost today, which is the answer the caller
+    needs in order not to pick again.
+    """
+    session_factory = _require_session()
+    stmt = select(DailyGhost).where(
+        DailyGhost.guild_id == guild_id, DailyGhost.day == day
+    )
+    try:
+        async with session_factory() as session:
+            row = (await session.execute(stmt)).scalar_one_or_none()
+    except SQLAlchemyError:
+        log.exception("Failed to read the ghost for %s in guild %s", day, guild_id)
+        raise
+    if row is None:
+        return None
+    return GhostOfTheDay(
+        day=row.day,
+        user_id=row.user_id,
+        display_name=row.display_name,
+        username=row.username,
+        eligible=row.eligible,
+    )
+
+
+async def record_daily_ghost(
+    guild_id: int,
+    day: date,
+    *,
+    user_id: int | None,
+    display_name: str | None,
+    username: str | None,
+    eligible: int,
+    now: datetime | None = None,
+) -> bool:
+    """Write one day's pick. True if this call wrote it, False if it was taken.
+
+    `ON CONFLICT DO NOTHING` rather than an upsert, and the return value
+    is the whole point: two changeovers racing must not both believe
+    they picked, because each would go on to tell a different player
+    they are the ghost. The row that landed first stands.
+    """
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    stmt = (
+        insert(DailyGhost)
+        .values(
+            guild_id=guild_id,
+            day=day,
+            user_id=user_id,
+            display_name=display_name,
+            username=username,
+            eligible=eligible,
+            picked_at=_on_the_server_clock(
+                now if now is not None else await server_now(guild_id)
+            ),
+        )
+        .on_conflict_do_nothing(
+            index_elements=[DailyGhost.guild_id, DailyGhost.day]
+        )
+        .returning(DailyGhost.day)
+    )
+    try:
+        async with session_factory() as session:
+            result = await session.execute(stmt)
+            wrote = result.scalar_one_or_none() is not None
+            await session.commit()
+            return wrote
+    except SQLAlchemyError:
+        log.exception("Failed to record the ghost for %s in guild %s", day, guild_id)
+        raise
 
 
 async def get_setting(guild_id: int, key: str) -> int:

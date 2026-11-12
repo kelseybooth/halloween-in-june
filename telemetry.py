@@ -33,6 +33,7 @@ from database import (  # noqa: F401 - the vocabulary, re-exported for call site
     DROP,
     FEED,
     FULL_HANDS,
+    GHOST_PICKED,
     GUARDED,
     HINT,
     KEY_DROPPED,
