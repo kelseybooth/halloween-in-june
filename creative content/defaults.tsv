@@ -208,6 +208,7 @@ ghost.haunt.modal.label	What do you whisper?
 ghost.haunt.modal.placeholder	Players will see: A sheet-draped shape drifts through the door and whispers "…"
 ghost.haunt.public	A sheet-draped shape drifts through the door and whispers "{whisper}"
 ghost.haunt.private	You drift into the {room} and whisper "{whisper}".
+ghost.haunt.private.all	You drift hither and thither and whisper "{whisper}".
 board.menu	The planchette shivers under your fingertips. Ask the board a question, or name a name.
 board.ask.clue	You rest your fingertips on the planchette. It circles the board {count}, slowly, then slides to {letter} and stops.
 board.ask.ghost	You rest your fingertips on the planchette. It slides to Y, then O, then U, and stops. You could swear the board is laughing.

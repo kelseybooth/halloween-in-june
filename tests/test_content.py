@@ -171,7 +171,13 @@ def test_the_shipped_content_parses():
     # is part 2's code - and the file is content with that. A default
     # nobody asks for prints nothing; it is the other direction, a
     # key a caller wants and the file has not got, that fails.
-    assert len(c.defaults) == 225
+    # And one on 12 November, for the haunt picker's *every room*: the
+    # private line could not be shared with the single-room one, which
+    # says *you drift into the {room}*. Filling that with "house" would
+    # have been a sentence about where the ghost went rather than how
+    # many rooms heard it, and the public line in each thread is the
+    # same either way.
+    assert len(c.defaults) == 226
     # Ten since 31 October: the ground floor arrives in two halves, and
     # 25 sits below the ceiling rather than above it, which is why
     # nothing else in the suite noticed.
