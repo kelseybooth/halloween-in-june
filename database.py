@@ -6875,6 +6875,105 @@ async def daily_ghost(guild_id: int, day: date) -> GhostOfTheDay | None:
     )
 
 
+async def ever_had_a_ghost(guild_id: int) -> bool:
+    """Has this server ever had a ghost - on any day, not just today.
+
+    **The marker the first ghost is chosen against**, and it is this
+    table rather than a flag of its own because this table is Part 2's:
+    every server begins with no rows in it, so "nobody has been the
+    ghost here yet" needs nothing stored and nothing migrated.
+
+    A row whose `user_id` is None does not count. A day the pick
+    skipped for want of players is a day with no ghost, and a server
+    that has only ever skipped has still never had one - which is the
+    answer the first-ghost rule needs, or a quiet server would lose its
+    one unmissable moment to a night three players were not around.
+    """
+    session_factory = _require_session()
+    stmt = select(func.count()).where(
+        DailyGhost.guild_id == guild_id, DailyGhost.user_id.is_not(None)
+    )
+    try:
+        async with session_factory() as session:
+            return (await session.execute(stmt)).scalar_one() > 0
+    except SQLAlchemyError:
+        log.exception("Failed to ask whether guild %s has had a ghost", guild_id)
+        raise
+
+
+async def claim_first_ghost(
+    guild_id: int,
+    day: date,
+    *,
+    user_id: int,
+    display_name: str,
+    username: str,
+    now: datetime | None = None,
+) -> bool:
+    """Make this player today's ghost, if nobody else already is.
+
+    True if this call claimed it. **The claim is atomic in one
+    statement**, which is what the first ghost needs and
+    `record_daily_ghost` does not: two players walking into the library
+    in the same second would both have read an empty table, and the
+    loser of that race must come away knowing they lost rather than
+    believing they are the ghost.
+
+    Three cases, and the one statement covers all three. No row for
+    today: the insert lands. A row for today that picked nobody - the
+    pick ran before anyone entered - is taken over, because a skipped
+    day is a day with no ghost and this is the day the first one
+    arrives. A row for today that already names somebody is left
+    exactly alone, and `DO UPDATE ... WHERE user_id IS NULL` is the
+    whole of that: the update matches no row, the statement returns
+    nothing, and this call reports False.
+
+    `eligible` is 1 - the one player who walked in. The minimum does
+    not apply to this pick, so the count is not a measurement of
+    anything; the log row says `first ghost` and that is where the
+    difference is kept.
+    """
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    stamped = _on_the_server_clock(
+        now if now is not None else await server_now(guild_id)
+    )
+    stmt = (
+        insert(DailyGhost)
+        .values(
+            guild_id=guild_id,
+            day=day,
+            user_id=user_id,
+            display_name=display_name,
+            username=username,
+            eligible=1,
+            picked_at=stamped,
+        )
+        .on_conflict_do_update(
+            index_elements=[DailyGhost.guild_id, DailyGhost.day],
+            set_={
+                "user_id": user_id,
+                "display_name": display_name,
+                "username": username,
+                "picked_at": stamped,
+            },
+            where=DailyGhost.user_id.is_(None),
+        )
+        .returning(DailyGhost.day)
+    )
+    try:
+        async with session_factory() as session:
+            result = await session.execute(stmt)
+            claimed = result.scalar_one_or_none() is not None
+            await session.commit()
+            return claimed
+    except SQLAlchemyError:
+        log.exception(
+            "Failed to claim the first ghost for %s in guild %s", day, guild_id
+        )
+        raise
+
+
 async def record_daily_ghost(
     guild_id: int,
     day: date,

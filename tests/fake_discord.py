@@ -383,6 +383,11 @@ class FakeInteraction:
             id=user_id,
             mention=f"<@{user_id}>",
             display_name=f"Player {user_id}",
+            # The Discord username, which is not the display name and
+            # is the spirit board's fallback when a display name has no
+            # letters in it. Here so the first ghost can be stored with
+            # both, the way the nightly pick stores both.
+            name=f"player{user_id}",
             # The QA commands read role names and nothing else.
             roles=[SimpleNamespace(name=r) for r in roles],
             __str__=lambda: f"Player {user_id}",

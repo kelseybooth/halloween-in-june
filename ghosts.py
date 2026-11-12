@@ -83,6 +83,19 @@ LIBRARY_FOUND = "library_found"
 # async content lookup on a path that runs after every command.
 FROM_DROP = 50
 
+# **Said once per server, ever.** The line the very first ghost gets
+# instead of `ARRIVED`, because they are not being told about a pick
+# that happened at midnight - the sheet slides off a shelf in front of
+# them.
+#
+# It is written for the oak: *as you climb in*. On a test server and on
+# beta that is always true, because the skeleton keys hang inside the
+# library and the only way to a first entry is up the tree. On QA a
+# tester who got in through the cabinet during Part 1 and walks back
+# through it reads a line about climbing. Flagged rather than rewritten,
+# because the writers' line is right for every server players will see.
+FIRST = "ghost.first"
+
 # Said on the ghost's next command after the pick, and on the old
 # ghost's next command after they stop being it.
 ARRIVED = "ghost.new"
@@ -257,6 +270,92 @@ async def hand_over(
         return GONE
     return None
 
+
+async def first_ghost(
+    guild_id: int,
+    user_id: int,
+    *,
+    display_name: str,
+    username: str,
+    now: datetime | None = None,
+) -> str | None:
+    """The one pick that is not random: whoever reaches the library first.
+
+    Returns the defaults key to say to them, or None if this is not
+    that moment. The sheet is in their hands by the time it returns.
+
+    **The condition is "has this server ever had a ghost", not "has
+    anybody found the library".** Those are the same question on every
+    server players will ever see - both parts launch together there, so
+    the first entry and the start of the ghost system are the same
+    event - and they are different on QA, where Part 1 was tested on
+    its own for days. A library found during that testing must not
+    spend the server's one unmissable moment, and `daily_ghosts` is
+    the table that cannot know about it: it is Part 2's, and every
+    server starts with no rows in it. So nothing is stored for this and
+    nothing is wiped.
+
+    **It asks about entry, not discovery.** A tester who found the
+    library during Part 1 and walks back into it still triggers it,
+    which is the behaviour QA needs: the first thing anybody does in
+    the library after the system is live is the thing that starts it.
+    It also means a player standing in the library when the drop
+    advances starts it on their next command, which is the same
+    sentence and the same truth.
+
+    A day the nightly pick skipped is taken over rather than left
+    alone, because a day with nobody in it is a day with no ghost -
+    see `database.claim_first_ghost`, where that is one `WHERE`.
+
+    The names are the ones the player has right now, passed in by the
+    caller from the member who just ran the command. That is both the
+    most current source and the only one that needs no cache lookup:
+    unlike the nightly pick, this player is demonstrably here.
+    """
+    drop = await resolve.current_drop(guild_id)
+    if drop is resolve.NO_GAME or drop is None or drop < FROM_DROP:
+        return None
+
+    # First, because it is the cheap one and because it is false exactly
+    # once per server. Every command after that first ghost exists
+    # stops here without reading a room.
+    if await database.ever_had_a_ghost(guild_id):
+        return None
+
+    state = await database.get_game_state(user_id, guild_id)
+    if state is None or state.current_room != LIBRARY:
+        return None
+
+    today = await database.server_today(guild_id)
+    claimed = await database.claim_first_ghost(
+        guild_id,
+        today,
+        user_id=user_id,
+        display_name=display_name,
+        username=username,
+        now=now,
+    )
+    if not claimed:
+        # Somebody else walked in during this command, or the night's
+        # pick landed between the two reads above. Theirs stands, and
+        # this player is told nothing - which is correct: nothing
+        # happened to them.
+        log.info(
+            "Guild %s already had a ghost by the time %s reached the library",
+            guild_id,
+            user_id,
+        )
+        return None
+
+    await database.place_in_hands(guild_id, user_id, BEDSHEET, now=now)
+    await telemetry.system(
+        guild_id,
+        telemetry.GHOST_PICKED,
+        user_id=user_id,
+        detail=f"day={today} first ghost, no minimum",
+    )
+    log.info("The first ghost in guild %s is %s", guild_id, user_id)
+    return FIRST
 
 async def rooms_to_haunt(guild_id: int, user_id: int) -> list[str]:
     """The rooms this ghost could drift into, in the house's own order.
