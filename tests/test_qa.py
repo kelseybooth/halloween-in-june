@@ -409,6 +409,119 @@ async def test_midnight_announces_what_it_awarded(testing):
     assert any("Boo Who?" in line for line in halloween.posted)
 
 
+def nowhere_to_post(monkeypatch):
+    """A server the game has no channel in.
+
+    The twin of the helper in `test_the_reveal`, kept local rather than
+    imported across test modules. Patched rather than arranged, because
+    a stale id is not this: `_game_channel` falls back to finding
+    #halloween by name, so both halves have to fail for there to be
+    nowhere to post.
+    """
+
+    async def gone(guild):
+        return None
+
+    monkeypatch.setattr(bot, "_game_channel", gone)
+
+
+def hooks_fired(monkeypatch):
+    """Every hook this command fires, in order, still doing its work."""
+    fired = []
+    real = bot._fire
+
+    async def recording(context, **kwargs):
+        fired.append(context.hook)
+        return await real(context, **kwargs)
+
+    monkeypatch.setattr(bot, "_fire", recording)
+    return fired
+
+
+async def test_midnight_withholds_the_award_when_the_reveal_could_not_post(
+    testing, monkeypatch
+):
+    """**Parity with the nightly job, which is what the comment over
+    this code claims.** The night gates `on_midnight` on the reveal
+    having got out, so *Boo Who?* cannot name the ghost by way of an
+    achievement when the board never named them at all. This command is
+    where that behaviour is rehearsed, so the gate has to be here too
+    or the rehearsal exercises a path production does not run.
+    """
+    _, guild, _, _ = testing
+    await a_ghost_yesterday(hauntings=3)
+    nowhere_to_post(monkeypatch)
+
+    await bot.qa_midnight.callback(qa_call(guild, "qa-midnight"))
+
+    assert "boo_who" not in await database.player_achievements_of(TEST_GUILD, BOB)
+
+
+async def test_midnight_skips_the_hook_when_the_reveal_could_not_post(
+    testing, monkeypatch
+):
+    """The same seam from the other side: not *no award* but *the hook
+    never ran*, which is what the gate does and what any predicate
+    added to `on_midnight` later would depend on."""
+    _, guild, _, _ = testing
+    fired = hooks_fired(monkeypatch)
+    await a_ghost_yesterday(hauntings=3)
+    nowhere_to_post(monkeypatch)
+
+    await bot.qa_midnight.callback(qa_call(guild, "qa-midnight"))
+
+    assert "on_midnight" not in fired
+
+
+async def test_midnight_says_when_it_skipped_the_hook(testing, monkeypatch):
+    """**A silent gate on a QA command is a bug report waiting to be
+    filed.** A tester who triggers the night and sees no award has to be
+    able to tell "nobody earned it" from "the reveal could not post" -
+    and on a test server the second one is fixable in a minute, as soon
+    as somebody knows that is what happened.
+    """
+    _, guild, _, _ = testing
+    await a_ghost_yesterday(hauntings=3)
+    nowhere_to_post(monkeypatch)
+    call = qa_call(guild, "qa-midnight")
+
+    await bot.qa_midnight.callback(call)
+
+    assert any("skipped" in (text or "") for text, _ in call.sent)
+
+
+async def test_midnight_still_picks_a_ghost_when_the_reveal_could_not_post(
+    testing, monkeypatch
+):
+    """Today's pick reads a different day from the reveal, so a reveal
+    that could not post is no reason for the server to spend today with
+    no ghost in it."""
+    _, guild, _, _ = testing
+    await a_ghost_yesterday()
+    nowhere_to_post(monkeypatch)
+
+    await bot.qa_midnight.callback(qa_call(guild, "qa-midnight"))
+
+    today = await database.server_today(TEST_GUILD)
+    assert await database.daily_ghost(TEST_GUILD, today) is not None
+
+
+async def test_a_quiet_night_still_fires_the_hook_here(testing, monkeypatch):
+    """**The over-gating guard, and the reason this is not one line.**
+    Nothing to reveal is not a failure to reveal it. A server with no
+    row for yesterday has no name to give away, and a hook that only
+    fired on interesting nights would be a worse bug than the one being
+    fixed - every other `on_midnight` listener would go quiet with it.
+    """
+    _, guild, _, _ = testing
+    fired = hooks_fired(monkeypatch)
+    await database.set_setting(TEST_GUILD, resolve.DROP_KEY, LAST_DROP)
+
+    await bot.qa_midnight.callback(qa_call(guild, "qa-midnight"))
+
+    assert "on_midnight" in fired
+
+
 async def test_clearing_cooldowns_lets_the_bed_be_fluffed_again(testing):
     _, guild, halloween, _ = testing
     bob = FakeInteraction(BOB, TEST_GUILD, guild=guild, channel=halloween)
