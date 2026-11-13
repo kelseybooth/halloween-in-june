@@ -45,6 +45,13 @@ log = logging.getLogger(__name__)
 SERVER_STATES = {"stairs_repaired", "stairs_upper", "house_unlocked", "collar_on"}
 PLAYER_STATES = {
     "has_key",
+    # **Not a door any more.** It once meant "the cabinet stands open
+    # for you", which made one piece of furniture open for one player
+    # and shut for another in the same room. The cabinet is locked
+    # behind whoever goes through it now, so both sides ask about the
+    # key instead - and this is left meaning the only thing it was ever
+    # really recording: that this player has been through before. It
+    # picks the line they read and nothing else.
     "passage_open",
     "library_found",
     "drawer_unjammed",

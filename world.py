@@ -710,10 +710,25 @@ async def states_for_exit(guild_id: int, user_id: int) -> set[str]:
 def exit_refused_by(thing_id: str, held: set[str]) -> bool:
     """Whether this exit is shut for a player holding these states.
 
-    Three doors, and the front one is not like the other two. The
-    cabinet and the passage are shut per player, because the discovery
-    is the content; the house is shut for everybody at once and opens
-    for everybody at once, so the state behind it is the server's.
+    **Two locked doors, and they are locked in different ways.** The
+    front door is opened once, by one player, for everybody and for
+    good: the house opening is the server's story, so the state behind
+    it is the server's and a player who never held the brass key walks
+    straight in afterwards.
+
+    The cabinet is never opened at all. It is unlocked, passed through
+    and locked again on every trip, which is why both of its sides ask
+    the same question - *are you carrying the key* - and why neither
+    asks whether anybody has been through before. The library is one
+    player's secret, and a cabinet standing open in the Living Room
+    would be found by the next person to walk in. That it used to be
+    gated on a per-player `passage_open` meant the same piece of
+    furniture was open for one player and shut for another standing
+    beside them, and `/look` said so in as many words.
+
+    It also gives the key something to do. A key that opened a door
+    once and was then dead weight could not explain why it refuses to
+    be put down; one you need every time can.
 
     The oak is deliberately not here: an exit gated on the state its own
     use produces is a locked door with the key inside. **The front door
@@ -723,10 +738,8 @@ def exit_refused_by(thing_id: str, held: set[str]) -> bool:
     """
     if thing_id == HOUSE:
         return HOUSE_UNLOCKED not in held
-    if thing_id == CABINET:
+    if thing_id in (CABINET, BACK_OF_CABINET):
         return HAS_KEY not in held
-    if thing_id == BACK_OF_CABINET:
-        return PASSAGE_OPEN not in held
     return False
 
 
@@ -758,6 +771,21 @@ async def after_move(guild_id: int, user_id: int, thing_id: str) -> str | None:
         if await states.set_player_state(guild_id, user_id, LIBRARY_FOUND):
             return LIBRARY_FOUND
     elif thing_id == CABINET:
+        # **Written by the way in only, and it no longer opens anything.**
+        # `passage_open` is the record that this player has come in
+        # through the cabinet before, which is all it is used for now:
+        # the first trip in reads the discovery paragraph and every
+        # later one reads the shorter line.
+        #
+        # The way out deliberately does not write it. The discovery is
+        # about finding that the cabinet is a door into the library, so
+        # a player who leaves that way first must still get the
+        # paragraph when they come back in - and the way out reads the
+        # same sentence every time, so it has nothing to remember.
+        #
+        # The door itself asks `exit_refused_by` about the key and
+        # nothing else, so a player who somehow lost this row would read
+        # one sentence twice rather than find themselves shut in.
         if await states.set_player_state(guild_id, user_id, PASSAGE_OPEN):
             return PASSAGE_OPEN
     return None

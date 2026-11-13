@@ -6913,7 +6913,14 @@ async def _use_exit(interaction, state, found, row) -> None:
     )
 
 
-async def _exit_to_room(guild_id: int, room_id: str, typed: str, hidden=frozenset()):
+async def _exit_to_room(
+    guild_id: int,
+    room_id: str,
+    typed: str,
+    hidden=frozenset(),
+    *,
+    user_id: int | None = None,
+):
     """The way out of this room that leads to the room a player named.
 
     `/go dining room` rather than `/go archway`. A player thinks in rooms,
@@ -6925,10 +6932,19 @@ async def _exit_to_room(guild_id: int, room_id: str, typed: str, hidden=frozense
     the room answered to the word, and the candidates are the two or three
     ways out of one room.
 
-    **The Secret Library is never matched by name**, from either of its two
-    doors. `/go secret library` has to fail exactly the way `/go dungeon`
-    fails, or the room's name is the thing that gives it away - and the oak
-    and the cabinet are still findable by their own.
+    **The Secret Library is matched by name only for a key-holder.** To
+    anybody else `/go secret library` has to fail exactly the way `/go
+    dungeon` fails, or the room's name is the thing that gives it away.
+    The key is the tightest test there is of somebody already knowing:
+    it hangs on a nail inside the library, so nobody is carrying one who
+    has not stood in the room, and telling them the way back to a place
+    they have been gives nothing away. Without this, a player holding
+    the key had to ask for the cabinet rather than for the room, which
+    is the one thing `/go` exists not to make them do.
+
+    Asked only when the library is actually a candidate, and asked once:
+    it is a read, and this runs on every `/go` that named something no
+    thing in the room answered to.
 
     `hidden` is the same argument for a different reason: a doorway this
     player has not earned must not be reachable by naming the room
@@ -6939,9 +6955,17 @@ async def _exit_to_room(guild_id: int, room_id: str, typed: str, hidden=frozense
     if not wanted:
         return None
 
+    holder = None
     for exit_ in await resolve.exits_from(guild_id, room_id):
-        if exit_.destination == world.SECRET_LIBRARY or exit_.thing_id in hidden:
+        if exit_.thing_id in hidden:
             continue
+        if exit_.destination == world.SECRET_LIBRARY:
+            if user_id is None:
+                continue
+            if holder is None:
+                holder = await world.has_key(guild_id, user_id)
+            if not holder:
+                continue
         name = await resolve.room_name(exit_.destination)
         if not name:
             continue
@@ -7015,7 +7039,9 @@ async def go(interaction: discord.Interaction, where: str) -> None:
             # out lead to - and then ask for that exit by its own name,
             # rather than building a `Found` by hand that the one real
             # resolver would not have produced.
-            exit_ = await _exit_to_room(guild_id, state.current_room, where, hidden)
+            exit_ = await _exit_to_room(
+                guild_id, state.current_room, where, hidden, user_id=user.id
+            )
             if exit_ is not None:
                 found = await reach.find(
                     guild_id, user.id, state.current_room, exit_.name, reach.Scope.REACH
