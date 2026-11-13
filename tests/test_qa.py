@@ -401,7 +401,7 @@ async def test_midnight_announces_what_it_awarded(testing):
     server it can be tested on cannot watch it happen.
     """
     _, guild, halloween, _ = testing
-    await a_ghost_yesterday(hauntings=3)
+    await a_ghost_yesterday(hauntings=5)
 
     await bot.qa_midnight.callback(qa_call(guild, "qa-midnight"))
 
@@ -447,9 +447,16 @@ async def test_midnight_withholds_the_award_when_the_reveal_could_not_post(
     achievement when the board never named them at all. This command is
     where that behaviour is rehearsed, so the gate has to be here too
     or the rehearsal exercises a path production does not run.
+
+    **Five hauntings, not three, and the number is load bearing here**
+    in a way it is not in the test above. This asserts an award did
+    *not* happen, so a ghost below the threshold would satisfy it with
+    the gate torn out - it would be passing because nobody qualified
+    rather than because the gate held. It went up with
+    `triggers.BOO_WHO_HAUNTS` on 13 November for that reason.
     """
     _, guild, _, _ = testing
-    await a_ghost_yesterday(hauntings=3)
+    await a_ghost_yesterday(hauntings=5)
     nowhere_to_post(monkeypatch)
 
     await bot.qa_midnight.callback(qa_call(guild, "qa-midnight"))
@@ -465,7 +472,7 @@ async def test_midnight_skips_the_hook_when_the_reveal_could_not_post(
     added to `on_midnight` later would depend on."""
     _, guild, _, _ = testing
     fired = hooks_fired(monkeypatch)
-    await a_ghost_yesterday(hauntings=3)
+    await a_ghost_yesterday(hauntings=5)
     nowhere_to_post(monkeypatch)
 
     await bot.qa_midnight.callback(qa_call(guild, "qa-midnight"))
@@ -481,7 +488,7 @@ async def test_midnight_says_when_it_skipped_the_hook(testing, monkeypatch):
     as somebody knows that is what happened.
     """
     _, guild, _, _ = testing
-    await a_ghost_yesterday(hauntings=3)
+    await a_ghost_yesterday(hauntings=5)
     nowhere_to_post(monkeypatch)
     call = qa_call(guild, "qa-midnight")
 

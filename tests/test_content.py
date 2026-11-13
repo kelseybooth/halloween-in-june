@@ -177,7 +177,15 @@ def test_the_shipped_content_parses():
     # have been a sentence about where the ghost went rather than how
     # many rooms heard it, and the public line in each thread is the
     # same either way.
-    assert len(c.defaults) == 226
+    # And two on 13 November, when both ghost achievements moved to the
+    # changeover: an award row is readable in `/stats` and on the
+    # leaderboard, so one written at the moment of the haunting named
+    # the day's ghost in two places the whispers were kept out of.
+    # These are what the ghost is told instead, privately, at the time
+    # - and they are the only place either award's picture is ever
+    # shown, because `_announce` sends no private line for an award
+    # earned on the midnight job.
+    assert len(c.defaults) == 228
     # Ten since 31 October: the ground floor arrives in two halves, and
     # 25 sits below the ceiling rather than above it, which is why
     # nothing else in the suite noticed.

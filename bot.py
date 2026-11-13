@@ -3300,6 +3300,13 @@ ART_FOR_ACHIEVEMENT = {
     # No live trigger in Release 1 - the ghost system is not built - and
     # shipped anyway so the image is there the day the ghosts land.
     "getting_into_the_spirit": "black_cat_startled",
+    # Added with the withheld lines below. Both ghost awards are
+    # handed over at the changeover, where `_announce` sends no private
+    # message and puts no image on a public one that has an earner - so
+    # the only place either picture can ever be seen is the line that
+    # says the award is coming. Without this the ghost's two moments
+    # would be one picture and one bare sentence.
+    "boo_who": "black_cat_suspicious",
 }
 
 # **Named in public, never pinged.** The reveal that spells out
@@ -3320,7 +3327,18 @@ ART_FOR_ACHIEVEMENT = {
 # A set rather than a column on the row. One achievement is not a
 # class, and the day a second one wants this it will want it for this
 # reason rather than a reason of its own.
-NEVER_PINGED = frozenset({"boo_who"})
+# *Getting into the Spirit* joined it on 13 November, when it moved to
+# the changeover: same hook, same night, same reason, and it would
+# otherwise have started pinging the very ghost the move exists to
+# keep quiet.
+NEVER_PINGED = frozenset({"boo_who", "getting_into_the_spirit"})
+
+# The two ghost awards, and the notice that stops the first one's
+# withheld line being said twice. *Boo Who?* needs no notice: see
+# `_tell_them_an_award_is_waiting`.
+SPIRIT = "getting_into_the_spirit"
+BOO_WHO = "boo_who"
+SPIRIT_TOLD = "told.spirit_is_waiting"
 
 ART_FIRST_PET = "black_cat_alert"
 ART_CROWDING = "black_cat_suspicious"
@@ -4428,6 +4446,88 @@ async def _the_shape_drifts_in(
         ),
         interaction=interaction,
     )
+
+    # **The hook above no longer awards anything for a haunting**, and
+    # is kept because it is the honest shape: a haunting is a use of
+    # the bedsheet, and a later achievement that wants to watch one
+    # should find the hook already firing rather than have to add it.
+    # What the ghost actually gets for qualifying is below.
+    #
+    # **Here rather than up beside the private line**, which is worth
+    # saying because #213 moved that line deliberately. The rule it
+    # set is about Discord's three-second deadline for a modal's
+    # *first* response, which `_instead` has already met by this point;
+    # a followup rides a webhook token good for fifteen minutes. So
+    # there is no deadline left to beat, and putting two database reads
+    # and another send in front of the whispers would delay the thing
+    # the rest of the house is waiting on. This sits where `_fire`'s
+    # own ephemeral already sits, for the same reason.
+    await _tell_them_an_award_is_waiting(interaction)
+
+
+async def _tell_them_an_award_is_waiting(interaction) -> None:
+    """Both withheld lines, whichever is due on this haunting.
+
+    **Two awards, two shapes of "once".** *Getting into the Spirit* is
+    a once-ever fact, so it is held by a notice and the award itself:
+    a player who already has it is past this, and a player who has
+    been told is not told twice. *Boo Who?* can be missed and tried
+    again on a later ghost day, so it has no flag at all - it fires on
+    the haunting that takes the day's count to exactly
+    `BOO_WHO_HAUNTS`, which happens once a day by construction and
+    comes back for free the next time they wear the sheet.
+
+    **The two lines never share a haunting**, and cannot: one is spent
+    on the first and the other on the fifth. It is the two *awards*
+    that stack, at the changeover - a ghost who haunts five times on
+    their first ghost day and is not named collects both that
+    midnight, which is the arrangement asked for.
+    """
+    guild_id, user = interaction.guild_id, interaction.user
+    held = await database.player_achievements_of(guild_id, user.id)
+
+    if SPIRIT not in held and await database.notice(guild_id, user.id, SPIRIT_TOLD):
+        # The notice is taken before the line is sent, so a Discord
+        # failure here costs the sentence rather than repeating it on
+        # the next haunting. `_mention_idle_drops` makes the same trade
+        # out loud and for the same reason.
+        await _an_award_is_waiting(interaction, SPIRIT, "ghost.withheld.spirit")
+
+    if BOO_WHO not in held:
+        today = await database.server_today(guild_id)
+        if await database.hauntings_on(
+            guild_id, user.id, today
+        ) == triggers.BOO_WHO_HAUNTS:
+            await _an_award_is_waiting(interaction, BOO_WHO, "ghost.withheld.boo_who")
+
+
+async def _an_award_is_waiting(interaction, achievement_id: str, key: str) -> None:
+    """One withheld line, in an award's own clothes.
+
+    `_with_art` puts the sentence inside an embed under the picture,
+    which is exactly what `_announce`'s private half does for an
+    ordinary award - so this reads as the achievement message it is
+    standing in for rather than as a notification about one.
+
+    Never raises. The haunting has already been posted and recorded by
+    the time this runs, and a ghost whose encouragement fails to send
+    must not be told their whisper did not go out.
+    """
+    line = await phrasing.default_say(key)
+    if not line:
+        return
+    content_, embed = await _with_art(
+        interaction.guild, line, ART_FOR_ACHIEVEMENT.get(achievement_id)
+    )
+    try:
+        await interaction.followup.send(content_, embed=embed, ephemeral=True)
+    except discord.HTTPException:
+        log.warning(
+            "Could not tell %s that %s is waiting",
+            interaction.user.id,
+            achievement_id,
+            exc_info=True,
+        )
 
 
 async def _pull_the_sheet_over(interaction, state, found) -> None:

@@ -225,3 +225,5 @@ board.no_ghost	The planchette rests on GOODBYE and won't move. The house is quie
 ghost.reveal.named	The planchette spells out a name: {name}. Yesterday's ghost has slipped out of their sheet. {count} of you named them.
 ghost.reveal.nobody	The planchette spells out a name: {name}. Yesterday's ghost has slipped out of their sheet, and nobody named them.
 ghost.reveal.quiet	Yesterday slipped by without a single haunting. The spirit board is keeping the name of whoever held the silvery sheet to itself.
+ghost.withheld.spirit	**Getting into the Spirit!** You've done your first haunting, but to keep your secret you won't be awarded your achievement yet.
+ghost.withheld.boo_who	**Boo Who?** You've haunted at least five times today, but to keep your secret you won't be awarded your achievement yet. It's yours at midnight if nobody names you.

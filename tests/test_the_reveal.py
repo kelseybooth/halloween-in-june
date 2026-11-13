@@ -448,13 +448,84 @@ async def earned_by(who, guild_id=GUILD_A):
     return await database.player_achievements_of(guild_id, who)
 
 
-async def test_three_hauntings_and_nobody_guessing_earns_it(house):
+async def test_five_hauntings_and_nobody_guessing_earns_it(house):
     day = await was_the_ghost(ALICE)
-    await haunted(ALICE, day, times=3)
+    await haunted(ALICE, day, times=5)
 
     await bot.nightly_job.coro()
 
     assert "boo_who" in await earned_by(ALICE)
+
+
+async def test_getting_into_the_spirit_waits_for_the_changeover(house):
+    """**It was on `on_use` until 13 November**, awarded the moment the
+    whisper posted - which put a row in the awards table while the day
+    was still being played. `/stats player:<the ghost>` lists another
+    player's achievement names and the leaderboard prints a name
+    beside each recent one, so the disguise came off in two places the
+    channel never saw. It waits for the night now, like *Boo Who?*."""
+    day = await was_the_ghost(ALICE)
+    await haunted(ALICE, day)
+
+    assert "getting_into_the_spirit" not in await earned_by(ALICE)
+
+    await bot.nightly_job.coro()
+
+    assert "getting_into_the_spirit" in await earned_by(ALICE)
+
+
+async def test_a_ghost_who_never_haunted_does_not_get_it(house):
+    """Wearing the costume is the achievement, so a sheet that stayed
+    in the bag earns nothing - and that is the same night the reveal
+    keeps their name to itself."""
+    await was_the_ghost(ALICE)
+
+    await bot.nightly_job.coro()
+
+    assert "getting_into_the_spirit" not in await earned_by(ALICE)
+
+
+async def test_being_named_does_not_cost_the_spirit(house):
+    """The lenient twin of `_yesterdays_quiet_ghost`. Being worked out
+    loses *Boo Who?* and nothing else: putting the costume on happened
+    either way."""
+    day = await was_the_ghost(ALICE)
+    await haunted(ALICE, day)
+    await named_them(BOB, day)
+
+    await bot.nightly_job.coro()
+
+    assert "getting_into_the_spirit" in await earned_by(ALICE)
+    assert "boo_who" not in await earned_by(ALICE)
+
+
+async def test_both_awards_can_land_on_one_night(house):
+    """**The stacking asked for on 13 November.** Five hauntings on a
+    first-ever ghost day, nobody naming them, and both arrive at the
+    same changeover - which is why `BOO_WHO_HAUNTS` went up to five in
+    the same change, rather than the two being kept apart."""
+    day = await was_the_ghost(ALICE)
+    await haunted(ALICE, day, times=5)
+
+    lines = await the_night(house)
+
+    assert set(await earned_by(ALICE)) >= {"getting_into_the_spirit", "boo_who"}
+    assert "slipped out of their sheet" in lines[0]
+    assert any("Getting into the Spirit" in line for line in lines[1:])
+    assert any("Boo Who?" in line for line in lines[1:])
+
+
+async def test_neither_award_pings_the_ghost(house):
+    """Both are in `NEVER_PINGED`. The second one joined it when it
+    moved to this hook: at midnight there is no interaction to answer,
+    so it would have taken the mention branch and notified the very
+    player the move exists to keep quiet."""
+    day = await was_the_ghost(ALICE)
+    await haunted(ALICE, day, times=5)
+
+    lines = await the_night(house)
+
+    assert "<@" not in "\n".join(lines)
 
 
 async def test_it_goes_to_the_ghost_and_to_nobody_else(house):
@@ -462,7 +533,7 @@ async def test_it_goes_to_the_ghost_and_to_nobody_else(house):
     award in the game whose earner has to be looked up rather than
     taken from whoever acted."""
     day = await was_the_ghost(ALICE)
-    await haunted(ALICE, day, times=3)
+    await haunted(ALICE, day, times=5)
 
     await bot.nightly_job.coro()
 
@@ -470,9 +541,13 @@ async def test_it_goes_to_the_ghost_and_to_nobody_else(house):
         assert "boo_who" not in await earned_by(who)
 
 
-async def test_two_hauntings_are_not_enough(house):
+async def test_four_hauntings_are_not_enough(house):
+    """Five since 13 November, three before it. The bar went up when
+    the pair moved to the changeover together: three was a low price
+    for the half of it meant to be hard, once *Getting into the
+    Spirit* could land on the same night."""
     day = await was_the_ghost(ALICE)
-    await haunted(ALICE, day, times=2)
+    await haunted(ALICE, day, times=4)
 
     await bot.nightly_job.coro()
 
@@ -483,7 +558,7 @@ async def test_one_right_guess_loses_it(house):
     """The sheet is a disguise and the award is for keeping it on, so
     being worked out once is being worked out."""
     day = await was_the_ghost(ALICE)
-    await haunted(ALICE, day, times=3)
+    await haunted(ALICE, day, times=5)
     await named_them(BOB, day)
 
     await bot.nightly_job.coro()
@@ -493,7 +568,7 @@ async def test_one_right_guess_loses_it(house):
 
 async def test_a_wrong_guess_does_not_lose_it(house):
     day = await was_the_ghost(ALICE)
-    await haunted(ALICE, day, times=3)
+    await haunted(ALICE, day, times=5)
     await guessed_wrong(BOB, day)
 
     await bot.nightly_job.coro()
@@ -517,12 +592,15 @@ async def test_the_award_lands_after_the_reveal(house):
     *Boo Who?* going out first would spell the name before the board
     does and the day would end backwards."""
     day = await was_the_ghost(ALICE)
-    await haunted(ALICE, day, times=3)
+    await haunted(ALICE, day, times=5)
 
     lines = await the_night(house)
 
     assert "slipped out of their sheet" in lines[0]
-    assert "Boo Who?" in lines[1]
+    # Not `lines[1]` any more: *Getting into the Spirit* moved to this
+    # hook too, so a night can carry two awards. What the guard is
+    # about is that the reveal came first, not which award follows.
+    assert any("Boo Who?" in line for line in lines[1:])
 
 
 async def test_the_award_names_the_ghost_without_pinging_them(house):
@@ -543,25 +621,25 @@ async def test_the_award_names_the_ghost_without_pinging_them(house):
     the same person and now post the same way.
     """
     day = await was_the_ghost(ALICE, display_name="Alice")
-    await haunted(ALICE, day, times=3)
+    await haunted(ALICE, day, times=5)
 
     lines = await the_night(house)
 
-    assert "Boo Who?" in lines[1]
-    assert "<@" not in lines[1]
+    award = next(line for line in lines if "Boo Who?" in line)
+    assert "<@" not in award
     # The name is still there, and it comes from the member cache
     # rather than from the row the pick wrote - `_earner_of` asks the
     # guild, `_reveal_the_ghost` reads `daily_ghosts.display_name`. The
     # two agree on a real server and are deliberately made to disagree
     # here, so that neither assertion can pass on the other's string.
-    assert "Player 100000000000000001 earned" in lines[1]
+    assert "Player 100000000000000001 earned" in award
 
 
 async def test_the_reveal_still_carries_no_mention_either(house):
     """The half that was already true, kept beside the half that was
     not, so a change to either is read against the other."""
     day = await was_the_ghost(ALICE, display_name="Alice")
-    await haunted(ALICE, day, times=3)
+    await haunted(ALICE, day, times=5)
 
     lines = await the_night(house)
 
@@ -574,7 +652,7 @@ async def test_a_second_night_does_not_announce_it_again(house):
     changed - so what stops a second announcement is the award being
     idempotent per player."""
     day = await was_the_ghost(ALICE)
-    await haunted(ALICE, day, times=3)
+    await haunted(ALICE, day, times=5)
     await the_night(house)
 
     await bot.nightly_job.coro()
@@ -648,7 +726,7 @@ async def test_the_award_is_withheld_when_there_is_nowhere_to_post(
     """**The hole the ordering could not see.** Granted-and-unannounced
     is the state this exists to prevent, not merely out-of-order."""
     day = await was_the_ghost(ALICE)
-    await haunted(ALICE, day, times=3)
+    await haunted(ALICE, day, times=5)
     nowhere_to_post(monkeypatch)
 
     await bot.nightly_job.coro()
@@ -662,7 +740,7 @@ async def test_the_award_is_withheld_when_the_reveal_line_is_missing(
     """A content file that shipped without the line is the same failure
     as nowhere to post, and `_reveal_the_ghost` treats it as one."""
     day = await was_the_ghost(ALICE)
-    await haunted(ALICE, day, times=3)
+    await haunted(ALICE, day, times=5)
     no_line_to_post(monkeypatch)
 
     await bot.nightly_job.coro()
@@ -677,7 +755,7 @@ async def test_the_hook_is_skipped_when_the_reveal_could_not_post(
     hook did not run*, which is what the gate actually does."""
     fired = recording_hooks(monkeypatch)
     day = await was_the_ghost(ALICE)
-    await haunted(ALICE, day, times=3)
+    await haunted(ALICE, day, times=5)
     nowhere_to_post(monkeypatch)
 
     await bot.nightly_job.coro()
@@ -699,7 +777,7 @@ async def test_the_award_does_not_post_when_the_board_could_not(
     a test looking for it proves nothing either way.
     """
     day = await was_the_ghost(ALICE)
-    await haunted(ALICE, day, times=3)
+    await haunted(ALICE, day, times=5)
     no_line_to_post(monkeypatch)
 
     await bot.nightly_job.coro()
@@ -725,7 +803,7 @@ async def test_the_pick_still_happens_when_the_reveal_could_not_post(
     """Today is owed a ghost either way: the pick reads a different day
     from the reveal, so one bad night is not two."""
     day = await was_the_ghost(ALICE)
-    await haunted(ALICE, day, times=3)
+    await haunted(ALICE, day, times=5)
     nowhere_to_post(monkeypatch)
 
     await bot.nightly_job.coro()
@@ -738,10 +816,13 @@ async def test_the_award_still_lands_on_a_night_that_posted(house):
     """Passes without the change. The guard that the gate did not close
     on the case it was built to protect."""
     day = await was_the_ghost(ALICE)
-    await haunted(ALICE, day, times=3)
+    await haunted(ALICE, day, times=5)
 
     lines = await the_night(house)
 
     assert "boo_who" in await earned_by(ALICE)
     assert "slipped out of their sheet" in lines[0]
-    assert "Boo Who?" in lines[1]
+    # Not `lines[1]` any more: *Getting into the Spirit* moved to this
+    # hook too, so a night can carry two awards. What the guard is
+    # about is that the reveal came first, not which award follows.
+    assert any("Boo Who?" in line for line in lines[1:])
