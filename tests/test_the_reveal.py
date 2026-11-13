@@ -525,6 +525,50 @@ async def test_the_award_lands_after_the_reveal(house):
     assert "Boo Who?" in lines[1]
 
 
+async def test_the_award_names_the_ghost_without_pinging_them(house):
+    """**The reveal's rule, applied to the line that follows it.**
+
+    `_announce` pings an earner it has no interaction to answer, which
+    is right for *Met the Craving* - a reaction has no reply, so the
+    public line is all its earner gets and a mention is what makes
+    them read it. *Boo Who?* is earned on the midnight job, so it took
+    that branch and went out as a mention.
+
+    Being named here is fine and is the point: the reveal has already
+    spelled the name out a line earlier, and #207 is what guarantees
+    that order. The ping is not. Somebody is being told in public that
+    they spent yesterday under a sheet and nobody worked it out, and
+    their phone going off about it is the one thing `_reveal_the_ghost`
+    already refuses to do. The two lines are the same sentence about
+    the same person and now post the same way.
+    """
+    day = await was_the_ghost(ALICE, display_name="Alice")
+    await haunted(ALICE, day, times=3)
+
+    lines = await the_night(house)
+
+    assert "Boo Who?" in lines[1]
+    assert "<@" not in lines[1]
+    # The name is still there, and it comes from the member cache
+    # rather than from the row the pick wrote - `_earner_of` asks the
+    # guild, `_reveal_the_ghost` reads `daily_ghosts.display_name`. The
+    # two agree on a real server and are deliberately made to disagree
+    # here, so that neither assertion can pass on the other's string.
+    assert "Player 100000000000000001 earned" in lines[1]
+
+
+async def test_the_reveal_still_carries_no_mention_either(house):
+    """The half that was already true, kept beside the half that was
+    not, so a change to either is read against the other."""
+    day = await was_the_ghost(ALICE, display_name="Alice")
+    await haunted(ALICE, day, times=3)
+
+    lines = await the_night(house)
+
+    assert "Alice" in lines[0]
+    assert "<@" not in lines[0]
+
+
 async def test_a_second_night_does_not_announce_it_again(house):
     """The predicate is still true the second time - the day has not
     changed - so what stops a second announcement is the award being
