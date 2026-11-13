@@ -1295,3 +1295,77 @@ def test_an_ambiguous_scripted_craving_is_caught():
     problems = content._check_scripted_cravings(replace(parsed, emoji_groups=groups))
 
     assert any("egg" in p and "2 rows" in p for p in problems)
+
+
+# --------------------------------------------------------------------------
+# The ghost costume
+# --------------------------------------------------------------------------
+
+
+# A sheet over the head is a children's ghost. A *white* sheet with two
+# eyeholes cut in it is also, unmistakably, a Klan hood, and the bedsheet
+# shipped described as exactly that - in `look`, in `look_carried`, in both
+# arrival notices, in the changeover line the whole channel reads, and as
+# `white sheet` in the aliases a player is invited to type.
+#
+# The sheet is silvery now and has no eyeholes. This is the guard, because
+# the wording is the sort that comes back: a writer reaching for "an old
+# white sheet" is reaching for the obvious phrase, and four of the six
+# places it lived were copied from a fifth.
+ROBE_WORDS = (
+    "eyehole",
+    "eye-hole",
+    "eye hole",
+    "white sheet",
+    "white bedsheet",
+)
+
+# Every file a player can be shown words out of. The emoji catalogues are
+# left out and only those: they carry "white heart", "white flag" and a
+# dozen more, none of which is a costume, and all of which are Unicode's
+# names rather than ours.
+PROSE_FILES = (
+    "achievements.tsv",
+    "art.tsv",
+    "craving_reactions.tsv",
+    "defaults.tsv",
+    "drops.tsv",
+    "restocks.tsv",
+    "room_text.tsv",
+    "rooms.tsv",
+    "thing_text.tsv",
+    "things.tsv",
+)
+
+
+def test_the_ghost_costume_keeps_its_distance_from_the_robe():
+    """**Scanned rather than asserted on one row**, because the phrase was
+    in six places across four files and the next one will not be where
+    this one was.
+
+    Each file is required to exist rather than skipped when missing, for
+    the reason this module opens with: a guard that quietly stops looking
+    when somebody renames a file reads like coverage and is not any.
+    """
+    found = []
+    for name in PROSE_FILES:
+        path = content.CONTENT_DIR / name
+        assert path.exists(), f"{name} is gone, so this guard stopped looking"
+        for number, line in enumerate(
+            path.read_text(encoding="utf-8").splitlines(), start=1
+        ):
+            lowered = line.lower()
+            for phrase in ROBE_WORDS:
+                if phrase in lowered:
+                    found.append(f"{name}:{number} says {phrase!r}")
+
+    assert found == []
+
+
+def test_the_sheet_is_described_as_silvery(shipped):
+    """The other direction, so the guard above cannot be satisfied by
+    deleting the sheet's description altogether."""
+    rows = [row for row in shipped.thing_text if row.entity_id == "bedsheet"]
+
+    assert rows, "the bedsheet has no text row"
+    assert all("silvery" in row.text["look"] for row in rows)

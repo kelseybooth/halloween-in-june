@@ -51,7 +51,7 @@ ritual_diagram	ritual diagram	ritual diagram|diagram|drawing	fixture	SE	1	no	yes
 cracked_mirrors	cracked mirrors	cracked mirrors|mirrors|mirror	fixture	SE	3	no	yes	0										50	45					
 empty_cat_bed	empty cat bed	cat bed|bed|empty cat bed	fixture	SE	1	no	yes	0										50	46		yes			
 spirit_board	spirit board	spirit board|board|ouija|planchette	fixture	SE	1	no	yes	0										50	47					
-bedsheet	bedsheet	sheet|bed sheet|white sheet|ghost sheet	object		0	no	no	0	1									50	179			no		
+bedsheet	bedsheet	sheet|bed sheet|silvery sheet|silver sheet|silver bed sheet|silver bedsheet|ghost sheet	object		0	no	no	0	1									50	179			no		
 key_nail	ring of iron keys	keys|key ring|ring of keys|iron keys|nail|skeleton keys	source	SE	1	no	yes	0						skeleton_key		library_shelves		50	48					
 skeleton_key	skeleton key	skeleton key|key|iron key	object		0	yes	no	0	1									50	48					
 rolltop_desk	roll-top desk	roll-top desk|desk|rolltop|papers	fixture	UH	1	no	yes	0										40	49					

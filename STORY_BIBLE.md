@@ -210,8 +210,8 @@ Each day one player in the server is secretly chosen as the house's ghost. The g
 **Becoming the ghost**
 
 - At the daily changeover (midnight Pacific), the bot picks one player at random from those who have entered the house. The pick is completely random, so the same player can be the ghost two days in a row.
-- A **bedsheet with eyeholes** appears in that player's inventory. Inventories are private, so nobody else can tell.
-- The next time the new ghost runs any command, they get a private notice (suggested): *"Something soft and faintly musty has appeared in your bag. It's a bedsheet with two eyeholes cut in it. You feel oddly… translucent."*
+- A **silvery bedsheet** appears in that player's inventory. Inventories are private, so nobody else can tell.
+- The next time the new ghost runs any command, they get a private notice (suggested): *"Something soft and faintly musty has appeared in your bag. It's an old silvery bedsheet. You feel oddly… translucent."*
 
 **Haunting**
 

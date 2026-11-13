@@ -199,8 +199,8 @@ shaken.cleared.nacho_chips	A few chips and a bit of salt, and your hands are ste
 shaken.cleared.candy	The sugar hits all at once. Your hands stop shaking almost immediately, and you feel about six years old.
 shaken.cleared.frozen_burrito	It's still half frozen, but it's food, and it works. Your hands have stopped shaking. Aunt Sue would be proud.
 shaken.cleared.dark_chocolate	One square of dark chocolate, and the world settles back into place. Your hands have stopped shaking.
-ghost.new	Something soft and faintly musty has appeared in your bag. It's a bedsheet with two eyeholes cut in it. You feel oddly… translucent.
-ghost.first	Something soft slides off a shelf behind you and into your bag. It's a bedsheet with two eyeholes cut in it. You feel oddly… translucent.
+ghost.new	Something soft and faintly musty has appeared in your bag. It's an old silvery bedsheet. You feel oddly… translucent.
+ghost.first	Something soft slides off a shelf behind you and into your bag. It's an old silvery bedsheet. You feel oddly… translucent.
 ghost.gone	The bedsheet is gone from your bag. You feel a little more solid than you did yesterday.
 ghost.haunt.picker	You pull the bedsheet over your head. Will anyone guess who you are? Which room will you haunt? Everyone there will see: A sheet-draped shape drifts through the door and whispers "…" (you'll write the whisper next).
 ghost.haunt.modal.title	Haunt the {room}
@@ -224,4 +224,4 @@ board.name.not_yet	You rest your fingers on the planchette, but it won't budge. 
 board.no_ghost	The planchette rests on GOODBYE and won't move. The house is quiet today.
 ghost.reveal.named	The planchette spells out a name: {name}. Yesterday's ghost has slipped out of their sheet. {count} of you named them.
 ghost.reveal.nobody	The planchette spells out a name: {name}. Yesterday's ghost has slipped out of their sheet, and nobody named them.
-ghost.reveal.quiet	Yesterday slipped by without a single haunting. The spirit board is keeping the name of whoever held the white sheet to itself.
+ghost.reveal.quiet	Yesterday slipped by without a single haunting. The spirit board is keeping the name of whoever held the silvery sheet to itself.
