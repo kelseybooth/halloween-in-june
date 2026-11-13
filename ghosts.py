@@ -96,7 +96,12 @@ CHANNEL = "CH"
 # article, so those two lines have rendered "the the channel" since the
 # picker shipped. One name for the list, one for after a "the", and both
 # read.
-ROAD_IN_A_LIST = "the road"
+#
+# **The list form is capitalised and carries no article**, because the
+# list is a list: "Entryway", "Dining Room", "Nursery". "the road" was
+# the only lowercase entry in it and the only one beginning with a word
+# the others left out, which read as a mistake rather than as a place.
+ROAD_IN_A_LIST = "Road"
 ROAD_AFTER_THE = "road"
 
 # The first option in the picker, which is no single room. A room id is

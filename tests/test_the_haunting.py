@@ -358,9 +358,11 @@ async def used_row(who=ALICE):
 
 
 async def test_the_road_is_in_the_list_under_its_own_name(house):
+    """Capitalised and bare, like every other entry: the list reads
+    "Entryway", "Dining Room", "Road"."""
     view = the_view(await open_the_picker(house))
 
-    assert option_for(view, "CH").label == "the road"
+    assert option_for(view, "CH").label == "Road"
 
 
 async def test_the_box_finishes_the_sentence_about_the_road(house):
