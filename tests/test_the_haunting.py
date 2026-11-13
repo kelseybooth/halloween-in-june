@@ -298,19 +298,68 @@ async def earned(user_id=ALICE):
     return set(await database.player_achievements_of(GUILD_A, user_id))
 
 
-async def test_the_first_haunting_earns_it(house):
+def embedded(interaction) -> str:
+    """The withheld lines, which arrive as embeds when art exists.
+
+    `_with_art` puts the sentence inside the embed's description and
+    sends no content at all, which is what makes it look like an
+    award - so `answered` above, which reads content, cannot see one.
+    """
+    return "\n".join(
+        kwargs["embed"].description
+        for _, kwargs in interaction.sent
+        if kwargs.get("embed") is not None
+    )
+
+
+async def test_the_first_haunting_awards_nothing_yet(house):
+    """**The whole point of the move.** An award row is readable by
+    anybody: `/stats player:<the ghost>` lists another player's
+    achievement names, and the leaderboard's recent list prints a name
+    beside each one. A row written here would name the day's ghost in
+    two places the whispers are carefully kept out of - and the
+    leaderboard's own defence of printing names is that the channel
+    has already said them, which a secret award makes untrue."""
     await haunt(house, "LI", "boo")
 
-    assert "getting_into_the_spirit" in await earned()
+    assert await earned() == set()
 
 
-async def test_a_second_haunting_earns_nothing_new(house):
-    """Idempotent per player, which is why *the first* haunting needs no
-    predicate of its own and `_used` is the whole of it."""
-    await haunt(house, "LI", "one")
-    await haunt(house, "LI", "two")
+async def test_the_ghost_is_told_it_is_coming(house):
+    """What they get instead, and it is not a consolation: at the
+    changeover `_announce` sends no private line for an award with no
+    interaction behind it, so this is the only time the player ever
+    reads the sentence or sees the picture."""
+    interaction = await haunt(house, "LI", "boo")
 
-    assert await earned() == {"getting_into_the_spirit"}
+    assert "Getting into the Spirit!" in answered(interaction)
+    assert "won't be awarded your achievement yet" in answered(interaction)
+
+
+async def test_the_withheld_line_is_said_once(house):
+    """A notice holds it, because the first haunting is a once-ever
+    fact. Without one the ghost would be told the same thing every
+    time they put the sheet on."""
+    first = await haunt(house, "LI", "one")
+    second = await haunt(house, "LI", "two")
+
+    assert "Getting into the Spirit!" in answered(first)
+    assert "Getting into the Spirit!" not in answered(second)
+    assert await earned() == set()
+
+
+async def test_it_rides_the_picture_when_there_is_one(house):
+    """**The formatting claim, asserted rather than asserted about.**
+    With art uploaded this is an embed whose description is the line
+    and whose image is the cat - the same shape `_announce` gives a
+    real award's private half, which is the whole reason it reads as
+    an achievement message instead of a notification about one."""
+    await database.record_art(GUILD_A, "black_cat_startled", "https://cdn.test/s.png")
+
+    interaction = await haunt(house, "LI", "boo")
+
+    assert "Getting into the Spirit!" in embedded(interaction)
+    assert "Getting into the Spirit!" not in answered(interaction)
 
 
 # --------------------------------------------------------------------------
@@ -507,12 +556,61 @@ async def test_the_ghost_gets_a_line_of_its_own(house):
     assert "drift into the" not in answer
 
 
-async def test_every_room_earns_the_spirit_once(house):
-    """Nine rooms, one use, one award - *the first haunting* is a
-    per-player fact and nine posts are still one haunting."""
-    await haunt(house, ghosts.EVERYWHERE, "boo")
+async def test_every_room_is_still_one_haunting(house):
+    """Nine rooms, one use, one line - nine posts are still one
+    haunting, which is what `record_haunting` taking a list is for."""
+    interaction = await haunt(house, ghosts.EVERYWHERE, "boo")
 
-    assert await earned() == {"getting_into_the_spirit"}
+    assert answered(interaction).count("Getting into the Spirit!") == 1
+    assert await earned() == set()
+
+
+async def test_the_fifth_haunting_says_boo_who_is_coming(house):
+    """*Boo Who?* has no notice behind it, on purpose: it can be lost
+    to a correct guess and tried again on a later ghost day, so it
+    fires on the haunting that takes the day's count to exactly five
+    and comes back for free next time."""
+    for i in range(4):
+        said = answered(await haunt(house, "LI", f"boo {i}"))
+        assert "Boo Who?" not in said
+
+    fifth = await haunt(house, "LI", "boo 5")
+
+    assert "Boo Who?" in answered(fifth)
+    assert "if nobody names you" in answered(fifth)
+    assert await earned() == set()
+
+
+async def test_a_sixth_haunting_does_not_repeat_it(house):
+    """Exactly five, not five or more - the count crosses the mark
+    once a day by construction, so no flag is needed to hold it."""
+    for i in range(5):
+        await haunt(house, "LI", f"boo {i}")
+
+    sixth = await haunt(house, "LI", "boo 6")
+
+    assert "Boo Who?" not in answered(sixth)
+
+
+async def test_the_two_lines_never_share_a_haunting(house):
+    """**They cannot, and it is worth writing down why.** The spirit
+    line is spent on haunting one and *Boo Who?*'s on haunting five, so
+    a press that says both would have to be somebody's first and fifth
+    at once.
+
+    The two *awards* do stack - a ghost who haunts five times on their
+    first ghost day and is not named collects both at that midnight,
+    which is the arrangement asked for. It is the announcements that
+    stack, not these; see `test_both_awards_can_land_on_one_night` in
+    `test_the_reveal.py`, which is where midnight is driven.
+    """
+    said = [answered(await haunt(house, "LI", f"boo {i}")) for i in range(5)]
+
+    assert "Getting into the Spirit!" in said[0]
+    assert "Boo Who?" in said[4]
+    assert not any(
+        "Getting into the Spirit!" in line and "Boo Who?" in line for line in said
+    )
 
 
 # --------------------------------------------------------------------------

@@ -173,11 +173,18 @@ HEAVY_LIFTING_MOVES = 4
 HEAD_FOR_HEIGHTS_CLIMBS = 25
 
 # *Boo Who?*: haunting this many times in a day and still not being
-# named. Three is the design's, and it is a fact about the game rather
-# than about the server - unlike `ghost_min_players`, which is a knob
-# because how many people a server can muster is not something the
-# design gets to decide.
-BOO_WHO_HAUNTS = 3
+# named. A fact about the game rather than about the server - unlike
+# `ghost_min_players`, which is a knob because how many people a server
+# can muster is not something the design gets to decide.
+#
+# **Three until 13 November, five since.** The award moved to the
+# changeover along with *Getting into the Spirit*, so the two can now
+# land on the same night, and three hauntings was a low bar for the
+# half of that pair meant to be the hard one. Nothing player-facing
+# carries the number - `achievements.tsv` says "Haunted the house all
+# day, and nobody guessed it was you", with no count in it - so this
+# constant and the note beside that row are the whole of the change.
+BOO_WHO_HAUNTS = 5
 
 
 # --------------------------------------------------------------------------
@@ -1047,6 +1054,47 @@ async def _yesterdays_quiet_ghost(guild_id: int) -> int | None:
     return row.user_id
 
 
+async def _yesterdays_ghost_who_haunted(guild_id: int) -> int | None:
+    """Yesterday's ghost, if they wore the sheet at all.
+
+    *Getting into the Spirit*'s half of the same shape, and it reads
+    the same day the same way for the same reason - see
+    `_yesterdays_quiet_ghost` above, which this is the lenient twin of.
+    One haunting is the whole condition; being worked out does not cost
+    it, because putting the costume on is the achievement.
+
+    **It is on `on_midnight` to keep a secret, not to count a day.**
+    The award row is what `/stats` on another player and the
+    leaderboard's recent list both read, so an award written at the
+    moment of the haunting would name the day's ghost in two places
+    that have nothing to do with the channel - and the leaderboard's
+    own defence of printing names beside players is that the channel
+    has already said them, which stops being true the moment an award
+    is earned in the dark. Waiting for the changeover is what makes
+    that defence true again: by then the board has spelled the name.
+    """
+    day = await database.server_today(guild_id) - timedelta(days=1)
+    row = await database.daily_ghost(guild_id, day)
+    if row is None or row.user_id is None:
+        return None
+    if not await database.hauntings_on(guild_id, row.user_id, day):
+        return None
+    return row.user_id
+
+
+async def getting_into_the_spirit(context: Context) -> bool:
+    """Yesterday's ghost haunted, so the costume was worn."""
+    return (await _yesterdays_ghost_who_haunted(context.guild_id)) is not None
+
+
+async def _the_ghost_who_haunted(context: Context) -> tuple[int, ...]:
+    """Who it goes to, for the reason `_the_quiet_ghost` gives below:
+    `on_midnight` fires with `user_id` None, so an award without this
+    would be written against a null id."""
+    ghost = await _yesterdays_ghost_who_haunted(context.guild_id)
+    return (ghost,) if ghost is not None else ()
+
+
 async def boo_who(context: Context) -> bool:
     """Haunted at least three times yesterday, and named by nobody.
 
@@ -1770,12 +1818,30 @@ def register_all() -> None:
     # completes the pair, and the same use feeds both lists.
     add("accompanist", "on_use", accompanist, earners=_accompanists)
     add("bandleader", "on_use", bandleader, earners=_bandleaders)
-    # **Off the blocked list with the haunting.** A successful
-    # `/use bedsheet` is a use of the bedsheet like any other, because
-    # `record_haunting` writes one - so this needs no predicate of its
-    # own, and *the first* haunting is free: the award is idempotent
-    # per player, so the second one announces nothing.
-    add("getting_into_the_spirit", "on_use", _used(BEDSHEET))
+    # **It was `on_use` with `_used(BEDSHEET)` until 13 November**, and
+    # that was correct about everything except where the award could be
+    # read. A row written at the moment of the haunting shows up under
+    # `/stats player:<the ghost>` and in the leaderboard's recent list,
+    # both of which name the earner - so the day's ghost was identified
+    # in two places the whispers had been kept out of, and no amount of
+    # keeping it out of the channel would have helped.
+    #
+    # So it waits for the changeover, where *Boo Who?* already waited,
+    # and the nightly job's own gate carries it: `on_midnight` runs
+    # only if the reveal went out, which is the night the name becomes
+    # public anyway. The two can land together now, which is deliberate
+    # - see `BOO_WHO_HAUNTS`, raised to five in the same change.
+    #
+    # The ghost is not left wondering in the meantime. `bot` says so at
+    # the moment they qualify, privately - see `_an_award_is_waiting`,
+    # which is also now the only place the cat picture for either of
+    # these is ever shown.
+    add(
+        "getting_into_the_spirit",
+        "on_midnight",
+        getting_into_the_spirit,
+        earners=_the_ghost_who_haunted,
+    )
     # **Off the blocked list with the spirit board**, and the predicate
     # is as bare as the haunting's for a reason that is a contract
     # rather than a coincidence: `bot` fires `on_use` for the board on
