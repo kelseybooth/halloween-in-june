@@ -26,9 +26,9 @@ A new thing, `bedsheet`, placed in the ghost's inventory by code and removed at 
 
 | When | Text |
 | --- | --- |
-| The ghost's next command after the pick | Something soft and faintly musty has appeared in your bag. It's a bedsheet with two eyeholes cut in it. You feel oddly… translucent. |
-| The first ghost, added to the library discovery | As you climb in, something soft slides off a shelf and into your bag. It's a bedsheet with two eyeholes cut in it. You feel oddly… translucent. |
-| `look_carried` | An old white bedsheet with two eyeholes cut in it, not quite level. It smells of cedar and something older. |
+| The ghost's next command after the pick | Something soft and faintly musty has appeared in your bag. It's an old silvery bedsheet. You feel oddly… translucent. |
+| The first ghost, added to the library discovery | As you climb in, something soft slides off a shelf and into your bag. It's an old silvery bedsheet. You feel oddly… translucent. |
+| `look_carried` | A silvery bedsheet, worn thin at the folds. It smells of cedar and something older. |
 | `drop_fail` | The bedsheet clings to you. It isn't done with you yet. |
 | `/use bedsheet` (room picker) | You pull the bedsheet over your head. Will anyone guess who you are? Which room will you haunt? Everyone there will see: A sheet-draped shape drifts through the door and whispers "…" (you'll write the whisper next). |
 | Pop-up title | Haunt the [room name] |
@@ -94,7 +94,7 @@ The new look and the two buttons replace the board's current drop 50 row, so its
 | --- | --- |
 | Someone named them | The planchette spells out a name: [name]. Yesterday's ghost has slipped out of their sheet. [n] of you named them. |
 | Nobody named them | The planchette spells out a name: [name]. Yesterday's ghost has slipped out of their sheet, and nobody named them. |
-| The ghost never haunted | Yesterday slipped by without a single haunting. The spirit board is keeping the name of whoever held the white sheet to itself. |
+| The ghost never haunted | Yesterday slipped by without a single haunting. The spirit board is keeping the name of whoever held the silvery sheet to itself. |
 
 It gives each day an ending, lets players check their reasoning, and tells players who haven't found the library yet that there's a board to find.
 
