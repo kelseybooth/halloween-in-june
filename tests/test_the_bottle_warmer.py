@@ -242,12 +242,21 @@ def test_a_pipe_is_and_and_a_slash_is_or():
     assert states.required_things(None) == []
 
 
-def test_the_warmer_is_the_only_thing_in_the_files_with_a_group():
-    """So the cost of asking is paid by one thing, and the claim is checked.
+def test_two_things_in_the_files_have_a_group():
+    """So the cost of asking is paid by a named few, and the claim is checked.
 
-    If a second gate ever wants a group this test is where it says so -
-    which is better than the comment in `bot` quietly going stale about
-    how much the lookup costs.
+    This is where a second gate says so, which is what the test was for.
+    The skeleton key is it: `SL/LS` is the two faces of the one cabinet,
+    and the key is the only thing in the game whose use is answered by
+    being in front of either side of a single piece of furniture. There
+    is no one thing present in both rooms to name instead.
+
+    **It pays the lookup and reads nothing from it.** The group exists
+    so `{to_hand}` can say which of the alternatives a player turned up
+    holding, and the key's line never mentions it - so this is a cost
+    with no reader, taken deliberately on the rarest command in the
+    game rather than inventing a second way to gate a use by room. The
+    comment in `bot` says the same thing from the other end.
     """
     grouped = sorted(
         thing.thing_id
@@ -258,7 +267,7 @@ def test_the_warmer_is_the_only_thing_in_the_files_with_a_group():
         )
     )
 
-    assert grouped == [WARMER]
+    assert grouped == sorted([WARMER, "skeleton_key"])
 
 
 def test_and_the_other_requires_column_is_not_parsed_by_this_at_all():

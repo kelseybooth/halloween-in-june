@@ -268,7 +268,20 @@ async def test_the_window_always_works(house):
     assert await where(db) == "CO"
 
 
-async def test_the_back_of_the_cabinet_is_shut_without_the_passage(house):
+# --------------------------------------------------------------------------
+# One door, and it is locked from both sides every time
+# --------------------------------------------------------------------------
+#
+# **The cabinet is never left open.** It used to stand open per player,
+# which made one piece of furniture open for one person and shut for
+# somebody standing next to them - and `/look` said so in as many words.
+# Both sides ask the same question now: are you carrying the key.
+
+
+async def test_the_back_of_the_cabinet_is_shut_without_a_key(house):
+    """A player who climbed the oak and never took a key is still shut
+    in, which is what keeps the passage something you open rather than
+    something you find open."""
     db, *_ = house
     await climb(house)
 
@@ -278,16 +291,254 @@ async def test_the_back_of_the_cabinet_is_shut_without_the_passage(house):
     assert "keyhole on this side" in reply
 
 
-async def test_the_back_of_the_cabinet_opens_once_the_passage_is(house):
+async def test_the_back_of_the_cabinet_opens_for_a_key_holder(house):
+    """The gap this closes: the key, the keyhole and the player were
+    all in the same room and the door was shut anyway - and `SL`'s own
+    refusal had just told them there was a keyhole on this side."""
+    db, *_ = house
+    await climb(house)
+    await act(house, bot.take, "key", "SE")
+
+    reply = replies(await act(house, bot.use, "back of the cabinet", "SE"))
+
+    assert await where(db) == "LI"
+    assert "lock it again behind you" in reply
+
+
+async def test_going_through_leaves_it_locked_for_everybody_else(house):
+    """**The whole point of the change.** Alice unlocking the cabinet
+    and walking through must not leave a door standing open in a room
+    Bob is in - the library is one player's secret, and a cabinet left
+    ajar in the Living Room is found by the next person through it.
+    """
+    db, *_ = house
+    await climb(house)
+    await act(house, bot.take, "key", "SE")
+    await act(house, bot.use, "back of the cabinet", "SE")
+    # Asserted, not assumed: before the change Alice could not get out
+    # this way at all, and a test that let her stay put would have
+    # proved Bob was shut out of a door nobody had opened.
+    assert await where(db) == "LI"
+
+    reply = replies(await act(house, bot.use, "cabinet", "LI", who=BOB))
+
+    assert await where(db, BOB) == "LI"
+    assert "takes a skeleton key" in reply
+
+
+async def test_having_been_through_before_does_not_open_it(house):
+    """**The marker stopped being a gate**, and this is the sharpest
+    way to say so: a player holding `passage_open` and no key is
+    refused from both sides. It decides which sentence they read on the
+    way in and nothing else."""
+    db, *_ = house
+    await climb(house)
+    await states.set_player_state(GUILD_A, ALICE, world.PASSAGE_OPEN)
+
+    out = replies(await act(house, bot.use, "back of the cabinet", "SE"))
+    assert await where(db) == "SE"
+
+    back = replies(await act(house, bot.use, "cabinet", "LI"))
+
+    assert await where(db) == "LI"
+    assert "keyhole on this side" in out
+    assert "takes a skeleton key" in back
+
+
+# --------------------------------------------------------------------------
+# Which sentence each trip reads
+# --------------------------------------------------------------------------
+
+
+async def test_the_first_trip_in_reads_the_discovery(house):
+    """The writers' paragraph, kept exactly as it was: the cabinet
+    swings outward and there is a room full of books behind it."""
+    db, *_ = house
+    await climb(house)
+    await act(house, bot.take, "key", "SE")
+
+    reply = replies(await act(house, bot.use, "cabinet", "LI"))
+
+    assert await where(db) == "SE"
+    assert "It's a secret door into the library." in reply
+
+
+async def test_a_later_trip_in_reads_the_shorter_line(house):
     db, *_ = house
     await climb(house)
     await act(house, bot.take, "key", "SE")
     await act(house, bot.use, "cabinet", "LI")
 
-    reply = replies(await act(house, bot.use, "back of the cabinet", "SE"))
+    reply = replies(await act(house, bot.use, "cabinet", "LI"))
+
+    assert await where(db) == "SE"
+    assert "feel a click" in reply
+    assert "secret door into the library" not in reply
+
+
+async def test_leaving_that_way_first_does_not_spend_the_discovery(house):
+    """**The way out does not write the marker**, and it must not: the
+    discovery is about finding that the cabinet is a door *into* the
+    library, so a player whose first trip through it is outward still
+    has that paragraph waiting for them on the way back.
+    """
+    db, *_ = house
+    await climb(house)
+    await act(house, bot.take, "key", "SE")
+    await act(house, bot.use, "back of the cabinet", "SE")
+    # The premise, asserted: a trip she never made cannot spend
+    # anything, and the test would pass on a build where the way out
+    # was still shut.
+    assert await where(db) == "LI"
+
+    reply = replies(await act(house, bot.use, "cabinet", "LI"))
+
+    assert "It's a secret door into the library." in reply
+
+
+async def test_the_way_out_reads_the_same_line_every_time(house):
+    """One sentence, every trip. There is nothing to discover on the
+    way out, so nothing is remembered about it."""
+    await climb(house)
+    await act(house, bot.take, "key", "SE")
+
+    first = replies(await act(house, bot.use, "back of the cabinet", "SE"))
+    second = replies(await act(house, bot.use, "back of the cabinet", "SE"))
+
+    assert "lock it again behind you" in first
+    assert "lock it again behind you" in second
+
+
+# --------------------------------------------------------------------------
+# The key points at the lock; the door is what opens
+# --------------------------------------------------------------------------
+
+
+async def test_the_key_points_at_the_lock_in_the_library(house):
+    await climb(house)
+    await act(house, bot.take, "key", "SE")
+
+    reply = replies(await act(house, bot.use, "key", "SE"))
+
+    assert "Will you go through?" in reply
+
+
+async def test_the_key_points_at_the_lock_in_the_living_room(house):
+    """`requires = SL/LS` is the gate, and it names both sides of the
+    one cabinet, so the line reads the same from either room."""
+    await climb(house)
+    await act(house, bot.take, "key", "SE")
+
+    reply = replies(await act(house, bot.use, "key", "LI"))
+
+    assert "Will you go through?" in reply
+
+
+async def test_the_key_only_hints_anywhere_else(house):
+    """Away from the cabinet it is the writers' hint and nothing else,
+    which is all it has ever been."""
+    await climb(house)
+    await act(house, bot.take, "key", "SE")
+
+    reply = replies(await act(house, bot.use, "key", "CO"))
+
+    assert "wants a keyhole" in reply
+
+
+async def test_the_key_opens_nothing_and_moves_nobody(house):
+    """Keys point, doors open. Turning it over in your hand in front of
+    the lock is not going through, and it leaves no state behind - if it
+    did, the door would be gated on something other than the key again.
+    """
+    db, *_ = house
+    await climb(house)
+    await act(house, bot.take, "key", "SE")
+
+    await act(house, bot.use, "key", "SE")
+
+    assert await where(db) == "SE"
+    assert world.PASSAGE_OPEN not in await states.in_force(GUILD_A, ALICE)
+
+
+# --------------------------------------------------------------------------
+# Asking for the library by name
+# --------------------------------------------------------------------------
+#
+# `/go` matches the destination room's name, and the Secret Library was
+# excluded from that outright - `/go secret library` had to fail the way
+# `/go dungeon` fails or the name gives the room away. The key is a
+# tighter test of already knowing than anything else in the game: it
+# hangs on a nail inside the library, so nobody carries one who has not
+# stood in the room.
+
+
+async def test_a_key_holder_can_ask_for_the_library_by_name(house):
+    db, *_ = house
+    await climb(house)
+    await act(house, bot.take, "key", "SE")
+
+    await act(house, bot.go, "library", "LI")
+
+    assert await where(db) == "SE"
+
+
+async def test_the_rooms_full_name_works_too(house):
+    db, *_ = house
+    await climb(house)
+    await act(house, bot.take, "key", "SE")
+
+    await act(house, bot.go, "secret library", "LI")
+
+    assert await where(db) == "SE"
+
+
+async def test_asking_by_name_reads_the_cabinet_s_own_line(house):
+    """It resolves to the cabinet and takes the cabinet's path, gates
+    and lines and all - so a first trip asked for by room name still
+    gets the paragraph."""
+    await climb(house)
+    await act(house, bot.take, "key", "SE")
+
+    reply = replies(await act(house, bot.go, "library", "LI"))
+
+    assert "It's a secret door into the library." in reply
+
+
+async def test_the_library_is_not_named_to_a_player_without_the_key(house):
+    """It has to fail the way a room that does not exist fails."""
+    db, *_ = house
+
+    reply = replies(await act(house, bot.go, "secret library", "LI"))
 
     assert await where(db) == "LI"
-    assert "push the cabinet aside" in reply
+    assert "don't see" in reply
+
+
+async def test_finding_the_library_is_not_enough_to_ask_for_it(house):
+    """**The gate is the key, not the discovery.** A player who climbed
+    the oak, looked around and climbed back down without taking a key
+    cannot reach it from the Living Room, so naming it from there would
+    hand them a way in they have not got."""
+    db, *_ = house
+    await climb(house)
+    await act(house, bot.use, "window", "SE")
+
+    reply = replies(await act(house, bot.go, "library", "LI"))
+
+    assert await where(db) == "LI"
+    assert "don't see" in reply
+
+
+async def test_the_living_room_is_still_named_from_inside(house):
+    """The other direction was never secret - the Living Room is an
+    ordinary room, and the back of the cabinet already answers to it."""
+    db, *_ = house
+    await climb(house)
+    await act(house, bot.take, "key", "SE")
+
+    await act(house, bot.go, "living room", "SE")
+
+    assert await where(db) == "LI"
 
 
 async def test_a_player_holding_several_states_reads_the_right_one(house):
