@@ -3302,6 +3302,26 @@ ART_FOR_ACHIEVEMENT = {
     "getting_into_the_spirit": "black_cat_startled",
 }
 
+# **Named in public, never pinged.** The reveal that spells out
+# yesterday's ghost posts as plain text on purpose: somebody is being
+# told in front of the whole server that they spent a day under a
+# sheet, and `_reveal_the_ghost` is explicit that the one thing which
+# should not happen is their phone going off about it. *Boo Who?* goes
+# out as the next line in that same post and is the same sentence about
+# the same person - so it posts the same way.
+#
+# It only ever pinged by accident of where it fires. `_announce`
+# mentions an earner it has no interaction to answer, which is right
+# for *Met the Craving*: a reaction has no reply, so the public line is
+# all its earner gets and the mention is what makes them read it. The
+# midnight job has no interaction either, and fell into that branch
+# without anybody choosing it.
+#
+# A set rather than a column on the row. One achievement is not a
+# class, and the day a second one wants this it will want it for this
+# reason rather than a reason of its own.
+NEVER_PINGED = frozenset({"boo_who"})
+
 ART_FIRST_PET = "black_cat_alert"
 ART_CROWDING = "black_cat_suspicious"
 ART_DIAPER = "black_cat_sniffing"
@@ -5337,7 +5357,14 @@ async def _announce(award, *, interaction=None, guild=None) -> None:
         and award.user_id is not None
         and award.user_id == interaction.user.id
     )
-    ping = None if mine else award.user_id
+    # `NEVER_PINGED` is the third way out of a mention, beside the two
+    # above: not "this player is already being answered" but "this
+    # award is never worth a notification, whoever earned it".
+    ping = (
+        None
+        if mine or award.achievement_id in NEVER_PINGED
+        else award.user_id
+    )
 
     if award.user_id is None:
         # A group achievement has no earner, so "somebody earned" is the
