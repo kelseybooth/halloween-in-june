@@ -1369,3 +1369,28 @@ def test_the_sheet_is_described_as_silvery(shipped):
 
     assert rows, "the bedsheet has no text row"
     assert all("silvery" in row.text["look"] for row in rows)
+
+
+
+def test_the_bottle_cap_reads_differently_in_hand(shipped):
+    """**The room's sentence is wrong in a bag.** The look says the cap
+    *is sitting* crimped side down, which describes a thing on a floor;
+    carried, it is in a hand and sitting nowhere.
+
+    Pinned because the failure is silent: `look_carried` falls back to
+    `look` when it is empty, so deleting the carried line does not break
+    anything, it just quietly tells a player their pocket is a floor.
+    """
+    rows = [row for row in shipped.thing_text if row.entity_id == "bottle_cap"]
+
+    assert rows, "the bottle cap has no text row"
+    for row in rows:
+        # An empty cell is dropped from the dict rather than stored
+        # blank, which is the fallback working - so the missing key is
+        # the failure, and it says so rather than raising KeyError.
+        assert "look_carried" in row.text, (
+            "the bottle cap's carried line is gone, so a player holding "
+            "it would be told it is sitting on something"
+        )
+        assert "You're holding it" in row.text["look_carried"]
+        assert row.text["look_carried"] != row.text["look"]
