@@ -8757,6 +8757,11 @@ async def qa_midnight(interaction: discord.Interaction) -> None:
     fires. Only a negative score moves - affection no longer fades
     during an absence - so a tester who sees nothing settle has
     nobody below the threshold rather than a broken command.
+
+    Three things, since the ghost arrived: the reveal of yesterday goes
+    first, and the hook fires only if it got out. A hook that was
+    skipped is said out loud in the reply rather than left silent,
+    because this command exists to be watched.
     """
     if await qa.refuse(interaction):
         return
@@ -8772,15 +8777,39 @@ async def qa_midnight(interaction: discord.Interaction) -> None:
     # tests for the reveal and for *Boo Who?* are both written against
     # this command, and a QA server that advanced its clock and
     # triggered midnight and still had no ghost would be untestable.
-    await _reveal_the_ghost(interaction.guild)
-    earned = await _fire(
-        achievements.Context(guild_id=interaction.guild_id, hook="on_midnight"),
-        guild=interaction.guild,
-        announce=False,
-    )
+    #
+    # **Including the gate on the hook**, which is the half that was
+    # missing. `_reveal_the_ghost` answers whether the night may go on
+    # to name the ghost, and the nightly job skips `on_midnight` when
+    # it says no - so that *Boo Who?* cannot name yesterday's ghost by
+    # way of an achievement on a night the board never named them at
+    # all. Gated there and ungated here, this command was the one place
+    # the award could still be granted with the name never announced -
+    # and it is the command both acceptance tests are run from, so the
+    # rehearsal would have exercised a path production does not have.
+    revealed = await _reveal_the_ghost(interaction.guild)
+    earned = []
+    if revealed:
+        earned = await _fire(
+            achievements.Context(guild_id=interaction.guild_id, hook="on_midnight"),
+            guild=interaction.guild,
+            announce=False,
+        )
+    # Today's pick is owed either way: it reads a different day from the
+    # reveal, so a reveal that could not post is no reason for a server
+    # to spend today with no ghost in it.
     await _pick_the_ghost(interaction.guild)
     await qa.record(interaction, f"midnight: {len(mine)} score(s) recovered")
     lines = [f"Settled {len(mine)} recovering score(s) here."]
+    if not revealed:
+        # **Said out loud, because a silent gate on a QA command is a
+        # bug report waiting to be filed.** A tester who triggers the
+        # night and sees no award has to be able to tell "nobody earned
+        # it" from "the reveal could not post", and on a test server
+        # the second is fixable in a minute once somebody knows.
+        lines.append(
+            "The reveal was due and could not post, so `on_midnight` was skipped."
+        )
     lines += [f"- `{c.user_id}` {c.before} -> {c.after} on {c.day}" for c in mine[:10]]
     await interaction.followup.send(chr(10).join(lines), ephemeral=True)
     # **Announced after the admin's reply, not instead of it.**
