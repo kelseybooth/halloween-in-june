@@ -174,11 +174,13 @@ The Secret Library is the one room players have to discover. Each player unlocks
 
   > You fit the skeleton key into the lock and turn it. Something clunks deep inside the wall. Instead of the glass doors opening, the whole cabinet swings outward on a hidden hinge. Behind it, a narrow doorway leads into a small room lined with books. It's a secret door into the library.
 
-  The passage is now unlocked for that player for good, and they never need the key for it again.
-- `/use curiosity cabinet` after that: *The cabinet swings open on its hidden hinge, and you step through into the library.*
-- From inside the library, before the passage is unlocked, the exit to the Living Room is the back of the cabinet (suggested): *The doorway is blocked by the back of a heavy cabinet. There's a keyhole on this side too.* With the key, it unlocks the same way.
+  **The cabinet is locked again behind them**, and it is never left standing open. The library is one player's secret, and a cabinet ajar in the Living Room is found by whoever walks in next — so both sides of the passage ask the same question on every trip: is this player carrying the key. That is also what the key is for. One that opened a door once and was dead weight afterwards could not explain why it refuses to be put down; one you need every time can.
 
-**What players see before they find it:** the Secret Library doesn't appear in their exits from the Living Room or the Courtyard. They can still see the curiosity cabinet and the oak tree.
+  This is the opposite of the front door on purpose. The house opens once, by one player, for everybody and for good, because the house opening is the server's story. The cabinet never stays open, because the library is not.
+- `/use curiosity cabinet` after that: *You insert the key in the cabinet, feel a click, and the cabinet swings open on its hidden hinge. You step through and lock it again behind you.*
+- From inside the library, the exit to the Living Room is the back of the cabinet. Without a key (suggested): *The doorway is blocked by the back of a heavy cabinet. There's a keyhole on this side too.* With one: *You unlock and push the cabinet aside, step through, and seal it again behind you.*
+
+**What players see before they find it:** the Secret Library doesn't appear in their exits from the Living Room or the Courtyard. They can still see the curiosity cabinet and the oak tree. `/go secret library` has to fail the way `/go dungeon` fails, or the room's name is what gives it away — so it is matched by name **only for a player carrying a key**, which is the tightest test of already knowing that the game has: the keys hang on a nail inside the library, so nobody is carrying one who has not stood in the room.
 
 ### Repairing the main staircase
 
