@@ -4362,14 +4362,28 @@ async def _the_shape_drifts_in(
     *Boo Who?* and the spirit board both count, and a Discord failure
     after a recorded haunting costs a line in a thread. The other
     order would cost a haunting the ghost watched themselves do.
+
+    **And the ghost is answered before the rooms are told**, which is
+    the three-second rule and not a preference. A modal submit has that
+    long to send any first response or Discord kills the token and
+    shows the player *Something went wrong. Try again.* - its own line,
+    not one of ours. Haunting one room posted once and finished inside
+    the deadline; haunting every room posts ten times, each its own
+    HTTP call with its own rate limit, and the reply arrived at a token
+    that had already died. The haunting was recorded and all ten
+    whispers landed, so the only thing that failed was the sentence
+    saying so, which is the worst shape a failure can take: a player
+    told to try again has every reason to, and each retry is another
+    row and another ten whispers.
+
+    So the private line goes first and the rooms are told afterwards.
+    Nothing is lost by it. `_say_in_room` is cosmetic by contract -
+    it swallows its own failures and returns a bool nobody has to
+    check - so there was never a case where posting could fail in a way
+    the ghost's confirmation should have waited for.
     """
     guild_id, user = interaction.guild_id, interaction.user
     await ghosts.record_haunting(guild_id, user.id, rooms, whisper)
-
-    public = await phrasing.default_say("ghost.haunt.public", whisper=whisper)
-    if public:
-        for room_id in rooms:
-            await _say_in_room(guild_id, room_id, public)
 
     private = await phrasing.default_say(
         "ghost.haunt.private.all" if len(rooms) > 1 else "ghost.haunt.private",
@@ -4378,6 +4392,11 @@ async def _the_shape_drifts_in(
     )
     if private:
         await _instead(interaction, private)
+
+    public = await phrasing.default_say("ghost.haunt.public", whisper=whisper)
+    if public:
+        for room_id in rooms:
+            await _say_in_room(guild_id, room_id, public)
 
     await _fire(
         achievements.Context(

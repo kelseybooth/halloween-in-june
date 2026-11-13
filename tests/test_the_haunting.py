@@ -513,3 +513,81 @@ async def test_every_room_earns_the_spirit_once(house):
     await haunt(house, ghosts.EVERYWHERE, "boo")
 
     assert await earned() == {"getting_into_the_spirit"}
+
+
+# --------------------------------------------------------------------------
+# The three-second rule
+# --------------------------------------------------------------------------
+#
+# A modal submit has three seconds to send any first response before
+# Discord kills the token and shows the player *Something went wrong.
+# Try again.* - its own line, not one of ours.
+#
+# Haunting one room posted once and finished well inside that. Haunting
+# every room posts ten times, each its own HTTP call with its own rate
+# limit, and the reply then arrived at a token that had already died.
+# The haunting was recorded and all ten whispers landed, so the only
+# thing that failed was the sentence saying so - and a player told to
+# try again has every reason to, which is another row and another ten
+# whispers each time.
+#
+# **So this is a test about order, because the bug was only about
+# order.** Nothing here can measure three seconds; what it can do is
+# hold the reply in front of the posting, which is what keeps the whole
+# of the posting outside the deadline no matter how many rooms the
+# house grows.
+
+
+def order_of_events(monkeypatch):
+    """Every answer and every room post, in the order they happen."""
+    events = []
+    real_instead = bot._instead
+    real_say = bot._say_in_room
+
+    async def instead(interaction, content, view=None):
+        events.append("answered")
+        return await real_instead(interaction, content, view)
+
+    async def say(guild_id, room_id, line):
+        events.append(f"posted:{room_id}")
+        return await real_say(guild_id, room_id, line)
+
+    monkeypatch.setattr(bot, "_instead", instead)
+    monkeypatch.setattr(bot, "_say_in_room", say)
+    return events
+
+
+async def test_the_ghost_is_answered_before_any_room_is_told(house, monkeypatch):
+    """**The whole of the fix.** The reply has to be the first thing out,
+    because everything after it is a round trip the deadline is counting."""
+    events = order_of_events(monkeypatch)
+
+    await haunt(house, ghosts.EVERYWHERE, "boo")
+
+    assert events[0] == "answered"
+    assert len([e for e in events if e.startswith("posted:")]) > 1
+
+
+async def test_one_room_is_answered_first_as_well(house, monkeypatch):
+    """The single-room path never broke - one post finished inside the
+    three seconds - but it is the same function and the same rule, and
+    a fix that only held for the long case would be waiting to come
+    back the first time a room is added."""
+    events = order_of_events(monkeypatch)
+
+    await haunt(house, "LI", "boo")
+
+    assert events == ["answered", "posted:LI"]
+
+
+async def test_every_room_is_still_told(house, monkeypatch):
+    """Answering first must not have cost the posting. Guard, because
+    moving a loop below an early return is how that happens."""
+    events = order_of_events(monkeypatch)
+    rooms = await ghosts.rooms_to_haunt(GUILD_A, ALICE)
+
+    await haunt(house, ghosts.EVERYWHERE, "boo")
+
+    assert sorted(e for e in events if e.startswith("posted:")) == sorted(
+        f"posted:{room_id}" for room_id in rooms
+    )
