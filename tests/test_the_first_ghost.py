@@ -12,10 +12,18 @@ Part 1 was being tested on its own must not spend the server's one
 unmissable moment. So the marker is a row in `daily_ghosts`, a table
 that is Part 2's and that every server starts with none of.
 
-Driven through the completion hook, which is where it runs - and once
-through the oak itself, because the sentence the writers wrote is *as
-you climb in* and a test of the whole path is the only thing that says
-the climb is where it lands.
+Driven through the completion hook, which is where it runs - and
+twice through the oak itself, because the climb and the first command
+from inside the library are two different moments now and which of
+them the sheet arrives on is the whole point.
+
+**Where the command was typed is half the question.** The line is
+ephemeral, so Discord puts it in the channel it was asked from, and it
+is only allowed to appear in the library - which means the climb,
+typed under the tree in the Courtyard, must not be what spends the
+server's one unmissable moment. `finish_a_command` defaults to the
+library's thread so the tests about *when* the pick happens stay about
+that; the ones about *where* pass their own room.
 """
 
 from datetime import timedelta
@@ -24,7 +32,13 @@ from types import SimpleNamespace
 import pytest
 
 from conftest import ALICE, BOB, GUILD_A, LAST_DROP
-from fake_discord import FakeChannel, FakeGuild, FakeInteraction, FakeMember
+from fake_discord import (
+    FakeChannel,
+    FakeGuild,
+    FakeInteraction,
+    FakeMember,
+    a_room_thread,
+)
 
 import bot
 import content as content_module
@@ -71,12 +85,43 @@ def answered(interaction):
     return "\n".join(lines)
 
 
-async def finish_a_command(house, who=ALICE):
-    """One command's worth of the completion hook, which is where it runs."""
-    _, guild, _, _ = house
-    interaction = FakeInteraction(who, GUILD_A, guild=guild)
+async def finish_a_command(house, who=ALICE, where=ghosts.LIBRARY):
+    """One command's worth of the completion hook, which is where it runs.
+
+    `where` is the room whose thread it was typed in - or None for the
+    game channel itself, which is not a room and is where a `/stats`
+    from outside the house is asked and answered.
+    """
+    _, guild, halloween, rooms = house
+    channel = halloween if where is None else a_room_thread(rooms[where])
+    interaction = FakeInteraction(who, GUILD_A, guild=guild, channel=channel)
     await bot.on_app_command_completion(interaction, bot.look)
     return interaction
+
+
+async def climb_the_oak(house, who=ALICE):
+    """Up the tree, typed under it, which is the one command whose
+    window and whose destination are different rooms."""
+    _, guild, _, rooms = house
+    interaction = FakeInteraction(
+        who, GUILD_A, guild=guild, channel=a_room_thread(rooms["CO"])
+    )
+    await bot.use.callback(interaction, "oak tree")
+    await bot.on_app_command_completion(interaction, bot.use)
+    return interaction
+
+
+def privately(interaction, line):
+    """Whether that line went out as an ephemeral reply.
+
+    Not just "was said": who is wearing the sheet is the whole game, so
+    a line that reached the thread itself would end it. The room is the
+    other half and the interaction's channel carries that.
+    """
+    return any(
+        text == line and kwargs.get("ephemeral") is True
+        for text, kwargs in interaction.sent
+    )
 
 
 async def standing_in_the_library(who=ALICE):
@@ -98,19 +143,34 @@ async def ghost_row():
 # --------------------------------------------------------------------------
 
 
-async def test_the_first_climb_into_the_library_hands_over_the_sheet(house):
-    """The whole path, through the oak, because the line says *as you
-    climb in* and nothing else proves that is when it arrives."""
-    _, guild, _, _ = house
-    interaction = FakeInteraction(ALICE, GUILD_A, guild=guild)
+async def test_the_climb_itself_says_nothing(house):
+    """**The climb is typed under the tree, so its reply lands there.**
+    An ephemeral line goes to the channel the command was asked in, and
+    the Courtyard is the one room the new ghost demonstrably is not in
+    by the time there is anything to tell them.
 
-    await bot.use.callback(interaction, "oak tree")
-    await bot.on_app_command_completion(interaction, bot.use)
+    The move still happens. Only the sheet waits.
+    """
+    interaction = await climb_the_oak(house)
 
     state = await database.get_game_state(ALICE, GUILD_A)
     assert state.current_room == ghosts.LIBRARY
-    assert await phrasing.default_say(ghosts.FIRST) in answered(interaction)
+    assert await phrasing.default_say(ghosts.FIRST) not in answered(interaction)
+    assert await holding() == 0
+    assert await ghost_row() is None
+
+
+async def test_their_first_command_inside_hands_over_the_sheet(house):
+    """The whole path: up the oak, and then the first thing they do
+    from inside the library, which is where the sheet arrives and the
+    only place the line about it can be read."""
+    await climb_the_oak(house)
+
+    inside = await finish_a_command(house)
+
+    assert privately(inside, await phrasing.default_say(ghosts.FIRST))
     assert await holding() == 1
+    assert (await ghost_row()).user_id == ALICE
 
 
 async def test_the_row_names_them_and_keeps_both_names(house):
@@ -219,13 +279,107 @@ async def test_a_day_that_already_has_a_ghost_is_left_alone(house):
 
 
 # --------------------------------------------------------------------------
+# Which window it lands in
+# --------------------------------------------------------------------------
+
+
+async def test_the_channel_is_not_the_library(house):
+    """`/stats` from the channel is a command run by somebody standing
+    in the library, and its reply would appear in the channel - which
+    is not a room and is read by everybody who has not found the
+    library yet."""
+    await standing_in_the_library()
+
+    outside = await finish_a_command(house, where=None)
+
+    assert await phrasing.default_say(ghosts.FIRST) not in answered(outside)
+    assert await holding() == 0
+
+
+async def test_another_room_s_thread_is_not_the_library(house):
+    """The window has to be the library itself, not merely a room."""
+    await standing_in_the_library()
+
+    elsewhere = await finish_a_command(house, where="CO")
+
+    assert await phrasing.default_say(ghosts.FIRST) not in answered(elsewhere)
+    assert await holding() == 0
+
+
+async def test_a_command_in_the_wrong_window_does_not_spend_the_moment(house):
+    """**The important half.** A moment that can be missed is worse
+    than one that arrives late: the server has exactly one of these,
+    and a `/stats` typed in the channel must leave it waiting rather
+    than burn it somewhere nobody can read it.
+    """
+    await standing_in_the_library()
+    await finish_a_command(house, where=None)
+    await finish_a_command(house, where="CO")
+
+    inside = await finish_a_command(house)
+
+    assert privately(inside, await phrasing.default_say(ghosts.FIRST))
+    assert (await ghost_row()).user_id == ALICE
+    assert await holding() == 1
+
+
+async def test_the_window_is_not_asked_once_the_server_has_a_ghost(house):
+    """**The order is the cost argument.** Which room a command was
+    typed in costs a channel lookup and the whole room list, on the
+    hook that runs after every command in the game. Every command on a
+    server that already has its ghost has to stop before paying for
+    it, which is why the question is a callable and is asked last.
+    """
+    today = await database.server_today(GUILD_A)
+    await database.record_daily_ghost(
+        GUILD_A, today, user_id=BOB, display_name="B", username="b", eligible=3
+    )
+    asked = False
+
+    async def window():
+        nonlocal asked
+        asked = True
+        return ghosts.LIBRARY
+
+    await standing_in_the_library()
+    key = await ghosts.first_ghost(
+        GUILD_A, ALICE, display_name="A", username="a", typed_in=window
+    )
+
+    assert key is None
+    assert asked is False
+
+
+async def test_the_nightly_lines_are_not_tied_to_a_room(house):
+    """**The gate is the first ghost's alone.** `ghost.new` and
+    `ghost.gone` are news from midnight: they belong to no verb and no
+    room, and a ghost who hears about their sheet in the channel has
+    still heard about it. Gating those too would mean a ghost picked at
+    midnight is never told until they next walk into the library.
+    """
+    today = await database.server_today(GUILD_A)
+    await database.record_daily_ghost(
+        GUILD_A, today, user_id=ALICE, display_name="A", username="a", eligible=3
+    )
+
+    anywhere = await finish_a_command(house, where=None)
+
+    assert privately(anywhere, await phrasing.default_say(ghosts.ARRIVED))
+    assert await holding() == 1
+
+
+# --------------------------------------------------------------------------
 # Where and when it does not happen
 # --------------------------------------------------------------------------
 
 
 async def test_nothing_happens_outside_the_library(house):
     """Alice is in the Courtyard, which is where the fixture leaves
-    her: being on the server is not being in the room."""
+    her: being on the server is not being in the room.
+
+    Typed in the library's thread, so that the body is the only thing
+    failing here and the window cannot be what refuses it.
+    """
     await finish_a_command(house)
 
     assert await ghost_row() is None
