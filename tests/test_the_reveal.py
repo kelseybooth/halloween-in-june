@@ -536,3 +536,168 @@ async def test_a_second_night_does_not_announce_it_again(house):
     await bot.nightly_job.coro()
 
     assert len([line for line in posted(house) if "Boo Who?" in line]) == 1
+
+
+# --------------------------------------------------------------------------
+# A reveal that could not post
+# --------------------------------------------------------------------------
+#
+# Running first stops the award overtaking the reveal. It does not stop
+# the award going out on a night the reveal never managed to, and that
+# is reachable without anything raising: `reveal_for` takes the claim
+# before it hands the line back, so a server with nowhere to post spends
+# the night's reveal, posts nothing, and used to go straight on to grant
+# *Boo Who?* - naming the ghost by way of the achievement and never by
+# way of the board, with the reveal burned and no second chance at it.
+#
+# **These check the database and not the channel.** `_announce_all`
+# fails quietly when there is nowhere to post, so a test that only read
+# the posted lines would pass against a granted award.
+
+
+def nowhere_to_post(monkeypatch):
+    """A server the game has no channel in.
+
+    Patched rather than arranged, because a stale id is not this: the
+    id is only `_game_channel`'s first guess and it falls back to
+    `house_utils.find_channel`, so a server whose recorded channel is
+    gone and whose #halloween is still there has somewhere to post. The
+    branch under test is the one where both have failed.
+    """
+
+    async def gone(guild):
+        return None
+
+    monkeypatch.setattr(bot, "_game_channel", gone)
+
+
+def no_line_to_post(monkeypatch):
+    """The other half: content that shipped without the reveal lines."""
+    import phrasing
+
+    real = phrasing.default_say
+
+    async def missing(key, **args):
+        if key.startswith("ghost.reveal."):
+            return ""
+        return await real(key, **args)
+
+    monkeypatch.setattr(phrasing, "default_say", missing)
+
+
+def recording_hooks(monkeypatch):
+    """Every hook `nightly_job` fires, in order, still doing its work."""
+    fired = []
+    real = bot._fire
+
+    async def recording(context, **kwargs):
+        fired.append(context.hook)
+        return await real(context, **kwargs)
+
+    monkeypatch.setattr(bot, "_fire", recording)
+    return fired
+
+
+async def test_the_award_is_withheld_when_there_is_nowhere_to_post(
+    house, monkeypatch
+):
+    """**The hole the ordering could not see.** Granted-and-unannounced
+    is the state this exists to prevent, not merely out-of-order."""
+    day = await was_the_ghost(ALICE)
+    await haunted(ALICE, day, times=3)
+    nowhere_to_post(monkeypatch)
+
+    await bot.nightly_job.coro()
+
+    assert "boo_who" not in await earned_by(ALICE)
+
+
+async def test_the_award_is_withheld_when_the_reveal_line_is_missing(
+    house, monkeypatch
+):
+    """A content file that shipped without the line is the same failure
+    as nowhere to post, and `_reveal_the_ghost` treats it as one."""
+    day = await was_the_ghost(ALICE)
+    await haunted(ALICE, day, times=3)
+    no_line_to_post(monkeypatch)
+
+    await bot.nightly_job.coro()
+
+    assert "boo_who" not in await earned_by(ALICE)
+
+
+async def test_the_hook_is_skipped_when_the_reveal_could_not_post(
+    house, monkeypatch
+):
+    """The same seam from the other side: not just *no award* but *the
+    hook did not run*, which is what the gate actually does."""
+    fired = recording_hooks(monkeypatch)
+    day = await was_the_ghost(ALICE)
+    await haunted(ALICE, day, times=3)
+    nowhere_to_post(monkeypatch)
+
+    await bot.nightly_job.coro()
+
+    assert "on_midnight" not in fired
+
+
+async def test_the_award_does_not_post_when_the_board_could_not(
+    house, monkeypatch
+):
+    """With the line missing the channel is still there, so this is the
+    case where an award could have gone out alone.
+
+    **Asserted on the award's own line and not on the display name**,
+    which is what the first draft of this did and it passed against the
+    defect. `_announce` fills `achievement.public` with `<@id>` rather
+    than a name - deliberately, so that a display name shaped like a
+    mention cannot become one - so "Alice" never appears literally and
+    a test looking for it proves nothing either way.
+    """
+    day = await was_the_ghost(ALICE)
+    await haunted(ALICE, day, times=3)
+    no_line_to_post(monkeypatch)
+
+    await bot.nightly_job.coro()
+
+    assert not [line for line in posted(house) if "Boo Who?" in line]
+
+
+async def test_a_quiet_night_still_fires_the_hook(house, monkeypatch):
+    """**The line between the two silences.** A night with no ghost has
+    no name to give away, and a hook that only ran on interesting nights
+    would be a different hook."""
+    fired = recording_hooks(monkeypatch)
+    await nobody_was_the_ghost()
+
+    await bot.nightly_job.coro()
+
+    assert "on_midnight" in fired
+
+
+async def test_the_pick_still_happens_when_the_reveal_could_not_post(
+    house, monkeypatch
+):
+    """Today is owed a ghost either way: the pick reads a different day
+    from the reveal, so one bad night is not two."""
+    day = await was_the_ghost(ALICE)
+    await haunted(ALICE, day, times=3)
+    nowhere_to_post(monkeypatch)
+
+    await bot.nightly_job.coro()
+    today = await database.server_today(GUILD_A)
+
+    assert await database.daily_ghost(GUILD_A, today) is not None
+
+
+async def test_the_award_still_lands_on_a_night_that_posted(house):
+    """Passes without the change. The guard that the gate did not close
+    on the case it was built to protect."""
+    day = await was_the_ghost(ALICE)
+    await haunted(ALICE, day, times=3)
+
+    lines = await the_night(house)
+
+    assert "boo_who" in await earned_by(ALICE)
+    assert "slipped out of their sheet" in lines[0]
+    assert "Boo Who?" in lines[1]
