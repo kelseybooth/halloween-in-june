@@ -279,13 +279,14 @@ HALLOWEEN = 31
 async def _is_the_cat(thing_id: str | None) -> bool:
     """Whether using this thing is reaching for the cat.
 
-    The bed, any toy, and any of the cans. Toys by *type*, so a
+    Either bed, any toy, and any of the cans. Toys by *type*, so a
     thirteenth toy stays a row in a spreadsheet - the same rule the cap
-    and the ramp already follow.
+    and the ramp already follow, and the same reason the beds are a set
+    rather than two names.
     """
     if thing_id is None:
         return False
-    if thing_id == world.CAT_BED or thing_id in world.CAT_FOOD:
+    if thing_id in world.CAT_BEDS or thing_id in world.CAT_FOOD:
         return True
     row = await phrasing.thing_row(thing_id)
     return row is not None and row.type == world.TOY

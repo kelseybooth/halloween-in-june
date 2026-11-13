@@ -554,7 +554,7 @@ For each thing: **Take** means it can go in an inventory. **Achievement** links 
 | Ritual diagram | No | Elena's diagram, pinned to the shelf edge; readable | — |
 | Copper wire coil | No | A **source**: Elena's salvaged wire, paid out and re-wound many times | — |
 | Cracked mirrors | No | Flavor; show glimpses of the other house | Self-Reflection |
-| Empty cat bed | No | Eunoia hasn't slept here since the split | — |
+| Empty cat bed | No | Eunoia hasn't slept here since the split. Fluffing it still pays, fifteen once a day, like the bed on the road | — |
 | Spirit board | No | Elena's board. Accuse a player of being the day's ghost | Ghostbuster |
 | Skeleton key | Yes, one per player | Unlocks the curiosity cabinet passage to the Living Room. Can't be dropped, taken from another player or sent to Dimension B | — |
 

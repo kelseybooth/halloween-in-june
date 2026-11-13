@@ -42,7 +42,32 @@ LUMBER = "lumber"
 CAT_BED = "cat_bed"
 BED_FLUFF = 15
 
-# What the bed has given this player, recorded once and never again.
+# The second bed, in the Secret Library, and the set that means "a bed"
+# wherever the question is only which cushion was shaken out.
+#
+# **It gets the fluff and nothing else**, and the three parts that do
+# not travel are the three keyed to the road rather than to the bed.
+# `dislodge_from_bed` places what it finds in the channel and spends
+# itself once per player ever, so from the library it would drop a toy
+# twenty rooms away for the few who had not already had theirs at drop
+# 2. `_a_key_falls_out` returns early while the house is unlocked,
+# which it always is for anybody standing in the library, so that
+# branch is unreachable by construction rather than by choice. And the
+# rungs in `hints.py` are drop 1 teaching a player what `/use` is. What
+# is left is a cushion with a dent in it, and shaking that out is worth
+# the same fifteen in either corner of the house.
+#
+# **Which also means the two cooldowns are separate**, because
+# `thing_uses` is keyed on (player, thing): somebody who can reach the
+# library has two beds and thirty points a day rather than one bed and
+# fifteen. That is the arrangement asked for on 12 November, written
+# down here because it is the one consequence the row in `things.tsv`
+# does not show.
+EMPTY_CAT_BED = "empty_cat_bed"
+CAT_BEDS = frozenset({CAT_BED, EMPTY_CAT_BED})
+
+# What the road's bed has given this player, recorded once and never
+# again - the library's gives nothing, so it never reads or writes this.
 # The flag is the whole detection: "their first fluff in drop 2" rather
 # than "their first fluff ever", which every drop 1 tester has already
 # spent - and drop 1 testers are exactly who is on the server when drop
@@ -926,7 +951,10 @@ async def after_use(
     if thing_id == LADDER:
         return await _climb_the_ladder(guild_id, user_id, room_id)
 
-    if thing_id == CAT_BED:
+    # Both beds, and no room test on either: the fluff is the same
+    # action in the farm stand and in the library, and the cat is
+    # `room_id = ALL` for both of them.
+    if thing_id in CAT_BEDS:
         return await _fluff_the_bed(guild_id, user_id)
 
     # **The two things in the house that make a noise.** A use is
@@ -1785,14 +1813,27 @@ async def play_with(
 async def _fluff_the_bed(guild_id: int, user_id: int) -> Effect:
     """Fifteen points, once a day, for shaking out a cushion.
 
-    The bed is a shared fixture with a per-player cooldown: everyone can
-    fluff it, nobody can fluff it twice. The cooldown itself is the
-    ordinary `use_cooldown_hours` path - rolling 24 hours rather than a
-    Pacific day, which is what that column already meant and what the
-    design accepted rather than coding around.
+    **Either cushion.** The road's bed and the library's are one action
+    here and differ only in what the handler does afterwards, which is
+    where the yield lives. Nothing in this function asks which bed it
+    was and nothing should, so a third bed would be a row.
 
-    No state is set and nothing is consumed. The bed in the channel on
-    the last day of October is the same bed as on the first.
+    A bed is a shared fixture with a per-player cooldown: everyone can
+    fluff it, nobody can fluff it twice in a day. The cooldown is the
+    `use_cooldown_daily` path - a Pacific day, which resets for the
+    whole server at one instant, rather than a rolling window that
+    would walk forward through the evening and cost the punctual player
+    a few minutes every day. (This paragraph said `use_cooldown_hours`
+    and rolling 24 hours until today. The bed moved to the daily path
+    well before drop 50 - `test_what_carries_a_cooldown` records why -
+    and this sentence did not go with it.)
+
+    Per player and per *thing*, which is `thing_uses`' key, so the two
+    beds hold two cooldowns and somebody who can reach the library can
+    fluff both in a day. See `CAT_BEDS`.
+
+    No state is set and nothing is consumed. Either bed on the last day
+    of October is the same bed as on the first.
     """
     score = await database.adjust_relationship(user_id, guild_id, BED_FLUFF)
     return Effect(relationship=score, delta=BED_FLUFF)

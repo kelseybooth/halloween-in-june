@@ -3354,7 +3354,10 @@ class _InTheChannel:
 # can is in here along with the four she will eat: the drift asks
 # whether somebody turned up, and offering her something is turning up
 # however it goes.
-CAT_INTERACTIONS = frozenset({world.CAT_BED}) | world.CAT_FOOD
+#
+# Both beds, by the set rather than by name. Turning up in the library
+# to fluff the cushion she has not slept in is still turning up.
+CAT_INTERACTIONS = world.CAT_BEDS | world.CAT_FOOD
 
 
 @bot.tree.command(name="use", description="Attempt to use an object.")
@@ -3488,6 +3491,14 @@ async def use(interaction: discord.Interaction, thing: str) -> None:
             await database.touched_the_cat(
                 user.id, guild_id, await database.server_today(guild_id)
             )
+        # **The road's bed by name, not `world.CAT_BEDS`.** The rung is
+        # `did.use_cat_bed`, and what it retires is *Things can be used,
+        # too. Try /use cat bed* - a hint pointing at the farm stand's
+        # cushion in particular. No other use in the game closes it,
+        # and the library's bed is not an exception to that: a player
+        # who has never been down to the road has not done the thing
+        # the hint asks for, however many cushions they have shaken out
+        # upstairs.
         if found.thing_id == world.CAT_BED:
             # Recorded on the attempt, like the stamp above: a player
             # refused because they fluffed it this morning has still
@@ -5068,6 +5079,22 @@ async def _finish_use(interaction, state, found) -> None:
                 reply,
                 None if carried else await hints.after(guild_id, user.id, nudge),
             )
+    elif found.thing_id == world.EMPTY_CAT_BED:
+        # **The ordinary fluff and only that.** Nothing falls out of
+        # this one - `world.CAT_BEDS` has the three reasons the yield
+        # stays on the road - so there is no line to choose between and
+        # no rung to spend. The room gets `bed_fluff.public`, the same
+        # key the farm stand posts, and the player keeps the cushion's
+        # own text underneath it: public and private both, which is
+        # what every successful fluff on the road already does.
+        #
+        # Reusing the key rather than writing a second one was asked
+        # for. It is worth knowing what it costs: the line says "the
+        # cat bed" for a thing named *empty cat bed*, and it says the
+        # cat approves in the one room the Story Bible has her staying
+        # out of. A `bed_fluff.empty.public` would fix both and is a
+        # content change, not a code one.
+        await _announce_bed_fluff(interaction)
     elif found.thing_id == world.LADDER:
         # **Public and private both, the bed's arrangement.** The
         # private line is the climb - six of them, one per room, and on

@@ -274,6 +274,14 @@ reach, which is true for the whole server, and this sentence is about one player
 Leave `use_fail_cooldown` blank on anything else and the cooldown keeps reading
 `use_fail`, which is what the cat bed does.
 
+*Added 12 November:* `empty_cat_bed`, the cushion in the Secret Library, is the third
+row to carry `use_cooldown_daily = yes`. It was given the road bed's fluff — fifteen
+points, once a day — and it has no `use_fail` or `use_fail_cooldown` of its own, so its
+refusal is the house `use_fail.cooldown`: *You've done that recently. Try the {name}
+again in {time}.* The road bed keeps its own line. The two clocks are separate, because
+`thing_uses` is keyed on the thing, so a player who can reach the library fluffs twice a
+day. Nothing falls out of the library one: the yield stayed on the road.
+
 `{time}` is a new template token — the remaining cooldown, rendered by the engine. It
 needs adding to the Templating section of the Content Schema.
 

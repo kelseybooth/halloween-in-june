@@ -285,6 +285,13 @@ def test_what_carries_a_cooldown(shipped):
     opportunity loses a few minutes a day forever, and somebody who
     fluffs just before midnight loses nearly all of the next day.
 
+    **The library's bed is the third row and arrived last**, on 12
+    November, when the empty cat bed in the Secret Library was given
+    the road bed's fluff. It takes the daily column for the reason the
+    road bed has it rather than for a reason of its own, and the two
+    clocks are separate because `thing_uses` is keyed on the thing: a
+    player who can reach the library fluffs twice a day.
+
     Drop 20 moved the staircase for a second reason on top of that one.
     The repair is a shared job measured in days - ninety planks at one
     per player per day - so "a day" has to mean the same day for
@@ -300,7 +307,7 @@ def test_what_carries_a_cooldown(shipped):
     daily = {t.thing_id for t in shipped.things if t.use_cooldown_daily}
 
     assert hourly == {}
-    assert daily == {"cat_bed", "lumber"}
+    assert daily == {"cat_bed", "empty_cat_bed", "lumber"}
     assert not (set(hourly) & daily)  # the loader refuses both on one row
 
 
