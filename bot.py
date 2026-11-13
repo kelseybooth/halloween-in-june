@@ -4191,20 +4191,34 @@ HAUNT_TIMEOUT = 180
 
 
 class _HauntWhere(discord.ui.Select):
-    """Step one: which room the shape drifts into.
+    """Step one: which room the shape drifts into, or every one of them.
 
     Rooms, not exits. A haunting is not a move - the ghost does not go
     anywhere - so this offers every room they could have been in,
     rather than the ones they could walk to from where they are.
+
+    **Every room is the first option**, because it is the one choice
+    that is not a room and a ghost deciding to be everywhere should not
+    have to read to the bottom of the house to find it. It costs one
+    haunting, not one per room: `record_haunting` takes the list and
+    writes a single row, which is what keeps *Boo Who?* a day's work.
     """
 
     def __init__(self, rooms):
-        self._rooms = dict(rooms)
+        self._rooms = {room_id: after for room_id, _, after in rooms}
+        self._everywhere = [room_id for room_id, _, _ in rooms]
         super().__init__(
             placeholder="Which room?",
             options=[
-                discord.SelectOption(label=name, value=room_id)
-                for room_id, name in rooms
+                discord.SelectOption(
+                    label="Every room",
+                    value=ghosts.EVERYWHERE,
+                    description="The shape drifts through the whole house.",
+                )
+            ]
+            + [
+                discord.SelectOption(label=label, value=room_id)
+                for room_id, label, _ in rooms
             ],
         )
 
@@ -4215,11 +4229,14 @@ class _HauntWhere(discord.ui.Select):
         `__init__` cannot await, so every line the box shows is
         resolved in this callback and handed over already written.
         """
-        room_id = self.values[0]
-        room_name = self._rooms[room_id]
+        chosen = self.values[0]
+        if chosen == ghosts.EVERYWHERE:
+            rooms, room_name = self._everywhere, "house"
+        else:
+            rooms, room_name = [chosen], self._rooms[chosen]
         await interaction.response.send_modal(
             _WhatToWhisper(
-                room_id,
+                rooms,
                 room_name,
                 limit=await database.get_setting(
                     interaction.guild_id, ghosts.MAX_CHARS
@@ -4255,10 +4272,10 @@ class _WhatToWhisper(discord.ui.Modal):
     """
 
     def __init__(
-        self, room_id, room_name, *, limit, title=None, label=None,
+        self, rooms, room_name, *, limit, title=None, label=None,
         placeholder=None,
     ):
-        self._where = (room_id, room_name)
+        self._where = (list(rooms), room_name)
         self._limit = limit
         super().__init__(
             title=(title or f"Haunt the {room_name}")[:45],
@@ -4274,19 +4291,19 @@ class _WhatToWhisper(discord.ui.Modal):
         self.add_item(self.whisper)
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        room_id, room_name = self._where
+        rooms, room_name = self._where
         await _the_shape_drifts_in(
             interaction,
-            room_id,
+            rooms,
             room_name,
             ghosts.trimmed(self.whisper.value, self._limit),
         )
 
 
 async def _the_shape_drifts_in(
-    interaction, room_id: str, room_name: str, whisper: str
+    interaction, rooms: list[str], room_name: str, whisper: str
 ) -> None:
-    """Post the whisper in the room, and tell the ghost it landed.
+    """Post the whisper in each room, and tell the ghost it landed.
 
     **The public line carries no name and no mention.** It goes out
     through `_say_in_room`, which posts with `_post_quietly` - every
@@ -4302,14 +4319,17 @@ async def _the_shape_drifts_in(
     order would cost a haunting the ghost watched themselves do.
     """
     guild_id, user = interaction.guild_id, interaction.user
-    await ghosts.record_haunting(guild_id, user.id, room_id, whisper)
+    await ghosts.record_haunting(guild_id, user.id, rooms, whisper)
 
     public = await phrasing.default_say("ghost.haunt.public", whisper=whisper)
     if public:
-        await _say_in_room(guild_id, room_id, public)
+        for room_id in rooms:
+            await _say_in_room(guild_id, room_id, public)
 
     private = await phrasing.default_say(
-        "ghost.haunt.private", room=room_name, whisper=whisper
+        "ghost.haunt.private.all" if len(rooms) > 1 else "ghost.haunt.private",
+        room=room_name,
+        whisper=whisper,
     )
     if private:
         await _instead(interaction, private)
@@ -4320,7 +4340,7 @@ async def _the_shape_drifts_in(
             hook="on_use",
             user_id=user.id,
             thing_id=ghosts.BEDSHEET,
-            room_id=room_id,
+            room_id=rooms[0] if len(rooms) == 1 else None,
         ),
         interaction=interaction,
     )
@@ -4338,7 +4358,7 @@ async def _pull_the_sheet_over(interaction, state, found) -> None:
     """
     guild_id, user = interaction.guild_id, interaction.user
     rooms = [
-        (room_id, await resolve.room_name(room_id) or room_id)
+        (room_id, *await ghosts.haunt_names(room_id))
         for room_id in await ghosts.rooms_to_haunt(guild_id, user.id)
     ]
     prompt = await phrasing.default_say("ghost.haunt.picker")

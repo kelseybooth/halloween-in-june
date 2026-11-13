@@ -176,7 +176,7 @@ async def a_ghost(display_name="Kate", username="kate_s.92", who=ALICE):
 
 async def a_haunting(who=ALICE, room_id="LI"):
     """One haunting, which is what *Name the ghost* waits for."""
-    await ghosts.record_haunting(GUILD_A, who, room_id, "boo")
+    await ghosts.record_haunting(GUILD_A, who, [room_id], "boo")
 
 
 def the_view(interaction):

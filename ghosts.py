@@ -57,6 +57,7 @@ import random
 import unicodedata
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from collections.abc import Sequence
 from datetime import date, datetime, timedelta
 
 import database
@@ -78,6 +79,43 @@ BEDSHEET = "bedsheet"
 # The one room that arrives for a server and not for a player, which
 # is why the picker has to ask about it separately.
 LIBRARY = "SE"
+
+# The channel, under the name the rest of the house uses for it.
+CHANNEL = "CH"
+
+# **Two forms, because the picker shows a name and the modal finishes a
+# sentence.** `rooms.tsv` calls the channel "the channel", which is what
+# a player standing in it reads. The haunt picker is a list of places to
+# drift into from outside, and outside is where the house has always
+# called it the road - `_say_in_room` says so in its own docstring.
+#
+# The second form exists because `ghost.haunt.modal.title` is
+# "Haunt the {room}" and `ghost.haunt.private` is "You drift into the
+# {room}". Every other room in the house is a bare noun that reads
+# correctly after "the"; the channel is the only name carrying its own
+# article, so those two lines have rendered "the the channel" since the
+# picker shipped. One name for the list, one for after a "the", and both
+# read.
+ROAD_IN_A_LIST = "the road"
+ROAD_AFTER_THE = "road"
+
+# The first option in the picker, which is no single room. A room id is
+# two uppercase letters everywhere in the house, so one character cannot
+# collide with one now or after a drop adds a room.
+EVERYWHERE = "*"
+
+
+async def haunt_names(room_id: str) -> tuple[str, str]:
+    """What to call one room in the picker, and after the word "the".
+
+    The pair is the same string for every room but the channel, and
+    callers use both halves rather than choosing, so that a second room
+    that ever needs its own article has one place to say so.
+    """
+    if room_id == CHANNEL:
+        return ROAD_IN_A_LIST, ROAD_AFTER_THE
+    name = await resolve.room_name(room_id) or room_id
+    return name, name
 
 # **And the state is not the room.** Asking whether `SE` is in force
 # for a player is a question that is always answered no, so the first
@@ -589,10 +627,10 @@ def trimmed(whisper: str, limit: int) -> str:
 async def record_haunting(
     guild_id: int,
     user_id: int,
-    room_id: str,
+    rooms: Sequence[str],
     whisper: str,
 ) -> None:
-    """Write the haunting down: the author, the room and the words.
+    """Write the haunting down: the author, the rooms and the words.
 
     Two writes, and they answer different questions. The log row is
     the admin's copy and the count *Boo Who?* and the spirit board
@@ -601,14 +639,39 @@ async def record_haunting(
     the sheet in the same bookkeeping as everything else a player
     uses, rather than inventing a second idea of what using a thing
     means.
+
+    **One haunting, however many rooms the shape reached.** This takes
+    a list rather than a room so that the all-rooms option is not a
+    special case anybody can forget: one call, one row, whether the
+    list holds one room or nine. *Boo Who?* wants the ghost haunting
+    three times across a day, and a press that wrote nine rows would
+    hand it over in one - "haunted the house all day" has to cost a
+    day.
+
+    **A room per use, or none.** `record_use` writes `last_used_at`
+    and `last_used_room` as one fact, and the honest answer for a
+    shape that was in every room at once is that it was in no
+    particular one. Its own docstring allows the null and warns
+    against coalescing, which is the trap here: keeping the last real
+    room would say the sheet was last used somewhere it was not.
     """
-    await database.record_use(user_id, guild_id, BEDSHEET, room_id=room_id)
+    places = list(rooms)
+    await database.record_use(
+        user_id,
+        guild_id,
+        BEDSHEET,
+        room_id=places[0] if len(places) == 1 else None,
+    )
     await telemetry.succeeded(
         guild_id,
         user_id,
         telemetry.HAUNTED,
         thing_id=BEDSHEET,
-        detail=whisper,
+        detail=(
+            whisper
+            if len(places) == 1
+            else f"every room ({len(places)}): {whisper}"
+        ),
     )
 # --------------------------------------------------------------------------
 # The spirit board
