@@ -541,6 +541,83 @@ async def test_the_living_room_is_still_named_from_inside(house):
     assert await where(db) == "LI"
 
 
+async def test_the_courtyard_names_the_library_once_it_has_been_found(house):
+    """**The oak's half of the same rule.** A player who has been up the
+    tree knows the room is there, and the tree is in the Courtyard prose
+    for everybody - so naming the room gives away nothing they have not
+    already seen, and asking for the way back is the thing `/go` is for.
+    """
+    db, *_ = house
+    await climb(house)
+    await act(house, bot.use, "window", "SE")
+
+    await act(house, bot.go, "library", "CO")
+
+    assert await where(db) == "SE"
+
+
+async def test_the_rooms_full_name_works_from_the_courtyard_too(house):
+    db, *_ = house
+    await climb(house)
+    await act(house, bot.use, "window", "SE")
+
+    await act(house, bot.go, "secret library", "CO")
+
+    assert await where(db) == "SE"
+
+
+async def test_the_key_is_not_what_the_courtyard_asks_for(house):
+    """**The difference between the two doors, in one test.** The same
+    player, having found the room and taken no key, is refused the name
+    in the Living Room and given it in the Courtyard - because the
+    cabinet is shut to them and the oak is not. Naming a room is never
+    a way past a door; it is a way of asking for one that is open.
+    """
+    db, *_ = house
+    await climb(house)
+    await act(house, bot.use, "window", "SE")
+
+    refused = replies(await act(house, bot.go, "library", "LI"))
+    assert await where(db) == "LI"
+    assert "don't see" in refused
+
+    await act(house, bot.go, "library", "CO")
+    assert await where(db) == "SE"
+
+
+async def test_the_courtyard_says_nothing_to_a_player_who_has_not_climbed(house):
+    """The secret is still a secret. It has to fail the way a room that
+    does not exist fails, which is what `test_the_secret_library_cannot_be_named`
+    pins against an invented room word for word."""
+    db, *_ = house
+
+    reply = replies(await act(house, bot.go, "secret library", "CO"))
+
+    assert await where(db) == "CO"
+    assert "don't see" in reply
+
+
+async def test_asking_by_name_climbs_the_oak_rather_than_arriving(house):
+    """**It resolves to the tree and then takes the tree's whole path**,
+    which is what `/go` does everywhere and the reason the room name is
+    allowed to be a way of asking at all. The player reads the oak's
+    own `library_found` line, and the Courtyard is told what the oak's
+    `move_depart` says - *you can't quite tell where they went* - so
+    naming the room out loud still does not name it to the room.
+    """
+    db, *_ = house
+    await climb(house)
+    await act(house, bot.use, "window", "SE")
+
+    reply = replies(await act(house, bot.go, "library", "CO"))
+
+    assert await where(db) == "SE"
+    assert "slip in through the library window" in reply
+    said = " ".join(posted(house, "Courtyard"))
+    assert "Secret Library" not in said
+    assert "can't quite tell where they went" in said
+
+
 async def test_a_player_holding_several_states_reads_the_right_one(house):
     """The bug this phase's resolution order exists for. Alphabetically
     `library_found` beats `passage_open`, so a naive pick would have shown
