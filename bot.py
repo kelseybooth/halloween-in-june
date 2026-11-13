@@ -4977,9 +4977,19 @@ async def _finish_use(interaction, state, found) -> None:
     # there is anything to ask. A plain `requires` names the thing in
     # the cell, so a writer who wants it in the sentence can type it;
     # `a/b` is the one shape where which one it was is not knowable
-    # until a player turns up holding one. So every `requires` in the
-    # files today costs nothing, and the gate above has already decided
-    # the answer is not None by the time this runs.
+    # until a player turns up holding one. The gate above has already
+    # decided the answer is not None by the time this runs.
+    #
+    # **Two `requires` in the files are groups, and one of them reads
+    # nothing back.** The skeleton key is gated on `SL/LS`, the two
+    # faces of the one cabinet, because no single thing is present in
+    # both of the rooms its use is answered in - and its line never
+    # names which side the player is standing at. So that use pays a
+    # lookup for a token nobody reads. Taken rather than designed
+    # around: it is the rarest command in the game, and the
+    # alternative was a second way of gating a use by room.
+    # `test_two_things_in_the_files_have_a_group` is the other end of
+    # this, and is where a third would have to say so.
     group = next(
         (
             part
