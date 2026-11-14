@@ -743,6 +743,38 @@ def exit_refused_by(thing_id: str, held: set[str]) -> bool:
     return False
 
 
+def may_name_the_library(thing_id: str, held: set[str]) -> bool:
+    """Whether this door in may be asked for by the room's name.
+
+    `/go library` rather than `/go oak tree`. The room is a secret, so
+    the name is not a way of finding it: it is a way for somebody who
+    has found it to ask for the way back, which is what `/go` is for
+    everywhere else in the house.
+
+    **Two conditions, one per door, and each door needs the one the
+    other does not.** `library_found` is written by the oak and by
+    nothing else - the oak being the way in that asks for nothing - so
+    it is exactly the set of players who have stood in the room. That
+    is the whole of the Courtyard's test: the tree is in the prose for
+    everybody, and a player who has climbed it is told nothing by the
+    room's name that the room has not already told them.
+
+    The cabinet wants more, because `exit_refused_by` asks it for the
+    key on every trip. A player who climbed the oak, looked around and
+    came back down empty-handed has `library_found` and no key, and the
+    Living Room has to go on refusing them the name - **naming a room
+    is a way of asking for a door, never a way through one**, and a
+    refusal that admitted the room was there would be the giveaway the
+    secret is kept against.
+
+    Written here rather than in `_exit_to_room` because it is the third
+    rule about these two doors and the other two are `exit_refused_by`
+    and `after_move`, four lines apart. A fourth place to look for them
+    is how they drift.
+    """
+    return LIBRARY_FOUND in held and not exit_refused_by(thing_id, held)
+
+
 def use_refused_by(thing_id: str, held: set[str]) -> bool:
     """Whether a use is refused outright by the states in force.
 

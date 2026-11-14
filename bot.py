@@ -7042,19 +7042,29 @@ async def _exit_to_room(
     the room answered to the word, and the candidates are the two or three
     ways out of one room.
 
-    **The Secret Library is matched by name only for a key-holder.** To
-    anybody else `/go secret library` has to fail exactly the way `/go
-    dungeon` fails, or the room's name is the thing that gives it away.
-    The key is the tightest test there is of somebody already knowing:
-    it hangs on a nail inside the library, so nobody is carrying one who
-    has not stood in the room, and telling them the way back to a place
-    they have been gives nothing away. Without this, a player holding
-    the key had to ask for the cabinet rather than for the room, which
-    is the one thing `/go` exists not to make them do.
+    **The Secret Library is matched by name only through a door that is
+    open to the player naming it.** To anybody else `/go secret library`
+    has to fail exactly the way `/go dungeon` fails, or the room's name
+    is the thing that gives it away. `world.may_name_the_library` is the
+    rule and it asks two things, which between them are what each of the
+    two doors needs:
+
+    *Have they been in it.* `library_found` is written by the oak and by
+    nothing else, and the oak is the way in that needs nothing - so
+    every player who has stood in the room holds it and nobody else can.
+    Telling somebody the way back to a place they have been gives away
+    nothing they have not already seen.
+
+    *And is the door they are naming shut to them.* The cabinet asks for
+    the key on every trip, so a player who went up the tree and came
+    back down without one still reads *you don't see a library here* in
+    the Living Room - naming a room is a way of asking for a door, never
+    a way through one. The oak is shut to nobody, so in the Courtyard
+    having found it is the whole of it.
 
     Asked only when the library is actually a candidate, and asked once:
-    it is a read, and this runs on every `/go` that named something no
-    thing in the room answered to.
+    it is two reads, and this runs on every `/go` that named something
+    no thing in the room answered to.
 
     `hidden` is the same argument for a different reason: a doorway this
     player has not earned must not be reachable by naming the room
@@ -7065,16 +7075,16 @@ async def _exit_to_room(
     if not wanted:
         return None
 
-    holder = None
+    held = None
     for exit_ in await resolve.exits_from(guild_id, room_id):
         if exit_.thing_id in hidden:
             continue
         if exit_.destination == world.SECRET_LIBRARY:
             if user_id is None:
                 continue
-            if holder is None:
-                holder = await world.has_key(guild_id, user_id)
-            if not holder:
+            if held is None:
+                held = await world.states_for_exit(guild_id, user_id)
+            if not world.may_name_the_library(exit_.thing_id, held):
                 continue
         name = await resolve.room_name(exit_.destination)
         if not name:
