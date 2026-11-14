@@ -208,6 +208,32 @@ def test_the_shipped_content_validates():
     assert content.validate(content.load_files()) == []
 
 
+def test_the_wire_is_named_for_the_word_the_prose_uses():
+    """The display name follows the prose, and the old one is kept.
+
+    "twisted copper wire" was written in exactly one place in the game -
+    this cell - while both sentences that point at the thing call it
+    copper wire. A display name nobody ever reads in the fiction can
+    only surprise: it is what `/take` echoes back and what the bag
+    lists, in a phrase the room never used.
+
+    **The long form stays an alias, and that is the half worth
+    pinning.** The name is the only place it lived, so a rename that
+    drops it stops `/take twisted copper wire` resolving for anybody
+    who learned the phrase off their own inventory. At three words it
+    is still markable, so keeping it costs nothing.
+
+    The spool answers to `copper wire` as well, and that is not an
+    ambiguity: a source is filed under what it yields, so the spool and
+    the wire are one candidate to the parser and to the marker alike.
+    """
+    things = {thing.thing_id: thing for thing in content.load_files().things}
+    wire = things["copper_wire"]
+
+    assert wire.name == "copper wire"
+    assert "twisted copper wire" in {content.normalise(n) for n in wire.names}
+
+
 def test_every_source_is_findable():
     """The check with no counterpart elsewhere: a source appears in no listing,
     so prose that fails to name it makes it unobtainable rather than untidy."""
