@@ -302,7 +302,7 @@ async def test_the_back_of_the_cabinet_opens_for_a_key_holder(house):
     reply = replies(await act(house, bot.use, "back of the cabinet", "SE"))
 
     assert await where(db) == "LI"
-    assert "lock it again behind you" in reply
+    assert "seal it again behind you" in reply
 
 
 async def test_going_through_leaves_it_locked_for_everybody_else(house):
@@ -405,8 +405,8 @@ async def test_the_way_out_reads_the_same_line_every_time(house):
     first = replies(await act(house, bot.use, "back of the cabinet", "SE"))
     second = replies(await act(house, bot.use, "back of the cabinet", "SE"))
 
-    assert "lock it again behind you" in first
-    assert "lock it again behind you" in second
+    assert "seal it again behind you" in first
+    assert "seal it again behind you" in second
 
 
 # --------------------------------------------------------------------------

@@ -47,7 +47,7 @@ used_baby_bottle	used baby bottle	used bottle|bottle|baby bottle|dirty bottle	ob
 sanitized_baby_bottle	sanitized baby bottle	clean bottle|sanitized bottle|sterilized bottle	object		0	yes	yes	1										25	42					
 dirty_diaper	dirty diaper	diaper|dirty diaper|nappy|dirty nappy	object		0	yes	yes	1										3	43					
 scorch_circle	scorch circle	scorch circle|scorch marks|burn|circle	fixture	SE	1	no	yes	0										50	43					
-ritual_diagram	ritual diagram	ritual diagram|diagram|drawing	fixture	SE	1	no	yes	0								library_shelves		50	44					
+ritual_diagram	diagram	diagram|ritual diagram|drawing	fixture	SE	1	no	yes	0								library_shelves		50	44					
 cracked_mirrors	cracked mirrors	cracked mirrors|mirrors|mirror	fixture	SE	3	no	yes	0										50	45					
 empty_cat_bed	empty cat bed	cat bed|bed|empty cat bed	fixture	SE	1	no	yes	0										50	46		yes			
 spirit_board	spirit board	spirit board|board|ouija|planchette	fixture	SE	1	no	yes	0										50	47					
