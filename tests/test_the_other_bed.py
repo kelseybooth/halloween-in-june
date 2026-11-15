@@ -162,8 +162,29 @@ async def test_it_is_worth_the_same_fifteen(house):
 async def test_an_alias_works(house):
     """`empty cat bed` and `bed` as well as the name, and `cat bed`
     reaching this one rather than the road's is the whole of what makes
-    the row addressable from in here."""
+    the row addressable from in here.
+
+    `empty cat bed` was the name until 14 November and is kept as an
+    alias, so nothing a player had already learned to type stopped
+    working when the row was renamed.
+    """
     assert FLUFFED in replies(await fluff(house, thing="empty cat bed"))
+
+
+async def test_the_name_it_is_called_now(house):
+    """**The name itself, which is not in the alias column.**
+    `reach._names_of` matches a row's name alongside its aliases, so
+    renaming the cell is the whole of what makes `round cat bed` work -
+    and the only test that would have caught the rename being written
+    into the aliases instead, where the name would have stayed `empty
+    cat bed` and the cell nobody reads would have gained a phrase.
+
+    It is also the sentence the bed's own `look` has always used: the
+    cushion reads "A round cat bed in the corner" and did so while the
+    row was still called empty. The rename closed that gap rather than
+    opening one.
+    """
+    assert FLUFFED in replies(await fluff(house, thing="round cat bed"))
 
 
 async def test_a_second_fluff_the_same_day_is_refused(house):
@@ -190,7 +211,7 @@ async def test_the_room_watches_the_fluff(house):
 
     `bed_fluff.public` is reused rather than written a second time,
     which was the call made on 12 November. It is why the library's
-    thread reads "the cat bed" for a thing named *empty cat bed*.
+    thread reads "the cat bed" for a thing named *round cat bed*.
     """
     interaction = await fluff(house)
 

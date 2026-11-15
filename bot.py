@@ -5304,9 +5304,9 @@ async def _finish_use(interaction, state, found) -> None:
         #
         # Reusing the key rather than writing a second one was asked
         # for. It is worth knowing what it costs: the line says "the
-        # cat bed" for a thing named *empty cat bed*, and it says the
+        # cat bed" for a thing named *round cat bed*, and it says the
         # cat approves in the one room the Story Bible has her staying
-        # out of. A `bed_fluff.empty.public` would fix both and is a
+        # out of. A `bed_fluff.round.public` would fix both and is a
         # content change, not a code one.
         await _announce_bed_fluff(interaction)
     elif found.thing_id == world.LADDER:
