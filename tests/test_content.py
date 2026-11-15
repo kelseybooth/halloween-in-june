@@ -326,7 +326,7 @@ def test_what_carries_a_cooldown(shipped):
     fluffs just before midnight loses nearly all of the next day.
 
     **The library's bed is the third row and arrived last**, on 12
-    November, when the empty cat bed in the Secret Library was given
+    November, when the round cat bed in the Secret Library was given
     the road bed's fluff. It takes the daily column for the reason the
     road bed has it rather than for a reason of its own, and the two
     clocks are separate because `thing_uses` is keyed on the thing: a
