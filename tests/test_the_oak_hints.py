@@ -503,6 +503,20 @@ async def test_the_spool_is_unchanged(house):
     assert "uncoil a little of it" in reply
 
 
+async def test_using_the_spool_hands_over_nothing(house):
+    """**The other half of "a fixture, not a source".** The rule is read
+    off the type, so the spool - which is a source with the same
+    `yields` cell - must go on answering `/use` with a sentence and
+    `/take` with the wire. Widening the rule to any type that yields
+    would turn one draw into two.
+    """
+    db, *_ = house
+
+    await act(house, bot.use, "spool of copper wire", LIBRARY)
+
+    assert await carrying(db, "copper_wire") == 0
+
+
 def test_only_the_cutters_yield_on_use():
     """**The general rule, and the list it applies to.**
 
