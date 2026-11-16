@@ -185,7 +185,12 @@ def test_the_shipped_content_parses():
     # - and they are the only place either award's picture is ever
     # shown, because `_announce` sends no private line for an award
     # earned on the midnight job.
-    assert len(c.defaults) == 228
+    # Ten more on 15 November: the oak's ambient hints. **They are
+    # the first defaults that are not a reply to anything** - no
+    # command produces one, the house posts them into the Courtyard
+    # on its own - which is why they are keys here rather than rows
+    # in `thing_text` beside the tree.
+    assert len(c.defaults) == 238
     # Ten since 31 October: the ground floor arrives in two halves, and
     # 25 sits below the ceiling rather than above it, which is why
     # nothing else in the suite noticed.

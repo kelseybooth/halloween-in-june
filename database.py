@@ -1473,6 +1473,36 @@ class ServerState(Base):
     set_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
+class OakHint(Base):
+    """Where a server has got to in the oak's ten ambient lines.
+
+    **A new table rather than a state on `server_states`**, because
+    this is not a state: it is a cursor, a clock and a memory of one
+    line. `create_all` creates a missing table, so unlike a new column
+    there is nothing to ALTER in and nothing to add to `ADDED_COLUMNS`.
+
+    `next_position` counts lines posted, so it is also the answer to
+    "how many had posted before somebody found the library" - the
+    number the work order asks to see beside the first entry, and the
+    reason the cursor keeps climbing past ten rather than wrapping.
+
+    `last_key` exists only to keep the random phase from reading the
+    same line twice running. It says nothing a player can see.
+
+    **`last_posted_at` is claimed before the line is posted**, thirty
+    seconds before, and released if the post fails. The gap is what
+    stops two commands in the same half minute both drawing, so a
+    stamp that waited for the send would not be a gap at all.
+    """
+
+    __tablename__ = "oak_hints"
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    next_position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_posted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
 class ServerConfig(Base):
     """Per-server numbers an admin can retune: planks_required, bottles_per_day.
 
@@ -5455,6 +5485,21 @@ CONFIG_KEYS: dict[str, tuple[int, str]] = {
         8,
         "How many used baby bottles are scattered through the house each day.",
     ),
+    # **The oak's two, and they are a pair.** The odds decide how often
+    # a Courtyard command is a candidate at all and the gap decides how
+    # often one can land, so tuning either alone is how a server ends
+    # up with ten lines in an evening or none in a week. Both are what
+    # QA sets to 1 and 0 to walk the ten in order.
+    "oak_hint_odds": (
+        4,
+        "One in how many commands run in the Courtyard may post a hint "
+        "about the oak, until somebody finds the Secret Library.",
+    ),
+    "oak_hint_gap_hours": (
+        4,
+        "How long the house waits between hints about the oak, however "
+        "many commands are run in the Courtyard.",
+    ),
     # **Two until drop 46, six from it**, and the number moved because
     # the space did: two toys were the right number for one channel
     # floor and are a rounding error across sixteen containers and nine
@@ -6907,6 +6952,130 @@ async def daily_ghost(guild_id: int, day: date) -> GhostOfTheDay | None:
         username=row.username,
         eligible=row.eligible,
     )
+
+
+async def anyone_holding(guild_id: int, states: Iterable[str]) -> bool:
+    """Whether any player on this server holds any of these states.
+
+    **The server-level question `player_states` can answer and no other
+    table can.** The oak's hints stop when somebody gets into the
+    library, and both ways in leave a row here: the tree writes
+    `library_found`, the cabinet writes `passage_open`.
+
+    Deliberately *not* `ever_had_a_ghost`, which the hints' work order
+    mistook for this. That one asks whether the ghost system has
+    started, and `ghosts.first_ghost` explains at length why the two
+    must not be confused - on QA they are different questions, because
+    the library was walked through for days before Part 2 existed. A
+    hint about how to find a room has to stop when the room is found,
+    whatever the ghosts are doing.
+
+    `LIMIT 1`, so a server with forty players in the library reads one
+    row.
+    """
+    wanted = tuple(states)
+    if not wanted:
+        return False
+    session_factory = _require_session()
+    async with session_factory() as session:
+        found = await session.scalar(
+            select(PlayerState.state)
+            .where(
+                PlayerState.guild_id == guild_id,
+                PlayerState.state.in_(wanted),
+            )
+            .limit(1)
+        )
+    return found is not None
+
+
+async def claim_an_oak_hint(
+    guild_id: int, *, not_before: datetime, now: datetime | None = None
+) -> tuple[int, str | None, datetime] | None:
+    """Take this server's next hint slot, or None if one posted too recently.
+
+    Returns the position to read, the line that went out last, and the
+    stamp this call wrote - which is what `release_an_oak_hint` needs if
+    the post then fails.
+
+    **Atomic in one statement**, the same shape as `claim_first_ghost`
+    and for the same reason: two commands in the Courtyard in the same
+    second would both have read an open window, and the loser has to
+    come away knowing it lost rather than posting a second line. `DO
+    UPDATE ... WHERE` is the whole of it - when the window is shut the
+    update matches no row, the statement returns nothing, and this
+    returns None.
+
+    Releasing sets the stamp back to NULL rather than to what was there
+    before, and nothing is lost by that: this only succeeds when the
+    window was already open, so "open" is exactly the state it restores.
+    """
+    session_factory = _require_session()
+    insert = _upsert_statement()
+    stamped = now if now is not None else _utcnow()
+    stmt = (
+        insert(OakHint)
+        .values(
+            guild_id=guild_id,
+            next_position=0,
+            last_posted_at=stamped,
+            last_key=None,
+        )
+        .on_conflict_do_update(
+            index_elements=[OakHint.guild_id],
+            set_={"last_posted_at": stamped},
+            where=or_(
+                OakHint.last_posted_at.is_(None),
+                OakHint.last_posted_at <= not_before,
+            ),
+        )
+        .returning(OakHint.next_position, OakHint.last_key)
+    )
+    async with session_factory() as session:
+        row = (await session.execute(stmt)).first()
+        await session.commit()
+    if row is None:
+        return None
+    return row[0], row[1], stamped
+
+
+async def finish_an_oak_hint(guild_id: int, key: str) -> None:
+    """Record that a hint actually posted: advance the cursor, remember it."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        await session.execute(
+            update(OakHint)
+            .where(OakHint.guild_id == guild_id)
+            .values(next_position=OakHint.next_position + 1, last_key=key)
+        )
+        await session.commit()
+
+
+async def release_an_oak_hint(guild_id: int, stamp: datetime) -> None:
+    """Open the window again, for a hint that was claimed and never posted.
+
+    Guarded on the stamp this call wrote, so a claim that has landed
+    since is left alone rather than reopened under it.
+    """
+    session_factory = _require_session()
+    async with session_factory() as session:
+        await session.execute(
+            update(OakHint)
+            .where(
+                OakHint.guild_id == guild_id,
+                OakHint.last_posted_at == stamp,
+            )
+            .values(last_posted_at=None)
+        )
+        await session.commit()
+
+
+async def oak_hints_so_far(guild_id: int) -> int:
+    """How many hints about the oak this server has had."""
+    session_factory = _require_session()
+    async with session_factory() as session:
+        row = await session.get(OakHint, guild_id)
+    return 0 if row is None else row.next_position
 
 
 async def ever_had_a_ghost(guild_id: int) -> bool:

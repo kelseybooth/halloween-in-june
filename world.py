@@ -25,6 +25,7 @@ from datetime import timedelta
 
 import content as content_module
 import database
+import phrasing
 import reach
 import resolve
 import states
@@ -1039,7 +1040,45 @@ async def after_use(
     if thing_id == HOUSE_KEY:
         return await _unlock_the_front_door(guild_id)
 
-    return None
+    return await _hand_over_what_it_yields(guild_id, user_id, thing_id)
+
+
+async def _hand_over_what_it_yields(
+    guild_id: int, user_id: int, thing_id: str
+) -> Effect | None:
+    """**A fixture with a `yields` cell hands one out when it is used.**
+
+    A rule read out of the files rather than a named thing, which is the
+    choice the wire cutters asked for and the first one on this path:
+    every branch above names its thing in code. It is safe to be general
+    because it cannot create a state, a loop or a room - all it can do
+    is put in a bag the thing a writer wrote in the cell.
+
+    **`fixture` and not `source`, and the difference is `/take`.** A
+    source answers a take with its yield, and a thing you are meant to
+    use rather than pocket has to refuse one. So the cutters stay where
+    they are and the wire comes off them, which is also the only shape
+    in which a `take_fail` line gets read.
+
+    No fixture in the files had a `yields` before this, so nothing that
+    already works can reach here - `test_only_the_cutters_yield_on_use`
+    is where a second one says so.
+
+    Public, because what it hands over is the same event a take from a
+    source is: a third-person sentence to the room, which everybody
+    standing in it reads once.
+
+    Stamped as a draw from this thing, the way `take_from_source` is -
+    so "has this player ever used the cutters" survives them dropping
+    the wire, which an inventory cannot answer.
+    """
+    row = await phrasing.thing_row(thing_id)
+    if row is None or row.type != content_module.FIXTURE or not row.yields:
+        return None
+    await database.take_from_source(
+        user_id, guild_id, row.yields, source_id=thing_id
+    )
+    return Effect(public=True)
 
 
 async def _climb_the_ladder(

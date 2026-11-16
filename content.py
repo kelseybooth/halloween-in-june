@@ -228,6 +228,13 @@ TERRAIN = "terrain"
 
 SCENERY_TYPES = frozenset({SCENERY, TERRAIN})
 
+# Named for the same reason `SCENERY` is: a bare "fixture" written
+# into a comparison is a type test nobody can find by searching for
+# the type. The wire cutters are the first thing to need one - a
+# fixture with a `yields` cell hands it over on `/use`, which is a
+# rule about the type and not about the cutters.
+FIXTURE = "fixture"
+
 # Toys are carried and dropped like any other object.
 CARRIABLE_TYPES = {"object", "toy"}
 
