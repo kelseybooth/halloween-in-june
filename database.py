@@ -1086,6 +1086,12 @@ class ThingType(Base):
     cross_weight: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     max_per_player: Mapped[int | None] = mapped_column(Integer, nullable=True)
     requires: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # What a successful use spends out of the player's bag. `requires`
+    # is the gate and this is the bill, and they are not the same
+    # question: the pumpkins require carving tools and must not eat
+    # them. Always a subset of `requires` - `content._check_ingredients`
+    # is what holds that true, and what lets the spend ask nothing.
+    consumes: Mapped[str | None] = mapped_column(String(64), nullable=True)
     present_when: Mapped[str | None] = mapped_column(String(64), nullable=True)
     transforms_to: Mapped[str | None] = mapped_column(String(64), nullable=True)
     transform_room: Mapped[str | None] = mapped_column(String(8), nullable=True)
@@ -2042,6 +2048,7 @@ _LATER_COLUMNS: list[tuple[str, str, str]] = [
     ("things", "cohort", "VARCHAR(1)"),
     ("thing_types", "consumed_on_use", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ("thing_types", "use_cooldown_daily", "BOOLEAN NOT NULL DEFAULT FALSE"),
+    ("thing_types", "consumes", "VARCHAR(64)"),
     ("restocks", "arrival_notice", "VARCHAR(64)"),
     ("restocks", "interval_min_hours", "INTEGER"),
     ("restocks", "interval_max_hours", "INTEGER"),
@@ -4374,6 +4381,44 @@ async def consume_carried(user_id: int, guild_id: int, thing_id: str) -> bool:
         )
         await session.commit()
     return bool(result.rowcount)
+
+
+async def consume_all_carried(
+    user_id: int, guild_id: int, thing_ids: "list[str]"
+) -> bool:
+    """Spend one of each, or none of them. False if any one was not there.
+
+    **One transaction, because half a recipe is worse than none.** The
+    `requires` gate has already proved every one of these was to hand,
+    so a failure here means the player put one down between the gate and
+    the spend - and the honest answer to that race is to leave the bag
+    exactly as it was and refuse the use, rather than cook with two
+    thirds of the ingredients and charge for three.
+
+    Conditional on `count > 0` per row, like every other decrement here,
+    so two rapid uses of a last ingredient cannot both succeed and leave
+    a count at minus one.
+    """
+    if not thing_ids:
+        return True
+    session_factory = _require_session()
+    async with session_factory() as session:
+        for thing_id in thing_ids:
+            result = await session.execute(
+                update(PlayerInventory)
+                .where(
+                    PlayerInventory.user_id == user_id,
+                    PlayerInventory.guild_id == guild_id,
+                    PlayerInventory.thing_id == thing_id,
+                    PlayerInventory.count > 0,
+                )
+                .values(count=PlayerInventory.count - 1)
+            )
+            if not result.rowcount:
+                await session.rollback()
+                return False
+        await session.commit()
+    return True
 
 
 async def transform_carried(user_id: int, guild_id: int, thing_id: str, into: str) -> bool:

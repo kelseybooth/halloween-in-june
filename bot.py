@@ -5094,6 +5094,37 @@ async def _finish_use(interaction, state, found) -> None:
             )
             return
 
+    # **And what the use cost, which is a different column.** The one
+    # above asks whether the thing in your hands is gone; this asks what
+    # it took. The stove is neither takeable nor consumable and still
+    # eats three objects out of the bag, which is why the question had to
+    # be asked twice rather than widened once.
+    #
+    # Nothing is re-checked here. `content._check_ingredients` holds every
+    # id in this cell to being named in the same row's `requires`, so the
+    # gate in `use` has already proved the player had all of them - and
+    # that gate is upstream of all four routes into this function.
+    spent = states.required_things(getattr(row, "consumes", None))
+    if spent and not await database.consume_all_carried(user.id, guild_id, spent):
+        # The gate losing a race, so it refuses in the gate's own words:
+        # somebody put an ingredient down between there and here.
+        await interaction.followup.send(
+            await phrasing.say(
+                guild_id, found.thing_id, "use_fail",
+                fallback="use_fail.default", name=found.name,
+            ),
+            ephemeral=True,
+        )
+        await _turned_away(
+            interaction,
+            telemetry.USE,
+            telemetry.REQUIRES_MISSING,
+            thing_id=found.thing_id,
+            typed=found.typed,
+            detail=row.consumes,
+        )
+        return
+
     await database.record_use(
         user.id, guild_id, found.thing_id, room_id=state.current_room
     )

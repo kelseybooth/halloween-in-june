@@ -257,6 +257,7 @@ def _rows_for(parsed: Content) -> dict[str, list[dict]]:
                 "cross_weight": t.cross_weight,
                 "max_per_player": t.max_per_player,
                 "requires": t.requires,
+                "consumes": t.consumes,
                 "present_when": t.present_when,
                 "transforms_to": t.transforms_to,
                 "transform_room": t.transform_room,
