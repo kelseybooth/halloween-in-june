@@ -74,7 +74,12 @@ def test_the_shipped_content_parses():
     # yields it and no restock puts it anywhere, so
     # `content.PLACED_BY_CODE` is the only reason the loader
     # calls it reachable at all. The brass key was the first.
-    assert len(c.things) == 180
+    # 181 on 15 November: the wire cutters. **The first fixture in
+    # the files with a `yields` cell**, which is a rule rather than a
+    # row - a fixture that yields hands one over on `/use` - and
+    # `test_only_the_cutters_yield_on_use` is where a second one has
+    # to say so.
+    assert len(c.things) == 181
     # Five out with `/enter`: its three lines, `#welcome`, and the
     # tutorial, which it was the only thing that posted. Five in: the two
     # wrong-place replies, `/go`'s own refusal, and the two hints that
