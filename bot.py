@@ -32,6 +32,7 @@ import ghosts
 import hints
 import leaderboard
 import house_utils
+import oak
 import phrasing
 import qa
 import reach
@@ -1375,6 +1376,69 @@ async def _hand_over_the_bedsheet(interaction: discord.Interaction) -> None:
     line = await phrasing.default_say(key)
     if line:
         await interaction.followup.send(line, ephemeral=True)
+
+
+# How long the house waits before muttering about the oak. **After the
+# command's own reply and well clear of it**: a line that lands in the
+# same breath reads as an answer to what the player typed, which is the
+# one thing an ambient line must not do.
+#
+# A module constant rather than config, because it is not a number a
+# server wants tuned - the odds and the gap are. Tests set it to zero.
+OAK_HINT_DELAY = 30.0
+
+
+async def _drop_an_oak_hint(interaction: discord.Interaction) -> None:
+    """Maybe start a hint about the oak, after this command's reply.
+
+    **Claimed now and posted later.** The claim has to happen on this
+    command, because that is what stops the next one in the same half
+    minute drawing a second line; the post waits, because a hint that
+    arrives with the reply reads as part of it.
+
+    `standing_in` is passed as a callable, not a value: `oak.due` asks
+    for it last, after the dice, so the read it costs is paid by one
+    command in four rather than by every command in the game.
+    """
+    if interaction.guild_id is None:
+        return
+    guild_id = interaction.guild_id
+
+    async def standing_in() -> str | None:
+        state = await database.get_game_state(interaction.user.id, guild_id)
+        return None if state is None else state.current_room
+
+    due = await oak.due(guild_id, standing_in=standing_in)
+    if due is None:
+        return
+    # Detached on purpose: the player's command is finished, and nothing
+    # about their reply may wait thirty seconds on an ambient line.
+    asyncio.create_task(_post_an_oak_hint(guild_id, due))
+
+
+async def _post_an_oak_hint(guild_id: int, due: oak.Due) -> None:
+    """Wait, then say it in the Courtyard - or give the slot back.
+
+    The slot is released on anything that stops the line going out, so a
+    server does not spend a hint on a channel that would not take it.
+    `_say_in_room` is cosmetic by contract and reports rather than
+    raising, which is the whole of how that is known here.
+    """
+    try:
+        await asyncio.sleep(OAK_HINT_DELAY)
+        line = await phrasing.default_say(due.key)
+        if line and await _say_in_room(guild_id, oak.COURTYARD, line):
+            await oak.posted(guild_id, due.key)
+            return
+        await oak.not_posted(guild_id, due.stamp)
+    except (discord.HTTPException, SQLAlchemyError):
+        log.warning(
+            "Could not post an oak hint in guild %s", guild_id, exc_info=True
+        )
+        try:
+            await oak.not_posted(guild_id, due.stamp)
+        except SQLAlchemyError:
+            log.exception("Could not reopen the oak hint window in %s", guild_id)
 
 
 async def _mention_idle_drops(interaction: discord.Interaction) -> None:
@@ -6914,7 +6978,12 @@ async def _use_exit(interaction, state, found, row) -> None:
         )
         # The discovery is recorded after the move has committed, so a player
         # who could not be moved is not told they found something.
-        await world.after_move(guild_id, user.id, found.thing_id)
+        discovered = await world.after_move(guild_id, user.id, found.thing_id)
+        # **The one place the hints' end is visible**, and the only
+        # reason this return value is read at all: how many lines the
+        # house had muttered before somebody got in is what says whether
+        # the odds and the gap were right.
+        await oak.note_the_first_entry(guild_id, user.id, discovered)
         # The channel is nobody's unlocked room. It is where players start,
         # and a row saying somebody has unlocked the road would be a row no
         # question ever asks.
@@ -9781,6 +9850,17 @@ async def on_app_command_completion(
     except (discord.HTTPException, SQLAlchemyError):
         log.warning(
             "Could not mention an idle drop in guild %s",
+            interaction.guild_id,
+            exc_info=True,
+        )
+    # **Swallowed separately, like every other passenger on this hook.**
+    # A hint is the least important thing the game says, and it runs
+    # after the player already has their answer.
+    try:
+        await _drop_an_oak_hint(interaction)
+    except (discord.HTTPException, SQLAlchemyError):
+        log.warning(
+            "Could not consider an oak hint in guild %s",
             interaction.guild_id,
             exc_info=True,
         )
