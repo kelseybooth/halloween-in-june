@@ -470,6 +470,35 @@ async def test_using_them_hands_over_copper_wire(house):
     assert replies(interaction) == ""
 
 
+async def test_a_use_is_counted_once_and_knows_its_room(house):
+    """**The trap the general rule walked into.** `record_use` is the only
+    place `use_count` increments, which is the whole reason a count off
+    it can be trusted - and a draw from a source asks it for a second
+    stamp, with a deliberately null room. Every use already arrives
+    through `_finish_use`, which recorded this one with the room in it,
+    so asking for the draw's stamp as well counted one snip twice and
+    then forgot where it happened.
+    """
+    from sqlalchemy import select
+
+    db, *_ = house
+
+    await act(house, bot.use, "wire cutters", LIBRARY)
+
+    async with db._require_session()() as session:
+        row = await session.scalar(
+            select(db.ThingUse).where(
+                db.ThingUse.guild_id == GUILD_A,
+                db.ThingUse.user_id == ALICE,
+                db.ThingUse.thing_id == "wire_cutters",
+            )
+        )
+
+    assert row is not None
+    assert row.use_count == 1
+    assert row.last_used_room == LIBRARY
+
+
 async def test_a_second_use_gives_another(house):
     db, *_ = house
     await act(house, bot.use, "cutters", LIBRARY)
@@ -503,17 +532,44 @@ async def test_the_spool_is_unchanged(house):
     assert "uncoil a little of it" in reply
 
 
-async def test_using_the_spool_hands_over_nothing(house):
-    """**The other half of "a fixture, not a source".** The rule is read
-    off the type, so the spool - which is a source with the same
-    `yields` cell - must go on answering `/use` with a sentence and
-    `/take` with the wire. Widening the rule to any type that yields
-    would turn one draw into two.
+async def test_the_rule_turns_a_source_down(house):
+    """**The other half of "a fixture, not a source", pinned on the rule
+    itself.**
+
+    It has to be asked here rather than through `/use`, and the reason
+    is the parser: `reach` files a source under the thing it yields -
+    which is what stops `/take cat food` asking which cat food - so
+    `/use spool of copper wire` resolves to `copper_wire`, an object
+    with no `yields` cell. A widened rule would find nothing to hand
+    over on that path and look safe while being wrong.
+
+    So the type guard is checked where it is written. Dropping it is
+    how a source quietly starts handing out its yield twice, once per
+    verb.
     """
     db, *_ = house
 
-    await act(house, bot.use, "spool of copper wire", LIBRARY)
+    handed = await world._hand_over_what_it_yields(
+        GUILD_A, ALICE, "copper_wire_spool"
+    )
 
+    assert handed is None
+    assert await carrying(db, "copper_wire") == 0
+
+
+async def test_asking_to_use_the_spool_is_asking_about_the_wire(house):
+    """**Why the guard above cannot be tested through `/use`.**
+
+    Naming the spool resolves to the thing it yields, so a player who
+    is not carrying wire is told to pick some up - the spool's own
+    sentence is never what answers. Nothing is handed over either way,
+    which is what makes a widened rule invisible from here.
+    """
+    db, *_ = house
+
+    reply = replies(await act(house, bot.use, "spool of copper wire", LIBRARY))
+
+    assert "have to pick it up first" in reply
     assert await carrying(db, "copper_wire") == 0
 
 

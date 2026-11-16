@@ -1068,16 +1068,20 @@ async def _hand_over_what_it_yields(
     source is: a third-person sentence to the room, which everybody
     standing in it reads once.
 
-    Stamped as a draw from this thing, the way `take_from_source` is -
-    so "has this player ever used the cutters" survives them dropping
-    the wire, which an inventory cannot answer.
+    **Not stamped as a draw, and that is not an oversight.** A `/take`
+    from a source asks `take_from_source` for the stamp because nothing
+    else records it; a `/use` has already been recorded by the time this
+    runs, with the room it happened in. Asking for both counted every
+    snip twice - `record_use` is the only place `use_count` increments,
+    which is what makes it trustworthy - and the draw's stamp writes a
+    null room deliberately, which would have overwritten the real one.
+    So the wire comes over and the bookkeeping is left to the use path
+    it already belongs to.
     """
     row = await phrasing.thing_row(thing_id)
     if row is None or row.type != content_module.FIXTURE or not row.yields:
         return None
-    await database.take_from_source(
-        user_id, guild_id, row.yields, source_id=thing_id
-    )
+    await database.take_from_source(user_id, guild_id, row.yields)
     return Effect(public=True)
 
 
