@@ -63,6 +63,30 @@ NOBODY = 100000000000000009
         # Neither spells. A real answer, not an error.
         ("\U0001f380", "\U0001f380", ""),
         (None, None, ""),
+        # **The moderator badge, which NFKD used to fold into a letter.**
+        # The first is the name off the beta server, verbatim, on the day
+        # the board spelled M for it. The usernames here all spell ZOE,
+        # so every one of these says which name the answer came from.
+        ("\u24c2 Sarah Althea | C\U0001f332 & E \U0001f353", "zoe99", "SARAH"),
+        ("\u24c2\ufe0f Mark", "zoe99", "MARK"),
+        # The other circled M, which never folded - a sibling, so the two
+        # cannot drift apart again.
+        ("\U0001f15c Megan", "zoe99", "MEGAN"),
+        # Squared and parenthesised are the same shape of decoration.
+        ("\U0001f13c Nadia", "zoe99", "NADIA"),
+        # **Full width still folds**, which is what NFKD was wanted for:
+        # these are letters wearing a different width, not letters in a
+        # badge.
+        ("\uff2d\uff41\uff52\uff49\uff41", "zoe99", "MARIA"),
+        # **The cost, and it is the right way round.** A name written
+        # entirely in circled letters stops spelling and falls back,
+        # where the badge made every moderator spell one wrong letter.
+        ("\u24b6\u24c1\u24be\u24b8\u24ba", "zoe99", "ZOE"),
+        ("\u24c2", "zoe99", "ZOE"),
+        # **An accent that arrives on its own**, which is how a name
+        # pasted off a Mac comes in. The mark is folded away rather than
+        # ending the word on the letter in front of it.
+        ("E\u0301lodie", "zoe99", "ELODIE"),
     ],
 )
 def test_the_first_word_is_what_the_board_spells(display_name, username, expected):
@@ -86,6 +110,41 @@ def test_the_count_is_written_out_for_every_place_there_can_be():
         "seven times",
         "eight times",
     ]
+
+
+def test_the_moderator_badge_is_not_the_name():
+    """**The bug from the beta server, named.**
+
+    Every moderator there has a circled M in front of their name, and
+    the board spelled `M` for all of them. The badge was not being kept
+    by mistake - `_first_word` has always skipped a leading emoji - it
+    was being *turned into a letter*: `U+24C2` is a symbol, and NFKD is
+    a compatibility decomposition, so it unwrapped the circle and left
+    a plain ASCII `M`. The space after the badge then ended the word on
+    its first letter.
+
+    Worse than unspellable, because it looked like an answer: every mod
+    on the server spelled the same thing, and it was not their name.
+    """
+    badged = "\u24c2 Sarah Althea | C\U0001f332 & E \U0001f353"
+
+    assert ghosts.letters_of(badged, "zoe99") == "SARAH"
+    assert "M" not in ghosts.letters_of(badged, "zoe99")[:1]
+
+
+def test_only_a_letter_folds_into_a_letter():
+    """The rule, stated where it can be checked without a name around it.
+
+    A decorated letter keeps its decoration and so is not a letter; a
+    letter in another width is still a letter. This is the whole of the
+    fix, and `_folded` is the only place it is written.
+    """
+    assert ghosts._folded("\u24c2") == "\u24c2"
+    assert ghosts._folded("\U0001f13c") == "\U0001f13c"
+    assert ghosts._folded("\u24b6\u24c1") == "\u24b6\u24c1"
+    assert ghosts._folded("\uff2d") == "M"
+    assert ghosts._folded("\u00e9") == "e"
+    assert ghosts._folded("\u00f8") == "o"
 
 
 def test_no_name_is_ever_spelled_past_the_cap():

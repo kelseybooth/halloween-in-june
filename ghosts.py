@@ -732,10 +732,51 @@ def circles(place: int) -> str:
     return _CIRCLES[place - 1]
 
 
+# Which characters are allowed to fold into letters: the ones that are
+# already letters, and the marks that sit on them.
+#
+# **NFKD is a compatibility decomposition, and that is a wider promise
+# than taking accents off.** It also unwraps a letter that has been
+# decorated - circled, squared, parenthesised, in a box - into the bare
+# letter inside it. Every moderator on the beta server has a circled M
+# in front of their name, `U+24C2`, and NFKD turns it into an `M`: the
+# board spelled **M** for all of them, because the space after the
+# badge ended the word on its first letter.
+#
+# A badge is not a letter in a name, so the rule is that **only a
+# letter may fold into one**. `U+24C2` is a symbol, so it is left as
+# the symbol it is, and `_first_word` skips it the way it already skips
+# a crescent moon. A full-width `Ｍ` is still a letter and still folds,
+# which is the case NFKD was wanted for in the first place.
+#
+# **The cost, said out loud:** a name written entirely in circled
+# letters no longer spells, where before it did. That is the right way
+# round. It falls back to the username and spells that instead -
+# `letters_of` exists for exactly this - whereas the badge made every
+# moderator spell the same single wrong letter, which is worse than
+# unspellable: it looks like an answer.
+_FOLDS = frozenset({"Lu", "Ll", "Lt", "Lm", "Lo", "Mn", "Mc", "Me"})
+
+
 def _folded(name: str) -> str:
-    """The name with its accents taken off."""
-    decomposed = unicodedata.normalize("NFKD", name.translate(_FOLDED))
-    return "".join(ch for ch in decomposed if unicodedata.category(ch) != "Mn")
+    """The name with its accents taken off, and its decorations left alone.
+
+    Folded per character rather than over the whole string, which is
+    what makes the rule above expressible: a precomposed `é` is a
+    letter and comes apart into `e` plus a mark this drops, while a
+    combining mark that arrives on its own is dropped the same way.
+    """
+    out: list[str] = []
+    for ch in name.translate(_FOLDED):
+        if unicodedata.category(ch) not in _FOLDS:
+            out.append(ch)
+            continue
+        out.extend(
+            part
+            for part in unicodedata.normalize("NFKD", ch)
+            if unicodedata.category(part) != "Mn"
+        )
+    return "".join(out)
 
 
 def _first_word(name: str) -> str:
