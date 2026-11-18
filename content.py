@@ -387,6 +387,17 @@ class Thing:
     # has stopped using the thing. See `world.SET_DOWN_WHEN_IDLE` for
     # why both exist.
     idle_drop_hours: int | None = None
+    # **What a successful use spends out of the bag**, pipe separated
+    # like `requires`, which it is always a subset of.
+    #
+    # Not `consumed_on_use` with a wider reading: the two mean opposite
+    # things on the same row. That one says *spent when you use it*;
+    # this says *spent when something else is used with it*. The herbs
+    # are the row that forced them apart - they carried
+    # `consumed_on_use` so the stove would eat them, which is not what
+    # the engine reads it as, so `/use herbs` destroyed them for a line
+    # telling the player to go and find the rest of the recipe.
+    consumes: str | None = None
 
     @property
     def is_exit(self) -> bool:
@@ -809,6 +820,7 @@ def load_files(directory: Path | None = None) -> Content:
                 cross_weight=_int(row.get("cross_weight"), default=0) or 0,
                 max_per_player=_int(row.get("max_per_player")),
                 requires=_text(row.get("requires")),
+                consumes=_text(row.get("consumes")),
                 present_when=_text(row.get("present_when")),
                 transforms_to=_text(row.get("transforms_to")),
                 transform_room=_text(row.get("transform_room")),
@@ -993,6 +1005,7 @@ def validate(content: Content) -> list[str]:
     problems += _check_quests(content)
     problems += _check_art(content)
     problems += _check_consumables(content)
+    problems += _check_ingredients(content)
     problems += _check_cooldowns(content)
     problems += _check_idle_drop_hours(content)
     problems += _check_toy_refusals(content)
@@ -1990,6 +2003,75 @@ def _check_consumables(content: Content) -> list[str]:
                 "transforms into or restocks it, so using it would destroy it "
                 "for good"
             )
+    return problems
+
+
+def _check_ingredients(content: Content) -> list[str]:
+    """`consumes` has to name things the gate upstream already proved are held.
+
+    **Five rules, and every one of them is what lets `_finish_use` spend
+    an ingredient without asking a question of its own.** The id has to
+    exist, like every reference in the files. It has to appear in the
+    same row's `requires`, because that gate is the only thing standing
+    between the spend and a player who never had one. It has to be an
+    `object`, for the reason `consumed_on_use` has the same rule -
+    `consume_carried` takes a thing off a bag and a fixture is never in
+    one. Something has to put it back, or cooking once would empty the
+    house of herbs for good. And it must not be `to_hand_in_room`,
+    which would let the gate be satisfied by a copy lying on the floor
+    that no bag holds.
+
+    **No `/` groups.** `requires` allows them and this does not: a group
+    says *any one of these will do*, and a cell that spent one would
+    have to say which, in a sentence nobody has had to write yet. The
+    rule is here rather than assumed, so the first row to want one fails
+    loudly instead of quietly spending whichever alternative came first.
+    """
+    produced = {t.yields for t in content.things if t.yields}
+    produced |= {t.transforms_to for t in content.things if t.transforms_to}
+    produced |= content.restocked_thing_ids
+    things = content.things_by_id
+
+    problems = []
+    for thing in content.things:
+        if not thing.consumes:
+            continue
+        required = set(requires_ids(thing.requires))
+        for part in requires_parts(thing.consumes):
+            if len(requires_alternatives(part)) > 1:
+                problems.append(
+                    f"thing {thing.thing_id} consumes {part!r}, which is an "
+                    "either/or group - an ingredient has to be named outright"
+                )
+                continue
+            if part not in things:
+                problems.append(
+                    f"thing {thing.thing_id} consumes {part}, which is not a thing"
+                )
+                continue
+            if part not in required:
+                problems.append(
+                    f"thing {thing.thing_id} consumes {part} without requiring "
+                    "it, so nothing proves the player has one to spend"
+                )
+            eaten = things[part]
+            if eaten.type != "object":
+                problems.append(
+                    f"thing {thing.thing_id} consumes {part}, which is a "
+                    f"{eaten.type} and is never in anybody's bag"
+                )
+            elif part not in produced and part not in SPENT_FOR_GOOD:
+                problems.append(
+                    f"thing {thing.thing_id} consumes {part} and nothing yields, "
+                    "transforms into or restocks it, so using it would destroy "
+                    "it for good"
+                )
+            if eaten.to_hand_in_room:
+                problems.append(
+                    f"thing {thing.thing_id} consumes {part}, which is "
+                    "to_hand_in_room, so its gate can be met by a copy in the "
+                    "room that nobody is carrying"
+                )
     return problems
 
 
